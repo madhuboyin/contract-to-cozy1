@@ -47,9 +47,10 @@ Every implementation phase must satisfy all applicable items:
 5. Startup validation fails on missing, duplicate, stale, or contradictory registry entries.
 6. Metrics use bounded labels; no property, user, execution, entity, message, or prompt identifiers become metric labels.
 7. Focused environment-independent tests cover pure registry, policy, state-transition, and serialization logic where available.
-8. `git diff --check` and the already-available lightweight TypeScript/registry checks are clean. Runtime infrastructure tests are reported, not fabricated, when no environment exists.
+8. `git diff --check` and `npm run typecheck` from `apps/backend` are clean. When registry behavior changes, `npm run test:ask:chunked` is also required; it does not replace type-checking. Runtime infrastructure tests are reported, not fabricated, when no environment exists.
 9. Any Prisma schema change updates affected contracts/types/services and runs `npm run prisma:generate` from `apps/backend` when dependencies are already available. No migration script is created.
 10. A completed code phase ends with `graphify update .` after other validation and corrections.
+11. Any governing FRD, architecture document, feature README, operational runbook, or reproducibility note affected by an approved behavior change is updated in the same phase.
 
 ## 4. Phase 0 — Freeze baselines and decisions
 
@@ -62,12 +63,12 @@ Turn the review into reproducible inputs before changing runtime behavior.
 1. Add a small read-only audit script under `apps/backend/src/scripts/` that emits:
    - operation, skill, capability-handler, domain-command, confirm-handler, presentation-block, renderer, suggested-action producer, and eligibility-rule counts;
    - every operation without an owning Skill;
-   - whether each such operation is routable, launch-only, declared-action-only, internal capture, read, or command according to existing metadata;
+   - whether each such operation is routable, launch-only, declared-action-only, internal capture, read, or command where authoritative existing metadata establishes that classification. The script must report `UNCLASSIFIED` rather than infer a classification from naming or incidental call sites; unresolved classifications move to Phase 1;
    - missing/duplicate handler and adapter relationships using the existing validators rather than reimplementing their rules.
 2. Add the audit command to the source review's reproducibility notes without making the generated count output a committed source of truth.
-3. Record two owner/architecture decisions before Phase 5 implementation:
-   - **AI-GOV-1:** on Redis failure, remote AI governance fails closed, uses a bounded local fallback, or uses another explicitly defined mode. Deterministic Ask operations must remain available either way.
-   - **AI-HEALTH-1:** provider health is represented globally and resolved during reads, or property changes are published only to a deterministically affected property set. Re-enumerating every property per replica is not an accepted target.
+3. Record two owner/architecture decisions, including the named accountable owner and rationale, before Phase 5 implementation:
+   - **AI-GOV-1:** on Redis failure, remote AI governance fails closed, uses a bounded local fallback, or uses another explicitly defined mode. **Recommendation:** use a short-lived, stricter bounded per-process fallback with explicit degraded-mode telemetry so a brief Redis failure does not disable optional AI; document that aggregate enforcement is not preserved while fallback is active. Deterministic Ask operations must remain available either way.
+   - **AI-HEALTH-1:** provider health is represented globally and resolved during reads, or property changes are published only to a deterministically affected property set. **Recommendation:** use one global/provider health state resolved while assembling source health, if the Phase 5 consumer trace confirms that no durable property-specific event is required. Re-enumerating every property per replica is not an accepted target.
 4. Record that streaming, multi-capability planning, learned embeddings, provider abstraction, and offline mutation sync are outside the approved remediation scope unless separately authorized.
 
 ### Acceptance criteria
@@ -99,19 +100,22 @@ Replace the flat `KNOWN_UNGOVERNED_OPERATIONS` carve-out with an auditable excep
    - equivalent controls that still apply (operation kill-switch, role floor, capability guard, declared-action verification, confirmation where applicable);
    - owner and removal condition for `TEMPORARY_GAP` entries.
 2. Derive the legacy list shape from the structured registry temporarily if tests or consumers require it; do not maintain two independent sources.
-3. Extend `validateSkillOperationGovernanceCoverage` so it rejects:
+3. Before changing validator strictness, classify every current `KNOWN_UNGOVERNED_OPERATIONS` entry from repository evidence and prepare the structured registry, validator change, and tests as one atomic reviewable change. If any entry is unclassifiable or evidence conflicts, stop the phase before tightening the validator and request the product/architecture decision; do not ship a partially stricter boot path.
+4. Extend `validateSkillOperationGovernanceCoverage` so it rejects:
    - an undocumented skill-less property-scoped operation;
    - a stale exception after a Skill begins owning the operation;
    - an internal/launch-only exception that is message-routable;
    - a command exception without its required role floor, declared-action/typed route, or confirmation contract;
    - a temporary gap without an owner and removal condition.
-4. Classify every current exception from repository evidence. If evidence conflicts or does not establish intended behavior, stop on that entry and request the product/architecture decision rather than guessing.
-5. Add a generated audit table to this plan or a sibling audit document only after every entry has an evidence-backed classification.
+5. Add direct unit calls to every changed validator and extend `apps/backend/tests/ask/startupRegistryValidation.test.js` so the assembled startup validation is exercised, including known-good current entries and representative stale, contradictory, or accidentally routable exceptions.
+6. Add a generated audit table to this plan or a sibling audit document only after every entry has an evidence-backed classification.
 
 ### Acceptance criteria
 
 - Every skill-less operation has exactly one structured classification.
 - Startup validation detects an accidentally routable internal exception and a stale exception.
+- Direct validator tests and `startupRegistryValidation.test.js` prove that the complete current registry boots successfully and that each new failure mode is detected.
+- Validator tightening, the fully classified exception registry, and its tests ship together; an unresolved entry leaves the pre-change validator intact.
 - Existing intentional internal, launch-only, and declared-action flows retain their operation-level guards.
 - No operation receives a synthetic Skill merely to make validation green.
 
@@ -134,7 +138,7 @@ Ensure every supported process/caller initializes the complete handler set throu
 ### Work
 
 1. Inventory every production, script, test-helper, and worker import of `capabilityInvoke` and `confirmCapabilityInvoke`; classify whether it reaches the orchestrator facade first.
-2. Define one explicit runtime bootstrap entry point that loads the complete static handler manifest and runs registry validation once. It must be idempotent and must not open a database/Redis connection merely by being imported in a pure test.
+2. Define one explicit runtime bootstrap entry point that loads the complete static handler manifest and runs registry validation once. It must be idempotent and must not open a database/Redis connection merely by being imported in a pure test. This is guardrail work: the review found zero known unsafe production callers, so Phase 2 must not claim to repair a demonstrated invocation failure.
 3. Call the bootstrap from every supported application entry point before accepting Ask traffic or jobs. Direct scripts must import the same bootstrap rather than depending on incidental import order.
 4. Keep handlers from importing the orchestrator/bootstrap. Extend the import-graph guardrail to include the new module and detect cycles or reverse-layer imports.
 5. Add a focused test that starts from an empty isolated registry/bootstrap state, initializes once and twice, and proves:
@@ -142,8 +146,9 @@ Ensure every supported process/caller initializes the complete handler set throu
    - every domain command's confirm adapter resolves;
    - the second initialization is harmless;
    - a deliberately omitted manifest entry is reported before invocation.
-6. Remove the duplicate `claimActivity.handler` import as cleanup in this phase.
-7. Do not combine this phase with the larger self-contained operation-descriptor proposal. If explicit bootstrap plus validation closes the demonstrated risk, descriptor consolidation remains a separate maintainability project.
+6. Add a filesystem/AST parity test that compares the manifest with registration-bearing `*.handler.ts` files and their `registerCapabilityHandler`/`registerConfirmCapabilityHandler` declarations. Do not assume every handler-named file has exactly one registration; report missing and extra manifest entries explicitly.
+7. Remove the duplicate `claimActivity.handler` import as cleanup in this phase.
+8. Do not combine this phase with the larger self-contained operation-descriptor proposal. If explicit bootstrap plus validation closes the demonstrated risk, descriptor consolidation remains a separate maintainability project.
 
 ### Acceptance criteria
 
@@ -182,7 +187,8 @@ Measure the serialized turn path before selecting streaming, batching, query red
 3. Add counters/histograms only where the existing metrics cannot answer stage p50/p95 or failure/timeout attribution. Avoid operation IDs as labels if the resulting cardinality is not demonstrably bounded and useful.
 4. Measure database work by a bounded per-turn query-count observation only if it can be scoped safely through existing Prisma instrumentation. Do not introduce global request cross-talk or log SQL/parameters. If safe attribution is unavailable, measure named repository stages instead and record query count as unresolved.
 5. Define a representative static scenario matrix for later environment execution: deterministic read, write proposal, confirmation, clarification, remote synthesis enabled/disabled, extraction pre-filter miss, inline extraction success, and extraction timeout/fallback.
-6. After real measurements exist, write a decision note choosing the smallest evidenced remedy:
+6. Assign an operational owner to run that matrix against the available deployed backend and return privacy-safe Prometheus/Loki query output with the deployment revision, time range, sample counts, and scenario labels. Inspect existing `askTurnStageDurationSeconds` history first; add instrumentation only for questions the existing histograms cannot answer. Repository implementation work must not attempt to create or troubleshoot a local service environment for this evidence.
+7. After real measurements exist, write a decision note choosing the smallest evidenced remedy:
    - remove redundant reads/writes;
    - batch independent event persistence;
    - move optional work after the durable response boundary;
@@ -210,6 +216,8 @@ Improve and certify the existing local lexical/concept router without misreprese
 - routing calibration, hard-negative, paraphrase, multi-intent, and trust certification corpora/tests
 
 ### Work
+
+This phase is optional until the Phase 4 coverage report demonstrates material routing gaps. Documentation terminology corrections may be made independently, but corpus expansion, weights, or router behavior must not proceed merely as cleanup.
 
 1. Rename documentation/telemetry descriptions that imply a learned dense embedding; preserve identifiers where renaming would break stored certification/version contracts unless a versioned migration is specified.
 2. Generate a coverage report from the existing certification corpus by operation, language, confidence band, and failure class: false route, clarification, or fallback.
@@ -247,33 +255,40 @@ Enforce one aggregate rate window, one circuit state, and one health-transition 
 ### Work package 5A — Shared rate windows
 
 1. Introduce a narrow storage port for governed-AI counters so policy logic is testable without Redis.
-2. Implement an atomic Redis increment/expiry operation using a versioned namespace and route identifier. Do not place user text, property IDs, or credentials in keys.
+2. Implement an atomic Redis increment/expiry operation using a versioned namespace and route identifier. Preserve fixed-window behavior explicitly: this provides aggregate cross-process parity with the current window semantics, including the possible boundary burst; it is not a sliding-window improvement. Do not place user text, property IDs, or credentials in keys.
 3. Apply the approved AI-GOV-1 Redis-outage behavior. A local fallback must be explicitly identified as per-process and bounded; fail-closed behavior must return the existing transparent AI-unavailable degradation rather than break deterministic capabilities.
-4. Add concurrency tests against a storage test double; run Redis integration coverage only when the existing environment is available.
+4. Add concurrency tests against a storage test double for policy behavior. Add a Redis integration test for the actual atomic increment/expiry primitive; execute it only when the existing environment is available, and distinguish authored coverage from executed evidence.
 
 ### Work package 5B — Shared circuit state
 
-1. Specify the circuit state machine: closed/open/half-open, failure threshold, open deadline, probe ownership, success reset, and stale-key expiry.
-2. Store transitions atomically so only one half-open probe wins across processes.
-3. Preserve per-route metrics while making the state itself shared.
-4. Ensure a provider failure cannot authorize a request or mutate canonical state; it only controls optional AI availability.
+1. Inventory every `AICircuitBreaker` constructor. Do not silently change the local behavior used by `gemini.service.ts` or `documentIntelligence.service.ts`; introduce a shared governance-specific implementation or migrate each consumer only through an explicit reviewed decision.
+2. Specify the circuit state machine: closed/open/half-open, failure threshold, Redis/server-time open deadline, probe ownership, success reset, and stale-key expiry.
+3. Store transitions atomically so only one half-open probe wins across processes. The probe claim must have a TTL so a dead owner cannot wedge the circuit, and completion must verify that the claimant token is still current before committing the transition.
+4. Add a Redis integration test against the actual Lua/transaction/`SET NX` primitive that proves one winner under concurrent claims, TTL recovery after an abandoned probe, and rejection of a stale claimant's completion. A storage-port double alone is insufficient evidence for these properties.
+5. Preserve per-route metrics while making the governance state itself shared.
+6. Ensure a provider failure cannot authorize a request or mutate canonical state; it only controls optional AI availability.
 
 ### Work package 5C — Health publication without all-property fan-out per replica
 
 1. Implement the approved AI-HEALTH-1 representation:
    - preferred when compatible with existing consumers: one global/provider health state resolved while assembling source health; or
    - publish only to properties deterministically known to depend on the route, using an affected-property query rather than `allPropertyIds()`.
-2. Use a shared transition/version key so one logical provider transition is published once, not once per process.
-3. Make publication retryable and idempotent. A failed publication must not advance the shared published-version cursor.
-4. Remove `allPropertyIds()` from the AI route-health transition path after consumer parity is proven.
+2. If publication remains necessary, persist publication intent durably before fan-out, using the existing `DomainEvent` outbox only if its delivery, ordering, retry, and idempotency contract fits this event. Otherwise define an equally durable job/outbox record; an in-memory retry or a cursor written after publication is insufficient.
+3. Have publishers/workers compete for one expiring shared claim keyed by provider transition/version. Claim acquisition must be atomic, carry a unique token, and verify that token in the same commit that marks publication complete so an expired slow claimant cannot overwrite a newer owner.
+4. Define an explicit retry trigger and retry/backoff/dead-letter behavior. Failed publication must retain its durable intent, release or expire the claim, and must not advance the published-version cursor.
+5. Add a Redis integration test against the actual claim primitive proving one publisher wins and a stale claimant cannot complete. Add outbox/job tests proving a pre-publish crash remains retryable and repeated delivery is idempotent.
+6. Remove `allPropertyIds()` from the AI route-health transition path after consumer parity is proven.
 
 ### Acceptance criteria
 
-- Two simulated processes share one aggregate rate limit and one circuit transition.
-- Exactly one half-open probe and one logical health publication occur per transition version.
+- Two simulated policy clients share one aggregate rate limit and one circuit transition in storage-port tests.
+- Executed Redis integration tests—not a storage test double—prove exactly one half-open probe and, when publication is retained, one active publication claimant per transition version.
+- A dead half-open probe owner recovers after the claim TTL, and a stale owner cannot commit after its token is superseded.
+- A durable health-publication intent exists before fan-out, survives a pre-publication crash, retries explicitly, and completes idempotently.
 - Redis failure follows the documented AI-GOV-1 behavior and leaves deterministic Ask operations usable.
 - No route-health transition enumerates all properties unless the approved design explicitly proves that every property is affected.
 - No secret, prompt, message, property ID, or user ID appears in shared governance keys or metric labels.
+- Rollback is a reviewed code revert to the prior local-only implementation. Do not add a permanent dual-mode feature flag or compatibility layer solely for rollout.
 
 ## 10. Phase 6 — Prove provenance/evidence impact before consolidation
 
@@ -287,30 +302,32 @@ Determine whether the legacy `Document`/Home Record and provenance-model split c
 - Prisma models and foreign keys for `Document`, Home Records, `HomeEventDocument`, `PropertyFactEvidence`, `SignalProvenance`, and `ExtractedFactCandidate`
 - Ask consumers that attach, display, correct, promote, or export evidence
 - Project Tracker, Negotiation Shield, Home Timeline, document promotion, and export flows
+- existing retirement and interoperability analysis, especially `PROJECT_TRACKER_DOCUMENT_STORE_DESIGN.md`, `ASK_COZY_NEGOTIATION_SHIELD_DOCUMENTS_DESIGN.md`, and `QUOTE_COMPARISON_HOME_RECORD_IMPORT_DESIGN.md`
 
 ### Work
 
-1. Produce a consumer matrix with, for each workflow:
+1. Begin with the existing Documents/Home Records retirement, Project Tracker, Negotiation Shield, and Quote Comparison tracing. Record which conclusions are still current and investigate only uncovered consumers or concrete inconsistencies; do not repeat completed repository tracing.
+2. Produce a consumer matrix with, for each workflow:
    - accepted evidence identifier/store;
    - provenance/confidence representation;
    - visibility and household-role rule;
    - correction/deletion lifecycle;
    - export/search availability;
    - conversion or linking boundary.
-2. Trace representative journeys end to end:
+3. Trace representative journeys end to end:
    - conversational event capture with legacy document evidence;
    - Home Record upload and later event attachment;
    - Project Tracker and Negotiation Shield evidence selection;
    - document candidate promotion;
    - correction, access loss, archive/delete, and export.
-3. Classify each discrepancy as:
+4. Classify each discrepancy as:
    - intentional bounded-context difference;
    - presentation-only inconsistency;
    - missing interoperability;
    - authorization/visibility defect;
    - provenance or referential-integrity defect.
-4. If no material defect is demonstrated, close F6 as documented technical debt with ownership boundaries; do not build a universal knowledge store.
-5. If a defect is demonstrated, write a focused design before implementation. It must choose the canonical owner, preserve existing IDs or define deterministic remapping, specify transactional/idempotent backfill behavior, and update every affected reader/writer/contract. No migration script is created by Codex; the user owns migration creation/execution.
+5. If no material defect is demonstrated, close F6 as documented technical debt with ownership boundaries; do not build a universal knowledge store.
+6. If a defect is demonstrated, write a focused design before implementation. It must choose the canonical owner, preserve existing IDs or define deterministic remapping, specify transactional/idempotent backfill behavior, and update every affected reader/writer/contract. This plan does not create migration scripts; the repository owner creates and executes any required migration in accordance with `AGENTS.md`.
 
 ### Acceptance criteria
 
@@ -350,7 +367,7 @@ Phase 0 baseline and decisions
   ├─> Phase 1 skill-less governance
   ├─> Phase 2 explicit registration bootstrap
   ├─> Phase 3 performance measurement ──> later transport/optimization decision
-  ├─> Phase 4 deterministic router certification
+  ├─> Phase 4 deterministic router certification (optional; only after measured corpus gaps)
   └─> Phase 5 shared AI governance (blocked on AI-GOV-1 and AI-HEALTH-1)
 
 Phase 6 provenance impact trace may run after Phase 0 and remains audit-only
@@ -366,11 +383,11 @@ Each phase should be its own reviewable change. Do not combine registry restruct
 | Phase | Required lightweight validation | Not claimed without an environment |
 |---|---|---|
 | 0 | audit script output; registry/count parity; `git diff --check` | production counts or latency |
-| 1 | focused governance-validator tests; startup validation; TypeScript check if already available | live routing across seeded users |
-| 2 | bootstrap idempotency/completeness tests; import-graph and decomposition guardrails | server/worker startup in deployed topology |
+| 1 | direct governance-validator tests; `startupRegistryValidation.test.js`; `npm run typecheck`; `npm run test:ask:chunked` | live routing across seeded users |
+| 2 | bootstrap idempotency/completeness and manifest/registration parity tests; import-graph and decomposition guardrails; `npm run typecheck`; `npm run test:ask:chunked` | server/worker startup in deployed topology |
 | 3 | metric-definition tests; bounded-label review; static stage tracing | p50/p95, query counts, or user-perceived latency |
 | 4 | routing calibration, paraphrase, hard-negative, multi-intent, and safety-overlap tests | open-ended language quality beyond the corpus |
-| 5 | storage-port/state-machine tests; shared-key/idempotency tests; existing Redis integration tests when available | real multi-pod failover or production provider outage behavior |
+| 5 | storage-port/state-machine tests; durable-intent/idempotency tests; authored Redis integration tests for rate, probe lease/token, and publication claim primitives; executed results only when an existing Redis environment is available | real multi-pod failover, production provider outage behavior, or Redis atomicity when the integration tests could not execute |
 | 6 | consumer/journey trace and contract/schema review; focused pure mapping tests if a design follows | migrated data or runtime interoperability without a database |
 
 Final reporting for each phase must state what was code-traced, what was executed, what could not run, and whether any owner decision remains open. An unavailable runtime environment is not a blocker to completing static implementation work, but it must never be described as executed validation.
