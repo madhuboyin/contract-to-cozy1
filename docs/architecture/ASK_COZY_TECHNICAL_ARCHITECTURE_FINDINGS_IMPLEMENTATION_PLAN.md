@@ -6,7 +6,7 @@
 
 **Planning basis:** code snapshot `61126057bbb063cd4a452c039289620952380655`, with the source review finalized through `79ed68fc`
 
-**Status:** Phases 0-2 implemented (see §14-§16); Phase 3 instrumentation and measurement contract built, measurements not yet taken (§17); owner decisions AI-GOV-1 and AI-HEALTH-1 still open; Phases 4-6 not started
+**Status:** Phases 0-2 implemented (see §14-§16); Phase 3 instrumentation and measurement contract built, measurements not yet taken (§17); Phase 6 audit complete, three defects demonstrated and designs awaiting owner rulings (§18); owner decisions AI-GOV-1 and AI-HEALTH-1 still open; Phases 4-5 not started
 
 ## 1. Purpose and evidence boundary
 
@@ -544,3 +544,27 @@ The stage histogram already existed (11 stages, UX-01). The audit found that it 
 **Open, needs the owner:** run scenarios S1-S7 on a deployment that contains this change and return the query output listed in the measurement document (the plan's step 6). S8 and S9 are reported only if they occur naturally.
 
 **Not claimed.** Nothing here is a production number. Confirmation, retry, clarification-resolution and capture-submit turns, idempotent replays and early refusals are not stage-instrumented. FR-PERF-001 targets are not set.
+
+## 18. Phase 6 implementation record
+
+**Audit only; nothing was changed in code, schema or data.** The deliverable is `ASK_COZY_PROVENANCE_EVIDENCE_IMPACT_TRACE.md`. All findings are code-traced; no application code, database or browser was run, and the trace says so.
+
+**Method followed (plan §10).** Started from the existing Documents-retirement, Project Tracker, Negotiation Shield, Quote Comparison and Property Tax tracing and recorded which conclusions are still current, superseded or corrected (trace §1). Built the consumer matrix (§3), traced the five named journeys (§4), classified every discrepancy (§5), ran the methodology's adversarial pass (§6), and wrote focused designs for the demonstrated defects (§7).
+
+**Result.** F6 is **not** closed as documented debt. Three defects are demonstrated, and none needs a schema ownership change or a universal knowledge store:
+
+| # | Defect | Class |
+|---|---|---|
+| F6-1 | Correcting a Timeline event drops its Home Record evidence from the current revision | Provenance / referential integrity |
+| F6-2 | Linked-record titles are returned to roles that cannot see the record (Timeline, Material Spec, savings outcomes) | Authorization / visibility |
+| F6-3 | Inventory, warranty, insurance and claim documents ignore Home Record links | Missing interoperability |
+
+Six further findings are recorded (non-atomic event evidence attach, the growing legacy island, an unused `SignalProvenance`, the mixed `uploadedBy` meaning, an unreachable document-promotion function, and legacy trash semantics).
+
+**Acceptance check (plan §10).** Every named store has a traced producer and consumer or is flagged unused (`SignalProvenance`; `PropertyFactEvidence` cites no document). The audit identified concrete impact before recommending anything. No cross-store identifier is reinterpreted in the paths traced. Any design that changes data carries authorization, correction and retry semantics and is gated on an owner ruling.
+
+**Open, needs the owner:** OD-6.1 (move or copy `HOME_EVENT` links on a correction; recommendation: move), OD-6.2 (filter linked-record descriptors at read, at link time, or both; recommendation: both), OD-6.3 (a bridge read for entity documents now, or wait for the S5d retarget; recommendation: bridge for inventory items first). Also decide whether to correct §17.6 of the continuity plan, which calls an unreachable function live.
+
+**A claim downgraded by the adversarial pass.** The report export snapshot builds entity documents from the legacy relations only, but the PDF never prints them and sharing strips them, so it is recorded as a stored-snapshot gap and not a finding.
+
+**Not done.** No implementation, no data repair, no migration. A read-only diagnostic query for F6-1 is written in the trace for the owner to run.
