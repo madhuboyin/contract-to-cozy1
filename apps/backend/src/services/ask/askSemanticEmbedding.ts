@@ -1,5 +1,15 @@
 import { createHash } from 'node:crypto';
 
+// WHAT THIS IS, AND IS NOT (Findings Implementation Plan, Phase 4).
+// This module is deterministic feature hashing: a message becomes a 384-dimension signed vector by hashing (FNV-1a) its words, bigrams, character
+// 3/4/5-grams and the curated, operation-agnostic concept groups below into buckets, then normalizing. It has no trained weights and no learned
+// semantic representation; its reach beyond exact wording comes only from those curated concept groups, subword overlap and the examples each
+// operation owns. It is NOT an embedding model, a neural encoder or a vector database.
+// The names in this file and in its callers (`embedAskSemanticText`, `embeddingScore`, `embeddingEnabled`, `HYBRID_LOCAL_EMBEDDING`,
+// `ASK_LOCAL_EMBEDDING_VERSION`) are kept because they are stored in telemetry, the semantic-index version hash and certification evidence;
+// renaming them would need a versioned migration. Read them as "hashed feature vector". A learned or remote embedding would be a separate,
+// separately certified design (see docs/architecture/ASK_COZY_ROUTING_COVERAGE_AND_CALIBRATION.md), not an edit to this file.
+
 export const ASK_LOCAL_EMBEDDING_VERSION = 'local-synonym-subword-embedding-3.0';
 const DIMENSIONS = 384;
 

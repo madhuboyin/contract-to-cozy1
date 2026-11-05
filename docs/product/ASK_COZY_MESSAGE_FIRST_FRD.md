@@ -178,7 +178,7 @@ Steps 6 and 8 are independent — routing succeeding or failing does not gate ex
 
 ## 11. Routing Requirements
 
-**MF-013 — Requirement.** No change to deterministic routing itself (regex → local embedding classifier → confidence gate, per Stage 1/2, unchanged). **[OPEN]**: the specific routing-coverage misses Stage 1 traced (Scenario D "storms," Scenario E "selling next year") are pattern/example additions, not architecture — Stage 3's implementation plan should size adding these patterns as ordinary routing-quality work using the existing `askRoutingQualityEvaluator`/`askTrustCertificationCorpus` harness (**[FACT — this pass]**, confirmed to exist: `apps/backend/tests/ask/askRoutingCalibration.test.js` + a hand-labeled `CERTIFICATION_ROWS` corpus tagged by category), not a new evaluation system.
+**MF-013 — Requirement.** No change to deterministic routing itself (regex → local classifier → confidence gate, per Stage 1/2, unchanged; the local classifier is feature hashing over curated concept groups and character n-grams, not a learned embedding model). **[OPEN]**: the specific routing-coverage misses Stage 1 traced (Scenario D "storms," Scenario E "selling next year") are pattern/example additions, not architecture — Stage 3's implementation plan should size adding these patterns as ordinary routing-quality work using the existing `askRoutingQualityEvaluator`/`askTrustCertificationCorpus` harness (**[FACT — this pass]**, confirmed to exist: `apps/backend/tests/ask/askRoutingCalibration.test.js` + a hand-labeled `CERTIFICATION_ROWS` corpus tagged by category), not a new evaluation system.
 
 ---
 

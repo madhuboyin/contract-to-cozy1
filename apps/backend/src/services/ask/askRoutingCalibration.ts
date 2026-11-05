@@ -6,6 +6,8 @@ import { ASK_ROUTING_CALIBRATION_EVIDENCE_METADATA, ASK_ROUTING_CALIBRATION_OBSE
 import { createHash } from 'node:crypto';
 
 export const ASK_ROUTING_CALIBRATION_VERSION = 'routing-calibration-3.0';
+// 'HYBRID_LOCAL_EMBEDDING' means lexical/phrase/concept scoring fused with the local hashed feature vector (askSemanticEmbedding.ts), not a learned embedding.
+// The identifier is stored in calibration versions and telemetry and is deliberately not renamed.
 export type AskRetrievalPath = 'HYBRID_LOCAL_EMBEDDING' | 'LEXICAL_LOCAL';
 
 export interface AskRoutingCalibrationResult {

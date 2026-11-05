@@ -137,7 +137,7 @@ Background: Domain Event Outbox (KEEP) → per-type consumer (KEEP)
 
 ## 7. Router vs. Conversational Understanding
 
-**[FACT — Stage 1 + this pass]** Today: regex → local embedding classifier → closed operation catalog → `GROUNDED_GUIDANCE` fallback, whose own LLM call never extracts. Bounded, regex-based parameter extraction already exists for ~3 write operations (`extractMaintenanceTaskInput`, `extractMaintenanceCompletionInput`, `extractHouseholdInvitationInput`), scoped to that operation's fixed field set — this is a different mechanism from what's being designed here and should stay as-is.
+**[FACT — Stage 1 + this pass]** Today: regex → local classifier (feature hashing over curated concept groups and character n-grams; not a learned embedding model) → closed operation catalog → `GROUNDED_GUIDANCE` fallback, whose own LLM call never extracts. Bounded, regex-based parameter extraction already exists for ~3 write operations (`extractMaintenanceTaskInput`, `extractMaintenanceCompletionInput`, `extractHouseholdInvitationInput`), scoped to that operation's fixed field set — this is a different mechanism from what's being designed here and should stay as-is.
 
 **Alternatives considered (per the request's instruction not to assume "add an extraction stage" is automatically right):**
 

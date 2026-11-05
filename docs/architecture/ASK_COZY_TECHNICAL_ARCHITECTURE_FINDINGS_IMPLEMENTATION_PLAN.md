@@ -6,7 +6,7 @@
 
 **Planning basis:** code snapshot `61126057bbb063cd4a452c039289620952380655`, with the source review finalized through `79ed68fc`
 
-**Status:** Phases 0-2 implemented (see §14-§16); Phase 3 instrumentation and measurement contract built, measurements not yet taken (§17); Phase 6 audit complete, three defects demonstrated and designs awaiting owner rulings (§18); owner decisions AI-GOV-1 and AI-HEALTH-1 answered 2026-11-05; Phase 5 built (5A, 5B, 5C: §19; the Redis integration tests are authored, not yet run); Phase 4 not started
+**Status:** Phases 0-2 implemented (see §14-§16); Phase 3 instrumentation and measurement contract built, measurements not yet taken (§17); Phase 6 audit complete, three defects demonstrated and designs awaiting owner rulings (§18); owner decisions AI-GOV-1 and AI-HEALTH-1 answered 2026-11-05; Phase 5 built (5A, 5B, 5C: §19; the Redis integration tests are authored, not yet run); Phase 4 measurement and terminology done, routing unchanged, decisions pending (§20)
 
 ## 1. Purpose and evidence boundary
 
@@ -620,3 +620,21 @@ The owner has not yet said who runs the Redis integration tests. Until someone d
 | Rollback is a code revert | No dual-mode switch added |
 
 **Open for the owner:** who runs `tests/integration/aiGovernanceRedis.test.js` (8 tests) against a throwaway Redis. Until then, atomicity, the real concurrent single-winner probe and cross-pod behaviour are unproven.
+
+## 20. Phase 4 implementation record (measurement and terminology; routing unchanged)
+
+The plan made Phase 4 optional until a coverage report showed material routing gaps, and forbade changing corpus, weights or router behavior "merely as cleanup". So this phase measured first. Full results are in `ASK_COZY_ROUTING_COVERAGE_AND_CALIBRATION.md`.
+
+**Delivered**
+
+- `npm run report:ask-routing-coverage` (`src/scripts/askRoutingCoverageReport.ts`): runs the real deterministic router over the 121 independent fixtures and 5 regressions and reports outcomes by language, operation and confidence band, with the failure class (wrong operation, clarification by policy or ambiguity, remote fallback), operation coverage, and **every** calibration row that no longer matches live scoring.
+- `tests/ask/askRoutingCoverageReport.test.js` (10 tests): the mechanism wording; one outcome class per fixture; the safety gate takes only boundary fixtures; no wrong route at any confidence; floors at the measured baseline; the per-kind execution, ambiguity and HIGH-band thresholds unchanged; and a drift ratchet that fails if any fixture beyond the four known ones drifts.
+- Terminology: the local classifier is described as feature hashing over curated concept groups and character n-grams, not a learned embedding, in `askSemanticEmbedding.ts`, `askRoutingCalibration.ts`, `askSemanticRouter.ts`, MF-013, the target-architecture document and the two current-state lines of the Trust addendum. Stored identifiers (`HYBRID_LOCAL_EMBEDDING`, `embeddingScore`, `ASK_LOCAL_EMBEDDING_VERSION` and the rest) are unchanged because they are persisted; renaming needs a versioned migration.
+
+**Measured (executed, certification corpus only)**: 92 of 126 route correctly; none to a wrong operation; 8 clarify (6 by policy); 26 fall through to the remote fallback, and in 24 of those the right operation was ranked first. The shortfall is calibrated confidence under the execution threshold, not retrieval.
+
+**Found.** Four calibration fixtures (015, 065, 075 and 121) no longer match live scoring, which the Trust addendum requires to be recomputed exactly. The existing certification test stops at the first mismatch. Refreshing them was measured and **reverted**: it gives 93 correct, 14 clarifications, 19 fallbacks and no wrong routes, with MATERIAL unchanged and WRITE slightly stricter, but three previously correct fixtures start to clarify because the refreshed READ curve plateaus near 0.50.
+
+**Not done, by design.** No evidence refresh, example, weight, synonym, threshold or version change; no learned or remote embedding. Safety routing is untouched.
+
+**Open for the owner (OD-4.1 to OD-4.3):** apply the four-row refresh (recommended); name an independent reviewer for new paraphrases and hard negatives, buyer-journey operations first; and approve a separate study of the calibration plateau.

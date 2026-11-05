@@ -142,6 +142,7 @@ export interface AskSemanticCandidate {
   score: number;
   rawScore: number;
   lexicalScore: number;
+  /** Cosine similarity of the local hashed feature vectors (feature hashing over curated concepts and n-grams); null on the lexical-only path. Not a learned embedding score. */
   embeddingScore: number | null;
   confidenceBand: AskConfidenceBand;
   minimumExecutionConfidence: number;
