@@ -125,3 +125,33 @@ test('keys: only the versioned prefix, a kind and the route id are stored, and t
   assert.ok((await client.pttl(`${prefix}circuit:${id}`)) > 0, 'the circuit key has a TTL');
   assert.ok((await client.pttl(`${prefix}rate:${id}`)) > 0, 'the rate key has a TTL');
 });
+
+test('health: concurrent failures from many callers are counted exactly once each across processes', { skip }, async () => {
+  const Redis = require('ioredis');
+  const second = new Redis(url, { maxRetriesPerRequest: 1 });
+  try {
+    const other = new RedisAIGovernanceStore(second, prefix);
+    const id = route();
+    await Promise.all(Array.from({ length: 40 }, (_, i) => (i % 2 === 0 ? redisStore : other).recordRouteHealth(id, 'FAILURE', 3, `f${i}`)));
+    const health = await redisStore.readRouteHealth(id);
+    assert.equal(health.consecutiveFailures, 40, 'no failure was lost or double counted');
+    assert.equal(health.status, 'UNHEALTHY');
+    const ok = await other.recordRouteHealth(id, 'SUCCESS', 3, null);
+    assert.deepEqual([ok.status, ok.consecutiveFailures], ['HEALTHY', 0]);
+    assert.deepEqual((await redisStore.readRouteHealth(id)).status, 'HEALTHY');
+  } finally {
+    await second.quit();
+  }
+});
+
+test('health: an unobserved route reads as null, and the stored record agrees with the in-memory transition', { skip }, async () => {
+  const id = route();
+  assert.equal(await redisStore.readRouteHealth(id), null);
+  const memory = new InMemoryAIGovernanceStore();
+  for (const [outcome, message] of [['FAILURE', 'a'], ['FAILURE', 'b'], ['SUCCESS', null], ['FAILURE', 'c']]) {
+    const fromRedis = await redisStore.recordRouteHealth(id, outcome, 3, message);
+    const fromMemory = await memory.recordRouteHealth(id, outcome, 3, message);
+    assert.deepEqual([fromRedis.status, fromRedis.consecutiveFailures, fromRedis.message], [fromMemory.status, fromMemory.consecutiveFailures, fromMemory.message]);
+  }
+  assert.ok((await client.pttl(`${prefix}health:${id}`)) > 0, 'the health key has a TTL');
+});

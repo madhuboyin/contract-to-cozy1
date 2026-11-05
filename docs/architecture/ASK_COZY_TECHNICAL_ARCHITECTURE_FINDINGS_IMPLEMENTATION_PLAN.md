@@ -6,7 +6,7 @@
 
 **Planning basis:** code snapshot `61126057bbb063cd4a452c039289620952380655`, with the source review finalized through `79ed68fc`
 
-**Status:** Phases 0-2 implemented (see §14-§16); Phase 3 instrumentation and measurement contract built, measurements not yet taken (§17); Phase 6 audit complete, three defects demonstrated and designs awaiting owner rulings (§18); owner decisions AI-GOV-1 and AI-HEALTH-1 answered 2026-11-05; Phase 5A and 5B built (§19), 5C waiting on one owner confirmation; Phase 4 not started
+**Status:** Phases 0-2 implemented (see §14-§16); Phase 3 instrumentation and measurement contract built, measurements not yet taken (§17); Phase 6 audit complete, three defects demonstrated and designs awaiting owner rulings (§18); owner decisions AI-GOV-1 and AI-HEALTH-1 answered 2026-11-05; Phase 5 built (5A, 5B, 5C: §19; the Redis integration tests are authored, not yet run); Phase 4 not started
 
 ## 1. Purpose and evidence boundary
 
@@ -569,7 +569,7 @@ Six further findings are recorded (non-atomic event evidence attach, the growing
 
 **Not done.** No implementation, no data repair, no migration. A read-only diagnostic query for F6-1 is written in the trace for the owner to run.
 
-## 19. Phase 5 implementation record (5A and 5B built; 5C not started)
+## 19. Phase 5 implementation record (5A, 5B and 5C built)
 
 **Decisions applied.** AI-GOV-1 (2026-11-05): a short-lived, stricter, bounded per-process fallback with degraded-mode telemetry. AI-HEALTH-1 (2026-11-05): the global read-time representation, with its own precondition (see 5C below).
 
@@ -592,13 +592,31 @@ Six further findings are recorded (non-atomic event evidence attach, the growing
 
 The owner has not yet said who runs the Redis integration tests. Until someone does, atomicity and cross-pod behaviour are unproven, and the runbook says so.
 
-### 5C: not started, and what the consumer trace found
+### 5C delivered: global provider health read where source health is assembled
 
-AI-HEALTH-1 was accepted "if the Phase 5 consumer trace confirms that no durable property-specific event is required." The trace (code-traced) found:
+**Owner confirmation (2026-11-05).** After the consumer trace below, the owner confirmed the consequence ("yes"): AI incidents stop adding to the stale-output counts, and no per-property publication remains for AI routes.
 
-- `publishRouteHealthIfChanged` emits one `SOURCE_HEALTH_CHANGED` property change per property for each AI route transition, and each replica repeats it.
-- Two intelligence consumers declare `AI_SOURCE` health: `home-actions` and `capability-suggestions`. A transition makes the recompute service re-run `getHomeActionFeed` and `getCapabilitySuggestions` for every property and write an `IntelligenceConsumerCurrentness` row for each (STALE when the route is not CURRENT, CURRENT again after recovery). Neither consumer reads the AI route's health itself.
-- The only reader of those rows is `feedbackQualityAggregates.service.ts`, which counts stale and unavailable consumer outputs per capability version for the quality report. No user-facing surface reads them.
-- A registry-parity test (`phase7IntelligenceGovernance.test.js`) asserts that `AI_SOURCE` maps to those two consumers.
+**Consumer trace (code-traced).** The old path emitted one `SOURCE_HEALTH_CHANGED` per property per transition, repeated by each replica. Two consumers subscribed to `AI_SOURCE` (`home-actions`, `capability-suggestions`); a transition re-ran `getHomeActionFeed` and `getCapabilitySuggestions` for every property and wrote an `IntelligenceConsumerCurrentness` row (STALE when the route was not CURRENT). Neither consumer reads AI route health. The only reader of those rows is `feedbackQualityAggregates.service.ts` (stale and unavailable counts per capability version). The only place AI route health was ever read was `getUnifiedSourceHealth()` (the admin view), and it read a per-process snapshot, so it showed whatever the answering pod had seen.
 
-**Consequence of the preferred branch.** Removing the per-property publication means AI incidents stop adding stale-output counts to that quality report, and any rows already marked STALE by past incidents stay until some other trigger recomputes the consumer. Nothing user-facing changes. This needs the owner's confirmation before 5C is built; see the question put to the owner with this record.
+**Delivered**
+
+- `aiGovernanceStore.ts`: `recordRouteHealth` / `readRouteHealth` on the store port; a pure `transitionHealth`; a Redis implementation with two scripts (an atomic record that counts the failure run across processes using Redis `TIME`, and a read); the wrapper's health write throttle (successes at most every 15 s per route, failures and the success after one always written) and its outage behaviour.
+- `aiRequestGovernance.service.ts`: the per-process health map, the emitted-status cursor and `publishRouteHealthIfChanged` are gone, with the `allPropertyIds()` fan-out. `getAIRouteHealth(routeId)` returns the shared reading, or this process's last observation labelled `LOCAL_LAST_KNOWN` while the shared store is unavailable. `getAIRequestHealthSnapshot` was removed.
+- `sourceHealthProjection.service.ts`: the AI entries read `getAIRouteHealth`; the entry says when it is showing a last-known value or has none, and shows UNKNOWN rather than a guess.
+- Registry: AI sources are `healthPropagation: 'READ_TIME'` with no `healthEntityType` or `recomputeConsumerKeys`; `AI_SOURCE` is removed from the two consumers' `relevantSourceHealthEntityTypes`. `validateIntelligenceSourceRegistry` rejects a read-time source that declares a mapping and still requires one for every recompute source.
+- Not changed: `allPropertyIds` and `emitSourceHealthChangesForProperties` stay, because Service Price Benchmark health uses them. That is the same all-properties pattern and is a candidate for a separate review.
+- Tests: 10 new unit tests (shared failure run across two clients, thresholds and recovery, message bound, write throttle, outage reads, service integration, no fan-out references, registry modes, projection labelling), a Lua parity check for the health scripts, and 2 authored Redis tests. A stale count in `adminSourceHealth.test.js` (23 sources; the registry has 24 AI-plus-domain entries) was corrected; it failed before this change.
+
+### Acceptance (plan §9) and what remains unproven
+
+| Acceptance item | Status |
+|---|---|
+| Two simulated policy clients share one rate limit, one circuit transition and one failure run | Met in storage-port tests |
+| Redis tests prove one probe winner, TTL recovery and stale-token rejection | **Authored, not executed**; no Redis here |
+| A dead probe owner recovers and a stale owner cannot commit | Met in the state machine and the Lua parity run; not on a real Redis |
+| No route-health transition enumerates all properties | Met for AI routes (test); Service Price Benchmark still does |
+| Redis failure follows the AI-GOV-1 matrix for rate, circuit/probe and health | Met in unit tests; the publication-claim row is not applicable under the preferred branch |
+| No secret, prompt, message, property or user id in shared keys or metric labels | Met (key and label tests) |
+| Rollback is a code revert | No dual-mode switch added |
+
+**Open for the owner:** who runs `tests/integration/aiGovernanceRedis.test.js` (8 tests) against a throwaway Redis. Until then, atomicity, the real concurrent single-winner probe and cross-pod behaviour are unproven.

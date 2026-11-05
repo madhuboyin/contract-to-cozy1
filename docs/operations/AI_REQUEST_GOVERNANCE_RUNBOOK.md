@@ -24,6 +24,15 @@ Per-route request counts and circuit state are shared by every backend and worke
 - **Half-open probe.** When the open period ends, exactly one request across all processes is granted the probe. The grant is a lease (`AI_CIRCUIT_PROBE_TTL_MS`, default the larger of 30 s and twice the request timeout), so a probe whose process died frees the slot after the lease expires. A probe result is applied only if its token is still the lease holder; a slow, reclaimed probe cannot overwrite the current one. A request admitted while the circuit was closed whose result arrives after it opened is ignored (the old per-process breaker let a late success close an open circuit).
 - **Provider failure is availability only.** It never authorizes a request and never changes canonical records.
 
+### Provider health (owner decision AI-HEALTH-1, 2026-11-05)
+
+Each route has one shared health record (`ai:gov:v1:health:<routeId>`, kept 30 days idle) updated when a request finishes after its retries: a success marks it HEALTHY and clears the failure run; a failure extends the run across **all** processes and marks it DEGRADED, or UNHEALTHY once the run reaches `AI_CIRCUIT_FAILURE_THRESHOLD`. Successes are written at most every 15 seconds per route; a failure, and the first success after it, are always written. The admin source-health view (`GET /api/admin/source-health`) reads this record, so it shows the whole deployment's view rather than what the answering pod saw.
+
+- **Nothing is published to properties any more.** The old path enumerated every property and wrote a change event per property on each route transition, repeated by each replica. That path is removed for AI routes. Service Price Benchmark health still uses the all-properties path; it was not part of this change.
+- **What stopped.** `home-actions` and `capability-suggestions` used to be re-run for every property, and marked STALE, when an AI route changed health. Neither reads AI route health; the only reader of those currentness rows is the stale-output count in the feedback quality report. AI incidents therefore no longer add to that count, and currentness rows already marked STALE by earlier AI incidents stay until another trigger recomputes the consumer. No user-facing surface changed.
+- **Registry.** AI sources are declared `healthPropagation: 'READ_TIME'` with no PropertyChange mapping; the registry validator rejects a read-time source that declares one, and still requires a mapping for every recompute source.
+- **When Redis is unavailable** the admin view shows this process's own last observation, labelled "Shared AI health is unavailable; showing this process's last observation", or UNKNOWN if it has none. It never invents a status.
+
 ### When Redis is unavailable (owner decision AI-GOV-1, 2026-11-05)
 
 If a shared-state call errors or takes longer than `AI_GOVERNANCE_STORE_TIMEOUT_MS` (default 300), the process serves requests from a short-lived, **stricter** per-process fallback and retries Redis after `AI_GOVERNANCE_STORE_RETRY_MS` (default 5000).
@@ -33,7 +42,7 @@ If a shared-state call errors or takes longer than `AI_GOVERNANCE_STORE_TIMEOUT_
 - Deterministic Ask operations do not call this layer and are unaffected.
 - A probe granted by one store is recorded only to that store, so a local probe finishing after Redis recovers cannot change the shared circuit.
 
-Watch `ai_governance_degraded_total{component="rate"|"circuit", reason="ERROR"|"TIMEOUT"|"FALLBACK_ACTIVE"}`. A sustained non-zero rate means the shared state is not being used. If it is non-zero from the first deploy, check that `REDIS_HOST` is reachable from the pod and that the scripts load (`tests/unit/aiGovernanceLuaParity.test.js` checks them with a Lua interpreter).
+Watch `ai_governance_degraded_total{component="rate"|"circuit"|"health", reason="ERROR"|"TIMEOUT"|"FALLBACK_ACTIVE"}`. A sustained non-zero rate means the shared state is not being used. If it is non-zero from the first deploy, check that `REDIS_HOST` is reachable from the pod and that the scripts load (`tests/unit/aiGovernanceLuaParity.test.js` checks them with a Lua interpreter).
 
 A command that times out may still be queued by the Redis client and run after reconnect, so a recovery can briefly over-count the first window. During an outage at most one shared call per component is attempted per retry interval, which bounds this.
 

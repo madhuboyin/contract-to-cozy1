@@ -38,35 +38,32 @@ export interface AIRequestHealthSnapshot {
   consecutiveFailures: number;
   message: string | null;
 }
-const routeHealth = new Map<string, AIRequestHealthSnapshot>();
-const emittedRouteHealth = new Map<string, AIRequestHealthSnapshot['status']>();
 
-export function getAIRequestHealthSnapshot(routeId: string): AIRequestHealthSnapshot | null {
-  const snapshot = routeHealth.get(routeId);
-  return snapshot ? { ...snapshot } : null;
+/**
+ * What the admin source-health view shows for one AI route (owner decision AI-HEALTH-1). Health is one shared record per route, written when a
+ * request finishes and read where source health is assembled; nothing is published to individual properties. While the shared store is
+ * unavailable the reading is this process's own last observation, labelled LOCAL_LAST_KNOWN, or no snapshot at all, never a guess.
+ */
+export interface AIRouteHealthReading {
+  snapshot: AIRequestHealthSnapshot | null;
+  source: 'SHARED' | 'LOCAL_LAST_KNOWN';
+  sharedUnavailable: boolean;
 }
 
-async function publishRouteHealthIfChanged(routeId: string, snapshot: AIRequestHealthSnapshot): Promise<void> {
-  if (emittedRouteHealth.get(routeId) === snapshot.status) return;
-  try {
-    const [{ allPropertyIds, emitSourceHealthChangesForProperties }] = await Promise.all([
-      import('../intelligence/sourceHealthImpact.service'),
-    ]);
-    const propertyIds = await allPropertyIds();
-    await emitSourceHealthChangesForProperties({
-      propertyIds,
-      sourceType: 'AI_SOURCE',
-      sourceEntityId: routeId,
-      sourceRevision: `${snapshot.status}:${snapshot.lastAttemptAt.toISOString()}`,
-      health: snapshot.status === 'HEALTHY' ? 'CURRENT' : snapshot.status === 'DEGRADED' ? 'DEGRADED' : 'UNAVAILABLE',
-    });
-    emittedRouteHealth.set(routeId, snapshot.status);
-  } catch (err) {
-    // Keep the emitted-status cursor unchanged. The next request on this
-    // route retries the durable PropertyChange/recompute publication even
-    // when provider health itself did not change again.
-    logger.error({ err, routeId, status: snapshot.status }, '[AI-GOVERNANCE] source-health publication pending retry');
-  }
+export async function getAIRouteHealth(routeId: string): Promise<AIRouteHealthReading> {
+  const reading = await store().readRouteHealth(routeId);
+  const health = reading.health;
+  return {
+    snapshot: health ? {
+      status: health.status,
+      lastAttemptAt: new Date(health.lastAttemptAtMs),
+      lastSuccessAt: health.lastSuccessAtMs === null ? null : new Date(health.lastSuccessAtMs),
+      consecutiveFailures: health.consecutiveFailures,
+      message: health.message,
+    } : null,
+    source: reading.source,
+    sharedUnavailable: reading.sharedUnavailable,
+  };
 }
 
 function positiveInt(value: string | undefined, fallback: number): number {
@@ -188,6 +185,7 @@ export async function executeGovernedAIRequest<T>(input: {
   const registered = sourceRegistryEntry(input.routeId)!;
   const maxAttempts = Math.min(3, input.maxAttempts ?? positiveInt(env.AI_REQUEST_MAX_ATTEMPTS, registered.retryPolicy.maxAttempts));
   const timeoutMs = input.timeoutMs ?? positiveInt(env.AI_REQUEST_TIMEOUT_MS, 10_000);
+  const unhealthyThreshold = positiveInt(env.AI_CIRCUIT_FAILURE_THRESHOLD, 3);
   const backoffMs = positiveInt(env.AI_REQUEST_RETRY_BACKOFF_MS, registered.retryPolicy.backoffMs || 250);
   const startedAt = Date.now();
   let lastError: unknown;
@@ -203,9 +201,7 @@ export async function executeGovernedAIRequest<T>(input: {
       const completionRate = Number(env.AI_COMPLETION_USD_PER_MILLION_TOKENS ?? 0);
       const estimatedCost = ((usage.prompt * promptRate) + (usage.completion * completionRate)) / 1_000_000;
       if (Number.isFinite(estimatedCost) && estimatedCost > 0) estimatedCostUsd.inc({ route: input.routeId, model: input.model }, estimatedCost);
-      const healthySnapshot: AIRequestHealthSnapshot = { status: 'HEALTHY', lastAttemptAt: new Date(), lastSuccessAt: new Date(), consecutiveFailures: 0, message: null };
-      routeHealth.set(input.routeId, healthySnapshot);
-      await publishRouteHealthIfChanged(input.routeId, healthySnapshot);
+      await store().recordRouteHealth(input.routeId, 'SUCCESS', unhealthyThreshold, null);
       logger.info({ routeId: input.routeId, model: input.model, attempt, ...usage, estimatedCostUsd: estimatedCost }, '[AI-GOVERNANCE] request completed');
       return value;
     } catch (error) {
@@ -216,15 +212,7 @@ export async function executeGovernedAIRequest<T>(input: {
   requestTotal.inc({ route: input.routeId, model: input.model, outcome: 'failure' });
   requestDuration.observe({ route: input.routeId, model: input.model, outcome: 'failure' }, (Date.now() - startedAt) / 1000);
   logger.warn({ err: lastError, routeId: input.routeId, model: input.model }, '[AI-GOVERNANCE] request exhausted retry policy');
-  const previous = routeHealth.get(input.routeId);
-  const consecutiveFailures = (previous?.consecutiveFailures ?? 0) + 1;
-  const failedSnapshot: AIRequestHealthSnapshot = {
-    status: consecutiveFailures >= positiveInt(env.AI_CIRCUIT_FAILURE_THRESHOLD, 3) ? 'UNHEALTHY' : 'DEGRADED',
-    lastAttemptAt: new Date(), lastSuccessAt: previous?.lastSuccessAt ?? null, consecutiveFailures,
-    message: lastError instanceof Error ? lastError.message.slice(0, 500) : 'AI provider request failed.',
-  };
-  routeHealth.set(input.routeId, failedSnapshot);
-  await publishRouteHealthIfChanged(input.routeId, failedSnapshot);
+  await store().recordRouteHealth(input.routeId, 'FAILURE', unhealthyThreshold, lastError instanceof Error ? lastError.message.slice(0, 500) : 'AI provider request failed.');
   throw lastError;
 }
 
@@ -232,6 +220,4 @@ export function resetAIRequestGovernanceForTests(): void {
   // Tests always run against fresh per-process state, never against a shared store.
   const local = new InMemoryAIGovernanceStore();
   governanceStore = new ResilientAIGovernanceStore(local, local, { commandTimeoutMs: 300, retryAfterFailureMs: 5_000 });
-  routeHealth.clear();
-  emittedRouteHealth.clear();
 }

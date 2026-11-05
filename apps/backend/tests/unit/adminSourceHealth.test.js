@@ -59,7 +59,7 @@ const { getUnifiedSourceHealth } = require('../../src/services/intelligence/sour
 
 test('getUnifiedSourceHealth combines domain health stores and registered AI routes into one sorted, normalized list', async () => {
   const sources = await getUnifiedSourceHealth();
-  assert.equal(sources.length, 23);
+  assert.equal(sources.length, 24); // 3 radar + 1 benchmark + 20 registered AI routes
   assert.ok(sources.some((source) => source.sourceKey === 'ai:ask'));
   assert.deepEqual(
     sources.filter((source) => source.domain === 'HOME_EVENT_RADAR').map((source) => source.sourceKey),

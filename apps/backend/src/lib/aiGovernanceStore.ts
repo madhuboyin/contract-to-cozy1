@@ -42,6 +42,19 @@ export interface CircuitRecordResult {
   state: SharedCircuitState;
 }
 
+/** One route's provider health, shared by every process (owner decision AI-HEALTH-1: global state read where source health is assembled). */
+export type SharedHealthStatus = 'HEALTHY' | 'DEGRADED' | 'UNHEALTHY';
+
+export interface SharedRouteHealth {
+  status: SharedHealthStatus;
+  lastAttemptAtMs: number;
+  lastSuccessAtMs: number | null;
+  consecutiveFailures: number;
+  message: string | null;
+}
+
+export const MAX_HEALTH_MESSAGE_LENGTH = 500;
+
 export interface AIGovernanceStore {
   readonly kind: 'REDIS' | 'MEMORY';
   /** Counts one request in the route's fixed window and returns the count including this one. The window starts at its first request. */
@@ -50,6 +63,10 @@ export interface AIGovernanceStore {
   circuitAcquire(routeId: string, config: CircuitConfig, token: string): Promise<CircuitAcquire>;
   /** Records the outcome. Pass the probe token when the request was granted PROBE, otherwise null. */
   circuitRecord(routeId: string, outcome: 'SUCCESS' | 'FAILURE', config: CircuitConfig, token: string | null): Promise<CircuitRecordResult>;
+  /** Records one request's final outcome (after retries) and returns the new shared health. Failures are counted across all processes. */
+  recordRouteHealth(routeId: string, outcome: 'SUCCESS' | 'FAILURE', unhealthyThreshold: number, message: string | null): Promise<SharedRouteHealth>;
+  /** The shared health, or null when the route has not been observed. */
+  readRouteHealth(routeId: string): Promise<SharedRouteHealth | null>;
 }
 
 // ── Pure circuit transitions ────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -109,6 +126,27 @@ export function transitionRecord(
   return { next: { ...record, failures }, result: { applied: true, state: 'CLOSED' } };
 }
 
+/** A success is HEALTHY and clears the failure run; a failure extends the run and is UNHEALTHY once it reaches the threshold. The Lua script mirrors this. */
+export function transitionHealth(
+  previous: SharedRouteHealth | null,
+  outcome: 'SUCCESS' | 'FAILURE',
+  nowMs: number,
+  unhealthyThreshold: number,
+  message: string | null,
+): SharedRouteHealth {
+  if (outcome === 'SUCCESS') {
+    return { status: 'HEALTHY', lastAttemptAtMs: nowMs, lastSuccessAtMs: nowMs, consecutiveFailures: 0, message: null };
+  }
+  const consecutiveFailures = (previous?.consecutiveFailures ?? 0) + 1;
+  return {
+    status: consecutiveFailures >= unhealthyThreshold ? 'UNHEALTHY' : 'DEGRADED',
+    lastAttemptAtMs: nowMs,
+    lastSuccessAtMs: previous?.lastSuccessAtMs ?? null,
+    consecutiveFailures,
+    message: message === null ? null : message.slice(0, MAX_HEALTH_MESSAGE_LENGTH),
+  };
+}
+
 // ── In-memory implementation (test double and local fallback) ───────────────────────────────────────────────────────────────────────
 
 export class InMemoryAIGovernanceStore implements AIGovernanceStore {
@@ -139,6 +177,19 @@ export class InMemoryAIGovernanceStore implements AIGovernanceStore {
     const { next, result } = transitionRecord(this.circuits.get(routeId) ?? closedCircuit(), outcome, this.now(), config, token);
     this.circuits.set(routeId, next);
     return result;
+  }
+
+  private readonly healths = new Map<string, SharedRouteHealth>();
+
+  async recordRouteHealth(routeId: string, outcome: 'SUCCESS' | 'FAILURE', unhealthyThreshold: number, message: string | null): Promise<SharedRouteHealth> {
+    const next = transitionHealth(this.healths.get(routeId) ?? null, outcome, this.now(), unhealthyThreshold, message);
+    this.healths.set(routeId, next);
+    return { ...next };
+  }
+
+  async readRouteHealth(routeId: string): Promise<SharedRouteHealth | null> {
+    const found = this.healths.get(routeId);
+    return found ? { ...found } : null;
   }
 
   /** For tests: the current record, or the closed default. */
@@ -230,6 +281,39 @@ redis.call('PEXPIRE', key, keyTtl)
 return {1, 'CLOSED'}
 `;
 
+/** Records a request's final outcome atomically, so the failure run is counted across processes. Mirrors transitionHealth. */
+export const HEALTH_RECORD_LUA = `
+local key = KEYS[1]
+local outcome = ARGV[1]
+local threshold = tonumber(ARGV[2])
+local message = ARGV[3]
+local keyTtl = tonumber(ARGV[4])
+local t = redis.call('TIME')
+local now = tonumber(t[1]) * 1000 + math.floor(tonumber(t[2]) / 1000)
+if outcome == 'SUCCESS' then
+  redis.call('DEL', key)
+  redis.call('HSET', key, 'status', 'HEALTHY', 'lastAttemptAtMs', now, 'lastSuccessAtMs', now, 'consecutiveFailures', 0)
+  redis.call('PEXPIRE', key, keyTtl)
+  return {'HEALTHY', 0, now, now, ''}
+end
+local failures = tonumber(redis.call('HGET', key, 'consecutiveFailures') or '0') + 1
+local status = 'DEGRADED'
+if failures >= threshold then status = 'UNHEALTHY' end
+local lastSuccess = redis.call('HGET', key, 'lastSuccessAtMs')
+redis.call('HSET', key, 'status', status, 'lastAttemptAtMs', now, 'consecutiveFailures', failures, 'message', message)
+redis.call('PEXPIRE', key, keyTtl)
+if not lastSuccess then lastSuccess = '' end
+return {status, failures, now, lastSuccess, message}
+`;
+
+export const HEALTH_READ_LUA = `
+local h = redis.call('HGETALL', KEYS[1])
+return h
+`;
+
+/** Health is kept for a month idle, then the route reads as never observed. */
+const HEALTH_KEY_TTL_MS = 30 * 24 * 3_600_000;
+
 /** Stale-key expiry: an idle route's circuit key disappears on its own, which is the same as a closed circuit. */
 const circuitKeyTtlMs = (config: CircuitConfig): number => Math.max(config.openMs * 10, 3_600_000);
 
@@ -238,7 +322,7 @@ export class RedisAIGovernanceStore implements AIGovernanceStore {
 
   constructor(private readonly client: RedisEvalClient, private readonly prefix = 'ai:gov:v1:') {}
 
-  private key(kind: 'rate' | 'circuit', routeId: string): string {
+  private key(kind: 'rate' | 'circuit' | 'health', routeId: string): string {
     return `${this.prefix}${kind}:${routeId}`;
   }
 
@@ -260,6 +344,32 @@ export class RedisAIGovernanceStore implements AIGovernanceStore {
     ) as [number, SharedCircuitState];
     return { applied: Number(reply[0]) === 1, state: reply[1] };
   }
+
+  async recordRouteHealth(routeId: string, outcome: 'SUCCESS' | 'FAILURE', unhealthyThreshold: number, message: string | null): Promise<SharedRouteHealth> {
+    const reply = await this.client.eval(
+      HEALTH_RECORD_LUA, 1, this.key('health', routeId), outcome, unhealthyThreshold, (message ?? '').slice(0, MAX_HEALTH_MESSAGE_LENGTH), HEALTH_KEY_TTL_MS,
+    ) as [SharedHealthStatus, number, number, number | string, string];
+    const lastSuccess = reply[3] === '' || reply[3] === null ? null : Number(reply[3]);
+    return {
+      status: reply[0], consecutiveFailures: Number(reply[1]), lastAttemptAtMs: Number(reply[2]),
+      lastSuccessAtMs: lastSuccess, message: reply[4] === '' ? null : reply[4],
+    };
+  }
+
+  async readRouteHealth(routeId: string): Promise<SharedRouteHealth | null> {
+    const flat = await this.client.eval(HEALTH_READ_LUA, 1, this.key('health', routeId)) as string[];
+    if (!Array.isArray(flat) || flat.length === 0) return null;
+    const fields: Record<string, string> = {};
+    for (let i = 0; i + 1 < flat.length; i += 2) fields[flat[i]] = flat[i + 1];
+    if (!fields.status) return null;
+    return {
+      status: fields.status as SharedHealthStatus,
+      lastAttemptAtMs: Number(fields.lastAttemptAtMs ?? 0),
+      lastSuccessAtMs: fields.lastSuccessAtMs ? Number(fields.lastSuccessAtMs) : null,
+      consecutiveFailures: Number(fields.consecutiveFailures ?? 0),
+      message: fields.message ? fields.message : null,
+    };
+  }
 }
 
 // ── Outage behaviour (AI-GOV-1) ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -270,7 +380,7 @@ const degradedTotal = new Counter({
   labelNames: ['component', 'reason'] as const,
 });
 
-export type GovernanceComponent = 'rate' | 'circuit';
+export type GovernanceComponent = 'rate' | 'circuit' | 'health';
 
 export interface ResilientOptions {
   /** A shared-store call that takes longer than this counts as a failure, so a Redis stall cannot stall an AI request. */
@@ -278,6 +388,8 @@ export interface ResilientOptions {
   /** After a failure, serve from the fallback for this long before trying the shared store again. */
   retryAfterFailureMs: number;
   now?: () => number;
+  /** A success is written to the shared health at most this often per route; a failure is always written. Bounds write volume to the request rate of one route. */
+  healthSuccessWriteIntervalMs?: number;
 }
 
 export interface RateReading {
@@ -300,8 +412,17 @@ const withDeadline = <T>(work: Promise<T>, ms: number): Promise<T> => new Promis
   work.then((value) => { clearTimeout(timer); resolve(value); }, (error) => { clearTimeout(timer); reject(error); });
 });
 
+export interface HealthReading {
+  health: SharedRouteHealth | null;
+  /** SHARED is every process's combined view. LOCAL_LAST_KNOWN is only what this process last observed, used while the shared store is unavailable. */
+  source: 'SHARED' | 'LOCAL_LAST_KNOWN';
+  sharedUnavailable: boolean;
+}
+
 export class ResilientAIGovernanceStore {
   private degradedUntil = 0;
+  private readonly lastSharedHealthWrite = new Map<string, { at: number; outcome: 'SUCCESS' | 'FAILURE' }>();
+  private readonly lastKnownHealth = new Map<string, SharedRouteHealth>();
   private readonly now: () => number;
 
   constructor(
@@ -349,6 +470,44 @@ export class ResilientAIGovernanceStore {
       degradedTotal.inc({ component: 'circuit', reason: 'FALLBACK_ACTIVE' });
     }
     return toPermit(await this.local.circuitAcquire(routeId, config, token), 'LOCAL');
+  }
+
+  /**
+   * Records a request's final outcome. The local last-known value is always updated (it is what a read serves during an outage); the shared write
+   * is skipped while degraded and, for a success, throttled. Never throws: health bookkeeping must not change a request's own result.
+   */
+  async recordRouteHealth(routeId: string, outcome: 'SUCCESS' | 'FAILURE', unhealthyThreshold: number, message: string | null): Promise<void> {
+    const now = this.now();
+    this.lastKnownHealth.set(routeId, transitionHealth(this.lastKnownHealth.get(routeId) ?? null, outcome, now, unhealthyThreshold, message));
+    if (this.isDegraded()) {
+      degradedTotal.inc({ component: 'health', reason: 'FALLBACK_ACTIVE' });
+      return;
+    }
+    const interval = this.options.healthSuccessWriteIntervalMs ?? 15_000;
+    const last = this.lastSharedHealthWrite.get(routeId);
+    // A success right after a recorded failure is always written, so the failure run clears promptly; repeated successes are throttled.
+    if (outcome === 'SUCCESS' && last?.outcome === 'SUCCESS' && now - last.at < interval) return;
+    try {
+      await withDeadline(this.shared.recordRouteHealth(routeId, outcome, unhealthyThreshold, message), this.options.commandTimeoutMs);
+      this.lastSharedHealthWrite.set(routeId, { at: now, outcome });
+    } catch (error) {
+      this.fail('health', error);
+    }
+  }
+
+  /** The shared health when reachable; otherwise this process's last observation, labelled as such, or null when it has none. */
+  async readRouteHealth(routeId: string): Promise<HealthReading> {
+    if (!this.isDegraded()) {
+      try {
+        return { health: await withDeadline(this.shared.readRouteHealth(routeId), this.options.commandTimeoutMs), source: 'SHARED', sharedUnavailable: false };
+      } catch (error) {
+        this.fail('health', error);
+      }
+    } else {
+      degradedTotal.inc({ component: 'health', reason: 'FALLBACK_ACTIVE' });
+    }
+    const known = this.lastKnownHealth.get(routeId);
+    return { health: known ? { ...known } : null, source: 'LOCAL_LAST_KNOWN', sharedUnavailable: true };
   }
 
   /** Never throws: a failure to record must not mask the request's own result. A permit from one store is only ever recorded to that store. */

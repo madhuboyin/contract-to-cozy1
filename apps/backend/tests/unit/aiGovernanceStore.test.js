@@ -13,6 +13,12 @@ const {
 } = store;
 const governance = require('../../src/services/ai/aiRequestGovernance.service.ts');
 const { register } = require('prom-client');
+const fs = require('node:fs');
+const path = require('node:path');
+const { transitionHealth } = store;
+const sourceRegistry = require('../../src/services/intelligence/sourceRegistry.ts');
+const consumerRegistry = require('../../src/services/intelligence/intelligenceConsumerRegistry.ts');
+const projection = require('../../src/services/intelligence/sourceHealthProjection.service.ts');
 
 const config = { failureThreshold: 3, openMs: 1000, probeTtlMs: 500 };
 const clock = (start = 1_000_000) => { let now = start; return { now: () => now, advance: (ms) => { now += ms; } }; };
@@ -231,4 +237,131 @@ test('Redis keys carry only a version prefix, a kind and a registered route id; 
 test('governance metric labels are fixed and carry no route, user, property or message', () => {
   const metric = register.getSingleMetric('ai_governance_degraded_total');
   assert.deepEqual(metric.labelNames, ['component', 'reason']);
+});
+
+// ── 5C: provider health as one shared record read where source health is assembled (owner decision AI-HEALTH-1) ───────────────────────────────
+
+test('health: a failure run is DEGRADED then UNHEALTHY at the threshold, keeps the last success, and a success clears it', async () => {
+  const c = clock();
+  const memory = new InMemoryAIGovernanceStore(c.now);
+  assert.equal(await memory.readRouteHealth('ai:ask'), null, 'never observed');
+  const ok = await memory.recordRouteHealth('ai:ask', 'SUCCESS', 3, null);
+  assert.deepEqual([ok.status, ok.consecutiveFailures, ok.lastSuccessAtMs], ['HEALTHY', 0, 1_000_000]);
+  c.advance(10);
+  const first = await memory.recordRouteHealth('ai:ask', 'FAILURE', 3, 'provider 500');
+  assert.deepEqual([first.status, first.consecutiveFailures, first.lastSuccessAtMs, first.message], ['DEGRADED', 1, 1_000_000, 'provider 500']);
+  await memory.recordRouteHealth('ai:ask', 'FAILURE', 3, 'again');
+  assert.equal((await memory.recordRouteHealth('ai:ask', 'FAILURE', 3, 'third')).status, 'UNHEALTHY');
+  const recovered = await memory.recordRouteHealth('ai:ask', 'SUCCESS', 3, null);
+  assert.deepEqual([recovered.status, recovered.consecutiveFailures, recovered.message], ['HEALTHY', 0, null]);
+});
+
+test('health: a long provider message is bounded', () => {
+  const next = transitionHealth(null, 'FAILURE', 5, 3, 'x'.repeat(2000));
+  assert.equal(next.message.length, 500);
+});
+
+test('health: two processes share one failure run, which a per-process count could not', async () => {
+  const shared = new InMemoryAIGovernanceStore();
+  const a = new ResilientAIGovernanceStore(shared, new InMemoryAIGovernanceStore(), { commandTimeoutMs: 100, retryAfterFailureMs: 1000 });
+  const b = new ResilientAIGovernanceStore(shared, new InMemoryAIGovernanceStore(), { commandTimeoutMs: 100, retryAfterFailureMs: 1000 });
+  await a.recordRouteHealth('ai:ask', 'FAILURE', 2, 'a');
+  await b.recordRouteHealth('ai:ask', 'FAILURE', 2, 'b');
+  const seen = await a.readRouteHealth('ai:ask');
+  assert.deepEqual([seen.source, seen.health.consecutiveFailures, seen.health.status], ['SHARED', 2, 'UNHEALTHY']);
+});
+
+test('health: successes are written to the shared record at most once per interval, but a failure and the success after it are always written', async () => {
+  const c = clock();
+  const writes = [];
+  const real = new InMemoryAIGovernanceStore(c.now);
+  const counting = { ...real, kind: 'REDIS', recordRouteHealth: (r, o, t, m) => { writes.push(o); return real.recordRouteHealth(r, o, t, m); }, readRouteHealth: (r) => real.readRouteHealth(r), incrementRateWindow: real.incrementRateWindow.bind(real), circuitAcquire: real.circuitAcquire.bind(real), circuitRecord: real.circuitRecord.bind(real) };
+  const resilient = new ResilientAIGovernanceStore(counting, new InMemoryAIGovernanceStore(c.now), { commandTimeoutMs: 50, retryAfterFailureMs: 1000, now: c.now, healthSuccessWriteIntervalMs: 15_000 });
+  for (let i = 0; i < 5; i += 1) { await resilient.recordRouteHealth('ai:ask', 'SUCCESS', 3, null); c.advance(1000); }
+  assert.deepEqual(writes, ['SUCCESS'], 'five successes inside the interval wrote once');
+  await resilient.recordRouteHealth('ai:ask', 'FAILURE', 3, 'x');
+  await resilient.recordRouteHealth('ai:ask', 'SUCCESS', 3, null);
+  assert.deepEqual(writes, ['SUCCESS', 'FAILURE', 'SUCCESS'], 'a failure and the success right after it are never throttled');
+  c.advance(15_000);
+  await resilient.recordRouteHealth('ai:ask', 'SUCCESS', 3, null);
+  assert.equal(writes.length, 4, 'a success after the interval is written again');
+});
+
+test('AI-GOV-1 for health: with the shared store down a read serves this process\'s own last observation, labelled, or nothing, never a guess; it recovers', async () => {
+  const c = clock();
+  let down = true;
+  const real = new InMemoryAIGovernanceStore(c.now);
+  const gate = (fn) => (...args) => (down ? Promise.reject(new Error('redis down')) : fn(...args));
+  const flaky = { kind: 'REDIS', incrementRateWindow: gate((...a) => real.incrementRateWindow(...a)), circuitAcquire: gate((...a) => real.circuitAcquire(...a)), circuitRecord: gate((...a) => real.circuitRecord(...a)), recordRouteHealth: gate((...a) => real.recordRouteHealth(...a)), readRouteHealth: gate((...a) => real.readRouteHealth(...a)) };
+  const resilient = new ResilientAIGovernanceStore(flaky, new InMemoryAIGovernanceStore(c.now), { commandTimeoutMs: 50, retryAfterFailureMs: 1000, now: c.now });
+  const none = await resilient.readRouteHealth('ai:ask');
+  assert.deepEqual([none.health, none.source, none.sharedUnavailable], [null, 'LOCAL_LAST_KNOWN', true]);
+  await resilient.recordRouteHealth('ai:ask', 'FAILURE', 3, 'seen here');
+  const lastKnown = await resilient.readRouteHealth('ai:ask');
+  assert.deepEqual([lastKnown.health.status, lastKnown.health.message, lastKnown.source, lastKnown.sharedUnavailable], ['DEGRADED', 'seen here', 'LOCAL_LAST_KNOWN', true]);
+  down = false;
+  c.advance(1000);
+  const back = await resilient.readRouteHealth('ai:ask');
+  assert.deepEqual([back.source, back.sharedUnavailable, back.health], ['SHARED', false, null], 'the shared view is authoritative again, and it never saw the outage-time failure');
+  assert.match(await register.metrics(), /ai_governance_degraded_total\{component="health",reason="(ERROR|FALLBACK_ACTIVE)"\} \d+/);
+});
+
+test('service: a governed request records shared health, and a failed request run reaches UNHEALTHY at the configured threshold', async () => {
+  governance.resetAIRequestGovernanceForTests();
+  assert.equal((await governance.getAIRouteHealth('ai:ask')).snapshot, null, 'nothing observed yet');
+  const env = { AI_CIRCUIT_FAILURE_THRESHOLD: '2', AI_REQUEST_MAX_ATTEMPTS: '1', AI_CIRCUIT_OPEN_MS: '60000' };
+  await governance.executeGovernedAIRequest({ routeId: 'ai:ask', model: 'm', env, work: async () => ({}) });
+  assert.equal((await governance.getAIRouteHealth('ai:ask')).snapshot.status, 'HEALTHY');
+  await assert.rejects(governance.executeGovernedAIRequest({ routeId: 'ai:ask', model: 'm', env, work: async () => { throw new Error('provider down'); } }), /provider down/);
+  assert.deepEqual([(await governance.getAIRouteHealth('ai:ask')).snapshot.status, (await governance.getAIRouteHealth('ai:ask')).snapshot.consecutiveFailures], ['DEGRADED', 1]);
+  await assert.rejects(governance.executeGovernedAIRequest({ routeId: 'ai:ask', model: 'm', env, work: async () => { throw new Error('provider down'); } }), /provider down/);
+  const unhealthy = await governance.getAIRouteHealth('ai:ask');
+  assert.equal(unhealthy.snapshot.status, 'UNHEALTHY');
+  assert.equal(unhealthy.snapshot.lastSuccessAt instanceof Date, true, 'the last success is kept');
+  governance.resetAIRequestGovernanceForTests();
+});
+
+test('5C: governed AI no longer fans a health change out to properties', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../../src/services/ai/aiRequestGovernance.service.ts'), 'utf8');
+  for (const forbidden of ['allPropertyIds', 'emitSourceHealthChangesForProperties', 'sourceHealthImpact', 'publishRouteHealthIfChanged', 'emittedRouteHealth', 'SOURCE_HEALTH_CHANGED']) {
+    assert.equal(source.includes(forbidden), false, `${forbidden} must not be referenced by the AI governance path`);
+  }
+});
+
+test('5C: every AI source is a read-time source with no recompute mapping, and no consumer subscribes to a health type nothing emits', () => {
+  assert.deepEqual(sourceRegistry.validateIntelligenceSourceRegistry(), []);
+  for (const entry of sourceRegistry.AI_SOURCE_REGISTRY) {
+    assert.equal(entry.healthPropagation, 'READ_TIME', entry.sourceId);
+    assert.equal(entry.healthEntityType, undefined, entry.sourceId);
+    assert.equal(entry.recomputeConsumerKeys, undefined, entry.sourceId);
+  }
+  const emitted = new Set(sourceRegistry.INTELLIGENCE_SOURCE_REGISTRY.map((entry) => entry.healthEntityType).filter(Boolean));
+  const subscribed = new Set(consumerRegistry.INTELLIGENCE_CONSUMER_REGISTRY.flatMap((consumer) => consumer.relevantSourceHealthEntityTypes ?? []));
+  assert.equal(subscribed.has('AI_SOURCE'), false);
+  // PROPERTY_INTELLIGENCE_SOURCE is emitted by property intelligence code rather than a registry entry; the point is only that AI_SOURCE is gone.
+  assert.equal(emitted.has('AI_SOURCE'), false);
+});
+
+test('5C: the registry still rejects a recompute source without a mapping, and a read-time source that declares one', () => {
+  const base = { sourceId: 'x:y', kind: 'EXTERNAL', owner: 'o', capabilityConsumers: ['c'], freshnessSlaSeconds: 1, credentialConfigRequirements: ['k'], retryPolicy: { maxAttempts: 1, backoffMs: 0 }, fallbackBehavior: 'f', userVisibleDegradationMessage: 'm', operationalRunbook: 'r' };
+  assert.match(sourceRegistry.validateIntelligenceSourceRegistry([{ ...base }]).join(), /missing source-health recompute mapping/);
+  assert.match(sourceRegistry.validateIntelligenceSourceRegistry([{ ...base, healthPropagation: 'READ_TIME', healthEntityType: 'T', recomputeConsumerKeys: ['home-actions'] }]).join(), /read-time source must not declare a recompute mapping/);
+  assert.deepEqual(sourceRegistry.validateIntelligenceSourceRegistry([{ ...base, healthPropagation: 'READ_TIME' }]), []);
+});
+
+test('5C: the admin projection shows shared health, labels last-known readings, and never invents a status', () => {
+  const entry = sourceRegistry.AI_SOURCE_REGISTRY[0];
+  const env = { GEMINI_API_KEY: 'k' };
+  const snapshot = { status: 'UNHEALTHY', lastAttemptAt: new Date('2026-11-05T10:00:00Z'), lastSuccessAt: new Date('2026-11-05T09:00:00Z'), consecutiveFailures: 4, message: 'provider 500' };
+  const shared = projection.mapAIRegistryHealth(entry, env, { snapshot, source: 'SHARED', sharedUnavailable: false });
+  assert.deepEqual([shared.status, shared.consecutiveFailures, shared.message], ['UNHEALTHY', 4, 'provider 500']);
+  const lastKnown = projection.mapAIRegistryHealth(entry, env, { snapshot, source: 'LOCAL_LAST_KNOWN', sharedUnavailable: true });
+  assert.equal(lastKnown.status, 'UNHEALTHY');
+  assert.match(lastKnown.message, /Shared AI health is unavailable; showing this process's last observation \(2026-11-05T10:00:00.000Z\)/);
+  const nothing = projection.mapAIRegistryHealth(entry, env, { snapshot: null, source: 'LOCAL_LAST_KNOWN', sharedUnavailable: true });
+  assert.deepEqual([nothing.status, nothing.lastCheckedAt], ['UNKNOWN', null]);
+  assert.match(nothing.message, /Shared AI health is unavailable and this process has not observed/);
+  assert.equal(projection.mapAIRegistryHealth(entry, { GEMINI_API_KEY: 'k', AI_REQUESTS_ENABLED: 'false' }, { snapshot, source: 'SHARED', sharedUnavailable: false }).status, 'DISABLED');
+  assert.equal(projection.mapAIRegistryHealth(entry, {}, { snapshot, source: 'SHARED', sharedUnavailable: false }).status, 'UNKNOWN', 'no credential configured');
+  assert.equal(projection.mapAIRegistryHealth(entry, env, null).status, 'UNKNOWN');
 });

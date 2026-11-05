@@ -1,6 +1,6 @@
 import { prisma } from '../../lib/prisma';
 import { AI_SOURCE_REGISTRY, sourceRegistryEntry, type IntelligenceSourceRegistryEntry } from './sourceRegistry';
-import { getAIRequestHealthSnapshot, type AIRequestHealthSnapshot } from '../ai/aiRequestGovernance.service';
+import { getAIRouteHealth, type AIRouteHealthReading } from '../ai/aiRequestGovernance.service';
 
 /**
  * Home Intelligence Functional Completeness FRD Phase 7 (HI-SRC-002) — one
@@ -159,19 +159,32 @@ export function mapPropertyIntelligenceSourceHealth(source: PropertyIntelligence
   };
 }
 
-export function mapAIRegistryHealth(entry: IntelligenceSourceRegistryEntry, env: NodeJS.ProcessEnv = process.env, runtime: AIRequestHealthSnapshot | null = getAIRequestHealthSnapshot(entry.sourceId)): UnifiedSourceHealthEntry {
+/**
+ * AI route health is one shared record per route (owner decision AI-HEALTH-1), so this view shows every process's combined result instead of
+ * whatever the answering process happened to observe. When the shared store is unreachable the entry says so: it shows this process's own last
+ * observation labelled as such, or UNKNOWN if it has none. It never invents a status.
+ */
+export function mapAIRegistryHealth(entry: IntelligenceSourceRegistryEntry, env: NodeJS.ProcessEnv = process.env, reading: AIRouteHealthReading | null = null): UnifiedSourceHealthEntry {
   const routeKey = entry.sourceId.replace(/^ai:/, '').replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
   const disabled = env.AI_REQUESTS_ENABLED === 'false' || env[`AI_ROUTE_${routeKey}_ENABLED`] === 'false';
   const configured = Boolean(env.GEMINI_API_KEY);
+  const runtime = reading?.snapshot ?? null;
+  const lastKnownOnly = Boolean(reading?.sharedUnavailable);
+  const observedAt = runtime?.lastAttemptAt.toISOString() ?? null;
+  const message = disabled ? 'Disabled by an operator control.'
+    : !configured ? 'Required AI credential is not configured.'
+      : lastKnownOnly
+        ? (runtime
+          ? `Shared AI health is unavailable; showing this process's last observation (${observedAt}). ${runtime.message ?? ''}`.trim()
+          : 'Shared AI health is unavailable and this process has not observed a governed request.')
+        : runtime?.message ?? 'Configured; no governed request has been observed yet.';
   return {
     domain: 'AI', sourceKey: entry.sourceId, name: entry.sourceId.replace(/^ai:/, '').replace(/-/g, ' '),
     status: disabled ? 'DISABLED' : !configured ? 'UNKNOWN' : runtime?.status ?? 'UNKNOWN',
     lastSuccessAt: runtime?.lastSuccessAt?.toISOString() ?? null,
-    lastCheckedAt: runtime?.lastAttemptAt.toISOString() ?? null,
+    lastCheckedAt: observedAt,
     consecutiveFailures: runtime?.consecutiveFailures ?? 0,
-    message: disabled ? 'Disabled by an operator control.'
-      : !configured ? 'Required AI credential is not configured.'
-        : runtime?.message ?? 'Configured; no governed request has been observed in this process yet.',
+    message,
     ...registryFields(entry),
   };
 }
@@ -230,10 +243,12 @@ export async function getUnifiedSourceHealth(): Promise<UnifiedSourceHealthEntry
     }),
   ]);
 
+  const aiEntries = await Promise.all(AI_SOURCE_REGISTRY.map(async (entry) => mapAIRegistryHealth(entry, process.env, await getAIRouteHealth(entry.sourceId))));
+
   return [
     ...radarSources.map(mapRadarSourceHealth),
     ...benchmarkSources.map(mapServicePriceBenchmarkSourceHealth),
     ...propertyIntelligenceSources.map(mapPropertyIntelligenceSourceHealth),
-    ...AI_SOURCE_REGISTRY.map((entry) => mapAIRegistryHealth(entry)),
+    ...aiEntries,
   ].sort((a, b) => a.domain.localeCompare(b.domain) || a.sourceKey.localeCompare(b.sourceKey));
 }

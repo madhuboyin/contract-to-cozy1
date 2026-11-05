@@ -9,7 +9,7 @@ const {
   executeGovernedAIRequest,
   resolveGovernedAIModel,
   resetAIRequestGovernanceForTests,
-  getAIRequestHealthSnapshot,
+  getAIRouteHealth,
 } = require('../../src/services/ai/aiRequestGovernance.service.ts');
 const {
   AI_SOURCE_REGISTRY,
@@ -86,7 +86,7 @@ test('governed AI requests enforce model configuration, disable controls, struct
     work: async () => ({ response: { usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 3 } } }),
   });
   assert.equal(response.response.usageMetadata.candidatesTokenCount, 3);
-  assert.equal(getAIRequestHealthSnapshot('ai:ask').status, 'HEALTHY');
+  assert.equal((await getAIRouteHealth('ai:ask')).snapshot.status, 'HEALTHY');
   await assert.rejects(
     executeGovernedAIRequest({ routeId: 'ai:ask', model: 'm', env, work: async () => ({}) }),
     (error) => error.code === 'AI_RATE_LIMITED',

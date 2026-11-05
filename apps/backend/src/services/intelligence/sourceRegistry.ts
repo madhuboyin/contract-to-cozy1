@@ -5,9 +5,16 @@ export interface IntelligenceSourceRegistryEntry {
   kind: IntelligenceSourceKind;
   owner: string;
   capabilityConsumers: readonly string[];
-  /** PropertyChange source type used when this source's health changes. */
+  /**
+   * How a change in this source's health reaches the rest of the platform. RECOMPUTE (the default): a PropertyChange of `healthEntityType` is emitted
+   * per affected property and re-runs `recomputeConsumerKeys`. READ_TIME: nothing is emitted; health is one shared record resolved where source health
+   * is assembled (owner decision AI-HEALTH-1, Findings Implementation Plan Phase 5C). A READ_TIME source declares no mapping, because nothing would
+   * honor it.
+   */
+  healthPropagation?: 'RECOMPUTE' | 'READ_TIME';
+  /** PropertyChange source type used when this source's health changes (RECOMPUTE sources only). */
   healthEntityType?: string;
-  /** Exact intelligenceConsumerRegistry keys affected by that transition. */
+  /** Exact intelligenceConsumerRegistry keys affected by that transition (RECOMPUTE sources only). */
   recomputeConsumerKeys?: readonly string[];
   freshnessSlaSeconds: number;
   credentialConfigRequirements: readonly string[];
@@ -20,7 +27,7 @@ export interface IntelligenceSourceRegistryEntry {
 
 const ai = (sourceId: string, sourceFile: string, capabilityConsumers: readonly string[], fallbackBehavior: string): IntelligenceSourceRegistryEntry => ({
   sourceId, kind: 'AI', owner: 'AI Platform', capabilityConsumers, freshnessSlaSeconds: 0,
-  healthEntityType: 'AI_SOURCE', recomputeConsumerKeys: ['home-actions', 'capability-suggestions'],
+  healthPropagation: 'READ_TIME',
   credentialConfigRequirements: ['GEMINI_API_KEY'], retryPolicy: { maxAttempts: 2, backoffMs: 250 }, fallbackBehavior,
   userVisibleDegradationMessage: 'Generated intelligence is temporarily unavailable. Record-based information remains available.',
   operationalRunbook: 'docs/operations/AI_REQUEST_GOVERNANCE_RUNBOOK.md', sourceFile,
@@ -68,7 +75,11 @@ export function validateIntelligenceSourceRegistry(entries: readonly Intelligenc
     ids.add(entry.sourceId);
     if (!entry.owner.trim()) issues.push(`${entry.sourceId}: missing owner`);
     if (!entry.capabilityConsumers.length) issues.push(`${entry.sourceId}: missing capability consumers`);
-    if (!entry.healthEntityType || !entry.recomputeConsumerKeys?.length) {
+    if ((entry.healthPropagation ?? 'RECOMPUTE') === 'READ_TIME') {
+      if (entry.healthEntityType || entry.recomputeConsumerKeys?.length) {
+        issues.push(`${entry.sourceId}: a read-time source must not declare a recompute mapping, because nothing would emit it`);
+      }
+    } else if (!entry.healthEntityType || !entry.recomputeConsumerKeys?.length) {
       issues.push(`${entry.sourceId}: missing source-health recompute mapping`);
     }
     if (entry.freshnessSlaSeconds < 0) issues.push(`${entry.sourceId}: invalid freshness SLA`);
