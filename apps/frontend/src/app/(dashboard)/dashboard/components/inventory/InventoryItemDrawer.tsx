@@ -4,9 +4,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { InventoryItem, InventoryItemCategory, InventoryItemCondition, InventoryRoom } from '@/types';
+import { InventoryItem, InventoryItemCategory, InventoryItemCondition, InventoryLinkedRecord, InventoryRoom } from '@/types';
 import DocumentPickerModal from './DocumentPickerModal';
 import DocumentUploadZone from './DocumentUploadZone';
+import LinkedRecordsList from './LinkedRecordsList';
 import BarcodeScannerModal, { BarcodeLookupResult } from './BarcodeScannerModal';
 import LabelOcrModal from './LabelOcrModal';
 import { lookupBarcode as lookupInventoryBarcode } from '../../inventory/inventoryApi';
@@ -216,6 +217,7 @@ export default function InventoryItemDrawer(props: {
   // docs
   const [docPickerOpen, setDocPickerOpen] = useState(false);
   const [linkedDocs, setLinkedDocs] = useState<any[]>([]);
+  const [linkedRecords, setLinkedRecords] = useState<InventoryLinkedRecord[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [documentUploading, setDocumentUploading] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -334,6 +336,7 @@ useEffect(() => {
     setShowWaiveCaution(false);
 
     setLinkedDocs((item as any)?.documents ?? []);
+    setLinkedRecords((item as any)?.homeRecordLinks ?? []);
     setUploadError(null);
     setDocumentUploading(false);
     setShowDeleteConfirm(false);
@@ -491,6 +494,7 @@ useEffect(() => {
     if (!props.initialItem) return;
     const fresh = await getInventoryItem(props.propertyId, props.initialItem.id);
     setLinkedDocs((fresh as any).documents ?? []);
+    setLinkedRecords((fresh as any).homeRecordLinks ?? []);
   }
 
   async function attachDocumentById(documentId: string) {
@@ -1504,6 +1508,7 @@ useEffect(() => {
                   void unlinkDocument(docId);
                 }}
               />
+              <LinkedRecordsList propertyId={props.propertyId} records={linkedRecords} />
               {!isEdit ? <p className="mt-3 text-xs text-gray-500">Save this item first to attach documents.</p> : null}
 
               {suggestions?.inventoryItemSuggestions?.length > 0 ? (

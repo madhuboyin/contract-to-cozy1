@@ -39,6 +39,7 @@ import {
   SummaryCard,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import type { SmartFilterId } from './InventoryFilterBar';
+import { inventoryItemDocumentCount } from './inventoryDocuments';
 import type { InventoryPortfolioFilter, PortfolioStats } from './PortfolioIntelligenceStrip';
 
 type CoverageStatus = 'missing' | 'confirmed' | 'managed' | 'incomplete' | 'not-required';
@@ -85,7 +86,7 @@ function getReplacementValue(item: InventoryItem): number | null {
 function getDocumentCount(item: InventoryItem): number {
   const direct = (item as any).documentCount;
   if (typeof direct === 'number' && Number.isFinite(direct)) return direct;
-  return item.documents?.length ?? 0;
+  return inventoryItemDocumentCount(item);
 }
 
 function filterCardClass(active: boolean): string {

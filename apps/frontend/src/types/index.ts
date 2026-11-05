@@ -130,6 +130,16 @@ export type InventoryRoom = {
   updatedAt: string;
 };
 
+/** A Home Record linked to an inventory item from the Home Records page (read-only bridge; Findings Phase 6, F6-3). */
+export type InventoryLinkedRecord = {
+  linkId: string;
+  recordId: string;
+  title: string;
+  recordType: string;
+  lifecycleStatus: string;
+  purpose: string;
+};
+
 export type InventoryItem = {
   id: string;
   propertyId: string;
@@ -192,6 +202,8 @@ export type InventoryItem = {
   insurancePolicy?: any | null;
 
   documents?: any[]; // Document type exists already in your project; you can replace later
+  /** Home Records linked to this item; the legacy `documents` above are unchanged and still authoritative for what they hold. */
+  homeRecordLinks?: InventoryLinkedRecord[];
 };
 
 export type ApiResponse<T> = {

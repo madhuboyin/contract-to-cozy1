@@ -25,6 +25,8 @@ import JobQueueService from './JobQueue.service';
 import { markThreadStaleOnFactCorrection } from './decisionPlatform/decisionThreadService';
 import { emitPropertyChangeWithTransaction } from '../propertyChanges/propertyChange.service';
 import { isWaterHeaterInventoryName } from './repairReplaceEligibility';
+import type { HouseholdRole } from '@prisma/client';
+import { entityIdsWithLinkedRecords } from './entityLinkedRecords.service';
 
 function normalize(v: any) {
   return String(v ?? '').trim().toLowerCase();
@@ -54,6 +56,8 @@ export function computeInventorySourceHash(input: {
 }
 
 type ListItemsQuery = {
+  /** The caller's household role, applied to Home Records linked to an item when `hasDocuments` is filtered. Omitted means the least privileged. */
+  role?: HouseholdRole;
   q?: string;
   roomId?: string;
   category?: InventoryItemCategory;
@@ -325,8 +329,16 @@ export class InventoryService {
       ];
     }
 
-    if (query.hasDocuments === true) where.documents = { some: {} };
-    if (query.hasDocuments === false) where.documents = { none: {} };
+    // An item "has documents" if a legacy document is attached to it OR a visible Home Record is linked to it (Findings Phase 6, F6-3).
+    if (query.hasDocuments !== undefined) {
+      const linkedIds = [...await entityIdsWithLinkedRecords({ propertyId, entityType: 'INVENTORY_ITEM', role: query.role })];
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : []),
+        query.hasDocuments
+          ? { OR: [{ documents: { some: {} } }, { id: { in: linkedIds } }] }
+          : { AND: [{ documents: { none: {} } }, { id: { notIn: linkedIds } }] },
+      ];
+    }
 
     const [items, responsibilities] = await Promise.all([
       prisma.inventoryItem.findMany({

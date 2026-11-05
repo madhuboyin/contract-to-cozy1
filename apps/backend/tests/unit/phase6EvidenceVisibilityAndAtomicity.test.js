@@ -68,7 +68,7 @@ function makeTx(target) {
 const fakePrisma = {
   homeEvent: {
     findMany: async () => state.events,
-    findFirst: async ({ where }) => state.events.find((event) => event.id === where.id && event.propertyId === where.propertyId) ?? null,
+    findFirst: async ({ where }) => state.events.find((event) => event.id === where.id && event.propertyId === where.propertyId && (where.isCurrent === undefined || event.isCurrent === where.isCurrent)) ?? null,
   },
   document: { findUnique: async ({ where }) => state.documents.find((d) => d.id === where.id) ?? null },
   propertyRecordLink: { findMany: async ({ where }) => linkRows(where) },
@@ -81,7 +81,28 @@ const fakePrisma = {
       eventEvidence: state.eventEvidence.map((r) => ({ ...r })),
       documents: state.documents,
     };
-    const result = await callback(makeTx(staged));
+    const tx = {
+      ...makeTx(staged),
+      homeEvent: {
+        update: async ({ where, data }) => { const row = state.events.find((e) => e.id === where.id); Object.assign(row, data); return row; },
+        create: async ({ data }) => {
+          const created = { id: `e${state.events.length + 1}`, ...data, documents: [], evidence: [], isCurrent: true, propertyId: data.propertyId };
+          state.events.push(created);
+          return created;
+        },
+        updateMany: async () => ({ count: 0 }),
+      },
+      propertyRecordLink: {
+        updateMany: async ({ where, data }) => {
+          let count = 0;
+          for (const link of state.links) {
+            if (link.entityType === where.entityType && link.entityId === where.entityId) { link.entityId = data.entityId; count += 1; }
+          }
+          return { count };
+        },
+      },
+    };
+    const result = await callback(tx);
     state.eventDocuments = staged.eventDocuments;
     state.eventEvidence = staged.eventEvidence;
     return result;
@@ -192,4 +213,36 @@ test('callers pass the asking user\'s role to the readers that return linked rec
   assert.match(src('controllers/homeEvents.controller.ts'), /includeSignals,\n    \}, req\.householdRole\)/);
   assert.match(src('controllers/materialSpec.controller.ts'), /service\.getSpec\(propertyId, specId, req\.householdRole\)/);
   assert.match(src('services/ask/handlers/homeTimeline.handler.ts'), /listHomeEvents\(propertyId, \{ limit: HOME_TIMELINE_ASK_LIMIT \}, access\.role\)/);
+});
+
+// ── F6-1 (owner decision OD-6.1: links move on a correction) ───────────────────────────────────────────────────────────────────────────────
+
+test('F6-1 a correction moves the event\'s Home Record links to the new revision, so the current event keeps its evidence', async () => {
+  const updated = await service.updateHomeEvent('p1', 'e1', { title: 'Roof replaced (corrected)', correctionReason: 'typo' }, 'u1');
+  assert.notEqual(updated.id, 'e1', 'a new revision was created');
+  assert.equal(state.events.find((e) => e.id === 'e1').isCurrent, false);
+  assert.deepEqual(state.links.filter((l) => l.entityId === 'e1' && l.entityType === 'HOME_EVENT'), [], 'nothing is left pointing at the superseded revision');
+  const onNew = state.links.filter((l) => l.entityId === updated.id && l.entityType === 'HOME_EVENT').map((l) => l.record.title).sort();
+  assert.deepEqual(onNew, ['Divorce settlement', 'Roof invoice']);
+});
+
+test('F6-1 the moved evidence is what the Timeline shows for the current revision, with the same visibility rule', async () => {
+  const updated = await service.updateHomeEvent('p1', 'e1', { title: 'Roof replaced (corrected)', correctionReason: 'typo' }, 'u1');
+  assert.deepEqual(titles((await service.getHomeEvent('p1', updated.id, 'OWNER')).propertyRecordLinks), ['Divorce settlement', 'Roof invoice']);
+  assert.deepEqual(titles((await service.getHomeEvent('p1', updated.id, 'VIEWER')).propertyRecordLinks), ['Roof invoice']);
+});
+
+test('F6-1 links on other events and other entity types are not touched by a correction', async () => {
+  state.links.push({ id: 'l9', entityType: 'HOME_EVENT', entityId: 'e-other', purpose: 'EVIDENCE', record: record('r-other', 'HOUSEHOLD', 'Other event invoice') });
+  state.links.push({ id: 'l10', entityType: 'INVENTORY_ITEM', entityId: 'e1', purpose: 'EVIDENCE', record: record('r-item', 'HOUSEHOLD', 'Item manual') });
+  await service.updateHomeEvent('p1', 'e1', { title: 'Roof replaced (corrected)', correctionReason: 'typo' }, 'u1');
+  assert.equal(state.links.find((l) => l.id === 'l9').entityId, 'e-other');
+  assert.equal(state.links.find((l) => l.id === 'l10').entityId, 'e1', 'a link whose entity type is not HOME_EVENT is never re-pointed, even if the id matches');
+});
+
+test('F6-1 a correction of an event with no Home Record links is unaffected', async () => {
+  state.links = [];
+  const updated = await service.updateHomeEvent('p1', 'e1', { title: 'Roof replaced (corrected)', correctionReason: 'typo' }, 'u1');
+  assert.notEqual(updated.id, 'e1');
+  assert.deepEqual(state.links, []);
 });

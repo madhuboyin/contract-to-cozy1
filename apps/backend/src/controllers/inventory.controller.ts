@@ -3,6 +3,7 @@ import { Response, NextFunction } from 'express';
 import { InventoryItemCategory } from '@prisma/client';
 import { CustomRequest } from '../types';
 import { InventoryService } from '../services/inventory.service';
+import { linkedRecordsByEntity } from '../services/entityLinkedRecords.service';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from '../services/coverageAnalysis.service';
@@ -87,8 +88,11 @@ export async function listItems(req: CustomRequest, res: Response, next: NextFun
 
     const hasDocuments = parseBool(req.query.hasDocuments);
 
-    const items = await service.listItems(propertyId, { q, roomId, category, hasDocuments });
-    res.json({ success: true, data: { items } });
+    const role = req.householdRole;
+    const items = await service.listItems(propertyId, { q, roomId, category, hasDocuments, role });
+    // Home Records linked to an item are shown beside its legacy documents (Findings Phase 6, F6-3); the caller's role decides which are visible.
+    const linked = await linkedRecordsByEntity({ propertyId, entityType: 'INVENTORY_ITEM', entityIds: items.map((item) => item.id), role });
+    res.json({ success: true, data: { items: items.map((item) => ({ ...item, homeRecordLinks: linked.get(item.id) ?? [] })) } });
   } catch (err) {
     next(err);
   }
@@ -113,7 +117,8 @@ export async function getItem(req: CustomRequest, res: Response, next: NextFunct
     const propertyId = req.params.propertyId;
     const itemId = req.params.itemId;
     const item = await service.getItem(propertyId, itemId);
-    res.json({ success: true, data: { item } });
+    const linked = await linkedRecordsByEntity({ propertyId, entityType: 'INVENTORY_ITEM', entityIds: [item.id], role: req.householdRole });
+    res.json({ success: true, data: { item: { ...item, homeRecordLinks: linked.get(item.id) ?? [] } } });
   } catch (err) {
     next(err);
   }

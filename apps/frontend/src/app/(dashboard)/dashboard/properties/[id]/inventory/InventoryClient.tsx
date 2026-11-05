@@ -46,6 +46,7 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { track } from '@/lib/analytics/events';
 import TrustStrip from '../components/route-templates/TrustStrip';
+import { inventoryItemDocumentCount } from '../../../components/inventory/inventoryDocuments';
 
 function getCoverageStatus(item: InventoryItem): 'uncovered' | 'partial' | 'covered' | 'waived' {
   if (item.coverageState === 'NOT_REQUIRED' || item.coverageState === 'MANAGED_ELSEWHERE') return 'waived';
@@ -304,7 +305,7 @@ export default function InventoryClient() {
     const gapCount = items.filter(isActionableCoverageGap).length;
     const incompleteCount = items.filter((item) => item.coverageState === 'INCOMPLETE').length;
     const missingValueCount = items.filter((item) => !hasReplacementValue(item)).length;
-    const docCount = items.filter((item) => (item.documents?.length ?? 0) > 0).length;
+    const docCount = items.filter((item) => inventoryItemDocumentCount(item) > 0).length;
     const notRequiredCount = items.filter((item) => item.coverageState === 'NOT_REQUIRED' || item.coverageNotRequired).length;
 
     return {
@@ -332,7 +333,7 @@ export default function InventoryClient() {
       if (roomFilter && item.roomId !== roomFilter) return false;
       if (categoryFilter && item.category !== categoryFilter) return false;
 
-      const docCount = item.documents?.length ?? 0;
+      const docCount = inventoryItemDocumentCount(item);
       if (docsFilter === 'with-docs' && docCount === 0) return false;
       if (docsFilter === 'no-docs' && docCount > 0) return false;
 

@@ -6,7 +6,7 @@
 
 **Planning basis:** code snapshot `61126057bbb063cd4a452c039289620952380655`, with the source review finalized through `79ed68fc`
 
-**Status:** Phases 0-2 implemented (see §14-§16); Phase 3 instrumentation and measurement contract built, measurements not yet taken (§17); Phase 6 audit complete; F6-2 and F6-4 fixed, F6-1 and F6-3 awaiting owner rulings (§18, §21); owner decisions AI-GOV-1 and AI-HEALTH-1 answered 2026-11-05; Phase 5 built (5A, 5B, 5C: §19; the Redis integration tests are authored, not yet run); Phase 4 measurement and terminology done, routing unchanged, decisions pending (§20)
+**Status:** Phases 0-2 implemented (see §14-§16); Phase 3 instrumentation and measurement contract built, measurements not yet taken (§17); Phase 6 audit complete and its defects fixed or decided: F6-1, F6-2, F6-4 and F6-3 for inventory items done, link-time rule deliberately not built (§18, §21, §22); owner decisions AI-GOV-1 and AI-HEALTH-1 answered 2026-11-05; Phase 5 built (5A, 5B, 5C: §19; the Redis integration tests are authored, not yet run); Phase 4 measurement and terminology done, routing unchanged, decisions pending (§20)
 
 ## 1. Purpose and evidence boundary
 
@@ -647,3 +647,12 @@ Plan §10 step 6 gates implementation on a focused design. Two of the audit's de
 - **F6-4 (atomic attach).** Attach is one transaction; detach removes the evidence row attach created and keeps deliberate, annotated evidence.
 - **Verification (executed, against a fake, not a database).** 11 tests; the six that encode the defects fail on the old service and pass on the new one. The Ask suite and the related unit suites show no new failures.
 - **Not done, waiting on the owner:** F6-1 (OD-6.1, move or copy event links on a correction), the link-time half of Design B (OD-6.2), and F6-3 (OD-6.3, bridge read or wait for S5d).
+
+## 22. Phase 6 implementation record (owner rulings OD-6.1 to OD-6.3)
+
+The owner accepted the three recommendations on 2026-11-05 and asked that role handling stay minimal (most households have one owner). Detail is in `ASK_COZY_PROVENANCE_EVIDENCE_IMPACT_TRACE.md` §10.
+
+- **OD-6.1 (F6-1).** A correction now moves the event's Home Record links to the new revision. A data-repair script for corrections already made is provided and was executed on a scratch PostgreSQL 15 database (5 links found, 4 repairable; 2 moved, 2 duplicates removed; a second run changed nothing). It has not been run against any real database; the owner runs it.
+- **OD-6.3 (F6-3, inventory items).** A read-only bridge shows linked Home Records in the inventory drawer, counts them with legacy documents, and makes the `hasDocuments` filter agree. Warranties, insurance and claims are the same pattern and are not bridged.
+- **OD-6.2 (link-time rule).** Not built: it only matters with several differently-privileged members, and the read-time filter already closes the exposure.
+- **Verification.** 25 backend and 8 frontend tests; mutation checks show the F6-1 tests fail without the fix. Not verified: Prisma SQL, a real database, or the screen in a browser.

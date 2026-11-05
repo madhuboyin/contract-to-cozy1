@@ -843,6 +843,13 @@ export class HomeEventsService {
         },
         data: { parentEventId: replacement.id },
       });
+      // Home Record evidence belongs to the same story. The legacy documents and evidence above are copied to the replacement; a Home Record link
+      // is a pointer that other pages (the record's own page, the trash gate) read, so it MOVES rather than being copied, which keeps one link per
+      // record and purpose. Without this the current revision silently lost its evidence (Findings Phase 6, F6-1, owner decision OD-6.1: move).
+      await tx.propertyRecordLink.updateMany({
+        where: { entityType: 'HOME_EVENT', entityId: existing.id },
+        data: { entityId: replacement.id },
+      });
       return replacement;
     });
 
