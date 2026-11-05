@@ -6,7 +6,7 @@
 
 **Planning basis:** code snapshot `61126057bbb063cd4a452c039289620952380655`, with the source review finalized through `79ed68fc`
 
-**Status:** proposed plan; implementation has not started
+**Status:** Phase 0 implemented (see §14); owner decisions AI-GOV-1 and AI-HEALTH-1 still open; Phases 1-6 not started
 
 ## 1. Purpose and evidence boundary
 
@@ -412,3 +412,49 @@ Each phase should be its own reviewable change. Do not combine registry restruct
 | 6 | consumer/journey trace and contract/schema review; focused pure mapping tests if a design follows | migrated data or runtime interoperability without a database |
 
 Final reporting for each phase must state what was code-traced, what was executed, what could not run, and whether any owner decision remains open. An unavailable runtime environment is not a blocker to completing static implementation work, but it must never be described as executed validation.
+
+## 14. Phase 0 implementation record
+
+**Delivered**
+
+- `apps/backend/src/scripts/askArchitectureInventory.ts`, run with `npm run audit:ask-architecture -- --out <file.json>` from `apps/backend`. It is read-only and needs no network, database, Redis, or model access. Counts come from the authoritative registries; the frontend renderer count comes from the TypeScript AST of `ASK_BLOCK_RENDERERS`. It calls the existing validators (`validateAskOperationDefinitions`, `validateAskDomainCommandRegistry`, `validateCapabilityHandlerRegistry`, `validateConfirmCapabilityHandlerRegistry`, `validateSkillDefinitions`, `validateSkillAdapterDefinitions`, `validateSkillOperationGovernanceCoverage`) without reimplementing any rule, and exits non-zero if any reports an issue.
+- `apps/backend/tests/ask/askArchitectureInventory.test.js` (5 tests): counts equal the registries, the skill-less list is exactly the Skill-less operations, current registries report no issues or drift, classification never goes beyond registry metadata, and the renderer counter ignores spreads.
+- The source review's reproducibility note (line 20) now names the command.
+
+**Baseline measured by running the script (2026-11-05, code snapshot plus this change; code-traced elsewhere, executed here)**
+
+| Measure | Value |
+|---|---|
+| Ask operations | 226 |
+| Skills | 45 |
+| `*.handler.ts` files | 155 |
+| Distinct operation adapter keys | 226 |
+| Domain commands / distinct confirm adapter keys | 126 / 126 |
+| Presentation blocks / renderers | 33 / 33 |
+| Suggested-action producers / eligibility rules | 12 / 11 |
+| `KNOWN_UNGOVERNED_OPERATIONS` entries | 99 |
+| Operations with no owning Skill | 104 (the 99 listed + the 5 null-role-floor boundary operations the validator exempts structurally) |
+| Validator issues, governance drift | none |
+
+Metadata classification of the 104 Skill-less operations (registry metadata only, never inferred from a name): `INTERNAL_COMMAND` 69, `UNCLASSIFIED` 20, `INTERNAL_NOT_MESSAGE_ROUTABLE` 7, `MESSAGE_ROUTABLE_COMMAND` 3, `NO_ROLE_FLOOR_BOUNDARY` 5. The 20 `UNCLASSIFIED` operations are message-routable, property-scoped, and have no domain command; no registry field says whether each is a read, a launch, or something else. They are resolved in Phase 1 and are the first concrete input to that phase. The 7 `INTERNAL_NOT_MESSAGE_ROUTABLE` operations cannot be split into launch-only, declared-action-only, and capture from metadata either; Phase 1 must record that from repository evidence.
+
+Two consequences for Phase 1 that the review did not state: the carve-out list covers 99 of 226 operations (about 44%), not a handful, and 69 of those are internal commands that already have a confirmation contract. The review's P1 framing (categories a/b/c) should be applied to the 20 and 7 above first.
+
+**Decision register (must be answered before any Phase 5 code)**
+
+| Id | Question | Recommendation in §4 | Accountable owner | Status |
+|---|---|---|---|---|
+| AI-GOV-1 | Redis-outage behavior for governed-AI rate, circuit, and probe state | Short-lived, stricter, bounded per-process fallback with degraded-mode telemetry; aggregate enforcement not preserved while active | Repository owner (to confirm) | OPEN: awaiting owner answer |
+| AI-HEALTH-1 | Provider health representation | One global/provider state resolved while assembling source health; publication machinery only as a conditional fallback | Repository owner (to confirm) | OPEN: awaiting owner answer |
+
+These two are not decided by this change; recording a recommendation is not an approval.
+
+**Out-of-scope record.** Progressive streaming, multi-capability read planning, learned or dense embeddings and hybrid RAG, provider-neutral LLM abstraction, and offline mutation sync are outside the approved remediation scope. Each needs separate authorization under §11.
+
+**Not claimed.** The inventory ran against source only. No database, Redis, worker, deployed environment, or browser was involved, and nothing here measures latency or production behavior. `SEMANTIC_SYNONYM_GROUPS` is not exported, so the script does not count it.
+
+**Phase 0 acceptance check**
+
+- One command reproduces the inventory without network, database, Redis, or model access: met (executed).
+- It reads authoritative registries and AST structures, not grep call-site counts: met.
+- Phase 5 decisions explicit before shared-governance code: recorded as OPEN above; Phase 5 stays blocked.
