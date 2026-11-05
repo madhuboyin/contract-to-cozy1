@@ -6,7 +6,7 @@
 
 **Planning basis:** code snapshot `61126057bbb063cd4a452c039289620952380655`, with the source review finalized through `79ed68fc`
 
-**Status:** Phases 0 and 1 implemented (see §14, §15); owner decisions AI-GOV-1 and AI-HEALTH-1 still open; Phases 2-6 not started
+**Status:** Phases 0, 1 and 2 implemented (see §14-§16); owner decisions AI-GOV-1 and AI-HEALTH-1 still open; Phases 3-6 not started
 
 ## 1. Purpose and evidence boundary
 
@@ -486,3 +486,35 @@ These two are not decided by this change; recording a recommendation is not an a
 **Corrections to earlier counts.** The typed-route recheck moved `HOME_BASICS_GUIDE` and `SEASONAL_HOME_CARE` from launch-only to typed reads (the earlier direction listed four launch-only reads; two are). The four `CAPTURE_*_CONFIRM` operations are `INTERNAL_CAPTURE` rather than declared-action commands, which leaves 65 governed commands, not 69.
 
 **Not done / not claimed.** No Skill was written and no operation was made non-routable; the 23 gaps remain. Entry-path claims for the governed commands are code-traced from the coverage matrix and registries, not from live requests. The matrix's `INTERNAL_CAPTURE` label on the two notification overviews is left for a separate cleanup.
+
+## 16. Phase 2 implementation record
+
+**Caller inventory (step 1; code-traced, then locked by a test)**
+
+| Caller | Reaches the facade first? | Treatment |
+|---|---|---|
+| `execution/executeOperation.ts` (`capabilityInvoke`) | Yes: loaded only through `askOrchestrator.service.ts` / `createAskExecution` | Unchanged; covered by the facade's `loadAskHandlerManifest()` |
+| `execution/askConfirm.ts` (`confirmCapabilityInvoke`) | Yes, same path | Unchanged |
+| `src/index.ts` (API server) | Imports the facade | Now also calls `initializeAskRuntime()` before the aggregate registry validation |
+| `controllers/ask.controller.ts` and the other services that import the facade | Yes | Unchanged; the facade still registers every handler |
+| `scripts/generate-work-evidence-fixtures.js` | Called the registries directly and loaded the facade only incidentally | Now calls `initializeAskRuntime()` explicitly |
+| `src/scripts/askArchitectureInventory.ts` | Loaded the facade for its side effect | Calls `loadAskHandlerManifest()` (not `initializeAskRuntime`, so the report can still list registry problems instead of throwing) |
+| `apps/workers/src/**` | n/a: no reference to the facade, the bootstrap, or either invocation entry point | No bootstrap needed; a test asserts it stays that way |
+
+No unsafe production caller existed. This phase is guardrail work, as scoped: it closes the latent coupling, not an observed failure.
+
+**Delivered**
+
+- `apps/backend/src/services/ask/askRuntimeBootstrap.ts`: `ASK_HANDLER_MANIFEST` (139 registering modules: 138 handlers plus `execution/askCapture`), `loadAskHandlerManifest()`, `validateAskRuntimeRegistration()`, and `initializeAskRuntime()`. The last loads the manifest and runs the two handler-registry validators once, memoizes the result, and throws `AskRuntimeBootstrapError` on any gap or duplicate. Importing the module opens no network connection.
+- `askOrchestrator.service.ts`: the 139 side-effect handler imports (including the duplicated `claimActivity.handler` line) were replaced by one `loadAskHandlerManifest()` call, so every existing importer behaves as before. The facade went from 213 to 77 lines. The `export ... from './handlers/...'` re-exports and the three non-registering helper imports are unchanged.
+- `src/index.ts` calls `initializeAskRuntime()` before the aggregate validation.
+- `tests/ask/askRuntimeBootstrap.test.js` (7 tests): manifest parity with the registering files on disk (and each id equals its `require` literal); from an empty child process nothing resolves until the bootstrap runs, then every operation adapter and every domain command's confirm adapter resolves, a second call is harmless, and importing opens no socket; an omitted manifest entry that nothing else imports is reported before invocation; a duplicate registration is reported; the only direct callers of the invocation entry points are the two reviewed lifecycle files; the supported entry points bootstrap and the workers process never references Ask capabilities; any script that loads the registries also bootstraps.
+- Guardrails updated: the import-graph test now includes the bootstrap (its literal `require` edges count, only the facade may import it, and it may import only handlers, `execution/askCapture` and the two registries); the decomposition test checks the manifest instead of the facade's import lines.
+
+**Findings worth keeping**
+
+- Handlers import each other, so omitting a manifest entry that another module loads does not leave a gap. The omitted-entry test therefore picks, from the real import statements, an entry nothing else imports, instead of assuming one.
+- The bootstrap alone, with no facade loaded, is sufficient to register everything. That was not assumed; the empty-process test shows zero issues after one call.
+- The 17 handler files that do not register anything (helpers loaded through registering handlers) are intentionally not in the manifest; the parity test lists only registration-bearing modules, as the plan required.
+
+**Not done / not claimed.** No behavior, operation id, role floor or confirmation semantics changed. Server and worker startup in the deployed topology was not run. The descriptor-consolidation proposal remains a separate project (step 8).

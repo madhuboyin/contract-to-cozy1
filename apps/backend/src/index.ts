@@ -208,6 +208,7 @@ import { validateAskLlmPurposeContracts } from './services/ask/askRemoteFallback
 import { validateCapabilityHandlerRegistry } from './services/ask/capabilityHandlerRegistry';
 import { validateConfirmCapabilityHandlerRegistry } from './services/ask/confirmCapabilityHandlerRegistry';
 import './services/ask/askOrchestrator.service';
+import { initializeAskRuntime } from './services/ask/askRuntimeBootstrap';
 import { validateSkillDefinitions } from './services/skills/skillRegistry';
 import { validateSkillContextProviderDefinitions } from './services/skills/context/skillContextProviderRegistry';
 import { validateSkillAdapterDefinitions } from './services/skills/adapters/skillAdapterRegistry';
@@ -236,6 +237,9 @@ import {
 import { AGENT_TRIGGER_HANDLER_REGISTRY } from './services/agents/agentRegistryValidation';
 import { validateAgentTriggerHandlers } from './services/agents/agentTriggerRegistry';
 dotenv.config();
+
+// Load every Ask capability/confirm handler through the explicit manifest and fail here, before the server accepts traffic, if any is missing or duplicated.
+initializeAskRuntime();
 
 const askRegistryIssues = [
   ...validateAskOperationDefinitions(),

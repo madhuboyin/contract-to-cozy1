@@ -17,7 +17,7 @@
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import ts from 'typescript';
-// Importing the facade registers every handler (the side-effect registration this plan's Phase 2 later makes explicit).
+import { loadAskHandlerManifest } from '../services/ask/askRuntimeBootstrap';
 import '../services/ask/askOrchestrator.service';
 import {
   ASK_INTERNAL_OPERATION_IDS,
@@ -35,6 +35,9 @@ import { KNOWN_UNGOVERNED_OPERATIONS, SKILL_GOVERNANCE_EXCEPTIONS, validateSkill
 import { AskPresentationBlockSchema } from '../productFramework/ask/ask.contract';
 import { SUGGESTED_NEXT_ACTION_PRODUCERS } from '../services/ask/suggestedActions/suggestedNextActionProducers';
 import { ELIGIBILITY_RULE_ORDER } from '../services/ask/suggestedActions/suggestedNextActionEligibility';
+
+// Load the handlers explicitly (not initializeAskRuntime): this report must list registry problems, not throw on the first one.
+loadAskHandlerManifest();
 
 const BACKEND_ROOT = resolve(__dirname, '../..');
 const HANDLER_DIRECTORY = join(BACKEND_ROOT, 'src/services/ask/handlers');

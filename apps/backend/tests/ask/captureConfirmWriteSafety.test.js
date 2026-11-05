@@ -94,7 +94,10 @@ test('CAPTURE_FACT_CONFIRM/CAPTURE_EVENT_CONFIRM reuse confirmAskExecution\'s on
   // are in place before the dispatch call site can run; the position in the concatenated source no longer says so.
   assert.ok(confirmFactIdx > 0, 'CAPTURE_FACT_CONFIRM must register into the same dispatch confirmAskExecution already calls');
   assert.ok(confirmEventIdx > 0, 'CAPTURE_EVENT_CONFIRM must register into the same dispatch confirmAskExecution already calls');
-  assert.match(orchestratorSource, /^import '\.\/handlers\/captureConfirm\.handler';$/m, 'the orchestrator imports the file that registers them');
+  // Handler registration is listed once in the explicit runtime manifest (askRuntimeBootstrap.ts), which the orchestrator facade loads.
+  const bootstrapSource = readFileSync(resolve(__dirname, '../../src/services/ask/askRuntimeBootstrap.ts'), 'utf8');
+  assert.match(bootstrapSource, /\{ id: 'handlers\/captureConfirm\.handler', load: \(\) => require\('\.\/handlers\/captureConfirm\.handler'\) \}/, 'the runtime manifest lists the file that registers them');
+  assert.match(orchestratorSource, /^loadAskHandlerManifest\(\);$/m, 'the orchestrator facade loads the manifest');
 });
 
 // Correction path (implementation plan §8/§4.1; FRD §4.1's finding: build on

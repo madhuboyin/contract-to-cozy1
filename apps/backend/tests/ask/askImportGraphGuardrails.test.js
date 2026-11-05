@@ -8,7 +8,7 @@ const { dirname, join, resolve } = require('node:path');
 // circular import once did). This builds the graph over the decomposed layers and fails on a cycle or a layering breach.
 const ASK_DIR = resolve(__dirname, '../../src/services/ask');
 const LAYER_DIRS = ['handlers', 'execution', 'support'];
-const SINGLE_FILES = ['askHandlerSupport.ts', 'askFormatting.ts', 'askOrchestrator.service.ts'];
+const SINGLE_FILES = ['askHandlerSupport.ts', 'askFormatting.ts', 'askOrchestrator.service.ts', 'askRuntimeBootstrap.ts'];
 
 function tsFiles(dir) {
   return readdirSync(dir).sort().flatMap((name) => {
@@ -35,6 +35,13 @@ function importsOf(file) {
     if (match[1]) continue;
     const target = resolveImport(file, match[2] ?? match[3]);
     if (target) targets.add(target);
+  }
+  // askRuntimeBootstrap.ts loads its manifest with literal require() calls; those are load-time edges too.
+  if (file.endsWith('askRuntimeBootstrap.ts')) {
+    for (const match of source.matchAll(/require\('(\.[^']+)'\)/g)) {
+      const target = resolveImport(file, match[1]);
+      if (target) targets.add(target);
+    }
   }
   return [...targets];
 }
@@ -93,6 +100,10 @@ test('layering: support modules import only support modules; handlers never impo
       if (from.startsWith('support/') && (to.startsWith('handlers/') || to.startsWith('execution/') || to === 'askHandlerSupport.ts' || to === 'askOrchestrator.service.ts')) breaches.push(`${from} -> ${to}`);
       if (from.startsWith('handlers/') && (to === 'askOrchestrator.service.ts' || (to.startsWith('execution/') && to !== 'execution/executeOperation.ts'))) breaches.push(`${from} -> ${to}`);
       if (from.startsWith('execution/') && to === 'askOrchestrator.service.ts') breaches.push(`${from} -> ${to}`);
+      // The runtime bootstrap sits above every layer: nothing in the decomposed layers or the facade-support files may import it back,
+      // and it may import only handlers, the one registering lifecycle module (execution/askCapture), and the two handler registries.
+      if (to === 'askRuntimeBootstrap.ts' && from !== 'askOrchestrator.service.ts') breaches.push(`${from} -> ${to} (only the facade may import the runtime bootstrap)`);
+      if (from === 'askRuntimeBootstrap.ts' && !(to.startsWith('handlers/') || ['execution/askCapture.ts', 'capabilityHandlerRegistry.ts', 'confirmCapabilityHandlerRegistry.ts'].includes(to))) breaches.push(`${from} -> ${to}`);
       if (from === 'askFormatting.ts' && graph.has(target)) breaches.push(`${from} -> ${to}`);
     }
   }

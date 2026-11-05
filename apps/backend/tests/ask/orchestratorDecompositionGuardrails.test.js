@@ -29,13 +29,15 @@ test('no handler, lifecycle or support file imports the orchestrator', () => {
   assert.deepEqual(offenders, []);
 });
 
-test('every handler file is imported by the orchestrator, so it registers before anything is dispatched', () => {
+test('every registering handler file is in the explicit runtime manifest, so it registers before anything is dispatched', () => {
+  const bootstrap = readFileSync(join(ASK_DIR, 'askRuntimeBootstrap.ts'), 'utf8');
   const facade = readFileSync(FACADE, 'utf8');
-  // Only a file that registers a handler must be loaded by the facade; a helper module a registering handler imports is loaded through it.
+  assert.match(facade, /^loadAskHandlerManifest\(\);$/m, 'the facade loads the manifest');
+  // Only a file that registers a handler must be listed; a helper module a registering handler imports is loaded through it.
   const registers = (file) => /register(?:Confirm)?CapabilityHandler\(/.test(readFileSync(file, 'utf8'));
   const missing = [...files(join(ASK_DIR, 'handlers')), ...files(join(ASK_DIR, 'execution'))]
     .filter(registers)
     .map((file) => file.slice(ASK_DIR.length + 1).replace(/\.ts$/, ''))
-    .filter((module) => !facade.includes(`'./${module}'`));
+    .filter((module) => !bootstrap.includes(`{ id: '${module}', load: () => require('./${module}') }`));
   assert.deepEqual(missing, []);
 });

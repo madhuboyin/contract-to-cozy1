@@ -11,6 +11,7 @@ const { capabilityInvoke } = require('../src/services/ask/capabilityHandlerRegis
 const { confirmCapabilityInvoke } = require('../src/services/ask/confirmCapabilityHandlerRegistry.ts');
 const { getAskDomainCommandByOperation } = require('../src/services/ask/askDomainCommandRegistry.ts');
 const executeOperation = require('../src/services/ask/execution/executeOperation.ts');
+require('../src/services/ask/askRuntimeBootstrap.ts').initializeAskRuntime();
 require('../src/services/ask/askOrchestrator.service.ts');
 const getUse = require('../src/modules/homeOperations/application/getWorkItem.usecase.ts');
 const recordUse = require('../src/modules/homeOperations/application/recordEvidence.usecase.ts');

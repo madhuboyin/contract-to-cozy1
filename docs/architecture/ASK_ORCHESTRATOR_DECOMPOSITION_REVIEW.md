@@ -142,3 +142,7 @@ How it was done: a script moved named top-level declarations unchanged, with a c
 **Leftovers, closed (FRD v1.110).** `askHandlerSupport.ts` is now a pure re-export of ten modules under `support/`, and `roomMapFacts` moved to `support/roomMap.ts`. Handlers still import each other's exports (`miscHandlers` from `homeRecordWrites`), and `tests/ask/askImportGraphGuardrails.test.js` now enforces that the import graph stays acyclic and layered.
 
 **Guardrails (added, `tests/ask/orchestratorDecompositionGuardrails.test.js`, and the import-graph test above):** the orchestrator may not exceed 300 lines or declare a function or registration; no handler, lifecycle, support or formatting file may import it; every handler and lifecycle file must be imported by it.
+
+## Update (Findings Implementation Plan, Phase 2)
+
+The facade no longer carries the handler side-effect imports. Handler registration is listed once in `askRuntimeBootstrap.ts` (`ASK_HANDLER_MANIFEST`) and the facade calls `loadAskHandlerManifest()`, so every existing importer keeps working while the API server calls `initializeAskRuntime()` explicitly at startup. The `export ... from './handlers/...'` re-exports are unchanged. See `ASK_COZY_TECHNICAL_ARCHITECTURE_FINDINGS_IMPLEMENTATION_PLAN.md` §16.
