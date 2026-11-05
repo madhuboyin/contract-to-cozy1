@@ -62,7 +62,9 @@ export const askExecutionDurationSeconds = new Histogram({
 // UX-01 (consolidated plan Phase 0): where one Ask turn's time goes, so latency work is guided by measurement. `stage` is a fixed set,
 // `operation` comes from the registry; no homeowner text or extracted value is ever a label. DURABLE_BASE_RESULT is the time from
 // execution start until the validated base result is persisted, as distinct from the whole API turn (TURN_TOTAL).
-export const ASK_TURN_STAGES = ['ROUTE_AND_EXECUTE', 'SYNTHESIS', 'ACTIONS_FINALIZE', 'SUGGESTION_FINALIZE', 'TRUST_VALIDATION', 'PERSIST_BASE', 'DURABLE_BASE_RESULT', 'POST_PERSIST_EVENTS', 'PROPERTY_SUMMARY', 'INLINE_EXTRACTION', 'TURN_TOTAL'] as const;
+// Findings Implementation Plan Phase 3 added REQUEST_SETUP, PROPERTY_SUMMARY_READ, REQUEST_TOTAL and FAILED_REQUEST_TOTAL. Each stage's exact start and end,
+// and whether it is additive, nested, concurrent or cumulative, is defined in services/ask/askTurnStageContract.ts and locked by a test.
+export const ASK_TURN_STAGES = ['REQUEST_SETUP', 'ROUTE_AND_EXECUTE', 'SYNTHESIS', 'ACTIONS_FINALIZE', 'SUGGESTION_FINALIZE', 'TRUST_VALIDATION', 'PERSIST_BASE', 'DURABLE_BASE_RESULT', 'POST_PERSIST_EVENTS', 'PROPERTY_SUMMARY', 'PROPERTY_SUMMARY_READ', 'INLINE_EXTRACTION', 'TURN_TOTAL', 'REQUEST_TOTAL', 'FAILED_REQUEST_TOTAL'] as const;
 export type AskTurnStage = typeof ASK_TURN_STAGES[number];
 export const askTurnStageDurationSeconds = new Histogram({
   name: 'ask_turn_stage_duration_seconds',
@@ -365,6 +367,26 @@ export const agentRuntimeToolInvocationsTotal = new Counter({
   name: 'agent_runtime_tool_invocations_total',
   help: 'Specialist tool invocations by agent, tool, and outcome',
   labelNames: ['agent', 'tool', 'outcome'] as const,
+  registers: [register],
+});
+
+// Phase 3: failure attribution for one Ask turn. `after_stage` is the last stage that completed before the failure (a bounded ASK_TURN_STAGES value),
+// `timeout` is whether the failure was the operational execution timeout. No operation, user, property or message is a label.
+export const askTurnFailuresTotal = new Counter({
+  name: 'ask_turn_failures_total',
+  help: 'Failed Ask turns by the last completed stage and whether the operational timeout fired',
+  labelNames: ['after_stage', 'timeout'] as const,
+  registers: [register],
+});
+
+// Phase 3: what the inline extraction tail did on a turn that reached it. Distinguishes a pre-filter miss from a completed attempt, a 1.5s
+// budget expiry (the background worker finishes it) and a failed attempt, none of which the stage histogram can tell apart.
+export const ASK_INLINE_EXTRACTION_OUTCOMES = ['PREFILTER_MISS', 'INTENT_NOT_PERSISTED', 'COMPLETED', 'BUDGET_TIMEOUT', 'ATTEMPT_FAILED'] as const;
+export type AskInlineExtractionOutcome = typeof ASK_INLINE_EXTRACTION_OUTCOMES[number];
+export const askInlineExtractionTotal = new Counter({
+  name: 'ask_inline_extraction_total',
+  help: 'Inline conversational extraction outcomes by bounded outcome',
+  labelNames: ['outcome'] as const,
   registers: [register],
 });
 

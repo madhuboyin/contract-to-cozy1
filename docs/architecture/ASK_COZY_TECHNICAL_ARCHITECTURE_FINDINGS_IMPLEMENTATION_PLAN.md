@@ -6,7 +6,7 @@
 
 **Planning basis:** code snapshot `61126057bbb063cd4a452c039289620952380655`, with the source review finalized through `79ed68fc`
 
-**Status:** Phases 0, 1 and 2 implemented (see §14-§16); owner decisions AI-GOV-1 and AI-HEALTH-1 still open; Phases 3-6 not started
+**Status:** Phases 0-2 implemented (see §14-§16); Phase 3 instrumentation and measurement contract built, measurements not yet taken (§17); owner decisions AI-GOV-1 and AI-HEALTH-1 still open; Phases 4-6 not started
 
 ## 1. Purpose and evidence boundary
 
@@ -518,3 +518,29 @@ No unsafe production caller existed. This phase is guardrail work, as scoped: it
 - The 17 handler files that do not register anything (helpers loaded through registering handlers) are intentionally not in the manifest; the parity test lists only registration-bearing modules, as the plan required.
 
 **Not done / not claimed.** No behavior, operation id, role floor or confirmation semantics changed. Server and worker startup in the deployed topology was not run. The descriptor-consolidation proposal remains a separate project (step 8).
+
+## 17. Phase 3 implementation record
+
+**Scope delivered: the measurement contract and instrumentation. No measurement has been taken and no optimization has started.** Plan steps 1-6 are done; step 7 (the decision note) cannot be written until the operational owner returns the evidence.
+
+**Audit result (step 1; code-traced)**
+
+The stage histogram already existed (11 stages, UX-01). The audit found that it could not answer the question as built:
+
+- `TURN_TOTAL`, `DURABLE_BASE_RESULT` and `ask_execution_duration_seconds` all start at `startedAt`, which is set after eligibility, safety routing, property access, the idempotency lookup, session handling, execution-row creation and skill routing. That whole segment was in no metric, so request latency was under-reported by an unknown amount.
+- The stages are not all additive: `SUGGESTION_FINALIZE` is nested inside `ROUTE_AND_EXECUTE`, three stages are cumulative clocks, and `PROPERTY_SUMMARY` is only the wait left after inline extraction, not the cost of the read.
+- Inline extraction outcomes (pre-filter miss, completed, 1.5 s budget expiry, failed attempt) and failure or timeout attribution were not recorded.
+
+**Delivered**
+
+- `lib/metrics.ts`: stages `REQUEST_SETUP`, `REQUEST_TOTAL`, `FAILED_REQUEST_TOTAL`, `PROPERTY_SUMMARY_READ`; counters `ask_turn_failures_total{after_stage,timeout}` and `ask_inline_extraction_total{outcome}`. `TURN_TOTAL` keeps its meaning so existing dashboards do not move.
+- `createAskExecution.ts`: a request clock, the new stage observations, last-completed-stage tracking for failures, and a timed property-summary read. `conversationalCapture.ts`: one bounded outcome counter. No control flow, return value or persisted data changed.
+- `services/ask/askTurnStageContract.ts`: for each of the 15 stages, its exact start, end, what it includes, whether it is additive, nested, concurrent or cumulative, and what the whole histogram does not measure.
+- `tests/ask/askTurnStageContract.test.js` (11 tests): one definition per stage; cumulative and nested stages are not additive; the additive stages are exactly the consecutive `markStage` calls plus setup, in code order; every observed stage is a contract stage; each clock starts where the contract says; labels are fixed and never an id, user, property, message or prompt; extraction outcomes are a closed set recorded at one site each; the contract sets no latency target; recorded observations land in the registry with only their bounded labels.
+- `docs/operations/ASK_TURN_PERFORMANCE_MEASUREMENT.md`: the metric audit, the stage order, the unmeasured list, the scenario matrix S1-S9, the operational owner's request (revision, time range, sample counts, queries), the PromQL pack, and the shape of the decision note.
+
+**Query count: unresolved, by design.** The backend has no Prisma instrumentation. A per-turn count would need a new global hook plus request-scoped attribution, and the Ask code already uses `AsyncLocalStorage.enterWith`, so cross-turn leakage is a real risk. It was not built. The named stages stand in for it.
+
+**Open, needs the owner:** run scenarios S1-S7 on a deployment that contains this change and return the query output listed in the measurement document (the plan's step 6). S8 and S9 are reported only if they occur naturally.
+
+**Not claimed.** Nothing here is a production number. Confirmation, retry, clarification-resolution and capture-submit turns, idempotent replays and early refusals are not stage-instrumented. FR-PERF-001 targets are not set.

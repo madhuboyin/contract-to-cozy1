@@ -7,7 +7,7 @@ import { logger } from '../../../lib/logger';
 import { recordAskCapabilityLifecycle } from '../askCapabilityLifecycle';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
-import { askTurnStageDurationSeconds, type AskTurnStage, askExecutionDurationSeconds, askExecutionsTotal, askInlineCapturesTotal, askRoutingDecisionsTotal, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../../lib/metrics';
+import { askTurnStageDurationSeconds, askTurnFailuresTotal, type AskTurnStage, askExecutionDurationSeconds, askExecutionsTotal, askInlineCapturesTotal, askRoutingDecisionsTotal, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../../lib/metrics';
 import { type AskAccountRole } from '../askAccountEligibility';
 import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
 import { runConversationalCaptureForTurn } from '../conversationalUnderstanding/conversationalCapture';
@@ -110,6 +110,8 @@ function suggestedActionRecoveryResultJson(reason: SuggestedActionRejectionReaso
 
 // `input` is rebound once a selected Suggested Next Action is verified; everything before that point is selection-independent.
 export async function createAskExecution(userId: string, requestInput: CreateAskExecutionRequest, accountRole?: AskAccountRole): Promise<AskExecutionResponse> {
+  // Phase 3: the request clock. REQUEST_SETUP and REQUEST_TOTAL are measured from here; every older stage is measured from `startedAt` below.
+  const requestStartedAt = Date.now();
   let input = requestInput;
   await ensureAskServiceAccountEligibility(userId, accountRole);
   const controls = readAskOperationalControls();
@@ -474,8 +476,10 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
   }
   const startedAt = Date.now();
   let stageMark = startedAt;
+  let lastStageCompleted: AskTurnStage = 'REQUEST_SETUP';
+  askTurnStageDurationSeconds.observe({ stage: 'REQUEST_SETUP', operation: operation.operationId }, (startedAt - requestStartedAt) / 1000);
   // UX-01: records the time since the previous mark under a bounded stage label (no homeowner text is ever a label).
-  const markStage = (stage: AskTurnStage, operationId: string) => { const now = Date.now(); askTurnStageDurationSeconds.observe({ stage, operation: operationId }, (now - stageMark) / 1000); stageMark = now; };
+  const markStage = (stage: AskTurnStage, operationId: string) => { const now = Date.now(); askTurnStageDurationSeconds.observe({ stage, operation: operationId }, (now - stageMark) / 1000); stageMark = now; lastStageCompleted = stage; };
   // A clarification-in-progress execution hasn't actually resolved to
   // `operation` yet — that's just the routing cascade's placeholder/best
   // guess among ambiguous candidates. Recording its family here would
@@ -618,7 +622,12 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     markStage('POST_PERSIST_EVENTS', operation.operationId);
     // UX-01 / plan 7A: the property label read only needs the property id (access was already verified at the top of this turn), so it runs
     // alongside inline extraction instead of before it. Nothing durable depends on it; it is awaited before the response is mapped.
-    const resolvedPropertyPromise = propertySummary(executionPropertyId);
+    const propertySummaryStartedAt = Date.now();
+    const resolvedPropertyPromise = propertySummary(executionPropertyId).then((summary) => {
+      // The real cost of the read: the PROPERTY_SUMMARY stage below is only the wait left over after inline extraction finished.
+      askTurnStageDurationSeconds.observe({ stage: 'PROPERTY_SUMMARY_READ', operation: operation.operationId }, (Date.now() - propertySummaryStartedAt) / 1000);
+      return summary;
+    });
     resolvedPropertyPromise.catch(() => undefined);
     // Ask Cozy Stage 3, Phase 3 (implementation plan §9's extraction-trigger
     // call site; FRD §10 Turn Processing Contract steps 7-8). Independent of
@@ -660,6 +669,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     const resolvedProperty = await resolvedPropertyPromise;
     markStage('PROPERTY_SUMMARY', operation.operationId);
     askTurnStageDurationSeconds.observe({ stage: 'TURN_TOTAL', operation: operation.operationId }, (Date.now() - startedAt) / 1000);
+    askTurnStageDurationSeconds.observe({ stage: 'REQUEST_TOTAL', operation: operation.operationId }, (Date.now() - requestStartedAt) / 1000);
     return mapPersistedExecution(reconciledParent ?? saved, resolvedProperty, childExecutionResponses);
   } catch (caught) {
     const failureStatus = askFailureStatus(caught);
@@ -709,6 +719,8 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     });
     askExecutionsTotal.inc({ operation: operation.operationId, status: failureStatus, generation_mode: generationMode });
     askExecutionDurationSeconds.observe({ operation: operation.operationId, generation_mode: generationMode }, (Date.now() - startedAt) / 1000);
+    askTurnStageDurationSeconds.observe({ stage: 'FAILED_REQUEST_TOTAL', operation: operation.operationId }, (Date.now() - requestStartedAt) / 1000);
+    askTurnFailuresTotal.inc({ after_stage: lastStageCompleted, timeout: errorCode === 'AskExecutionTimeoutError' ? 'true' : 'false' });
     return mapPersistedExecution(saved, await propertySummary(executionPropertyId));
   }
 }

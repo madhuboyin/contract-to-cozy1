@@ -21,6 +21,7 @@ import { z } from 'zod';
 import { prisma } from '../../../lib/prisma';
 import { PLANNING_HOME_VALUE_REQUIRED } from '../../planningHomeValue';
 import { logger } from '../../../lib/logger';
+import { askInlineExtractionTotal } from '../../../lib/metrics';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
 import { normalizeCaptureValue } from '../../../modules/propertyContext/application/capturePropertyFact';
 import { FINANCING_CAPTURE_FACT_KEY } from '../../../modules/propertyContext/application/capturePropertyFinancingFact';
@@ -2087,7 +2088,10 @@ export async function runConversationalCaptureForTurn(input: ConversationalCaptu
 
   const activeDecisionThread = await fetchActiveDecisionThreadContext(input.propertyId);
   const preFilter = evaluateExtractionPreFilter(input.message, activeDecisionThread !== null);
-  if (!preFilter.shouldExtract) return [];
+  if (!preFilter.shouldExtract) {
+    askInlineExtractionTotal.inc({ outcome: 'PREFILTER_MISS' });
+    return [];
+  }
 
   const idempotencyKey = `ask-extraction:${input.parentExecutionId}`;
   const now = new Date();
@@ -2126,6 +2130,7 @@ export async function runConversationalCaptureForTurn(input: ConversationalCaptu
     if (typeof persisted.timezone === 'string') referenceTimezone = persisted.timezone;
   } catch (error) {
     logger.warn({ error, parentExecutionId: input.parentExecutionId }, '[ask-conversational-capture] failed to persist durable extraction intent; skipping this turn');
+    askInlineExtractionTotal.inc({ outcome: 'INTENT_NOT_PERSISTED' });
     return [];
   }
 
@@ -2158,6 +2163,7 @@ export async function runConversationalCaptureForTurn(input: ConversationalCaptu
   // fires -- correct, since the caller's childExecutions field already
   // delivers the result inline in that same case.
   let timedOut = false;
+  let attemptFailed = false;
   const attempt = (async () => {
     try {
       const [recentHomeEvents, recentDocuments] = await Promise.all([
@@ -2208,6 +2214,7 @@ export async function runConversationalCaptureForTurn(input: ConversationalCaptu
       }
       return created;
     } catch (error) {
+      attemptFailed = true;
       logger.warn({ error, parentExecutionId: input.parentExecutionId }, '[ask-conversational-capture] extraction attempt failed');
       // Release the claim promptly (rather than holding a 15-minute lease
       // uselessly) so the worker's own poller can retry per its existing
@@ -2223,7 +2230,10 @@ export async function runConversationalCaptureForTurn(input: ConversationalCaptu
   const timeout = new Promise<PersistedCaptureExecution[]>((resolve) => {
     setTimeout(() => { timedOut = true; resolve([]); }, INLINE_EXTRACTION_BUDGET_MS);
   });
-  return Promise.race([attempt, timeout]);
+  const raced = await Promise.race([attempt, timeout]);
+  // `timedOut` is set only by the timeout firing first, so it is the one reliable signal that the budget expired before the attempt finished.
+  askInlineExtractionTotal.inc({ outcome: timedOut ? 'BUDGET_TIMEOUT' : attemptFailed ? 'ATTEMPT_FAILED' : 'COMPLETED' });
+  return raced;
 }
 
 /**

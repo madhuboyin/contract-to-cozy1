@@ -143,7 +143,8 @@ test('orphaned RUNNING executions (no confirmation receipt) are reclaimed on a t
   const pendingWorkFn = orchestrator.slice(orchestrator.indexOf('export async function getAskPendingWork('));
   assert.match(pendingWorkFn.slice(0, 1500), /confirmations: \{ none: \{\} \}, updatedAt: \{ lte: orphanRunningCutoff \} \}/);
   const createFn = orchestrator.slice(orchestrator.indexOf('export async function createAskExecution('));
-  assert.match(createFn.slice(0, 1500), /reclaimOrphanedRunningExecution\(duplicate\)/);
+  // Proximity bound only: the idempotency lookup sits in the opening setup of createAskExecution, not deep in the turn.
+  assert.match(createFn.slice(0, 2200), /reclaimOrphanedRunningExecution\(duplicate\)/);
 });
 
 test('pending Ask work returns the complete authorized set for the Work destination', () => {
