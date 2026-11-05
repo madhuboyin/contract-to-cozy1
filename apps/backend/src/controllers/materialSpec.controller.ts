@@ -55,7 +55,7 @@ export async function searchSpecs(req: CustomRequest, res: Response, next: NextF
 export async function getSpec(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const { propertyId, specId } = req.params;
-    const spec = await service.getSpec(propertyId, specId);
+    const spec = await service.getSpec(propertyId, specId, req.householdRole);
     res.json({ success: true, data: { spec } });
   } catch (err) {
     next(err);

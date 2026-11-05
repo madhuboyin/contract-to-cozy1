@@ -8,6 +8,8 @@ import {
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
+import type { HouseholdRole } from '@prisma/client';
+import { DEFAULT_LINKED_RECORD_ROLE, visibleRecordWhere } from './homeRecordsAccess';
 import { logger } from '../lib/logger';
 import { presignGetObject } from './storage/presign';
 import { uploadDocumentBuffer } from './storage/reportStorage';
@@ -719,7 +721,7 @@ export class MaterialSpecService {
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
 
-  async getSpec(propertyId: string, specId: string) {
+  async getSpec(propertyId: string, specId: string, role: HouseholdRole = DEFAULT_LINKED_RECORD_ROLE) {
     const spec = await prisma.materialSpec.findFirst({
       where: { id: specId, propertyId },
       include: {
@@ -741,7 +743,7 @@ export class MaterialSpecService {
     // exactly as before. A full migration of that write path is a
     // separate, larger, DB-untested change, not done here.
     const homeRecordLinks = await prisma.propertyRecordLink.findMany({
-      where: { entityType: 'MATERIAL_SPEC', entityId: specId, record: { propertyId } },
+      where: { entityType: 'MATERIAL_SPEC', entityId: specId, record: { propertyId, ...visibleRecordWhere(role) } },
       include: { record: { select: { id: true, title: true, recordType: true, lifecycleStatus: true } } },
       orderBy: { createdAt: 'desc' },
     });

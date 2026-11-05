@@ -215,10 +215,9 @@ export function homeTimelineFromView(allEvents: readonly TimelineEventView[], pr
 }
 
 async function homeTimelineResult(propertyId: string, userId: string, knownRole?: HouseholdRole): Promise<AskOperationResult> {
-  const [{ events }, access] = await Promise.all([
-    new HomeEventsService().listHomeEvents(propertyId, { limit: HOME_TIMELINE_ASK_LIMIT }),
-    knownRole ? Promise.resolve({ role: knownRole }) : ensurePropertyAccess(userId, propertyId),
-  ]);
+  // The role is resolved first because the listing applies the caller's record visibility to any linked records it returns.
+  const access = knownRole ? { role: knownRole } : await ensurePropertyAccess(userId, propertyId);
+  const { events } = await new HomeEventsService().listHomeEvents(propertyId, { limit: HOME_TIMELINE_ASK_LIMIT }, access.role);
   return homeTimelineFromView(events, propertyId, userId, access.role !== HouseholdRole.VIEWER);
 }
 

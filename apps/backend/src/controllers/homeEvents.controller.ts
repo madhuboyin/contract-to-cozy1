@@ -23,7 +23,7 @@ export async function listHomeEvents(req: CustomRequest, res: Response, next: Ne
       to: req.query.to ? String(req.query.to) : undefined,
       limit: req.query.limit ? Number(req.query.limit) : undefined,
       includeSignals,
-    });
+    }, req.householdRole);
 
     const context = await getPlanningContextEnvelope(
       propertyId,
@@ -41,7 +41,7 @@ export async function getHomeEvent(req: CustomRequest, res: Response, next: Next
   try {
     const propertyId = req.params.propertyId;
     const eventId = req.params.eventId;
-    const event = await service.getHomeEvent(propertyId, eventId);
+    const event = await service.getHomeEvent(propertyId, eventId, req.householdRole);
     const context = await getPlanningContextEnvelope(
       propertyId,
       req.user!.userId,

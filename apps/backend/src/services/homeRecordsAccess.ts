@@ -8,6 +8,13 @@ import type { HouseholdRole } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 
+/**
+ * The role a read applies to a linked record when its caller supplied none. It is the least privileged role, so an omitted role can only hide an
+ * owner-only record, never reveal one. Reads that return a linked record's title, type or file facts must apply visibleRecordWhere(role) to the link's
+ * record (Findings Phase 6, F6-2): a link to an owner-only record is not a reason for other roles to learn that the record exists.
+ */
+export const DEFAULT_LINKED_RECORD_ROLE: HouseholdRole = 'VIEWER';
+
 /** The records a household role may see. Only owners see owner-only records; every other role sees household records. */
 export function visibleRecordWhere(role: HouseholdRole) {
   return role === 'OWNER' ? {} : { visibility: 'HOUSEHOLD' as const };

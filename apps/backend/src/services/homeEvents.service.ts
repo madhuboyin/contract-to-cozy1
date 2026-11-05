@@ -2,6 +2,8 @@
 import { createHash } from 'node:crypto';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
+import type { HouseholdRole } from '@prisma/client';
+import { DEFAULT_LINKED_RECORD_ROLE, visibleRecordWhere } from './homeRecordsAccess';
 import { markReplaceRepairStale } from './replaceRepairAnalysis.service';
 import { markDoNothingRunsStale } from './doNothingSimulator.service';
 import { formatMajorApplianceType, inferMajorApplianceType, majorApplianceTypeFromSourceHash } from './majorAppliance.util';
@@ -183,7 +185,7 @@ export class HomeEventsService {
 
   // ---- queries ----
 
-  async listHomeEvents(propertyId: string, query: ListQuery): Promise<{
+  async listHomeEvents(propertyId: string, query: ListQuery, role: HouseholdRole = DEFAULT_LINKED_RECORD_ROLE): Promise<{
     events: any[];
     signalEvents: TimelineProjectionEntry[];
     timelineEntries: TimelineProjectionEntry[];
@@ -251,7 +253,7 @@ export class HomeEventsService {
     const eventIds = projectedEventsBase.map((event) => event.id);
     const propertyRecordLinks = eventIds.length > 0
       ? await prisma.propertyRecordLink.findMany({
-        where: { entityType: 'HOME_EVENT', entityId: { in: eventIds } },
+        where: { entityType: 'HOME_EVENT', entityId: { in: eventIds }, record: visibleRecordWhere(role) },
         include: {
           record: { select: { id: true, title: true, recordType: true, lifecycleStatus: true } },
           version: { select: { id: true, versionNumber: true, scanStatus: true, integrityStatus: true } },
@@ -518,7 +520,7 @@ export class HomeEventsService {
     return [...events, ...syntheticEvents];
   }
 
-  async getHomeEvent(propertyId: string, eventId: string) {
+  async getHomeEvent(propertyId: string, eventId: string, role: HouseholdRole = DEFAULT_LINKED_RECORD_ROLE) {
     const event = await prisma.homeEvent.findFirst({
       where: { id: eventId, propertyId },
       include: {
@@ -556,7 +558,7 @@ export class HomeEventsService {
     // calls for surfacing this so an event's detail shows how it's known,
     // not just what happened.
     const propertyRecordLinks = await prisma.propertyRecordLink.findMany({
-      where: { entityType: 'HOME_EVENT', entityId: eventId },
+      where: { entityType: 'HOME_EVENT', entityId: eventId, record: visibleRecordWhere(role) },
       include: {
         record: { select: { id: true, title: true, recordType: true, lifecycleStatus: true } },
         version: { select: { id: true, versionNumber: true, scanStatus: true, integrityStatus: true } },
@@ -1160,37 +1162,42 @@ export class HomeEventsService {
       homeownerProfileId: args.homeownerProfileId ?? null,
     });
 
-    const link = await prisma.homeEventDocument.upsert({
-      where: { eventId_documentId: { eventId: args.eventId, documentId: args.documentId } },
-      create: {
-        eventId: args.eventId,
-        documentId: args.documentId,
-        kind: (args.kind as any) ?? 'OTHER',
-        caption: args.caption ?? null,
-        sortOrder: args.sortOrder ?? 0,
-      },
-      update: {
-        kind: args.kind ? (args.kind as any) : undefined,
-        caption: args.caption !== undefined ? args.caption : undefined,
-        sortOrder: args.sortOrder !== undefined ? args.sortOrder : undefined,
-      },
-      include: { document: true, event: { select: { id: true, title: true } } },
-    });
-    await prisma.homeEventEvidence.upsert({
-      where: {
-        eventId_evidenceKey: {
+    // One transaction: the link and the evidence row that mirrors it either both exist or neither does (a failure between the two writes used to
+    // leave a link with no evidence row). Findings Phase 6, F6-4.
+    const link = await prisma.$transaction(async (tx) => {
+      const created = await tx.homeEventDocument.upsert({
+        where: { eventId_documentId: { eventId: args.eventId, documentId: args.documentId } },
+        create: {
           eventId: args.eventId,
-          evidenceKey: `document:${args.documentId}`,
+          documentId: args.documentId,
+          kind: (args.kind as any) ?? 'OTHER',
+          caption: args.caption ?? null,
+          sortOrder: args.sortOrder ?? 0,
         },
-      },
-      create: {
-        eventId: args.eventId,
-        evidenceType: 'DOCUMENT',
-        evidenceKey: `document:${args.documentId}`,
-        documentId: args.documentId,
-        addedByUserId: args.userId ?? null,
-      },
-      update: {},
+        update: {
+          kind: args.kind ? (args.kind as any) : undefined,
+          caption: args.caption !== undefined ? args.caption : undefined,
+          sortOrder: args.sortOrder !== undefined ? args.sortOrder : undefined,
+        },
+        include: { document: true, event: { select: { id: true, title: true } } },
+      });
+      await tx.homeEventEvidence.upsert({
+        where: {
+          eventId_evidenceKey: {
+            eventId: args.eventId,
+            evidenceKey: `document:${args.documentId}`,
+          },
+        },
+        create: {
+          eventId: args.eventId,
+          evidenceType: 'DOCUMENT',
+          evidenceKey: `document:${args.documentId}`,
+          documentId: args.documentId,
+          addedByUserId: args.userId ?? null,
+        },
+        update: {},
+      });
+      return created;
     });
 
     return link;
@@ -1203,8 +1210,15 @@ export class HomeEventsService {
     });
     if (!event) throw new APIError('Home event not found', 404, 'HOME_EVENT_NOT_FOUND');
 
-    await prisma.homeEventDocument.delete({
-      where: { eventId_documentId: { eventId, documentId } },
+    // The link and the evidence row that attachDocument created for it go together. Only a pristine row is removed (no note and no observed date):
+    // evidence a person added deliberately through addEvidence, with a note or a date, is theirs and stays. Findings Phase 6, F6-4.
+    await prisma.$transaction(async (tx) => {
+      await tx.homeEventDocument.delete({
+        where: { eventId_documentId: { eventId, documentId } },
+      });
+      await tx.homeEventEvidence.deleteMany({
+        where: { eventId, evidenceKey: `document:${documentId}`, evidenceType: 'DOCUMENT', note: null, observedAt: null },
+      });
     });
   }
 }

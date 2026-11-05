@@ -6,7 +6,7 @@
 
 **Planning basis:** code snapshot `61126057bbb063cd4a452c039289620952380655`, with the source review finalized through `79ed68fc`
 
-**Status:** Phases 0-2 implemented (see §14-§16); Phase 3 instrumentation and measurement contract built, measurements not yet taken (§17); Phase 6 audit complete, three defects demonstrated and designs awaiting owner rulings (§18); owner decisions AI-GOV-1 and AI-HEALTH-1 answered 2026-11-05; Phase 5 built (5A, 5B, 5C: §19; the Redis integration tests are authored, not yet run); Phase 4 measurement and terminology done, routing unchanged, decisions pending (§20)
+**Status:** Phases 0-2 implemented (see §14-§16); Phase 3 instrumentation and measurement contract built, measurements not yet taken (§17); Phase 6 audit complete; F6-2 and F6-4 fixed, F6-1 and F6-3 awaiting owner rulings (§18, §21); owner decisions AI-GOV-1 and AI-HEALTH-1 answered 2026-11-05; Phase 5 built (5A, 5B, 5C: §19; the Redis integration tests are authored, not yet run); Phase 4 measurement and terminology done, routing unchanged, decisions pending (§20)
 
 ## 1. Purpose and evidence boundary
 
@@ -638,3 +638,12 @@ The plan made Phase 4 optional until a coverage report showed material routing g
 **Not done, by design.** No evidence refresh, example, weight, synonym, threshold or version change; no learned or remote embedding. Safety routing is untouched.
 
 **Open for the owner (OD-4.1 to OD-4.3):** apply the four-row refresh (recommended); name an independent reviewer for new paraphrases and hard negatives, buyer-journey operations first; and approve a separate study of the calibration plateau.
+
+## 21. Phase 6 implementation record (the fixes that need no owner ruling)
+
+Plan §10 step 6 gates implementation on a focused design. Two of the audit's defects need no ruling, because every option the owner could choose includes them, so they were implemented. Detail is in `ASK_COZY_PROVENANCE_EVIDENCE_IMPACT_TRACE.md` §9.
+
+- **F6-2 (visibility), read half.** Timeline list and detail and Material Spec detail apply `visibleRecordWhere(role)` to linked records; an omitted role is the least privileged. Controllers and the Ask timeline handler pass the caller's role. **Correction to the audit:** savings-outcome documents are not exposed, because only the property's owning profile can read them; the finding is narrowed to the Timeline and Material Spec.
+- **F6-4 (atomic attach).** Attach is one transaction; detach removes the evidence row attach created and keeps deliberate, annotated evidence.
+- **Verification (executed, against a fake, not a database).** 11 tests; the six that encode the defects fail on the old service and pass on the new one. The Ask suite and the related unit suites show no new failures.
+- **Not done, waiting on the owner:** F6-1 (OD-6.1, move or copy event links on a correction), the link-time half of Design B (OD-6.2), and F6-3 (OD-6.3, bridge read or wait for S5d).

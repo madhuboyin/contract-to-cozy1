@@ -60,7 +60,8 @@ test.afterEach(restore);
 test('the operation reads the page\'s full supported event list (limit 200) behind the page\'s viewer floor, for the asking user', async () => {
   const envelope = { userId: 'u1', propertyId: 'p1', message: 'Show my home timeline' };
   const viewer = await capabilityInvoke('HOME_TIMELINE_EVENTS', envelope, { propertyAccess: { role: 'VIEWER', userId: 'u1', propertyId: 'p1' } });
-  assert.deepEqual(calls, [['p1', { limit: 200 }]]);
+  // The third argument is the asking user's household role: the listing applies that role's record visibility to any linked records it returns (Findings Phase 6, F6-2).
+  assert.deepEqual(calls, [['p1', { limit: 200 }, 'VIEWER']]);
   const titles = [...viewer.blocks.find((block) => block.id === 'home-timeline-events').items.map((item) => item.label), ...viewer.blocks.find((block) => block.id === 'home-timeline-undated').sections.flatMap((section) => section.items.map((row) => row.title))];
   assert.equal(titles.includes('My private note'), true);
   assert.equal(titles.includes('Someone else private note'), false);

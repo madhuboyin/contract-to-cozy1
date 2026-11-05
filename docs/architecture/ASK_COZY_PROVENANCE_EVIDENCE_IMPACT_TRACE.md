@@ -4,7 +4,7 @@
 
 **Scope:** Findings Implementation Plan, Phase 6 (`ASK_COZY_TECHNICAL_ARCHITECTURE_FINDINGS_IMPLEMENTATION_PLAN.md` §10). Finding F6 of `ASK_COZY_TECHNICAL_ARCHITECTURE_REVIEW.md` said that home knowledge is spread across `PropertyFactEvidence`, `HomeEvent` (with its two evidence tables), `SignalProvenance`, `ExtractedFactCandidate` and the legacy `Document` versus Home Record stores, and that no user-visible failure had been traced. This document traces it.
 
-**Status:** audit only. No code, schema or data was changed. The three focused designs in §7 are proposals that need owner rulings before any implementation.
+**Status:** audit, plus the two fixes that need no owner ruling (2026-11-05, §9): F6-2 (read-time visibility filter, Timeline and Material Spec) and F6-4 (atomic attach, detach removes its evidence row). F6-1 and F6-3 and the link-time half of Design B still wait on rulings OD-6.1 to OD-6.3. No schema or data was changed.
 
 **Governing documents read first:** `AUDIT_METHODOLOGY.md`; `HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md` §17 (the Documents-retirement arc); `PROJECT_TRACKER_DOCUMENT_STORE_DESIGN.md`; `ASK_COZY_NEGOTIATION_SHIELD_DOCUMENTS_DESIGN.md`; `QUOTE_COMPARISON_HOME_RECORD_IMPORT_DESIGN.md`; `PROPERTY_TAX_EVIDENCE_AND_INTAKE_IN_ASK_DESIGN.md`.
 
@@ -22,7 +22,7 @@
 | # | Finding | Class | Severity |
 |---|---|---|---|
 | F6-1 | Correcting a Timeline event drops its Home Record evidence from the current revision | Provenance / referential integrity | P2 |
-| F6-2 | Linked-record titles are returned to roles that cannot see the record (Timeline list and detail, Material Spec detail, savings outcomes) | Authorization / visibility | P2 |
+| F6-2 | Linked-record titles are returned to roles that cannot see the record (Timeline list and detail, Material Spec detail). **Fixed 2026-11-05, §9.** The savings-outcome path named in the first draft is not exposed: only the property's owning profile can read it (§6) | Authorization / visibility | P2 |
 | F6-3 | Documents attached to inventory items, warranties, insurance policies and claims are read from the legacy store only; a Home Record linked to them is not shown by any traced read path | Missing interoperability | P2 |
 | F6-4 | Event evidence attach is not atomic and detach leaves the evidence row | Referential integrity (legacy-internal) | P3 |
 | F6-5 | Conversational capture and Ask evidence upload are a self-consistent legacy island that grows with use | Intentional bounded-context difference, with growing debt | P3 |
@@ -92,9 +92,9 @@ Columns: the evidence id and store the workflow accepts; how provenance and conf
 
 ### F6-2. Linked-record titles reach roles that cannot see the record (P2)
 
-**Evidence (code-traced).** `homeRecordsAccess.ts` states the rule: only owners see owner-only records, and a member "never learns that it exists." `homeRecords.service.addLink` (line 740) lets an owner link an owner-only record to any entity type, including a `HOME_EVENT`. The Timeline list and detail endpoints are guarded only by `propertyAuthMiddleware`, which admits every household role, and `getHomeEvent(propertyId, eventId)` takes no role. They return `propertyRecordLinks[].record.{id, title, recordType, lifecycleStatus}` and version scan and integrity status for every link. The same unfiltered shape appears in `materialSpec.service.ts:743` (title, type, status) and `savingsOutcome.service.ts:47` (title, type, mime type, size). Project Tracker and Property Tax avoid this by admitting only household-visible records at link time (D-P3); the Timeline, Material Spec and savings paths have no equivalent rule.
+**Evidence (code-traced).** `homeRecordsAccess.ts` states the rule: only owners see owner-only records, and a member "never learns that it exists." `homeRecords.service.addLink` (line 740) lets an owner link an owner-only record to any entity type, including a `HOME_EVENT`. The Timeline list and detail endpoints are guarded only by `propertyAuthMiddleware`, which admits every household role, and `getHomeEvent(propertyId, eventId)` takes no role. They return `propertyRecordLinks[].record.{id, title, recordType, lifecycleStatus}` and version scan and integrity status for every link. The same unfiltered shape appears in `materialSpec.service.ts:743` (title, type, status). `savingsOutcome.service.ts:47` has the same query shape, but its callers are restricted to the property's owning profile (`property: { homeownerProfile: { userId } }`), so no other role reaches it (§6). Project Tracker and Property Tax avoid this by admitting only household-visible records at link time (D-P3); the Timeline, Material Spec and savings paths have no equivalent rule.
 
-**Impact.** A viewer or contributor can read the title and type of an owner-only record. File content is not exposed here (downloads go through record routes that apply the rule). The role handling of the Material Spec and savings endpoints beyond their queries was not traced.
+**Impact.** A viewer or contributor can read the title and type of an owner-only record. File content is not exposed here (downloads go through record routes that apply the rule). The Material Spec endpoint is guarded by `propertyAuthMiddleware` like the Timeline, so it was affected too; the savings path was traced in §6 and is not.
 
 ### F6-3. Entity documents ignore Home Record links (P2)
 
@@ -137,6 +137,7 @@ Every absolute claim above was checked against the strongest way it could be wro
 | "Correction drops links" | **Held.** No re-pointing code exists (Appendix A) |
 | "No reader of `PropertyRecordLink` for entity documents" | **Held** for the backend read layer. The warranty, insurance and claim screens were not traced in the frontend |
 | "`SignalProvenance` is unused" | **Held in application code.** Not checked in the database |
+| "Savings outcome documents reach every household role" | **Ruled out (found while implementing F6-2).** `getHiddenAssetMatchOutcomes` and its siblings begin with an ownership check on `property.homeownerProfile.userId`, so only the owning profile reaches `documentsByOutcomeId`; the owner sees owner-only records anyway |
 | "A Home Record id can be stored or read as a legacy id without notice" | **Ruled out in the paths traced.** `HomeEventDocument` and `HomeEventEvidence` are foreign keys to `Document`, so a Home Record id cannot be stored there; workflows that accept both stores resolve through `resolvePropertyDocuments`, which tags `source` |
 
 ## 7. Disposition and focused designs
@@ -161,9 +162,9 @@ Every absolute claim above was checked against the strongest way it could be wro
 ### Design B: one visibility rule for every linked-record descriptor (F6-2)
 
 - **Outcome.** No read returns a linked record's title, type or file facts to a role that could not read the record.
-- **Candidate mechanism.** A single helper that applies `visibleRecordWhere(role)` to link reads, used by `listHomeEvents`, `getHomeEvent`, Material Spec detail and savings outcomes, with the role threaded in from `req.householdRole`. Optionally also refuse to link an owner-only record to an entity visible to other roles at `addLink`, as Project Tracker and Property Tax already do.
+- **Candidate mechanism.** A single helper that applies `visibleRecordWhere(role)` to link reads, used by `listHomeEvents`, `getHomeEvent` and Material Spec detail (savings outcomes were ruled out, §6), with the role threaded in from `req.householdRole`. Optionally also refuse to link an owner-only record to an entity visible to other roles at `addLink`, as Project Tracker and Property Tax already do.
 - **Owner decision OD-6.2:** filter at read only, or also restrict at link time. Recommendation: both; the read filter is non-breaking and the link rule stops new exposure.
-- **Tests:** an owner-only record linked to an event is absent for viewer and contributor and present for owner, on list and on detail; the same for Material Spec and savings.
+- **Tests:** an owner-only record linked to an event is absent for viewer and contributor and present for owner, on list and on detail; the same for Material Spec.
 
 ### Design C: one read of "documents for this entity" (F6-3)
 
@@ -178,7 +179,6 @@ F6-4 through F6-9 need no design here. F6-4 is a small fix (one transaction; del
 
 - Any running system: no database, so row counts and whether `SignalProvenance` or orphaned links exist are unknown.
 - The frontend warranty, insurance and claim screens beyond their backend read layers.
-- Role handling at the Material Spec and savings endpoints beyond their queries.
 - Raw SQL, scripts outside `apps/backend/scripts`, and deployed configuration other than `HOME_EVENTS_AUTOGEN`.
 - `scripts/copy-legacy-documents-to-home-records.ts` and its effect on event links (`legacyNotYetInRecords` hides a legacy row whose checksum matches a record, but the event link still points at the legacy row).
 
@@ -190,3 +190,18 @@ F6-4 through F6-9 need no design here. F6-4 is a small fix (one transaction; del
 - **D.** `grep -rni "signalProvenance"` over backend and workers source: a deletion-cascade comment only; `grep -rn "provenanceId"`: two lines, both in `homeEvents.service.ts`.
 - **E.** `grep -rIl "promoteDocumentEventToSemantic"` over the whole repository excluding `node_modules`: its definition and one FRD mention.
 - Also read: `conversationalCapture.ts`, `document.routes.ts`, `homeEvents.service.ts`, `homeRecords.service.ts`, `homeRecordsAccess.ts`, `homeRecordsExtraction.service.ts`, `propertyDocumentInventory.service.ts`, `reportSnapshot.ts`, `redaction.ts`, `materialSpec.service.ts`, `savingsOutcome.service.ts`, `inventory.service.ts`, `InventoryItemDrawer.tsx`, `HomeRecordsClient.tsx`, `documentAuth.middleware.ts`, `subscription.service.ts`, `coverageCommands.handler.ts`, and the `schema.prisma` models named above.
+
+## 9. Implementation of the fixes that need no ruling (2026-11-05)
+
+**F6-2, read-time visibility (Design B, read half).**
+
+- `homeRecordsAccess.ts` gains `DEFAULT_LINKED_RECORD_ROLE` (`VIEWER`): a read that is not told the caller's role applies the least-privileged rule, so a forgotten argument can only hide a record.
+- `HomeEventsService.listHomeEvents` and `getHomeEvent`, and `MaterialSpecService.getSpec`, take the caller's role and add `record: visibleRecordWhere(role)` to the link query. The Timeline and Material Spec controllers pass `req.householdRole`; the Ask timeline handler now resolves the role first and passes it.
+- The link-time restriction (refusing to link an owner-only record to an entity other roles can see) is the other half of Design B and waits on OD-6.2.
+- **Not changed:** the Material Spec lifecycle check at `materialSpec.service.ts:167` counts link purposes to gate a status change; it returns no record facts to the caller, so it was left alone.
+
+**F6-4, atomic evidence attach.** `attachDocument` writes the `HomeEventDocument` and the mirroring `HomeEventEvidence` in one transaction. `detachDocument` deletes the link and, in the same transaction, the evidence row attach created (`document:<id>`, type `DOCUMENT`, no note and no observed date). Evidence a person added deliberately, with a note or a date, is kept.
+
+**Evidence.** `tests/unit/phase6EvidenceVisibilityAndAtomicity.test.js` (11 tests) runs the real service code against an in-memory fake that evaluates the visibility filter and transaction rollback. Against the pre-change service the six tests that encode the defects fail (an owner-only title returned to contributors and viewers on list, detail and Material Spec; a link left without its evidence row after a failed second write; evidence left after a detach), and all 11 pass on the new code. This upgrades those findings from code-traced to reproduced against the fake. It still says nothing about Prisma's SQL or a real database. `homeTimelineEventsCapabilitySlice.test.js` was updated to expect the role argument, which also proves the Ask path passes the asking user's role.
+
+**Still waiting on the owner:** OD-6.1 (F6-1: move or copy `HOME_EVENT` links on a correction), OD-6.2 (also restrict at link time), OD-6.3 (F6-3: bridge read for entity documents, or wait for the S5d retarget).
