@@ -511,11 +511,11 @@ const WEATHER_PREPARATION_NOW_WINDOW_MS = 72 * 60 * 60 * 1000;
  * window is current.
  */
 function environmentInsightPriority(
-  insight: EnvironmentInsight,
+  category: string,
   evaluatedAt: Date,
   windowStart: Date | null,
 ): HomeAction['priority'] {
-  if (insight.category === 'drought' || !windowStart) return 'SOON';
+  if (category === 'drought' || !windowStart) return 'SOON';
   return windowStart.getTime() - evaluatedAt.getTime() <= WEATHER_PREPARATION_NOW_WINDOW_MS
     ? 'NOW'
     : 'SOON';
@@ -589,7 +589,7 @@ export function adaptEnvironmentInsightsToHomeActions(
         sourceEntityId: insight.id,
         sourceVersion: 'environment-v1',
         state: 'OPEN',
-        priority: environmentInsightPriority(insight, evaluatedAt, windowStart),
+        priority: environmentInsightPriority(insight.category, evaluatedAt, windowStart),
         signal: insight.title,
         whyItMatters: `${insight.summary} ${insight.homeImplication}`.trim(),
         recommendedAction: insight.recommendedActions[0] ?? primary?.label ?? 'Review the environment outlook',
@@ -1133,6 +1133,13 @@ async function loadIncidentActions(
     const preparationStart = isWeatherPreparation && typeof details.effectiveFrom === 'string'
       ? environmentBoundary(details.effectiveFrom)?.toISOString() ?? null
       : null;
+    const preparationPriority = isWeatherPreparation
+      ? environmentInsightPriority(
+        incident.category ?? '',
+        new Date(),
+        preparationStart ? new Date(preparationStart) : null,
+      )
+      : null;
     const weatherExpiry = typeof details.expires === 'string' && !Number.isNaN(new Date(details.expires).getTime())
       ? new Date(details.expires).toISOString()
       : preparationExpiry ?? incident.expiredAt?.toISOString() ?? null;
@@ -1189,7 +1196,9 @@ async function loadIncidentActions(
       sourceEntityId: incident.id,
       sourceVersion: 'phase2-v1',
       state: addressedPreparationSteps > 0 || proposed?.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'OPEN',
-      priority: critical ? 'NOW' : incident.severity === 'WARNING' ? 'SOON' : 'PLAN',
+      priority: critical
+        ? 'NOW'
+        : preparationPriority ?? (incident.severity === 'WARNING' ? 'SOON' : 'PLAN'),
       signal: incident.title,
       whyItMatters: (preparationContext || incident.summary) ?? 'An active property incident may affect safety, damage exposure, or timely response.',
       recommendedAction: isWeatherPreparation

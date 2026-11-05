@@ -462,7 +462,15 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
     : /\bplan ahead\b/i.test(message)
       ? 'planAhead'
       : null;
-  const dashboardSections = dashboardSection ? projectHomeActionDashboardSections(visibleFeedActions) : null;
+  // The Home dashboard itself stays compact at three entries per section, but
+  // Ask's conversational presentation owns an eight-item disclosure window
+  // (the first three cards plus items four through eight behind Show more).
+  // Applying the dashboard's default cap here discarded valid lower-ranked
+  // actions before the Ask renderer could disclose them, most visibly weather
+  // preparation when three other actions ranked ahead of it.
+  const dashboardSections = dashboardSection
+    ? projectHomeActionDashboardSections(visibleFeedActions, MAX_RESULT_ITEMS)
+    : null;
   const matchingActions = dashboardSection && dashboardSections
     ? dashboardSectionRepresentativeActions(visibleFeedActions, dashboardSections[dashboardSection])
     : (priorityFilter

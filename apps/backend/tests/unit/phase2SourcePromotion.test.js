@@ -357,6 +357,27 @@ test('preserves forecast preparation provenance and every bounded checklist step
   assert.doesNotMatch(JSON.stringify(action), /official weather alert|National Weather Service/i);
 });
 
+test('keeps an accepted weather preparation in the same 72-hour priority window as its source insight', async () => {
+  const db = stubSources();
+  const nearStart = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+  const nearEnd = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+  db.incident.findMany = async () => [{
+    id: 'preparation-near', propertyId: 'property-1', fingerprint: 'weather-preparation:property-1:rain-near',
+    typeKey: 'WEATHER_PREPARATION', category: 'rain', severity: 'INFO', confidence: 100,
+    title: 'Heavy rain preparation', summary: 'Prepare exterior drainage before the rain.',
+    sourceType: 'WEATHER', status: 'ACTIONED', openedAt: new Date(), expiredAt: null,
+    createdAt: new Date(), updatedAt: new Date(), lastEvaluatedAt: new Date(),
+    details: { insightId: 'rain-near', effectiveFrom: nearStart, effectiveTo: nearEnd, source: 'Open-Meteo forecast' },
+    actions: [{ id: 'step-1', type: 'CHECKLIST_ITEM', status: 'CREATED', ctaLabel: 'Clear exterior drains.', ctaUrl: null, payload: { label: 'Clear exterior drains.', sortOrder: 0 } }],
+  }];
+
+  const result = await getPromotedHomeActions('property-1', db);
+  const action = result.actions.find((candidate) => candidate.id === 'incident:preparation-near');
+
+  assert.ok(action);
+  assert.equal(action.priority, 'NOW');
+});
+
 test('uses a continue CTA after weather preparation progress has been recorded', async () => {
   const db = stubSources();
   db.incident.findMany = async () => [{

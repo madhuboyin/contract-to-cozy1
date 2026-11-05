@@ -47,3 +47,16 @@ test('projects the same independently capped dashboard sections and collapses co
     ['now-1', 'coverage-1', 'soon-2'],
   );
 });
+
+test('allows Ask to request its eight-item disclosure window without changing the dashboard default', () => {
+  const actions = Array.from({ length: 9 }, (_, index) => action(`plan-${index + 1}`, 'PLAN'));
+
+  assert.deepEqual(
+    projectHomeActionDashboardSections(actions).planAhead.map((entry) => entry.actionIds[0]),
+    ['plan-1', 'plan-2', 'plan-3'],
+  );
+  assert.deepEqual(
+    projectHomeActionDashboardSections(actions, 8).planAhead.map((entry) => entry.actionIds[0]),
+    ['plan-1', 'plan-2', 'plan-3', 'plan-4', 'plan-5', 'plan-6', 'plan-7', 'plan-8'],
+  );
+});
