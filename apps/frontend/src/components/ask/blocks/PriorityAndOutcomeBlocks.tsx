@@ -159,7 +159,7 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
           return (
             <div className="max-w-3xl space-y-1 text-sm leading-6 text-slate-700" data-home-actions-intro="">
               <p>{leadContext ?? `Start with ${lead.title.replace(/[.]$/, '')}.`}</p>
-              {block.items.length > 1 && <p className="text-slate-600">It is ranked first in your current Home Actions. The next priorities are summarized below, with supporting details available when you want them.</p>}
+              {block.items.length > 1 && <p className="text-slate-600"><span className="sm:hidden">Ranked first in your Home Actions.</span><span className="hidden sm:inline">It is ranked first in your current Home Actions. The next priorities are summarized below, with supporting details available when you want them.</span></p>}
             </div>
           );
         })()}
