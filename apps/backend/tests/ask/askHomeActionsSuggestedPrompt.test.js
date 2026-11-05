@@ -37,6 +37,32 @@ function homeActionsResult(status = 'ANSWERED', populated = true, producerUnavai
   return { status, blocks, suggestions: ['What should I plan?'] };
 }
 
+function productionShapedPriorityList() {
+  return {
+    type: 'PRIORITY_LIST', id: 'home-actions-priority-list', title: 'What matters now',
+    propertyId: 'property-1', rankingPolicyVersion: 'priority-list-policy-v2',
+    generatedAt: '2026-11-05T02:52:18.000Z', sourceFreshnessAt: '2026-11-05T02:45:00.000Z', truncated: false,
+    items: [{
+      homeActionId: 'weather-1', title: 'Heavy rain expected Friday, Nov 6',
+      rawPriority: 'PLAN', consumerPriority: 'WATCH', comparativeReasonCodes: [],
+      whyThisAppeared: 'Forecast conditions may affect this home.', confidenceLabel: 'HIGH', deadlineAt: '2026-11-06T12:00:00.000Z',
+      dependencyRefs: [], cta: null, inlineLaunch: null,
+      presentation: {
+        kind: 'WEATHER', variant: 'ENVIRONMENT_PREPARATION', eyebrow: 'Environment action recommended',
+        summary: 'Heavy rainfall may overwhelm gutters and exterior drainage.',
+        whyItMatters: 'Water may enter around the lowest level or foundation.',
+        recommendedAction: 'Clear gutters and exterior drains before the rain begins.',
+        expectedOutcome: 'Exterior drainage is ready for the forecast rainfall.', detailLabel: 'View preparation steps',
+        timing: { windowStart: '2026-11-05T12:00:00.000Z', windowEnd: '2026-11-06T12:00:00.000Z', rationale: 'Prepare before rainfall begins.' },
+        keyFacts: [{ label: 'Provider signal', value: 'OPERATIONAL_WORK_DUE' }],
+        source: { label: 'OPEN_METEO', observedAt: '2026-11-05T02:45:00.000Z', freshness: 'CURRENT' },
+        controls: [],
+      },
+      watchState: null, suppressed: false, completed: false, unavailable: false, stale: false,
+    }],
+  };
+}
+
 test('first-party Home Actions planning prompt routes directly', () => {
   const routing = resolveAskRoutingCascade(QUESTION);
   assert.equal(routing.operation.operationId, 'HOME_ACTIONS');
@@ -100,6 +126,24 @@ test('the Plan ahead answer preserves actions and its partial-source disclosure 
   assert.equal(validation.result.blocks.some((block) => block.id === 'home-actions-list'), true);
   assert.equal(validation.result.blocks.some((block) => block.id === 'home-actions-producer-unavailable'), true);
   assert.equal(validation.result.blocks.some((block) => block.id === 'answer-trust-failed'), false);
+});
+
+test('canonical Priority List source identifiers do not leak into Ask-authored internal-token validation', () => {
+  const result = homeActionsResult('ANSWERED', true, false);
+  result.blocks.splice(1, 0, productionShapedPriorityList());
+
+  const validation = validateAskAnswerTrustPipeline({
+    question: 'Show me what I should plan ahead for',
+    operationId: 'HOME_ACTIONS', propertyId: 'property-1', semanticEnabled: true,
+    recoveryAttempted: false, operationConfirmedByUser: false,
+    result: attachAskAuthoritativeSourceEvidence(result, [completedAskAuthoritativeSourceEvidence('HOME_ACTIONS')]),
+  });
+
+  assert.equal(validation.result.status, 'ANSWERED');
+  assert.notEqual(validation.trust.outcome, 'BLOCK');
+  assert.equal(validation.trust.checks.operationCongruence, 'PASS');
+  assert.equal(validation.trust.reasonCodes.includes('INTERNAL_PRESENTATION_TOKEN'), false);
+  assert.equal(validation.result.blocks.some((block) => block.id === 'home-actions-priority-list'), true);
 });
 
 test('focused canonical Home Action guidance passes the same contract', () => {

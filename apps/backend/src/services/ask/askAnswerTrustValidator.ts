@@ -99,6 +99,14 @@ function authoredPresentationText(block: AskPresentationBlock): string {
   if (block.type === 'ENVIRONMENT_REPORT') {
     return [block.title, block.summary].filter(Boolean).join(' ');
   }
+  // Priority-list items are canonical Home Actions. Their titles, homeowner
+  // summaries, facts, evidence-source labels and presentation metadata may
+  // legitimately contain identifier-like recorded values (for example,
+  // OPEN_METEO). Only the list framing and filter labels are authored by Ask.
+  if (block.type === 'PRIORITY_LIST') {
+    return [block.title, ...(block.filters ?? []).map((filter) => filter.label)]
+      .filter(Boolean).join(' ');
+  }
   return visibleText(block);
 }
 
@@ -246,6 +254,7 @@ export function validateAskAnswerTrust(input: {
   const coverage = operationSpecificFirstBlock(input.operationId, blocks);
   const congruent = blocks.length > 0 && blocks.every((block) => block.type === 'BOUNDARY' || allowed.has(block.type));
   if (!coverage) reasonCodes.push('DIRECT_ANSWER_MISSING');
+  if (!congruent) reasonCodes.push('OPERATION_CONGRUENCE_FAILED');
   if (!absenceSupported) reasonCodes.push('UNSUPPORTED_ABSENCE_CLAIM');
   if (source !== 'COMPLETE') reasonCodes.push(source === 'PARTIAL' ? 'AUTHORITATIVE_SOURCE_PARTIAL' : 'AUTHORITATIVE_SOURCE_EVIDENCE_MISSING');
   if (hasInternalToken) reasonCodes.push('INTERNAL_PRESENTATION_TOKEN');
