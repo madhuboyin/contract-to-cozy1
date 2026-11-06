@@ -44,9 +44,10 @@ export function askAnswerWidth(blocks: AskPresentationBlock[]): AskAnswerWidth {
   // The upgrade planner's responsive columns fit the ordinary conversation measure. Keep it aligned with Home Actions instead of widening
   // the whole turn, especially before any option has calculated results.
   if (blocks.some((block) => block.id === 'home-upgrade-options')) return 'STANDARD';
-  // Recurring costs are a four-way comparison and setup workspace. Its dedicated
-  // responsive grid uses the extra desktop measure while remaining stacked on mobile.
-  if (blocks.some((block) => block.id === 'savings-recurring-setup')) return 'WIDE';
+  // Savings is still a conversational answer, not a full-width comparison
+  // workspace. Its responsive two-column setup grid fits the same readable
+  // measure as Browse my home record and stacks naturally on smaller screens.
+  if (blocks.some((block) => block.id === 'savings-recurring-setup')) return 'STANDARD';
   return blocks.some((block) => WIDE_BLOCK_TYPES.has(block.type)
     || (block.type === 'PRIORITY_LIST' && block.items.length > 1)
     || (block.type === 'GROUPED_LIST' && Boolean(block.presentation)))
