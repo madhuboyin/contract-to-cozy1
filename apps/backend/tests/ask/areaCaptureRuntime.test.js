@@ -258,7 +258,10 @@ test('the end state never claims the area is done: it says no more questions THI
   assert.match(summary.body, /cannot be filled in here/);
   assert.match(summary.body, /Installed system types \(from your inventory\)/);
   assert.equal(summary.tone, 'CAUTION');
-  assert.equal(summary.actions.some((action) => action.interactionType === 'START_WORKFLOW'), false, 'nothing left to continue with');
+  assert.equal(summary.actions.some((action) => action.id === 'continue-area-capture'), false, 'nothing left to continue with in this area');
+  // Other areas with open details are offered next, so the homeowner is never left at a dead end.
+  assert.ok(summary.actions.every((action) => /^next-area-capture-(?!systems$)/.test(action.id)), 'only other areas are offered');
+  assert.ok(summary.actions.length <= 3);
 });
 
 test('"Continue" from a receipt carries that workflow\'s skips; a start from anywhere else or for another scope begins with none', async () => {

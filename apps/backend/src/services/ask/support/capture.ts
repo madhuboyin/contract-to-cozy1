@@ -38,6 +38,15 @@ export async function areaCaptureProgress(userId: string, propertyId: string, sc
   return areaCaptureProgressFromSnapshot(snapshot, scope, skip, excluded);
 }
 
+/** Other areas that still have details the homeowner can answer, in catalog order, so a finished area can offer the next one. */
+export async function otherAreasWithAskableFacts(userId: string, propertyId: string, current: PropertyAreaCaptureScope): Promise<PropertyAreaCaptureScope[]> {
+  const snapshot = await getPropertyContext(propertyId, { userId }, { scopes: [...PROPERTY_AREA_CAPTURE_SCOPES] });
+  return (PROPERTY_AREA_CAPTURE_SCOPES as readonly PropertyAreaCaptureScope[])
+    .filter((scope) => scope !== current && areaCaptureProgressFromSnapshot(snapshot, scope, new Set()).askable.length > 0);
+}
+
+export const nextAreaActionId = (scope: string): string => `next-area-capture-${scope.toLowerCase()}`;
+
 export const PROPERTY_SCOPE_LABELS: Record<string, string> = {
   CORE: 'Core property details', LOCATION: 'Location', STRUCTURE: 'Structure', EXTERIOR: 'Exterior and utilities',
   RESPONSIBILITY: 'Maintenance responsibility', SYSTEMS: 'Home systems', SAFETY: 'Safety', ROOMS: 'Rooms',
@@ -164,7 +173,7 @@ export function derivedFactsNote(derivedFactKeys: readonly string[]): string | n
 
 export const areaLabel = (scope: string): string => PROPERTY_SCOPE_LABELS[scope] ?? readablePropertyValue(scope);
 
-export function areaProgressBlock(_propertyId: string, scope: PropertyAreaCaptureScope, progress: Awaited<ReturnType<typeof areaCaptureProgress>>, terminal: boolean, continueAction: boolean): AskPresentationBlock {
+export function areaProgressBlock(_propertyId: string, scope: PropertyAreaCaptureScope, progress: Awaited<ReturnType<typeof areaCaptureProgress>>, terminal: boolean, continueAction: boolean, nextAreas: readonly PropertyAreaCaptureScope[] = []): AskPresentationBlock {
   const parts = [`${areaLabel(scope)} is ${progress.percent}% complete on the home record.`];
   if (progress.skipped.length) parts.push(`${progress.skipped.length} detail${progress.skipped.length === 1 ? ' was' : 's were'} skipped or marked not sure this session and ${progress.skipped.length === 1 ? 'is' : 'are'} still incomplete.`);
   const otherLabels = progress.otherSurface.map((key) => AREA_OTHER_SURFACE_LABELS[key]).filter(Boolean);
@@ -175,6 +184,7 @@ export function areaProgressBlock(_propertyId: string, scope: PropertyAreaCaptur
     body: parts.join(' '), tone: terminal && (progress.skipped.length || progress.otherSurface.length || progress.percent < 100) ? 'CAUTION' : 'DEFAULT',
     actions: [
       ...(continueAction && progress.askable.length ? [{ id: 'continue-area-capture', label: `Continue with ${areaLabel(scope)}`, interactionType: 'START_WORKFLOW' as const, message: AREA_CAPTURE_MESSAGES[scope], operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE', style: 'PRIMARY' as const }] : []),
+      ...(terminal ? nextAreas.slice(0, 3).map((next, index) => ({ id: nextAreaActionId(next), label: `Continue with ${areaLabel(next)}`, interactionType: 'START_WORKFLOW' as const, message: AREA_CAPTURE_MESSAGES[next], operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE', style: index === 0 ? 'PRIMARY' as const : 'SECONDARY' as const })) : []),
     ],
   };
 }

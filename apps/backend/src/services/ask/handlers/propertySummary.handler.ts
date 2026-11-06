@@ -17,7 +17,7 @@ import { normalizeAnswers } from '../../../modules/propertyContext/application/c
 import { getPropertyContext } from '../../../modules/propertyContext/application/getPropertyContext';
 import { getPropertyRecordOverview } from '../../propertyRecordOverview.service';
 import { humanDate } from '../askFormatting';
-import { answerableUnmetFacts, AREA_CAPTURE_MESSAGES, areaCaptureProgress, derivedFactsNote, areaLabel, areaProgressBlock, ensurePropertyAccess, isAreaCaptureScope, PROPERTY_SCOPE_LABELS, readablePropertyValue } from '../askHandlerSupport';
+import { answerableUnmetFacts, AREA_CAPTURE_MESSAGES, areaCaptureProgress, otherAreasWithAskableFacts, derivedFactsNote, areaLabel, areaProgressBlock, ensurePropertyAccess, isAreaCaptureScope, PROPERTY_SCOPE_LABELS, readablePropertyValue } from '../askHandlerSupport';
 import { ROOM_ADD_MESSAGE, roomRenameItemActions } from '../handlers/homeRecordWrites.handler';
 import { INVENTORY_ADD_MESSAGE } from '../handlers/inventory.handler';
 import { roomMapFacts } from '../support/roomMap';
@@ -589,7 +589,7 @@ export async function areaCapturePrompt(
   if (!batchResult.requirements.length) {
     return {
       status: 'ANSWERED', reasonCode: 'AREA_CAPTURE_NO_MORE_QUESTIONS', contextVersion: batchResult.contextVersion, parameters,
-      blocks: [...noticeBlock, areaProgressBlock(propertyId, scope, progress, true, false)], suggestions: [],
+      blocks: [...noticeBlock, areaProgressBlock(propertyId, scope, progress, true, false, await otherAreasWithAskableFacts(userId, propertyId, scope))], suggestions: [],
     };
   }
   const request = areaBatchRequest(scope, batchResult.requirements, batchResult.contextVersion);

@@ -23,7 +23,7 @@ import { markReplaceRepairStale } from '../../replaceRepairAnalysis.service';
 import { markRiskPremiumOptimizerStale } from '../../riskPremiumOptimizer.service';
 import { humanDate } from '../askFormatting';
 import { AreaCaptureAnswerSchema, areaCaptureError, areaCaptureStateFrom, areaEffectiveSkip } from '../handlers/propertySummary.handler';
-import { areaCaptureProgress, areaLabel, areaProgressBlock, asInputJson, captureEventResult, ensurePropertyAccess, HOME_EVENT_CORRECTION_FIELDS, HOME_EVENT_LINK_FIELDS, HOME_EVENT_VISIBILITY_LABELS, HomeEventCorrectionInputSchema, HomeEventVisibilityInputSchema, HouseholdInvitationInputSchema, InventoryCreateInputSchema, InventoryItemCorrectionInputSchema, InvitableHouseholdRole, invitationRoleCopy, mapPersistedExecution, preservedExecutionHistory, propertySummary, RoomCreateInputSchema, RoomRenameInputSchema, WarrantyUpdateInputSchema, HomeEventUpdateInputSchema } from '../askHandlerSupport';
+import { areaCaptureProgress, otherAreasWithAskableFacts, areaLabel, areaProgressBlock, asInputJson, captureEventResult, ensurePropertyAccess, HOME_EVENT_CORRECTION_FIELDS, HOME_EVENT_LINK_FIELDS, HOME_EVENT_VISIBILITY_LABELS, HomeEventCorrectionInputSchema, HomeEventVisibilityInputSchema, HouseholdInvitationInputSchema, InventoryCreateInputSchema, InventoryItemCorrectionInputSchema, InvitableHouseholdRole, invitationRoleCopy, mapPersistedExecution, preservedExecutionHistory, propertySummary, RoomCreateInputSchema, RoomRenameInputSchema, WarrantyUpdateInputSchema, HomeEventUpdateInputSchema } from '../askHandlerSupport';
 import { homeEventContextVersion, homeEventCorrectionBlocker, homeEventCorrectionConfirmation, homeEventCorrectionValueError, homeEventFieldCurrent, homeEventFieldPatch, homeEventLinkOptions, homeEventsServiceForCapture, homeEventVisibilityBlocker, homeEventVisibilityConfirmation, householdService, householdWorkflowVersion, ROOM_CORRECTION_FIELDS, roomContextVersion, roomCorrectionNormalized, roomCorrectionValueError, roomFieldCurrent, roomFieldDisplay, roomRenameConfirmation, roomTypeLabel, warrantyContextVersion } from '../handlers/homeRecordWrites.handler';
 import { warrantyExpiryReminderCandidates } from '../handlers/warranties.handler';
 import { homeEventFollowUpCandidates } from '../handlers/homeRecordWrites.handler';
@@ -825,7 +825,7 @@ async function confirmPropertyAreaCapture(ctx: ConfirmCapabilityContext): Promis
       details: [...stored.rows, { label: 'Areas updated', value: (writtenAreas.length ? writtenAreas : stored.areas).join(', ') }],
       actions: [],
     },
-    areaProgressBlock(propertyId, state.scope, progress, progress.askable.length === 0, true)],
+    areaProgressBlock(propertyId, state.scope, progress, progress.askable.length === 0, true, progress.askable.length === 0 ? await otherAreasWithAskableFacts(userId, propertyId, state.scope) : [])],
     suggestions: [],
   };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);

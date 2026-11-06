@@ -5,6 +5,7 @@ import { isAskActionAllowedForHouseholdRole } from './askAudiencePresentation';
 import { getAskOperationDefinition, type AskOperationId, type AskOperationResult } from './askOperationRegistry';
 import type { AskAnswerTrustEvidence, AskAuthoritativeSourceEvidence } from './askTrust.contract';
 import { isReceiptFollowUpAction } from './support/receiptFollowUps';
+import { PROPERTY_AREA_CAPTURE_SCOPES } from '../../modules/propertyContext/catalog/featureRequirementRegistry';
 import { DIY_FILTER_ACTION_IDS } from './support/diyTemplateBrowseFilter';
 
 type AskAction = Extract<AskPresentationBlock, { type: 'SUMMARY' }>['actions'][number];
@@ -144,7 +145,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   DO_NOTHING_SIMULATION_RUN: new Set(),
   SERVICE_PRICE_CHECK_RUN: new Set(['service-price-check-negotiate']),
   INVENTORY_ITEM_CREATE: new Set(['open-rooms', 'view-inventory-item']),
-  PROPERTY_CONTEXT_AREA_CAPTURE: new Set(['continue-area-capture']),
+  PROPERTY_CONTEXT_AREA_CAPTURE: new Set(['continue-area-capture', ...PROPERTY_AREA_CAPTURE_SCOPES.map((scope) => `next-area-capture-${scope.toLowerCase()}`)]),
   // Every action id PROPERTY_SUMMARY actually emits: the contributor-only inline add workflow actions (Ask links to no desktop page).
   PROPERTY_SUMMARY: new Set(['add-warranty', 'add-timeline-event', 'add-room', 'add-inventory-item']),
   CAPTURE_EVENT_CONFIRM: new Set(['open-timeline', 'open-home-timeline']),
