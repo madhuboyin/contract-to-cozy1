@@ -637,7 +637,7 @@ The plan made Phase 4 optional until a coverage report showed material routing g
 
 **Not done, by design.** No evidence refresh, example, weight, synonym, threshold or version change; no learned or remote embedding. Safety routing is untouched.
 
-**Open for the owner (OD-4.1 to OD-4.3):** apply the four-row refresh (recommended); name an independent reviewer for new paraphrases and hard negatives, buyer-journey operations first; and approve a separate study of the calibration plateau.
+**Open for the owner (OD-4.1 to OD-4.3):** the four-row refresh was applied on 2026-11-05 and reverted after three routing regressions (a wrong route to `HOME_DIGITAL_WILL` and two lost intents), so it now depends on OD-4.2 (see the coverage document, OD-4.1); name an independent reviewer for new paraphrases and hard negatives, buyer-journey operations first; and approve a separate study of the calibration plateau.
 
 ## 21. Phase 6 implementation record (the fixes that need no owner ruling)
 
