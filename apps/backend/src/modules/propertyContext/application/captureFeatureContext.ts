@@ -355,3 +355,95 @@ export async function captureFeatureContext(propertyId: string, userId: string, 
     stopTimer();
   }
 }
+
+export interface PropertyContextAreaBatchItem {
+  requirementId: string;
+  captureKey: string;
+  answer: Record<string, unknown>;
+  factKeys: string[];
+}
+
+/**
+ * Saves one reviewed Property Summary area as a single transaction. Each entry is re-evaluated in the same
+ * server-owned order used to build the form, so the client cannot add a capture or fact to the batch.
+ */
+export async function capturePropertyContextAreaBatch(propertyId: string, userId: string, input: {
+  scope: string;
+  skipFactKeys: string[];
+  expectedContextVersion: string;
+  idempotencyKey: string;
+  captures: PropertyContextAreaBatchItem[];
+}) {
+  const access = await resolvePropertyAccess(userId, propertyId);
+  if (!access || ROLE_RANK[access.role] < ROLE_RANK.CONTRIBUTOR) throw new PropertyContextAccessDeniedError();
+  const steered = new Set(input.skipFactKeys);
+  const normalized: Array<{ factKey: string; value: unknown; state: string }> = [];
+  for (const item of input.captures) {
+    const evaluation = await evaluateFeatureContext(propertyId, userId, {
+      featureKey: 'PROPERTY_RECORD_SUMMARY', operationKey: 'CAPTURE_AREA', operationInput: { scope: input.scope, skipFactKeys: [...steered] },
+    });
+    if (evaluation.contextVersion !== input.expectedContextVersion) throw new PropertyContextVersionConflictError(evaluation);
+    const active = evaluation.requirements[0];
+    if (!active || active.requirementId !== item.requirementId || active.capture.captureKey !== item.captureKey
+      || JSON.stringify(active.capture.factKeys) !== JSON.stringify(item.factKeys)) throw new Error('Capture requirement is no longer active.');
+    const definition = getCaptureDefinition(item.captureKey);
+    let answers: Array<{ factKey: string; value: unknown }>;
+    try {
+      answers = normalizeAnswers(definition, item.answer, active.capture.allowNotSure);
+    } catch (error) {
+      throw new PropertyContextCaptureValidationError(error instanceof Error ? error.message : 'Invalid context capture answer.');
+    }
+    if (!answers.length) throw new PropertyContextCaptureValidationError('Capture did not contain an applicable answer.');
+    normalized.push(...answers.map((answer) => ({ ...answer, state: active.state })));
+    active.capture.factKeys.forEach((key) => steered.add(key));
+  }
+  const deduped = normalized.filter((entry, index, entries) => entries.findIndex(({ factKey }) => factKey === entry.factKey) === index);
+  const updatedFactKeys = deduped.map(({ factKey }) => factKey);
+  const answerHash = stableHash({ scope: input.scope, expectedContextVersion: input.expectedContextVersion, captures: input.captures });
+  const previous = await prisma.propertyContextCaptureReceipt.findUnique({
+    where: { propertyId_userId_idempotencyKey: { propertyId, userId, idempotencyKey: input.idempotencyKey } },
+  });
+  if (previous) {
+    if (previous.answerHash !== answerHash) throw new PropertyContextIdempotencyConflictError();
+    if (previous.result) return previous.result as { captureId: string; contextVersion: string; updatedFactKeys: string[]; evidenceIds: string[] };
+  }
+  const observedAt = new Date();
+  const evidenceIds: string[] = [];
+  let captureId = '';
+  await prisma.$transaction(async (tx) => {
+    const receipt = await tx.propertyContextCaptureReceipt.create({
+      data: {
+        propertyId, userId, featureKey: 'PROPERTY_RECORD_SUMMARY', operationKey: 'CAPTURE_AREA', captureKey: 'PROPERTY_AREA_BATCH',
+        requirementId: `area-batch-${input.scope.toLowerCase()}`, idempotencyKey: input.idempotencyKey,
+        expectedContextVersion: input.expectedContextVersion, answerHash, updatedFactKeys, evidenceIds: [],
+      },
+    });
+    captureId = receipt.id;
+    for (const { factKey, value, state } of deduped) {
+      const unknownAnswer = isUnknownAnswer(value);
+      if (!unknownAnswer) await writeCanonicalFact(tx, propertyId, factKey, value);
+      if (!unknownAnswer && state !== 'CONFLICTED') await tx.propertyFactEvidence.updateMany({ where: { propertyId, factKey, supersededAt: null }, data: { supersededAt: observedAt } });
+      const evidence = await tx.propertyFactEvidence.create({
+        data: {
+          propertyId, factKey, sourceType: PropertyFactSourceType.USER_REPORTED, observationState: unknownAnswer ? 'UNKNOWN' : 'KNOWN',
+          sourceEntityType: state === 'CONFLICTED' ? 'PROPERTY_CONTEXT_CONFLICT_RESOLUTION' : state === 'STALE' ? 'PROPERTY_CONTEXT_STALE_CONFIRMATION' : 'PROPERTY_CONTEXT_CAPTURE',
+          sourceEntityId: receipt.id, confidence: 0.9, observedAt, verifiedAt: observedAt,
+        },
+      });
+      evidenceIds.push(evidence.id);
+    }
+    await tx.propertyContextCaptureReceipt.update({ where: { id: receipt.id }, data: { evidenceIds } });
+    await emitPropertyChangeWithTransaction(tx, {
+      propertyId, sourceType: 'PROPERTY_FACT', sourceEntityId: receipt.id, sourceRevision: receipt.id,
+      changeType: 'PROPERTY_FACT_CHANGED', changedFactKeys: updatedFactKeys,
+      canonicalReferences: updatedFactKeys.map((factKey) => ({ entityType: 'PROPERTY', entityId: propertyId, fieldPath: factKey.split('.').at(-1) ?? factKey })),
+      occurredAt: observedAt, detectedAt: observedAt, confidence: 0.9, sourceHealth: 'CURRENT',
+      signals: { homeownerRelevant: true, lifecycleAdvanced: false, propertyEffectConfirmed: true, urgentSafetyCondition: updatedFactKeys.some((key) => key.startsWith('safety.')), canonicalActionPriority: null },
+    });
+  });
+  const next = await evaluateFeatureContext(propertyId, userId, { featureKey: 'PROPERTY_RECORD_SUMMARY', operationKey: 'CAPTURE_AREA', operationInput: { scope: input.scope, skipFactKeys: input.skipFactKeys } });
+  const result = { captureId, contextVersion: next.contextVersion, updatedFactKeys, evidenceIds };
+  await prisma.propertyContextCaptureReceipt.update({ where: { id: captureId }, data: { result: result as unknown as Prisma.InputJsonValue } });
+  for (const factKey of updatedFactKeys) propertyContextCapturesTotal.inc({ scope: getFactDefinition(factKey).scope, fact_key: factKey, outcome: 'success' });
+  return result;
+}

@@ -10,7 +10,7 @@ import { prisma } from '../../../lib/prisma';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type EditAskConfirmation } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type ConfirmCapabilityResult } from '../confirmCapabilityHandlerRegistry';
-import { captureFeatureContext, PropertyContextCaptureValidationError, PropertyContextVersionConflictError } from '../../../modules/propertyContext/application/captureFeatureContext';
+import { captureFeatureContext, capturePropertyContextAreaBatch, PropertyContextCaptureValidationError, PropertyContextVersionConflictError } from '../../../modules/propertyContext/application/captureFeatureContext';
 import { PropertyContextAccessDeniedError } from '../../../modules/propertyContext/application/getPropertyContext';
 import { APIError } from '../../../middleware/error.middleware';
 import { markDoNothingRunsStale } from '../../doNothingSimulator.service';
@@ -786,19 +786,25 @@ async function confirmPropertyAreaCapture(ctx: ConfirmCapabilityContext): Promis
   const access = await ensurePropertyAccess(userId, propertyId);
   if (access.role === HouseholdRole.VIEWER) throw areaCaptureError('ASK_PERMISSION_REQUIRED', 'A contributor or owner is required to add home details.');
   const confirmationVersion = typeof parameters.confirmationVersion === 'number' ? parameters.confirmationVersion : 1;
-  // One write per execution + question + review version: a retry after a lost response returns the stored capture.
-  const idempotencyKey = `ask-area-${createHash('sha256').update(`${execution.id}:${stored.requirementId}:${confirmationVersion}`).digest('hex').slice(0, 40)}`;
+  const storedIdentity = 'captures' in stored ? `batch:${stored.scope}` : stored.requirementId;
+  // One write per execution + reviewed area (or legacy question) + review version: a retry after a lost response returns the stored capture.
+  const idempotencyKey = `ask-area-${createHash('sha256').update(`${execution.id}:${storedIdentity}:${confirmationVersion}`).digest('hex').slice(0, 40)}`;
   const earlier = await prisma.propertyContextCaptureReceipt.findUnique({ where: { propertyId_userId_idempotencyKey: { propertyId, userId, idempotencyKey } }, select: { id: true, result: true } });
   const alreadyApplied = Boolean(earlier?.result);
   let updatedFactKeys: string[];
   try {
-    const capture = await captureFeatureContext(propertyId, userId, {
-      requirementId: stored.requirementId, captureKey: stored.captureKey,
-      featureKey: PROPERTY_AREA_CAPTURE_FEATURE, operationKey: PROPERTY_AREA_CAPTURE_OPERATION,
-      // Identical to the question that was asked: the user's skips plus the server-owned exclusions, or the requirement id would not match.
-      operationInput: { scope: stored.scope, skipFactKeys: areaEffectiveSkip(new Set(state.skipFactKeys), new Set(state.excludedFactKeys)) },
-      expectedContextVersion: stored.expectedContextVersion, idempotencyKey, answer: stored.answer,
-    }) as { updatedFactKeys?: string[] };
+    const capture = 'captures' in stored
+      ? await capturePropertyContextAreaBatch(propertyId, userId, {
+          scope: stored.scope, skipFactKeys: areaEffectiveSkip(new Set(state.skipFactKeys), new Set(state.excludedFactKeys)),
+          expectedContextVersion: stored.expectedContextVersion, idempotencyKey, captures: stored.captures,
+        })
+      : await captureFeatureContext(propertyId, userId, {
+          requirementId: stored.requirementId, captureKey: stored.captureKey,
+          featureKey: PROPERTY_AREA_CAPTURE_FEATURE, operationKey: PROPERTY_AREA_CAPTURE_OPERATION,
+          // Identical to the question that was asked: the user's skips plus the server-owned exclusions, or the requirement id would not match.
+          operationInput: { scope: stored.scope, skipFactKeys: areaEffectiveSkip(new Set(state.skipFactKeys), new Set(state.excludedFactKeys)) },
+          expectedContextVersion: stored.expectedContextVersion, idempotencyKey, answer: stored.answer,
+        }) as { updatedFactKeys?: string[] };
     updatedFactKeys = Array.isArray(capture.updatedFactKeys) ? capture.updatedFactKeys : [];
   } catch (error) {
     if (error instanceof PropertyContextVersionConflictError || (error instanceof Error && /no longer active/i.test(error.message))) {
@@ -814,8 +820,8 @@ async function confirmPropertyAreaCapture(ctx: ConfirmCapabilityContext): Promis
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: 'AREA_CAPTURE_SAVED',
     blocks: [{
-      type: 'WORKFLOW_PROGRESS', id: `area-capture-saved-${stored.requirementId}`, title: alreadyApplied ? 'Already saved' : 'Details saved', status: 'COMPLETED',
-      description: alreadyApplied ? 'This answer was already saved by this conversation; nothing was written again.' : 'The answer is now part of your home record.',
+      type: 'WORKFLOW_PROGRESS', id: `area-capture-saved-${'captures' in stored ? stored.scope.toLowerCase() : stored.requirementId}`, title: alreadyApplied ? 'Already saved' : 'Area details saved', status: 'COMPLETED',
+      description: alreadyApplied ? 'These details were already saved by this conversation; nothing was written again.' : 'The reviewed area details are now part of your home record.',
       details: [...stored.rows, { label: 'Areas updated', value: (writtenAreas.length ? writtenAreas : stored.areas).join(', ') }],
       actions: [],
     },
@@ -825,11 +831,11 @@ async function confirmPropertyAreaCapture(ctx: ConfirmCapabilityContext): Promis
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
   if (refresh.attemptedAndFailed) {
     result.blocks.push({
-      type: 'LIMITATION', id: `area-capture-refresh-failed-${stored.requirementId}`, severity: 'CAUTION', title: 'Saved; view could not refresh',
+      type: 'LIMITATION', id: `area-capture-refresh-failed-${storedIdentity}`, severity: 'CAUTION', title: 'Saved; view could not refresh',
       body: 'This answer was saved to the home record. The summary you were viewing could not refresh automatically -- ask "How complete is my home record?" to see the current state.',
     });
   }
-  return { result, artifactType: 'PROPERTY_CONTEXT', artifactId: stored.requirementId, refreshedExecutions: refresh.refreshedExecutions };
+  return { result, artifactType: 'PROPERTY_CONTEXT', artifactId: 'captures' in stored ? `area-batch-${stored.scope.toLowerCase()}` : stored.requirementId, refreshedExecutions: refresh.refreshedExecutions };
 }
 
 registerConfirmCapabilityHandler('property-context.area-capture', confirmPropertyAreaCapture);

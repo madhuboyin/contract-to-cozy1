@@ -20,7 +20,7 @@ const { getAskDomainCommandByOperation } = require('../../src/services/ask/askDo
 const { getCaptureDefinition } = require('../../src/modules/propertyContext/catalog/captureRegistry.ts');
 
 const realPrisma = prismaModule.prisma;
-const originals = { getPropertyContext: getPropertyContextModule.getPropertyContext, captureFeatureContext: captureModule.captureFeatureContext, resolveAccess: propertyAccess.resolvePropertyAccess };
+const originals = { getPropertyContext: getPropertyContextModule.getPropertyContext, captureFeatureContext: captureModule.captureFeatureContext, capturePropertyContextAreaBatch: captureModule.capturePropertyContextAreaBatch, resolveAccess: propertyAccess.resolvePropertyAccess };
 let facts; let models; let accessRole; let captureCalls; let captureError;
 
 function install() {
@@ -40,6 +40,11 @@ function install() {
     const updated = captureModule.normalizeAnswers(getCaptureDefinition(input.captureKey), input.answer, true).map(({ factKey }) => factKey);
     return { captureId: 'cap-1', contextVersion: 'ctx-2', updatedFactKeys: updated };
   };
+  captureModule.capturePropertyContextAreaBatch = async (propertyId, userId, input) => {
+    captureCalls.push({ propertyId, userId, input });
+    if (captureError) throw captureError;
+    return { captureId: 'cap-batch', contextVersion: 'ctx-2', updatedFactKeys: input.captures.flatMap((capture) => capture.factKeys), evidenceIds: [] };
+  };
   models.property = { findUnique: async () => ({ name: null, address: '1 Main St', city: 'Austin' }) };
   models.askExecution = { findMany: async () => [], findFirst: async () => null };
   models.propertyContextCaptureReceipt = { findUnique: async () => null };
@@ -48,6 +53,7 @@ function restore() {
   prismaModule.prisma = realPrisma;
   getPropertyContextModule.getPropertyContext = originals.getPropertyContext;
   captureModule.captureFeatureContext = originals.captureFeatureContext;
+  captureModule.capturePropertyContextAreaBatch = originals.capturePropertyContextAreaBatch;
   propertyAccess.resolvePropertyAccess = originals.resolveAccess;
 }
 test.beforeEach(install);
@@ -61,32 +67,43 @@ const start = (launchContext = declared) => capabilityInvoke('PROPERTY_CONTEXT_A
 const hvacFields = Object.fromEntries(getCaptureDefinition('HVAC_SYSTEM_PROFILE').inputSchema.fields.map((field) => [field.key, field.inputSchema.options.map((option) => option.value)]));
 const hvacAnswer = { heatingType: hvacFields.heatingType.find((value) => value !== 'UNKNOWN'), coolingType: hvacFields.coolingType.find((value) => value !== 'UNKNOWN'), hvacResponsibility: hvacFields.hvacResponsibility.find((value) => value !== 'UNKNOWN') };
 const HVAC_FACTS = ['systems.heatingType', 'systems.coolingType', 'responsibility.hvac'];
-const submit = (prompt, answer, over = {}) => areaCaptureSubmitResult('u1', 'p1', 'SYSTEMS', new Set(over.skip ?? []), 'summary-1', {
+const valueFor = (schema) => schema.type === 'BOOLEAN' ? true
+  : schema.type === 'SINGLE_SELECT' ? (schema.options.find((option) => option.value !== 'UNKNOWN') ?? schema.options[0]).value
+    : schema.type === 'MULTI_SELECT' ? [schema.options[0].value]
+      : schema.type === 'INTEGER' || schema.type === 'DECIMAL' ? (schema.min ?? 1)
+        : schema.type === 'APPROXIMATE_DATE' ? { precision: 'YEAR', value: '2020' }
+          : schema.type === 'TIME' ? '09:00' : 'Known';
+const batchAnswer = (prompt) => Object.fromEntries(prompt.captureRequests[0].inputSchema.fields.map((field) => [field.key, valueFor(field.inputSchema)]));
+const submit = (prompt, answer = batchAnswer(prompt), over = {}) => areaCaptureSubmitResult('u1', 'p1', 'SYSTEMS', new Set(over.skip ?? []), 'summary-1', {
   requirementId: prompt.captureRequests[0].requirementId, captureKey: prompt.captureRequests[0].captureKey, answer,
   expectedContextVersion: prompt.contextVersion, sensitiveDataConfirmed: false, ...over.submitted,
-});
+}, new Set(), prompt.parameters.batch);
 const codeOf = async (promise) => { try { await promise; return null; } catch (error) { return error.code ?? `NO_CODE:${error.message}`; } };
 const EXEC_CREATED = new Date('2026-09-20T00:00:00.000Z');
-async function reviewedCard(answer = hvacAnswer) {
+async function reviewedCard(answer) {
   const prompt = await start();
-  return submit(prompt, answer);
+  return submit(prompt, answer ?? batchAnswer(prompt));
 }
 const confirm = (parameters) => confirmCapabilityInvoke('PROPERTY_CONTEXT_AREA_CAPTURE', {
   userId: 'u1', execution: { id: 'area-exec', propertyId: 'p1', sessionId: 's1', userId: 'u1', operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE', createdAt: EXEC_CREATED },
   parameters, access: { role: 'CONTRIBUTOR' }, command: getAskDomainCommandByOperation('PROPERTY_CONTEXT_AREA_CAPTURE'),
 });
 
-test('the declared row action opens the first question (structured profile first) with progress and a skip control, and writes nothing', async () => {
+test('the declared row action opens one grouped area form with progress and writes nothing', async () => {
   const result = await start();
   assert.equal(result.status, 'NEEDS_CONTEXT');
   assert.equal(result.reasonCode, 'AREA_CAPTURE_INPUT_REQUIRED');
-  assert.deepEqual(result.parameters, { areaScope: 'SYSTEMS', skipFactKeys: [], sourceExecutionId: 'summary-1' });
+  assert.equal(result.parameters.areaScope, 'SYSTEMS');
+  assert.equal(result.parameters.batch[0].captureKey, 'HVAC_SYSTEM_PROFILE');
+  assert.ok(result.parameters.batch.length > 1);
   const [request] = result.captureRequests;
-  assert.equal(request.captureKey, 'HVAC_SYSTEM_PROFILE');
+  assert.equal(request.captureKey, 'PROPERTY_AREA_BATCH');
   assert.equal(request.classification, 'WORKFLOW_INPUT', 'a form submit is a proposal, not a write');
-  assert.equal(request.skippable, true);
+  assert.equal(request.skippable, false);
+  assert.equal(request.presentation, 'FORM');
+  assert.equal(request.inputSchema.groups.length, result.parameters.batch.length);
   assert.equal(request.expectedContextVersion, result.contextVersion);
-  assert.match(request.helpText, /Home systems, Maintenance responsibility/, 'a structured answer discloses every area it updates');
+  assert.match(request.helpText, /review the whole area once/i);
   assert.equal(result.blocks[0].id, 'area-capture-progress');
   assert.match(result.blocks[0].title, /Home systems: \d+ details? left to answer/);
   assert.equal(captureCalls.length, 0);
@@ -122,31 +139,22 @@ test('a valid answer builds a review card naming the property, every fact and ev
   const card = await reviewedCard();
   assert.equal(card.status, 'NEEDS_CONFIRMATION');
   assert.equal(card.reasonCode, 'AREA_CAPTURE_CONFIRMATION_REQUIRED');
-  assert.equal(card.confirmation.confirmLabel, 'Save details');
+  assert.equal(card.confirmation.confirmLabel, 'Save area details');
   const rows = Object.fromEntries(card.confirmation.fields.map((field) => [field.label, field.value]));
   assert.equal(rows.Property, '1 Main St, Austin');
   assert.equal(rows['Areas updated'], 'Home systems, Maintenance responsibility');
-  assert.equal(card.confirmation.fields.length, 5, 'property, three answered facts, areas');
+  assert.ok(card.confirmation.fields.length > 5, 'the review includes the whole area, not only the first capture group');
   assert.equal(card.parameters.areaCapture.scope, 'SYSTEMS');
   assert.equal(card.parameters.confirmationVersion, 1);
-  assert.equal(card.captureRequests[0].currentAnswer.heatingType, hvacAnswer.heatingType, 'the form is kept so the answer can be changed');
+  assert.equal(card.captureRequests[0].captureKey, 'PROPERTY_AREA_BATCH', 'the complete form is kept so the area can be changed');
   assert.equal(captureCalls.length, 0);
 });
 
-test('"Skip for now" and an all-"not sure" answer save nothing and only steer the next question; the client cannot supply the skip list', async () => {
+test('the area batch rejects incomplete or client-invented fields and writes nothing', async () => {
   const prompt = await start();
-  const skipped = await submit(prompt, { $skip: true });
-  assert.equal(skipped.status, 'NEEDS_CONTEXT');
-  assert.equal(skipped.blocks[0].title, 'Skipped for now');
-  assert.deepEqual([...skipped.parameters.skipFactKeys].sort(), [...HVAC_FACTS].sort());
-  assert.notEqual(skipped.captureRequests[0].captureKey, 'HVAC_SYSTEM_PROFILE');
-  const notSure = await submit(prompt, { heatingType: 'UNKNOWN', coolingType: 'UNKNOWN', hvacResponsibility: 'UNKNOWN' });
-  assert.equal(notSure.blocks[0].title, 'Marked not sure for this session');
-  assert.equal(notSure.confirmation, undefined);
-  assert.equal(captureCalls.length, 0, 'neither writes anything');
-  // A skip marker mixed with other keys is an ordinary (invalid) answer, not a skip; extra "skipFactKeys" input is an unknown field.
-  assert.equal(await codeOf(submit(prompt, { $skip: true, heatingType: hvacAnswer.heatingType })), 'ASK_CAPTURE_VALIDATION_ERROR');
-  assert.equal(await codeOf(submit(prompt, { ...hvacAnswer, skipFactKeys: ['core.yearBuilt'] })), 'ASK_CAPTURE_VALIDATION_ERROR');
+  assert.equal(await codeOf(submit(prompt, {})), 'ASK_CAPTURE_VALIDATION_ERROR');
+  assert.equal(await codeOf(submit(prompt, { ...batchAnswer(prompt), skipFactKeys: ['core.yearBuilt'] })), 'ASK_CAPTURE_VALIDATION_ERROR');
+  assert.equal(captureCalls.length, 0, 'review preparation writes nothing');
 });
 
 test('a stale version, a question that is no longer current, an invalid answer and a missing permission are all refused without writing', async () => {
@@ -164,25 +172,24 @@ test('a stale version, a question that is no longer current, an invalid answer a
 test('a security-sensitive form needs the sensitive-data confirmation before a review is offered', async () => {
   const prompt = await capabilityInvoke('PROPERTY_CONTEXT_AREA_CAPTURE', envelope({ ...declared, entityId: 'SAFETY' }, 'Fill in the missing safety details.'));
   assert.equal(prompt.captureRequests[0].sensitivity, 'SECURITY');
-  const answer = { hasSmokeDetectors: true, hasCoDetectors: true, commonSafetyResponsibility: 'OWNER' };
-  const args = (confirmed) => ['u1', 'p1', 'SAFETY', new Set(), null, { requirementId: prompt.captureRequests[0].requirementId, captureKey: prompt.captureRequests[0].captureKey, answer, expectedContextVersion: prompt.contextVersion, sensitiveDataConfirmed: confirmed }];
+  const answer = batchAnswer(prompt);
+  const args = (confirmed) => ['u1', 'p1', 'SAFETY', new Set(), null, { requirementId: prompt.captureRequests[0].requirementId, captureKey: prompt.captureRequests[0].captureKey, answer, expectedContextVersion: prompt.contextVersion, sensitiveDataConfirmed: confirmed }, new Set(), prompt.parameters.batch];
   assert.equal(await codeOf(areaCaptureSubmitResult(...args(false))), 'ASK_CAPTURE_CONFIRMATION_REQUIRED');
   assert.equal((await areaCaptureSubmitResult(...args(true))).status, 'NEEDS_CONFIRMATION');
 });
 
-test('confirming writes through captureFeatureContext for THIS question and scope with the server-held skip list and a per-execution idempotency key', async () => {
+test('confirming writes the reviewed area batch with the server-held scope and a per-execution idempotency key', async () => {
   const card = await reviewedCard();
   const { result, artifactType } = await confirm(card.parameters);
   assert.equal(captureCalls.length, 1);
   const { input } = captureCalls[0];
-  assert.equal(input.featureKey, 'PROPERTY_RECORD_SUMMARY');
-  assert.equal(input.operationKey, 'CAPTURE_AREA');
-  assert.deepEqual(input.operationInput, { scope: 'SYSTEMS', skipFactKeys: [] });
-  assert.equal(input.requirementId, card.parameters.areaCapture.requirementId);
+  assert.equal(input.scope, 'SYSTEMS');
+  assert.deepEqual(input.skipFactKeys, []);
+  assert.equal(input.captures.length, card.parameters.areaCapture.captures.length);
   assert.equal(input.expectedContextVersion, 'ctx-1');
-  assert.equal(input.idempotencyKey, `ask-area-${createHash('sha256').update(`area-exec:${card.parameters.areaCapture.requirementId}:1`).digest('hex').slice(0, 40)}`);
+  assert.equal(input.idempotencyKey, `ask-area-${createHash('sha256').update('area-exec:batch:SYSTEMS:1').digest('hex').slice(0, 40)}`);
   assert.equal(result.reasonCode, 'AREA_CAPTURE_SAVED');
-  assert.equal(result.blocks[0].title, 'Details saved');
+  assert.equal(result.blocks[0].title, 'Area details saved');
   assert.deepEqual(result.blocks[0].actions, [], 'the saved receipt must not navigate out of Ask');
   assert.match(result.blocks[0].details.find((detail) => detail.label === 'Areas updated').value, /Home systems, Maintenance responsibility/, 'the receipt names every area actually written');
   assert.deepEqual(result.blocks[1].actions.map((action) => [action.label, action.operationId]), [['Continue with Home systems', 'PROPERTY_CONTEXT_AREA_CAPTURE']], 'remaining questions continue through the inline capture workflow only');

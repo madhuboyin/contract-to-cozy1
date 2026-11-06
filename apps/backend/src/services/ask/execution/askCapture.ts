@@ -2444,7 +2444,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     result = await areaCaptureSubmitResult(userId, execution.propertyId, state.scope, new Set(state.skipFactKeys), state.sourceExecutionId, {
       requirementId: input.requirementId, captureKey: input.captureKey, answer: input.answer,
       expectedContextVersion: input.expectedContextVersion, sensitiveDataConfirmed: input.sensitiveDataConfirmed === true,
-    }, new Set(state.excludedFactKeys));
+    }, new Set(state.excludedFactKeys), state.batch);
     captureId = input.idempotencyKey;
     capturedContextVersion = input.expectedContextVersion;
     canonicalOwner = 'PropertyContext';

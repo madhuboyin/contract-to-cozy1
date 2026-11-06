@@ -45,8 +45,8 @@ export const PROPERTY_SCOPE_LABELS: Record<string, string> = {
 };
 
 // ── Property Summary per-area capture ──────────────────────────────────────────────────────────────────────
-// A completeness row on the Property Summary opens an inline flow for ONE area. Each answer goes form -> review card ->
-// confirm -> receipt (IW-CONF-001); nothing is written by the form. The questions come from the versioned Property Context
+// A completeness row on the Property Summary opens one grouped form for ONE area. The area goes form -> review card ->
+// confirm -> receipt (IW-CONF-001); nothing is written by the form. The fields come from the versioned Property Context
 // contract PROPERTY_RECORD_SUMMARY:CAPTURE_AREA, and the write is captureFeatureContext -- the same canonical capture the
 // rest of Property Context uses -- so this adds no new form and no new writer.
 //

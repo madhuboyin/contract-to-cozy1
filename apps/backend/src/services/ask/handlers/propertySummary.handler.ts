@@ -443,6 +443,14 @@ registerCapabilityHandler('property.summary', async (envelope) => propertySummar
 const AREA_SKIP_MARKER = '$skip';
 
 const AREA_CAPTURE_MAX_SKIPPED = 200;
+const AREA_BATCH_CAPTURE_KEY = 'PROPERTY_AREA_BATCH';
+
+const AreaBatchEntrySchema = z.object({
+  slot: z.string().regex(/^c\d+$/),
+  requirementId: z.string().min(1).max(100),
+  captureKey: z.string().min(1).max(100),
+  factKeys: z.array(z.string().min(1).max(120)).min(1).max(20),
+}).strict();
 
 
 
@@ -464,17 +472,18 @@ const AreaCaptureStateSchema = z.object({
   // displayed as skipped; empty for the legacy message-routed launch, which keeps its previous behavior.
   excludedFactKeys: z.array(z.string().max(120)).max(AREA_CAPTURE_MAX_SKIPPED).default([]),
   sourceExecutionId: z.string().nullable().default(null),
+  batch: z.array(AreaBatchEntrySchema).max(30).optional(),
 });
 
-export function areaCaptureStateFrom(parametersJson: unknown): { scope: PropertyAreaCaptureScope; skipFactKeys: string[]; excludedFactKeys: string[]; sourceExecutionId: string | null } | null {
+export function areaCaptureStateFrom(parametersJson: unknown): { scope: PropertyAreaCaptureScope; skipFactKeys: string[]; excludedFactKeys: string[]; sourceExecutionId: string | null; batch: z.infer<typeof AreaBatchEntrySchema>[] } | null {
   const parsed = AreaCaptureStateSchema.safeParse(parametersJson);
-  return parsed.success ? { scope: parsed.data.areaScope, skipFactKeys: parsed.data.skipFactKeys, excludedFactKeys: parsed.data.excludedFactKeys, sourceExecutionId: parsed.data.sourceExecutionId } : null;
+  return parsed.success ? { scope: parsed.data.areaScope, skipFactKeys: parsed.data.skipFactKeys, excludedFactKeys: parsed.data.excludedFactKeys, sourceExecutionId: parsed.data.sourceExecutionId, batch: parsed.data.batch ?? [] } : null;
 }
 
 /** The facts the question-choosing evaluator must leave out: the user's skips plus the server-owned exclusions. Every site that reproduces the question must use this. */
 export const areaEffectiveSkip = (skip: ReadonlySet<string>, excluded: ReadonlySet<string>): string[] => [...new Set([...skip, ...excluded])];
 
-export const AreaCaptureAnswerSchema = z.object({
+const SingleAreaCaptureAnswerSchema = z.object({
   scope: z.enum(PROPERTY_AREA_CAPTURE_SCOPES),
   requirementId: z.string().min(1).max(100),
   captureKey: z.string().min(1).max(100),
@@ -483,6 +492,19 @@ export const AreaCaptureAnswerSchema = z.object({
   rows: z.array(z.object({ label: z.string(), value: z.string() })).max(40).default([]),
   areas: z.array(z.string()).max(10).default([]),
 }).strict();
+
+const BatchAreaCaptureAnswerSchema = z.object({
+  scope: z.enum(PROPERTY_AREA_CAPTURE_SCOPES),
+  expectedContextVersion: z.string().min(1).max(128),
+  rows: z.array(z.object({ label: z.string(), value: z.string() })).max(80).default([]),
+  areas: z.array(z.string()).max(10).default([]),
+  captures: z.array(z.object({
+    slot: z.string().regex(/^c\d+$/), requirementId: z.string().min(1).max(100), captureKey: z.string().min(1).max(100),
+    answer: z.record(z.string(), z.unknown()), factKeys: z.array(z.string().min(1).max(120)).min(1).max(20),
+  }).strict()).min(1).max(30),
+}).strict();
+
+export const AreaCaptureAnswerSchema = z.union([SingleAreaCaptureAnswerSchema, BatchAreaCaptureAnswerSchema]);
 
 export function areaCaptureError(code: string, message: string): Error {
   return Object.assign(new Error(message), { code });
@@ -501,38 +523,78 @@ function areaValueDisplay(schema: { type: string; [key: string]: unknown }, valu
   return String(value);
 }
 
+async function areaBatchRequirements(propertyId: string, userId: string, scope: PropertyAreaCaptureScope, skip: Set<string>, excluded: ReadonlySet<string>) {
+  const requirements: Array<Awaited<ReturnType<typeof evaluateFeatureContext>>['requirements'][number]> = [];
+  const steered = new Set(areaEffectiveSkip(skip, excluded));
+  let contextVersion = '';
+  for (let guard = 0; guard < AREA_CAPTURE_MAX_SKIPPED; guard += 1) {
+    const evaluation = await evaluateFeatureContext(propertyId, userId, {
+      featureKey: PROPERTY_AREA_CAPTURE_FEATURE, operationKey: PROPERTY_AREA_CAPTURE_OPERATION,
+      operationInput: { scope, skipFactKeys: [...steered] },
+    });
+    contextVersion ||= evaluation.contextVersion;
+    if (evaluation.contextVersion !== contextVersion) throw areaCaptureError('ASK_CONTEXT_VERSION_CONFLICT', 'The home record changed while the area form was being prepared. Start again from the area.');
+    const requirement = evaluation.requirements[0];
+    if (!requirement || requirement.capture.inputSchema.type === 'RELATIONAL_SELECT_CREATE' || requirement.capture.inputSchema.type === 'RELATIONAL_UPDATE') break;
+    requirements.push(requirement);
+    const before = steered.size;
+    requirement.capture.factKeys.forEach((key) => steered.add(key));
+    if (steered.size === before) break;
+  }
+  return { requirements, contextVersion };
+}
+
+function areaBatchRequest(scope: PropertyAreaCaptureScope, requirements: Awaited<ReturnType<typeof areaBatchRequirements>>['requirements'], contextVersion: string): AskCaptureRequest {
+  const entries = requirements.map((requirement, index) => ({ slot: `c${index}`, requirement }));
+  const fields = entries.flatMap(({ slot, requirement }) => {
+    const definition = getCaptureDefinition(requirement.capture.captureKey);
+    if (definition.mode === 'SCALAR' && definition.inputSchema.type !== 'GROUP' && definition.inputSchema.type !== 'RELATIONAL_SELECT_CREATE' && definition.inputSchema.type !== 'RELATIONAL_UPDATE') {
+      return [{ key: `${slot}__value`, label: definition.title, prompt: definition.question, required: true, inputSchema: definition.inputSchema }];
+    }
+    if (definition.mode !== 'STRUCTURED' || definition.inputSchema.type !== 'GROUP') return [];
+    return definition.inputSchema.fields.map((field) => ({ ...field, key: `${slot}__${field.key}`, ...(field.when ? { when: { ...field.when, fieldKey: `${slot}__${field.when.fieldKey}` } } : {}) }));
+  });
+  const groups = entries.map(({ slot, requirement }) => {
+    const definition = getCaptureDefinition(requirement.capture.captureKey);
+    const fieldKeys = definition.mode === 'SCALAR'
+      ? [`${slot}__value`]
+      : definition.inputSchema.type === 'GROUP' ? definition.inputSchema.fields.map((field) => `${slot}__${field.key}`) : [];
+    return { id: slot, title: definition.title, description: definition.helpText, fieldKeys };
+  });
+  return {
+    requirementId: `area-batch-${scope.toLowerCase()}`, captureKey: AREA_BATCH_CAPTURE_KEY,
+    classification: 'WORKFLOW_INPUT',
+    state: requirements.some((entry) => entry.state === 'CONFLICTED') ? 'CONFLICTED' : requirements.some((entry) => entry.state === 'STALE') ? 'STALE' : 'UNKNOWN',
+    title: `${areaLabel(scope)} details`, question: `Add the missing ${areaLabel(scope).toLowerCase()} details.`,
+    helpText: 'Complete the details you know. You will review the whole area once before anything is saved.',
+    inputSchema: { type: 'GROUP', fields, groups }, allowNotSure: true,
+    sensitivity: requirements.some((entry) => entry.capture.sensitivity === 'SECURITY') ? 'SECURITY' : requirements.some((entry) => entry.capture.sensitivity === 'FINANCIAL') ? 'FINANCIAL' : 'STANDARD',
+    destinationLabel: 'Used to update this area of your home record after one review', confirmationText: null,
+    expectedContextVersion: contextVersion, presentation: 'FORM', skippable: false,
+  };
+}
+
 
 export async function areaCapturePrompt(
   userId: string, propertyId: string, scope: PropertyAreaCaptureScope, skip: Set<string>, sourceExecutionId: string | null, notice?: string,
   excluded: ReadonlySet<string> = new Set(),
 ): Promise<AskOperationResult> {
-  const [evaluation, progress] = await Promise.all([
-    evaluateFeatureContext(propertyId, userId, { featureKey: PROPERTY_AREA_CAPTURE_FEATURE, operationKey: PROPERTY_AREA_CAPTURE_OPERATION, operationInput: { scope, skipFactKeys: areaEffectiveSkip(skip, excluded) } }),
+  const [batchResult, progress] = await Promise.all([
+    areaBatchRequirements(propertyId, userId, scope, skip, excluded),
     areaCaptureProgress(userId, propertyId, scope, skip, excluded),
   ]);
-  const parameters = { areaScope: scope, skipFactKeys: [...skip], ...(excluded.size ? { excludedFactKeys: [...excluded] } : {}), sourceExecutionId };
+  const batch = batchResult.requirements.map((requirement, index) => ({ slot: `c${index}`, requirementId: requirement.requirementId, captureKey: requirement.capture.captureKey, factKeys: requirement.capture.factKeys }));
+  const parameters = { areaScope: scope, skipFactKeys: [...skip], ...(excluded.size ? { excludedFactKeys: [...excluded] } : {}), sourceExecutionId, batch };
   const noticeBlock: AskPresentationBlock[] = notice ? [{ type: 'SUMMARY', id: 'area-capture-notice', title: notice, body: 'Nothing was saved. You can come back to it any time.', tone: 'DEFAULT', actions: [] }] : [];
-  const requirement = evaluation.requirements[0];
-  if (!requirement || requirement.capture.inputSchema.type === 'RELATIONAL_SELECT_CREATE' || requirement.capture.inputSchema.type === 'RELATIONAL_UPDATE') {
+  if (!batchResult.requirements.length) {
     return {
-      status: 'ANSWERED', reasonCode: 'AREA_CAPTURE_NO_MORE_QUESTIONS', contextVersion: evaluation.contextVersion, parameters,
+      status: 'ANSWERED', reasonCode: 'AREA_CAPTURE_NO_MORE_QUESTIONS', contextVersion: batchResult.contextVersion, parameters,
       blocks: [...noticeBlock, areaProgressBlock(propertyId, scope, progress, true, false)], suggestions: [],
     };
   }
-  const capture = requirement.capture;
-  const areas = [...new Set(capture.factKeys.map((key) => areaLabel(getFactDefinition(key).scope)))];
-  const alsoUpdates = areas.length > 1 ? ` This answer updates: ${areas.join(', ')}.` : '';
-  const request: AskCaptureRequest = {
-    requirementId: requirement.requirementId, captureKey: capture.captureKey, classification: 'WORKFLOW_INPUT', state: requirement.state,
-    title: capture.title, question: capture.question,
-    helpText: `${capture.helpText ? `${capture.helpText} ` : ''}You will review it before anything is saved.${alsoUpdates}`.trim(),
-    inputSchema: capture.inputSchema, ...(requirement.currentAnswer === undefined ? {} : { currentAnswer: requirement.currentAnswer }),
-    allowNotSure: capture.allowNotSure, sensitivity: capture.sensitivity,
-    destinationLabel: 'Used to prepare this answer; nothing is saved until you confirm', confirmationText: null,
-    expectedContextVersion: evaluation.contextVersion, skippable: true,
-  };
+  const request = areaBatchRequest(scope, batchResult.requirements, batchResult.contextVersion);
   return {
-    status: 'NEEDS_CONTEXT', reasonCode: 'AREA_CAPTURE_INPUT_REQUIRED', contextVersion: evaluation.contextVersion, parameters,
+    status: 'NEEDS_CONTEXT', reasonCode: 'AREA_CAPTURE_INPUT_REQUIRED', contextVersion: batchResult.contextVersion, parameters,
     blocks: [...noticeBlock, areaProgressBlock(propertyId, scope, progress, false, false)], captureRequests: [request], suggestions: [],
   };
 }
@@ -540,10 +602,73 @@ export async function areaCapturePrompt(
 export async function areaCaptureSubmitResult(
   userId: string, propertyId: string, scope: PropertyAreaCaptureScope, skip: Set<string>, sourceExecutionId: string | null,
   submitted: { requirementId: string; captureKey: string; answer: Record<string, unknown>; expectedContextVersion: string; sensitiveDataConfirmed: boolean },
-  excluded: ReadonlySet<string> = new Set(),
+  excluded: ReadonlySet<string> = new Set(), declaredBatch: z.infer<typeof AreaBatchEntrySchema>[] = [],
 ): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   if (access.role === HouseholdRole.VIEWER) throw areaCaptureError('ASK_PERMISSION_REQUIRED', 'A contributor or owner is required to add home details.');
+  if (submitted.captureKey === AREA_BATCH_CAPTURE_KEY) {
+    if (submitted.requirementId !== `area-batch-${scope.toLowerCase()}` || !declaredBatch.length) throw areaCaptureError('ASK_CAPTURE_NOT_ACTIVE', 'This area form is no longer active. Start again from the area.');
+    const current = await areaBatchRequirements(propertyId, userId, scope, skip, excluded);
+    if (current.contextVersion !== submitted.expectedContextVersion) throw areaCaptureError('ASK_CONTEXT_VERSION_CONFLICT', 'The home record changed while this area form was open. Start again from the area.');
+    const currentBatch = current.requirements.map((requirement, index) => ({ slot: `c${index}`, requirementId: requirement.requirementId, captureKey: requirement.capture.captureKey, factKeys: requirement.capture.factKeys }));
+    if (JSON.stringify(currentBatch) !== JSON.stringify(declaredBatch)) throw areaCaptureError('ASK_CAPTURE_NOT_ACTIVE', 'The details needed for this area changed. Start again from the area.');
+    if (current.requirements.some((requirement) => requirement.capture.sensitivity !== 'STANDARD') && !submitted.sensitiveDataConfirmed) {
+      throw areaCaptureError('ASK_CAPTURE_CONFIRMATION_REQUIRED', 'Confirm that you want to save this sensitive home information.');
+    }
+    const allowedInputKeys = new Set(current.requirements.flatMap((requirement, index) => {
+      const definition = getCaptureDefinition(requirement.capture.captureKey);
+      return definition.mode === 'SCALAR'
+        ? [`c${index}__value`]
+        : definition.inputSchema.type === 'GROUP' ? definition.inputSchema.fields.map((field) => `c${index}__${field.key}`) : [];
+    }));
+    const unknownInputKeys = Object.keys(submitted.answer).filter((key) => !allowedInputKeys.has(key));
+    if (unknownInputKeys.length) throw areaCaptureError('ASK_CAPTURE_VALIDATION_ERROR', 'The area form contains fields that are no longer valid. Start again from the area.');
+    const captures: Array<{ slot: string; requirementId: string; captureKey: string; answer: Record<string, unknown>; factKeys: string[] }> = [];
+    const rows: Array<{ label: string; value: string }> = [];
+    const areas = new Set<string>();
+    current.requirements.forEach((requirement, index) => {
+      const slot = `c${index}`;
+      const definition = getCaptureDefinition(requirement.capture.captureKey);
+      const prefix = `${slot}__`;
+      const answer = Object.fromEntries(Object.entries(submitted.answer).filter(([key]) => key.startsWith(prefix)).map(([key, value]) => [key.slice(prefix.length), value]));
+      let normalized: Array<{ factKey: string; value: unknown }>;
+      try {
+        normalized = normalizeAnswers(definition, answer, requirement.capture.allowNotSure);
+      } catch (error) {
+        throw areaCaptureError('ASK_CAPTURE_VALIDATION_ERROR', error instanceof Error ? error.message : 'Check the area details and try again.');
+      }
+      if (!normalized.length) throw areaCaptureError('ASK_CAPTURE_VALIDATION_ERROR', `Answer the ${definition.title.toLowerCase()} section.`);
+      const schemas = definition.mode === 'SCALAR'
+        ? [{ factKey: definition.factKeys[0], label: definition.title, schema: definition.inputSchema as { type: string; [key: string]: unknown } }]
+        : definition.inputSchema.type === 'GROUP' ? definition.inputSchema.fields.map((field) => ({ factKey: definition.answerBindings?.[field.key] ?? '', label: field.label, schema: field.inputSchema as { type: string; [key: string]: unknown } })) : [];
+      normalized.forEach(({ factKey, value }) => {
+        const field = schemas.find((candidate) => candidate.factKey === factKey);
+        rows.push({ label: field?.label ?? definition.title, value: field ? areaValueDisplay(field.schema, value) : String(value) });
+        areas.add(areaLabel(getFactDefinition(factKey).scope));
+      });
+      captures.push({ slot, requirementId: requirement.requirementId, captureKey: requirement.capture.captureKey, answer, factKeys: requirement.capture.factKeys });
+    });
+    const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, address: true, city: true } });
+    const propertyName = property?.name?.trim() || (property ? `${property.address}, ${property.city}` : 'This property');
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+    return {
+      status: 'NEEDS_CONFIRMATION', reasonCode: 'AREA_CAPTURE_CONFIRMATION_REQUIRED', contextVersion: current.contextVersion,
+      parameters: {
+        areaScope: scope, skipFactKeys: [...skip], ...(excluded.size ? { excludedFactKeys: [...excluded] } : {}), sourceExecutionId, batch: declaredBatch,
+        areaCapture: { scope, expectedContextVersion: current.contextVersion, captures, rows, areas: [...areas] },
+        confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
+      },
+      blocks: [areaProgressBlock(propertyId, scope, await areaCaptureProgress(userId, propertyId, scope, skip, excluded), false, false)],
+      confirmation: {
+        confirmationId: `area-batch-${createHash('sha256').update(`${propertyId}:${scope}:${current.contextVersion}`).digest('hex').slice(0, 12)}-1`, version: 1,
+        title: `Save ${areaLabel(scope).toLowerCase()} details to your home record?`,
+        description: 'Review the details for this area. They will be saved together to the shared home record only after you confirm.',
+        fields: [{ label: 'Property', value: propertyName }, ...rows, { label: 'Areas updated', value: [...areas].join(', ') }],
+        editableFields: [], confirmLabel: 'Save area details', consentText: 'I authorize saving these details to the shared home record.', expiresAt: expiresAt.toISOString(),
+      },
+      captureRequests: [areaBatchRequest(scope, current.requirements, current.contextVersion)], suggestions: [],
+    };
+  }
   const evaluation = await evaluateFeatureContext(propertyId, userId, { featureKey: PROPERTY_AREA_CAPTURE_FEATURE, operationKey: PROPERTY_AREA_CAPTURE_OPERATION, operationInput: { scope, skipFactKeys: areaEffectiveSkip(skip, excluded) } });
   const active = evaluation.requirements[0];
   if (!active || active.requirementId !== submitted.requirementId || active.capture.captureKey !== submitted.captureKey) {
