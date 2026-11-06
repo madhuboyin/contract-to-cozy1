@@ -2846,12 +2846,20 @@ registerCapabilityHandler('property-context.area-capture', async (envelope) => {
   const scope = typedOutcome ? areaScopeForOutcome(typedOutcome) : areaScopeForMessage(envelope.message);
   const entityMatches = !launch?.entityType || launch.entityType !== 'PROPERTY_CONTEXT_AREA' || launch.entityId === scope;
   const declaredStart = launch?.operationId === 'PROPERTY_CONTEXT_AREA_CAPTURE' && launch.surface !== 'ASK_REFRESH' && scope !== null && entityMatches;
+  // Compatibility recovery for a server-authored row command whose action
+  // metadata was dropped by an older/stale client. Free text, a conflicting
+  // operation, typed outcomes, refreshes and mismatched rows still fail closed.
+  const canonicalMessageStart = !typedOutcome
+    && !launch?.operationId
+    && launch?.surface !== 'ASK_REFRESH'
+    && scope !== null
+    && entityMatches;
   const notRoutable = (): AskOperationResult => ({
     status: 'NOT_APPLICABLE', reasonCode: 'ASK_AREA_CAPTURE_NOT_DIRECTLY_ROUTABLE',
     blocks: [{ type: 'SUMMARY', id: 'area-capture-not-routable', title: 'Use "Fill in missing details" on the home record', body: 'Missing home details are filled in from the completeness list in your home summary. Nothing has changed.', tone: 'DEFAULT', actions: [] }],
     suggestions: [],
   });
-  if (declaredStart && scope) {
+  if ((declaredStart || canonicalMessageStart) && scope) {
     const access = await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
     if (access.role === HouseholdRole.VIEWER) {
       return {
@@ -2877,7 +2885,7 @@ registerCapabilityHandler('property-context.area-capture', async (envelope) => {
         };
       }
     }
-    const sourceId = launch.sourceExecutionId ?? null;
+    const sourceId = launch?.sourceExecutionId ?? null;
     if (sourceId) {
       const source = await prisma.askExecution.findFirst({ where: { id: sourceId, userId: envelope.userId, propertyId: envelope.propertyId!, operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE' }, select: { parametersJson: true } });
       const inherited = source ? areaCaptureStateFrom(source.parametersJson) : null;

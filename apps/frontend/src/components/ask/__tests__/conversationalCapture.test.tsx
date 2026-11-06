@@ -224,6 +224,31 @@ describe('Service Price Radar contractor quote compact capture', () => {
 describe('grouped workflow capture', () => {
   beforeEach(() => window.localStorage.clear());
 
+  it('keeps Next actionable and explains the required choice instead of looking disabled', () => {
+    const request = {
+      requirementId: 'area-batch', captureKey: 'PROPERTY_AREA_BATCH', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
+      title: 'Maintenance responsibility details', question: 'Add the missing maintenance responsibility details.', helpText: null,
+      allowNotSure: true, sensitivity: 'STANDARD', destinationLabel: 'Used to update this area', fallbackHref: null, confirmationText: null,
+      expectedContextVersion: 'v1', presentation: 'FORM', inputSchema: { type: 'GROUP', groups: [
+        { id: 'building', title: 'Building Exterior responsibility', fieldKeys: ['building'] },
+        { id: 'trees', title: 'Trees Shrubs responsibility', fieldKeys: ['trees'] },
+      ], fields: [
+        { key: 'building', label: 'Building Exterior responsibility', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [{ value: 'OWNER', label: 'I am responsible' }, { value: 'UNKNOWN', label: 'I’m not sure' }] } },
+        { key: 'trees', label: 'Trees Shrubs responsibility', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [{ value: 'OWNER', label: 'I am responsible' }] } },
+      ] },
+    } as unknown as AskCaptureRequest;
+    render(<InlineCaptureCard executionId="area-execution" request={request} onCompleted={jest.fn()} />);
+
+    const next = screen.getByRole('button', { name: 'Next: Trees Shrubs responsibility' });
+    expect(next).toBeEnabled();
+    fireEvent.click(next);
+    expect(screen.getByRole('alert')).toHaveTextContent('Choose an answer for the required field above to continue.');
+    expect(screen.getByText('Step 1 of 2')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'I am responsible' }));
+    fireEvent.click(next);
+    expect(screen.getByText('Step 2 of 2')).toBeInTheDocument();
+  });
+
   it('moves through declared groups while retaining draft values and submits only from the final group', () => {
     const groupedRequest = {
       requirementId: 'project-completion', captureKey: 'PROJECT_TRACKER_COMMAND_INPUTS', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',

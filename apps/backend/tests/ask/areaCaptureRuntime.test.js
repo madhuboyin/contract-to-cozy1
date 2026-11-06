@@ -18,6 +18,7 @@ const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRe
 const { confirmCapabilityInvoke } = require('../../src/services/ask/confirmCapabilityHandlerRegistry.ts');
 const { getAskDomainCommandByOperation } = require('../../src/services/ask/askDomainCommandRegistry.ts');
 const { getCaptureDefinition } = require('../../src/modules/propertyContext/catalog/captureRegistry.ts');
+const { resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');
 
 const realPrisma = prismaModule.prisma;
 const originals = { getPropertyContext: getPropertyContextModule.getPropertyContext, captureFeatureContext: captureModule.captureFeatureContext, capturePropertyContextAreaBatch: captureModule.capturePropertyContextAreaBatch, resolveAccess: propertyAccess.resolvePropertyAccess };
@@ -109,9 +110,13 @@ test('the declared row action opens one grouped area form with progress and writ
   assert.equal(captureCalls.length, 0);
 });
 
-test('only the declared action starts it: bare messages, other operations, a mismatched row and an unknown area are not routable; a viewer is blocked', async () => {
+test('the exact server-authored command recovers a dropped declaration; free text, other operations and mismatched rows stay closed', async () => {
+  assert.equal(resolveAskOperation('Fill in the missing structure details.').operationId, 'PROPERTY_CONTEXT_AREA_CAPTURE');
+  const recovered = await capabilityInvoke('PROPERTY_CONTEXT_AREA_CAPTURE', envelope(undefined, 'Fill in the missing structure details.'));
+  assert.equal(recovered.status, 'NEEDS_CONTEXT');
+  assert.equal(recovered.parameters.areaScope, 'STRUCTURE');
   for (const [launchContext, message] of [
-    [undefined, MESSAGE], [{ surface: 'ASK_WORKSPACE' }, MESSAGE], [{ ...declared, operationId: 'PROPERTY_SUMMARY' }, MESSAGE],
+    [undefined, 'fill in my missing details'], [{ ...declared, operationId: 'PROPERTY_SUMMARY' }, MESSAGE],
     [declared, 'fill in my missing details'], [declared, 'Fill in the missing financial details.'], [{ ...declared, entityId: 'STRUCTURE' }, MESSAGE],
   ]) {
     const result = await capabilityInvoke('PROPERTY_CONTEXT_AREA_CAPTURE', envelope(launchContext, message));

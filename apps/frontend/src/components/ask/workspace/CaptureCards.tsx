@@ -452,6 +452,7 @@ export function InlineCaptureCard({
   const [sensitiveDataConfirmed, setSensitiveDataConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeGroupIndex, setActiveGroupIndex] = useState(0);
+  const [groupValidationAttempted, setGroupValidationAttempted] = useState(false);
   useEffect(() => {
     window.localStorage.setItem(captureDraftStorageKey(executionId, request.requirementId), JSON.stringify(values));
   }, [executionId, request.requirementId, values]);
@@ -1088,14 +1089,18 @@ export function InlineCaptureCard({
           {compactServicePriceCheck && request.destinationLabel && <span className="text-xs text-slate-500">{request.destinationLabel}.</span>}
         </div>
         <div className="flex flex-wrap gap-2">
-        {activeGroupIndex > 0 && <button type="button" disabled={saving} onClick={() => setActiveGroupIndex((index) => Math.max(0, index - 1))} className="min-h-10 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Previous</button>}
+        {activeGroupIndex > 0 && <button type="button" disabled={saving} onClick={() => { setGroupValidationAttempted(false); setActiveGroupIndex((index) => Math.max(0, index - 1)); }} className="min-h-10 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Previous</button>}
         {activeGroup && activeGroupIndex < formGroups.length - 1
-          ? <button type="button" disabled={saving || activeGroupMissingRequired} onClick={() => setActiveGroupIndex((index) => Math.min(formGroups.length - 1, index + 1))} className="min-h-10 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Next: {formGroups[activeGroupIndex + 1].title}</button>
+          ? <button type="button" disabled={saving} aria-describedby={groupValidationAttempted && activeGroupMissingRequired ? `capture-group-error-${executionId}` : undefined} onClick={() => {
+            if (activeGroupMissingRequired) { setGroupValidationAttempted(true); return; }
+            setGroupValidationAttempted(false);
+            setActiveGroupIndex((index) => Math.min(formGroups.length - 1, index + 1));
+          }} className="min-h-10 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">Next: {formGroups[activeGroupIndex + 1].title}</button>
           : <button type="submit" disabled={saving || missingRequired || (!refinanceScenario && (request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && !sensitiveDataConfirmed)} className="min-h-10 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? (refinanceScenario ? 'Running scenario…' : 'Saving…') : refinanceScenario ? 'Run this scenario' : compactWorkItemReschedule ? 'Review change' : request.classification === 'WORKFLOW_INPUT' ? 'Continue to review' : 'Save and update answer'}</button>}
         {request.skippable && <button type="button" disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, true)} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Skip for now</button>}
         {request.classification === 'ENHANCEMENT_ACCURACY' && <button type="button" disabled={saving} onClick={() => { window.localStorage.removeItem(captureDraftStorageKey(executionId, request.requirementId)); setDismissed(true); void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'DISMISSED' }).catch(() => undefined); }} className="min-h-10 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-white">Use general estimate</button>}
         {request.fallbackHref && <AskContextLink href={request.fallbackHref} onClick={() => void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'FULL_FORM_OPENED' }).catch(() => undefined)} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Open full form <ExternalLink className="h-4 w-4" /></AskContextLink>}
-        {compactContinuityPlan && activeGroup && activeGroupIndex < formGroups.length - 1 && activeGroupMissingRequired && <p className="basis-full text-right text-xs font-medium text-amber-700">Complete the required fields to continue.</p>}
+        {activeGroup && activeGroupIndex < formGroups.length - 1 && groupValidationAttempted && activeGroupMissingRequired && <p id={`capture-group-error-${executionId}`} className="basis-full text-right text-xs font-medium text-amber-700" role="alert">Choose an answer for the required field above to continue.</p>}
         {compactEventAdd && missingRequired && <p className="basis-full text-right text-xs font-medium text-amber-700">Add a title, choose a type, and enter when it happened.</p>}
         </div>
       </div>

@@ -7,6 +7,10 @@
 **Prototype:** [Ask Cozy launch validation](prototypes/ask-cozy-launch-validation.html) (validated clickable prototype)
 **Primary requirements:** `ASK_COZY_INLINE_WORKSPACE_FRD.md`, `ASK_COZY_INTERACTION_MODEL_UI_FRD.md`, and `ASK_COZY_PRIMARY_INTERFACE_REDESIGN.md`
 
+**Area-detail action recovery (November 6, 2026):** The exact server-authored commands behind Property Summary's **Add details** rows now route deterministically to `PROPERTY_CONTEXT_AREA_CAPTURE`. If an older or stale client drops the declared action metadata, “Fill in the missing structure details.” still opens the grouped area form instead of being misclassified as general guidance and replaced by the generic answer-relevance clarification. Recovery is limited to the seven canonical commands; access checks, row identity checks, review, and confirmation remain unchanged.
+
+**Grouped-form progression (November 6, 2026):** A required unanswered field no longer makes the **Next** CTA appear broken. Next remains actionable; selecting it keeps the current step visible and announces a specific inline validation message. Once the required answer is selected, the same CTA advances normally.
+
 Cross-tool desktop parity, implementation status, remaining P0/P1/P2 gaps, and the shared compact-form recommendations are consolidated in [`ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md`](ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md). This document remains the deeper prototype-to-presentation audit.
 
 ## 1. Executive conclusion

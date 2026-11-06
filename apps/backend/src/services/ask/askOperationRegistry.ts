@@ -1290,6 +1290,10 @@ const ownershipCostsPattern = /\b(?:how much|what does|what is|what are|show|bre
 const ownershipExpensesPattern = /\b(?:show|list|see|view|open)\b.{0,25}\b(?:my|our|the|recent|recorded)\s+(?:recent\s+|recorded\s+)?expenses\b|\bmy\s+(?:recent\s+|recorded\s+)?expenses\b|\b(?:add|record|log|enter)\s+(?:an?|my|another)\s+(?:new\s+)?expense\b/i;
 const inventoryLookupPattern = /\badd\s+(?:or|\/)\s+update\s+missing\s+details\b|\b(?:what do you know about|tell me about|show|find|list|which|do i have)\b.{0,65}\b(?:inventory|appliances?|systems?|equipment|hvac|furnace|air conditioner|heat pump|boiler|refrigerator|fridge|water heater|roof|washer|dryer|dishwasher)\b|\b(?:inventory|appliance|system|equipment)\s+(?:record|records|details|items|list)\b|\b(?:incomplete|missing)\b.{0,35}\b(?:inventory|appliance|system)\s+(?:record|records|details|information)\b|\b(?:my|the|this)\s+(?:hvac|furnace|air conditioner|heat pump|boiler|refrigerator|fridge|water heater|roof|washer|dryer|dishwasher)\b.{0,45}\b(?:history|record|details|information|know)\b|\b(?:systems?|equipment|appliances?)\b.{0,45}\b(?:end of life|expiry|expire|incomplete)\b/i;
 const propertySummaryPattern = /\b(?:summarize|summary of|overview of|what do you know about|tell me about|show me)\b.{0,60}\b(?:my|this|the)?\s*(?:home|house|property|home record|living home record)\b|\bbrowse\b.{0,24}\b(?:my|this|the|our)?\s*(?:home|house|property)\s+record\b|\b(?:show|view|browse|review|open)\b.{0,24}\b(?:complete|full|entire|whole)\b.{0,24}\b(?:home|house|property)\s+record\b|\b(?:home|property|living home)\s+(?:record )?(?:summary|overview|profile)\b|\bhow complete\b.{0,45}\b(?:home record|property profile|home profile|living home record)\b/i;
+// Exact server-authored Property Summary row commands remain narrowly
+// routable if an older/stale client drops the action's launchContext.
+// The area handler still verifies the exact command, access and confirmation.
+const propertyAreaCaptureCommandPattern = /^\s*fill in the missing (?:core property|location|structure|exterior|maintenance responsibility|home systems|safety) details\.\s*$/i;
 // A room collection is a focused Property Summary answer. Keep this exact
 // conversational phrase deterministic so the receipt's declared suggestion
 // cannot fall through semantic routing and be replaced by a clarification.
@@ -1837,6 +1841,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (inventoryLookupPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('INVENTORY_LOOKUP', 0.96);
+  }
+  if (propertyAreaCaptureCommandPattern.test(message)) {
+    return resolved('PROPERTY_CONTEXT_AREA_CAPTURE', 1);
   }
   if ((propertySummaryPattern.test(message) || roomSummaryPattern.test(message) || isPropertyCompletenessRequest(message)) && !explicitCapabilityPattern.test(message)) {
     return resolved('PROPERTY_SUMMARY', 0.96);
