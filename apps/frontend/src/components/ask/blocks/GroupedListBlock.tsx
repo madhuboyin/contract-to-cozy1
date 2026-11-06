@@ -45,6 +45,7 @@ import { FinancingNumbers, FinancingOptions, FinancingPlanner, FinancingScenario
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { CalendarDays, CheckCircle2, CircleHelp, ShieldCheck, Wrench } from 'lucide-react';
 import { WorkOverviewResultList } from '../WorkOverviewResultList';
+import { SavedResultsListBlock } from '../SavedResultsListBlock';
 
 // Blocks whose items carry longer text revealed on demand (`item.detail`). The Negotiation Shield draft is collapsed by default so a long
 // message does not push the analysis down; the producer sets the id, the client only implements the expand/collapse.
@@ -1107,6 +1108,9 @@ const DeclaredListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   const { block, propertyId, itemActionsDisabled, onFilterClick, onCollectionPage, onItemAction, onAccessLost } = props;
   if (block.id === 'work-overview-results') {
     return <WorkOverviewResultList {...props} />;
+  }
+  if (block.id === 'saved-results-list') {
+    return <SavedResultsListBlock {...props} />;
   }
   if (INVENTORY_ITEM_DETAIL_BLOCK_IDS.has(block.id)) {
     return <NotedInventoryResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}

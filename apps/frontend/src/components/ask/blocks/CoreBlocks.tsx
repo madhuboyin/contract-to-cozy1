@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, Calendar, CheckCircle2, DollarSign, Home, Sparkles, TrendingDown, TrendingUp } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Calendar, CheckCircle2, ChevronDown, DollarSign, Home, Sparkles, TrendingDown, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { workflowProgressStatusLabel } from '@/features/ask/presentationCompatibility';
 import { timelinePoint } from '@/features/ask/displayPatterns';
@@ -826,6 +826,39 @@ function PlantAdvisorSummaryCard({ block }: { block: Extract<AskPresentationBloc
   );
 }
 
+function SavedResultsSummaryCard({ block }: { block: Extract<AskPresentationBlock, { type: 'SUMMARY' }> }) {
+  const rawHeadline = block.headline?.trim() || block.title;
+  const supportLine = block.supportLine?.trim() || block.body;
+  const partialHeadlineMatch = /^(\d+)\s+shown so far;\s*some kinds could not be read,\s*so this may not be everything\.?$/i.exec(rawHeadline);
+  const shownCount = partialHeadlineMatch ? Number(partialHeadlineMatch[1]) : null;
+  const displayHeadline = shownCount !== null
+    ? `${shownCount} saved ${shownCount === 1 ? 'result' : 'results'} ready to reopen`
+    : rawHeadline;
+  const hasStaleNotice = /no longer current/i.test(rawHeadline);
+
+  return (
+    <section
+      data-calm-summary=""
+      data-saved-results-summary=""
+      className={cn(
+        'max-w-[800px]',
+        hasStaleNotice && CALM_TONE_RULE.CAUTION,
+      )}
+    >
+      <h3 className="font-display text-xl font-medium leading-snug tracking-[-0.01em] text-slate-950 sm:text-2xl">
+        <span>{displayHeadline}</span>
+        {shownCount !== null && <span className="sr-only"> {rawHeadline}</span>}
+      </h3>
+      {supportLine && (
+        <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-500">
+          {supportLine}
+        </p>
+      )}
+      {block.chips && block.chips.length > 0 && <AnswerChips chips={block.chips} />}
+    </section>
+  );
+}
+
 export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => {
   const calm = useCalmChrome();
   // The seasonal plan's intro and next steps are their own cards in both shells (see SeasonalAnswerCards).
@@ -842,6 +875,7 @@ export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => {
   if (block.id === 'service-price-radar-summary') return <ServicePriceRadarSummaryCard block={block} />;
   if (COVERAGE_SUMMARY_IDS.has(block.id)) return <CoverageSummaryCard block={block} />;
   if (PLANT_ADVISOR_SUMMARY_IDS.has(block.id)) return <PlantAdvisorSummaryCard block={block} />;
+  if (block.id === 'saved-results-summary') return <SavedResultsSummaryCard block={block} />;
   if (calm) return <CalmSummary block={block} />;
   return (
     <section className={cn(
@@ -891,11 +925,84 @@ export const ProactiveInsightBlock: AskBlockRenderer<'PROACTIVE_INSIGHT'> = ({ b
   </section>
 );
 
+const PARTIAL_COVERAGE_BOUNDARY_IDS = new Set(['saved-results-partial', 'work-overview-partial']);
+
+function PartialCoverageBoundary({ block }: { block: Extract<AskPresentationBlock, { type: 'BOUNDARY' }> }) {
+  const trailingNoteMatch = /\s*(Nothing here is treated as zero or complete for those\.)$/i.exec(block.body);
+  const trailingNote = trailingNoteMatch ? trailingNoteMatch[1] : 'Nothing here is treated as zero or complete for those.';
+  const rawList = trailingNoteMatch
+    ? block.body.slice(0, trailingNoteMatch.index).replace(/\.\s*$/, '')
+    : block.body;
+  const entries = rawList
+    .split(/;\s+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .reduce<Array<{ label: string; reason: string }>>((acc, chunk) => {
+      const idx = chunk.indexOf(':');
+      if (idx !== -1) {
+        acc.push({
+          label: chunk.slice(0, idx).trim(),
+          reason: chunk.slice(idx + 1).trim(),
+        });
+      } else if (acc.length > 0) {
+        const prev = acc[acc.length - 1];
+        prev.reason = prev.reason ? `${prev.reason}; ${chunk}` : chunk;
+      } else {
+        acc.push({ label: chunk, reason: '' });
+      }
+      return acc;
+    }, []);
+
+  if (entries.length === 0) return <WarningBoundary block={block} />;
+
+  return (
+    <section
+      data-partial-coverage-boundary={block.id}
+      className="rounded-xl border border-amber-200/80 bg-amber-50/45 px-3.5 py-2.5 text-xs text-slate-700"
+    >
+      <details className="group">
+        <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden="true" />
+            <h3 className="font-semibold text-slate-900">{block.title}</h3>
+            <span className="text-slate-600">· {trailingNote}</span>
+          </div>
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-200/90 bg-white/90 px-2.5 py-0.5 text-[11px] font-semibold text-amber-900">
+            <span>
+              {entries.length} {entries.length === 1 ? 'area' : 'areas'} not shown
+            </span>
+            <ChevronDown
+              className="h-3 w-3 transition-transform group-open:rotate-180"
+              aria-hidden="true"
+            />
+          </span>
+        </summary>
+        <p className="sr-only">{block.body}</p>
+        <ul
+          aria-label={block.title}
+          className="mt-2.5 grid grid-cols-1 gap-2 border-t border-amber-200/60 pt-2.5 sm:grid-cols-2"
+        >
+          {entries.map((entry) => (
+            <li
+              key={entry.label}
+              className="rounded-lg border border-amber-200/60 bg-white/85 px-3 py-2 leading-4"
+            >
+              <p className="font-semibold text-slate-900">{entry.label}</p>
+              {entry.reason && <p className="mt-0.5 text-[11px] leading-4 text-slate-600">{entry.reason}</p>}
+            </li>
+          ))}
+        </ul>
+      </details>
+    </section>
+  );
+}
+
 // IW-CALM-005 (FRD v1.111): an informational limit is a muted footnote, not a warning card. Cautions and emergencies keep
 // their warning treatment because the homeowner may need to act on them.
 export const BoundaryBlock: AskBlockRenderer<'BOUNDARY'> = ({ block }) => {
   const calm = useCalmChrome();
   if (SEASONAL_ABOUT_BLOCK_IDS.has(block.id) && block.severity === 'INFO') return <SeasonalAboutCard block={block} />;
+  if (PARTIAL_COVERAGE_BOUNDARY_IDS.has(block.id)) return <PartialCoverageBoundary block={block} />;
   if (calm && block.severity === 'INFO' && block.suggestions.length === 0 && !block.actions?.length) {
     return <p data-calm-footnote="" className="text-xs leading-5 text-slate-500"><span className="font-medium text-slate-600">{block.title}.</span> {block.body}</p>;
   }
