@@ -129,6 +129,24 @@ test('the exact server-authored command recovers a dropped declaration; free tex
   assert.equal(blocked.captureRequests, undefined);
 });
 
+test('answering that there is no private outdoor space does not ask Outdoor space details again', async () => {
+  facts = {
+    'exterior.hasPrivateOutdoorSpace': { key: 'exterior.hasPrivateOutdoorSpace', state: 'KNOWN', value: false },
+    'exterior.outdoorSpaceTypes': { key: 'exterior.outdoorSpaceTypes', state: 'KNOWN', value: [] },
+    ...Object.fromEntries([
+      'responsibility.roof', 'responsibility.buildingExterior', 'responsibility.treesShrubs',
+      'responsibility.drivewayWalkways', 'responsibility.deckPatioBalcony', 'responsibility.plumbing',
+      'responsibility.hvac', 'responsibility.commonSafety', 'responsibility.snowIce',
+      'responsibility.pestControl', 'responsibility.sharedSystems',
+    ].map((key) => [key, { key, state: 'KNOWN', value: 'OWNER' }])),
+  };
+  const result = await capabilityInvoke('PROPERTY_CONTEXT_AREA_CAPTURE', envelope({ ...declared, entityId: 'RESPONSIBILITY' }, 'Fill in the missing maintenance responsibility details.'));
+  assert.equal(result.status, 'ANSWERED');
+  assert.equal(result.reasonCode, 'AREA_CAPTURE_NO_MORE_QUESTIONS');
+  assert.equal(result.captureRequests, undefined);
+  assert.doesNotMatch(JSON.stringify(result), /Outdoor space details/i);
+});
+
 test('a refresh of an in-progress execution re-asks with ITS OWN stored skips and never resets them; without stored state it is not routable', async () => {
   models.askExecution.findFirst = async () => ({ parametersJson: { areaScope: 'SYSTEMS', skipFactKeys: HVAC_FACTS, sourceExecutionId: 'summary-1' } });
   const refreshed = await capabilityInvoke('PROPERTY_CONTEXT_AREA_CAPTURE', envelope({ surface: 'ASK_REFRESH', sourceExecutionId: 'area-exec' }));

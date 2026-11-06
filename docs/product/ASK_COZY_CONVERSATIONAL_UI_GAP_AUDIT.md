@@ -13,6 +13,8 @@
 
 **Savings answer width (November 6, 2026):** The recurring-cost savings panel now uses the standard 960px conversational measure, aligned with **Browse my home record**, instead of expanding to the 1140px workspace measure. Its responsive two-column cards remain intact and continue stacking on smaller screens.
 
+**Outdoor-responsibility completion (November 6, 2026):** Saving **No** for private outdoor space now makes landscaping responsibility non-applicable to home-record completeness. The maintenance-responsibility workflow therefore finishes when its remaining applicable facts are known instead of reporting one detail left and reopening **Outdoor space details** indefinitely.
+
 Cross-tool desktop parity, implementation status, remaining P0/P1/P2 gaps, and the shared compact-form recommendations are consolidated in [`ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md`](ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md). This document remains the deeper prototype-to-presentation audit.
 
 ## 1. Executive conclusion

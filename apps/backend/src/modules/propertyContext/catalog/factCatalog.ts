@@ -40,6 +40,9 @@ const PRIVATE_EXTERIOR_STRUCTURE_NOT_APPLICABLE: readonly FactApplicabilityCondi
   { factKey: 'core.dwellingType', operator: 'IN', values: ATTACHED_DWELLING_TYPES },
   { factKey: 'core.ownershipForm', operator: 'IN', values: ASSOCIATION_OWNERSHIP_FORMS },
 ];
+const NO_PRIVATE_OUTDOOR_SPACE: readonly FactApplicabilityCondition[] = [
+  { factKey: 'exterior.hasPrivateOutdoorSpace', operator: 'EQUALS', value: false },
+];
 
 export const PROPERTY_FACT_CATALOG = [
   { key: 'core.dwellingType', scope: 'CORE', canonicalOwner: 'Property.dwellingType', correctionPath: propertyPath('property-type'), writable: true },
@@ -85,7 +88,7 @@ export const PROPERTY_FACT_CATALOG = [
   { key: 'exterior.hasDrainageIssues', scope: 'EXTERIOR', canonicalOwner: 'PropertyExteriorProfile.hasDrainageIssues', correctionPath: propertyPath('exterior'), writable: true },
   { key: 'responsibility.roof', scope: 'RESPONSIBILITY', canonicalOwner: 'PropertyResponsibility.ROOF', correctionPath: propertyPath('responsibility'), writable: true },
   { key: 'responsibility.buildingExterior', scope: 'RESPONSIBILITY', canonicalOwner: 'PropertyResponsibility.BUILDING_EXTERIOR', correctionPath: propertyPath('responsibility'), writable: true },
-  { key: 'responsibility.landscaping', scope: 'RESPONSIBILITY', canonicalOwner: 'PropertyResponsibility.LANDSCAPING', correctionPath: propertyPath('responsibility'), writable: true },
+  { key: 'responsibility.landscaping', scope: 'RESPONSIBILITY', canonicalOwner: 'PropertyResponsibility.LANDSCAPING', correctionPath: propertyPath('responsibility'), writable: true, notApplicableWhen: NO_PRIVATE_OUTDOOR_SPACE },
   { key: 'responsibility.treesShrubs', scope: 'RESPONSIBILITY', canonicalOwner: 'PropertyResponsibility.TREES_SHRUBS', correctionPath: propertyPath('responsibility'), writable: true },
   { key: 'responsibility.drivewayWalkways', scope: 'RESPONSIBILITY', canonicalOwner: 'PropertyResponsibility.DRIVEWAY_WALKWAYS', correctionPath: propertyPath('responsibility'), writable: true },
   { key: 'responsibility.deckPatioBalcony', scope: 'RESPONSIBILITY', canonicalOwner: 'PropertyResponsibility.DECK_PATIO_BALCONY', correctionPath: propertyPath('responsibility'), writable: true },
