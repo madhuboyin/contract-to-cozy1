@@ -86,7 +86,8 @@ test('captured scalar facts and event titles survive relevance selection and saf
     provider: { select: async ({ candidates }) => ({ claims: candidates }) },
   });
   const text = rendered.map((claim) => claim.text).join(' ');
-  assert.match(text, /ASPHALT_SHINGLE/);
+  assert.match(text, /Asphalt shingle/);
+  assert.doesNotMatch(text, /ASPHALT_SHINGLE/, 'a stored enum value is shown the way a homeowner reads it');
   assert.match(text, /Roof replaced \(2025; third-party report\)/);
   assert.doesNotMatch(text, /2025-01-01|Dishwasher/);
 });

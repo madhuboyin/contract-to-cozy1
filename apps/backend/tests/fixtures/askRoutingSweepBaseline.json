@@ -3,6 +3,8 @@
  "knownGood": {
   "APPLIANCE_FAILURE_RISK": [
    "show failure risk for my appliances",
+   "what are the most risky items in my home inventory",
+   "what are the riskiest appliances i own",
    "which appliances are about to fail"
   ],
   "BREAK_EVEN_ANALYSIS": [
@@ -184,6 +186,10 @@
   ],
   "HOME_ACTIONS": [
    "what are my top priorities for the house",
+   "what are the main things i need to be concerned of for next few days",
+   "what is the most important thing to do first",
+   "what is the most important thing to do next",
+   "what is the single most important thing i need to be concerned of about my home",
    "what needs my attention"
   ],
   "HOME_BRIEFING_VIEW": [
@@ -380,11 +386,13 @@
   ],
   "OWNERSHIP_COSTS": [
    "breakdown of my housing expenses",
+   "by how much my cost of ownership for my home will increase in next 5 years",
    "how much does it cost to own my house",
    "show my ownership costs",
    "total cost of owning this home",
    "what are my yearly home expenses",
-   "what do i spend on the house each month"
+   "what do i spend on the house each month",
+   "what is the cost of ownership for my home"
   ],
   "PAST_HAZARD_EXPOSURE": [
    "am i in a flood zone",
@@ -478,7 +486,9 @@
   "REPLACEMENT_GUIDANCE": [
    "can i continue to use my microwave or should i need to buy new one",
    "can i keep using my oven or replace it",
+   "do I need a new roof",
    "do i need a new dishwasher",
+   "do i need a new washing machine",
    "is my fridge worth repairing",
    "is my microwave good enough or do i need to replace it",
    "is my water heater still good",
@@ -508,6 +518,7 @@
    "what have i bookmarked"
   ],
   "SAVINGS_OPPORTUNITIES": [
+   "are there any federal/ state rebates for my home",
    "find ways to lower my home costs",
    "how can i save money on my home"
   ],

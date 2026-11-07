@@ -110,8 +110,17 @@ function labelFor(key: string): string {
   return key.split('.').pop()!.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
 }
 
+// A stored enum value ("ASPHALT_SHINGLE") is shown as a homeowner reads it ("Asphalt shingle"). Shown raw it is also an internal-looking token that the
+// answer-trust check refuses, which turned a correct fallback answer into "I couldn't verify this answer" (review screenshot, 2026-11-07).
+const ENUM_VALUE = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/;
+export function readableStoredValue(value: string): string {
+  if (!ENUM_VALUE.test(value)) return value;
+  const words = value.toLowerCase().replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 function scalar(value: unknown): string | null {
-  if (typeof value === 'string' && value.trim()) return value.trim().slice(0, 160);
+  if (typeof value === 'string' && value.trim()) return readableStoredValue(value.trim().slice(0, 160));
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   if (typeof value === 'boolean') return value ? 'yes' : 'no';
   return null;

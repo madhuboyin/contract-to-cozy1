@@ -300,6 +300,18 @@ export function validateAskAnswerTrust(input: {
     };
   }
   if ((outcome === 'BLOCK' || outcome === 'CLARIFY') && SUCCESS_STATUSES.has(input.result.status)) {
+    // The generic fallback's answer is assembled from recorded facts and may differ on a retry, but a blocked one is not an error the homeowner can fix by
+    // pressing "Try again": it is an answer that could not be confirmed, which the turn replaces with the plain message and, where the router had candidates,
+    // a "Did you mean" (support/didYouMean.ts).
+    if (input.operationId === 'GROUNDED_GUIDANCE') {
+      return {
+        result: {
+          status: 'READY_WITH_LIMITATIONS', reasonCode: 'ASK_ANSWER_UNVERIFIED_NO_ALTERNATIVE',
+          blocks: [{ type: 'SUMMARY', id: 'answer-unverified', title: 'I’m not sure that answers your question', body: ASK_UNVERIFIABLE_ANSWER_TEXT, tone: 'CAUTION', actions: [] }],
+          suggestions: [], parameters: { ...(input.result.parameters ?? {}), answerTrust: trust },
+        }, trust, repaired: true,
+      };
+    }
     return {
       result: {
         status: 'FAILED_RETRYABLE', reasonCode: 'ASK_ANSWER_TRUST_FAILED',
