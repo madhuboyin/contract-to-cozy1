@@ -5,6 +5,7 @@ import { validateAskSemanticAnswerRelevance, type AskSemanticAnswerRelevanceResu
 import type { AskLanguageCode } from './askLanguageRegistry';
 import type { HouseholdRole } from '@prisma/client';
 import { ASK_NAMING_HINT, ASK_UNVERIFIABLE_ANSWER_TEXT } from './askRemoteFallbackTypedClaims';
+import { clarificationLabelFor } from './support/clarificationLabels';
 import { applyAskAudiencePresentation } from './askAudiencePresentation';
 import {
   actionsForAskBlock,
@@ -441,7 +442,7 @@ export function validateAskAnswerTrustPipeline(input: {
         : 'What did you want to look at?',
       options: candidateOperationIds.map((operationId) => ({
         operationId,
-        label: getAskOperationDefinition(operationId).semantic.supportedJobs[0],
+        label: clarificationLabelFor(operationId),
       })),
       allowFreeText: true,
       expiresAt,

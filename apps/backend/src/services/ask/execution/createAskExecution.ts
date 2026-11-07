@@ -17,6 +17,7 @@ import { classifyLaunchedOutcome, recordHandoffOutcome, resolveHandoffAttributio
 import { propertyScopeForAskRouting, resolveAskRoutingCascade, type AskRoutingDecision } from '../askRoutingCascade';
 import { refineAskRoutingWithModel } from '../askModelRouter';
 import { offerDidYouMean, isAskUnansweredFallbackResult } from '../support/didYouMean';
+import { clarificationLabelFor } from '../support/clarificationLabels';
 import { geminiService } from '../../gemini.service';
 import { resolveAskFollowUpMessage, shouldForceAskOperation } from '../askFollowUpContext';
 import { getSkillDefinition, getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../../skills/skillRegistry';
@@ -50,11 +51,8 @@ function routingClarificationResult(
   const languagePack = (operationId: AskOperationId) => (
     getAskOperationDefinition(operationId).semantic.languagePacks[decision.language]
   );
-  const clarificationLabel = (operationId: AskOperationId) => operationId === 'GUIDANCE_JOURNEY_CONTINUE'
-    ? 'View current guided journey steps'
-    : languagePack(operationId)?.supportedJobs[0]
-      ?? getAskOperationDefinition(operationId).semantic.supportedJobs[0];
-  const choices = candidates.map((candidate) => languagePack(candidate.operationId)?.supportedJobs[0]).filter(Boolean);
+  const clarificationLabel = (operationId: AskOperationId) => clarificationLabelFor(operationId, decision.language);
+  const choices = candidates.map((candidate) => clarificationLabelFor(candidate.operationId, decision.language));
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
   return {
     status: 'NEEDS_CLARIFICATION',

@@ -9,8 +9,8 @@ const { ASK_NO_SUPPORTED_CLAIM_TEXT } = require('../../src/services/ask/askRemot
 const { ASK_DID_YOU_MEAN_FLOOR, ASK_DID_YOU_MEAN_LIMIT, ASK_DID_YOU_MEAN_REASON, buildDidYouMeanResult, didYouMeanOptions, isAskUnansweredFallbackResult, offerDidYouMean } = require('../../src/services/ask/support/didYouMean.ts');
 const { assertSkillResultBlocksAllowed } = require('../../src/services/ask/askHandlerSupport.ts');
 
-// Review screenshots (2026-11-07): "are there any development activities happening in my neighbor hood", "what need to be taken care for my plant for
-// winter" and "how much rent can i expect for my home" all ended in "Nothing in your home record answers this" although the right operation was the
+// Review screenshots (2026-11-07): "what need to be taken care for my plant for
+// winter" and "how much rent can i expect for my home" both ended in "Nothing in your home record answers this" although the right operation was the
 // local router's top candidate, just under the confidence threshold.
 
 const eligible = new Set(Object.values(ASK_OPERATION_DEFINITIONS).filter((definition) => !definition.safetyClass.endsWith('_BOUNDARY')).map((definition) => definition.operationId));
@@ -23,7 +23,6 @@ const noAnswer = () => ({
 
 test('the screenshot messages are offered the operation the homeowner meant', () => {
   for (const [message, expected] of [
-    ['are there any development activities happening in my neighbor hood', 'NEIGHBORHOOD_CHANGE_FEED'],
     ['what need to be taken care for my plant for winter', 'PLANT_CARE_OUTLOOK'],
     ['how much rent can i expect for my home', 'SELL_HOLD_RENT_ANALYSIS'],
   ]) {

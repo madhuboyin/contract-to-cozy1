@@ -1436,6 +1436,9 @@ const neighborhoodChangePattern = new RegExp([
   String.raw`\b(?:what(?:'s| is)|anything)\s+changing\s+(?:around|near)\s+` + neighborhoodChangePlace + String.raw`\b`,
   String.raw`\bchanges?\s+(?:around|near)\s+` + neighborhoodChangePlace + String.raw`\b`,
   String.raw`\bchanges?\s+in\s+(?:my|our|this|the)\s+(?:neighbou?rhood|area|street|block)\b`,
+  // "Are there any development activities happening in my neighborhood" (review screenshots, 2026-11-07): the same question without "near/around".
+  String.raw`\b(?:any|are there any|is there any)\b.{0,15}\b(?:construction|development|developments|building|zoning)\b.{0,40}\b(?:in|within|around|near)\b.{0,10}\b` + neighborhoodChangePlace + String.raw`\b`,
+  String.raw`\b(?:construction|development|developments)\s+(?:activit(?:y|ies)|projects?|work)\b.{0,30}\b(?:happening|going on|planned|underway|in progress)\b.{0,25}\b(?:nearby|around here|in the area|in my area|in town|on my street)\b`,
 ].join('|'), 'i');
 // A home's past hazard exposure and long-term hazard context (Home Risk Replay). Current weather near the home stays
 // with the Home Event Radar; reporting damage or filing a claim stays with incidents and claims.
@@ -1449,6 +1452,11 @@ const applianceFailureRiskPattern = /\bappliance oracle\b|\b(?:appliance|system)
 const applianceFailureRiskOtherIntentPattern = /\b(?:buy|recommend\w*|brand|model|should|repair|fix|add|record|log)\b/i;
 // Budget Planner's calculated yearly and monthly upkeep forecast. Actual ownership costs are OWNERSHIP_COSTS; the
 // maintenance task forecast is MAINTENANCE_FORECAST.
+// Forward-looking money wording about upkeep: "how much budget I need to allocate for home maintenance", "the minimum to set aside for repairs". The broad word
+// "maintenance" otherwise sent these to the maintenance-status list (review screenshots, 2026-11-07). A multi-year horizon is not the upkeep budget's (it is a
+// yearly view; the capital reserve plan takes 5 or 10 years), so those are left to the clarification between the two instead of being routed here.
+const maintenanceBudgetWordingPattern = /\b(?:budget|allocat\w*|set aside|put aside|afford)\b.{0,70}\b(?:maintenance|upkeep|repairs?)\b|\b(?:maintenance|upkeep|repairs?)\b.{0,40}\b(?:budget|allocation)\b|\b(?:should|need to|ought to|minimum|at least)\b.{0,20}\bspend\b.{0,40}\b(?:maintenance|upkeep|repairs?)\b/i;
+const multiYearHorizonPattern = /\b\d+\s*(?:-\s*)?(?:years?|yrs?)\b|\b(?:five|ten|several|many|multi)[- ]years?\b/i;
 const maintenanceBudgetPattern = /\bbudget planner\b|\b(?:home |house )?(?:maintenance|upkeep|repair) budget\b|\bbudget forecast\b|\bhow much (?:should|do|will) (?:i|we) (?:need to )?(?:budget|set aside|save)\b.{0,50}\b(?:maintenance|upkeep|repairs?)\b/i;
 const maintenanceBudgetOtherIntentPattern = /\b(?:create|add|log|record|change|update|set up|renovation|remodel|closing|mortgage)\b/i;
 // The latest saved Do-Nothing Simulator run: what putting off home upkeep could cost. One item's repair-or-replace timing
@@ -1726,7 +1734,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (applianceFailureRiskPattern.test(message) && !applianceFailureRiskOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('APPLIANCE_FAILURE_RISK', 0.96);
   }
-  if (maintenanceBudgetPattern.test(message) && !maintenanceBudgetOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+  if ((maintenanceBudgetPattern.test(message) || (maintenanceBudgetWordingPattern.test(message) && !multiYearHorizonPattern.test(message))) && !maintenanceBudgetOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('MAINTENANCE_BUDGET_FORECAST', 0.96);
   }
   if (doNothingPattern.test(message) && !doNothingOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
@@ -1903,7 +1911,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (homeBasicsGuidePattern.test(message) && !seasonalHomeCareRecordedIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('HOME_BASICS_GUIDE', 0.97);
   }
-  if (maintenancePattern.test(message) && !explicitCapabilityPattern.test(message)) {
+  if (maintenancePattern.test(message) && !maintenanceBudgetWordingPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('MAINTENANCE_STATUS', 0.94);
   }
   if (homeChangeSummaryPattern.test(message) && !explicitCapabilityPattern.test(message) && !/\bdecision\b/i.test(message)) {

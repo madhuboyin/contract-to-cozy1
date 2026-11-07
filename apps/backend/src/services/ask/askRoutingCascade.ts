@@ -1,3 +1,4 @@
+import { correctKnownMisspellings } from './support/commonMisspellings';
 import {
   ASK_OPERATION_DEFINITIONS,
   getAskOperationDefinition,
@@ -10,6 +11,8 @@ import { classifyAskCandidates, normalizeAskMessage, retrieveAskOperationCandida
 import { ASK_DEFAULT_LANGUAGE, requireCertifiedAskLanguage, type AskLanguageCode } from './askLanguageRegistry';
 import type { AskConfidenceBand } from './askTrust.contract';
 import { resolveAskEntityState, type AskEntityResolutionResult } from './askEntityResolution';
+
+const HOME_VALUE_GROWTH_PATTERN = /\b(?:increase|raise|boost|grow|improve|add to|maximi[sz]e)\b.{0,25}\b(?:home|house|property)\b.{0,12}\bvalue\b|\b(?:increase|raise|boost|grow|improve|maximi[sz]e)\b.{0,12}\bvalue\b.{0,12}\b(?:home|house|property)\b|\b(?:home|house|property)\s+value\b.{0,20}\b(?:increase|go up|rise|grow|improve)\b|\b(?:improvements?|upgrades?|renovations?|projects?)\b.{0,25}\b(?:add|increase|raise|boost)\b.{0,15}\bvalue\b/i;
 
 export type AskRoutingStage = 'SAFETY' | 'DETERMINISTIC' | 'LOCAL_CLASSIFIER' | 'MODEL_CLASSIFIER' | 'CLARIFICATION' | 'REMOTE_FALLBACK';
 
@@ -45,7 +48,7 @@ function resolution(operationId: AskOperationId, confidence: number): AskOperati
   return { ...getAskOperationDefinition(operationId), confidence };
 }
 
-export function resolveAskRoutingCascade(message: string, options: {
+export function resolveAskRoutingCascade(rawMessage: string, options: {
   localRoutingEnabled?: boolean;
   localMinimumConfidence?: number;
   ambiguityMargin?: number;
@@ -58,6 +61,8 @@ export function resolveAskRoutingCascade(message: string, options: {
 } = {}): AskRoutingDecision {
   const language = options.language ?? ASK_DEFAULT_LANGUAGE;
   requireCertifiedAskLanguage(language);
+  // Routing reads a closed list of common misspellings and split words as their correct form ("maintainence", "neighbor hood"); nothing else changes.
+  const message = correctKnownMisspellings(rawMessage);
   const direct = resolveAskOperation(message);
   if (direct.operationId === 'EMERGENCY_BOUNDARY' || direct.operationId === 'UNSAFE_RESTRICTED_BOUNDARY' || direct.operationId === 'OUT_OF_SCOPE_BOUNDARY') {
     return { language, operation: direct, stage: 'SAFETY', candidates: [{ operationId: direct.operationId, language, confidence: direct.confidence, confidenceBand: 'HIGH' }], requiresClarification: false, entityResolution: null };
@@ -67,6 +72,19 @@ export function resolveAskRoutingCascade(message: string, options: {
   }
   if (options.localRoutingEnabled === false) {
     return { language, operation: direct, stage: 'REMOTE_FALLBACK', candidates: [], requiresClarification: false, entityResolution: null };
+  }
+
+  // "How can I increase my home value" has no single answer: the seller-prep checklist (repairs, records and presentation work, prioritised) and the saved upgrade
+  // options are the two real ways in. The local classifier offered break-even, habits and property-tax appeal, none of which is about raising value.
+  if (HOME_VALUE_GROWTH_PATTERN.test(message)) {
+    const eligibleForValue = options.eligibleOperationIds ? new Set(options.eligibleOperationIds) : null;
+    const valueCandidates = (['SELLER_PREP_CHECKLIST', 'HOME_UPGRADE_SCENARIOS'] as AskOperationId[]).filter((operationId) => !eligibleForValue || eligibleForValue.has(operationId));
+    if (valueCandidates.length) {
+      return {
+        language, operation: direct, stage: 'CLARIFICATION', requiresClarification: true, entityResolution: null,
+        candidates: valueCandidates.map((operationId) => ({ operationId, language, confidence: 0.6, reasonCodes: ['HOME_VALUE_GROWTH_AMBIGUOUS'] })),
+      };
+    }
   }
 
   const normalized = normalizeAskMessage(message, language);

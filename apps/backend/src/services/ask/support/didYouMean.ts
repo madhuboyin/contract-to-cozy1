@@ -4,6 +4,7 @@
 // wrong as right: so the homeowner is asked, which costs one click and no model call. A floor keeps near-zero scores from being offered.
 import { getAskOperationDefinition, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
 import { isAskHonestNoAnswerResult } from '../askRemoteFallbackTypedClaims';
+import { clarificationLabelFor } from './clarificationLabels';
 import type { AskRoutingDecision } from '../askRoutingCascade';
 import { ASK_DEFAULT_LANGUAGE, type AskLanguageCode } from '../askLanguageRegistry';
 
@@ -34,11 +35,6 @@ export function didYouMeanOptions(candidates: ReadonlyArray<{ operationId: AskOp
   return options;
 }
 
-function labelFor(operationId: AskOperationId, language: AskLanguageCode): string {
-  if (operationId === 'GUIDANCE_JOURNEY_CONTINUE') return 'View current guided journey steps';
-  const definition = getAskOperationDefinition(operationId);
-  return definition.semantic.languagePacks[language]?.supportedJobs[0] ?? definition.semantic.supportedJobs[0];
-}
 
 export function buildDidYouMeanResult(options: readonly AskOperationId[], language: AskLanguageCode = ASK_DEFAULT_LANGUAGE, now: Date = new Date()): AskOperationResult {
   const expiresAt = new Date(now.getTime() + EXPIRES_IN_MS).toISOString();
@@ -53,7 +49,7 @@ export function buildDidYouMeanResult(options: readonly AskOperationId[], langua
     clarification: {
       version: 1,
       question: 'Which of these did you mean?',
-      options: options.map((operationId) => ({ operationId, label: labelFor(operationId, language) })),
+      options: options.map((operationId) => ({ operationId, label: clarificationLabelFor(operationId, language) })),
       allowFreeText: true,
       expiresAt,
     },

@@ -104,7 +104,8 @@
   ],
   "CAPITAL_RESERVE_PLAN": [
    "capital reserve plan",
-   "how much should i save for future home expenses"
+   "how much should i save for future home expenses",
+   "what should i set aside for big repairs"
   ],
   "CLAIM_CHECKLIST_VIEW": [
    "show my claim checklist",
@@ -328,8 +329,12 @@
   ],
   "MAINTENANCE_BUDGET_FORECAST": [
    "budget for home upkeep",
+   "how much budget i need to allocate over the next 5 years for home maintainence",
    "how much should i budget for maintenance",
+   "how much to set aside for home repairs",
    "monthly maintenance budget",
+   "what is the minimum budget i need to allocate for home Maintenance",
+   "what is the minimum i should spend on home maintenance",
    "what will upkeep cost me this year"
   ],
   "MAINTENANCE_FORECAST": [
@@ -378,6 +383,8 @@
    "show my negotiation cases"
   ],
   "NEIGHBORHOOD_CHANGE_FEED": [
+   "are there any construction activities in my neighbor hood",
+   "are there any development activities happening in my neighbor hood",
    "local changes near my home"
   ],
   "OPERATIONAL_WORK_UPDATE": [
@@ -427,6 +434,7 @@
   ],
   "PROPERTY_SUMMARY": [
    "how many bathrooms are there",
+   "how many bed rooms do i have",
    "how many bedrooms do i have",
    "summarize my property",
    "tell me about my house",
@@ -466,6 +474,7 @@
   ],
   "REFINANCE_ANALYSIS": [
    "refinance worth it",
+   "should i refinace",
    "should i refinance"
   ],
   "REFINANCE_COMMAND": [
@@ -656,7 +665,6 @@
    "what insights do you have about my home"
   ],
   "MAINTENANCE_BUDGET_FORECAST": [
-   "how much to set aside for home repairs",
    "yearly maintenance cost estimate"
   ],
   "MAINTENANCE_FORECAST": [
