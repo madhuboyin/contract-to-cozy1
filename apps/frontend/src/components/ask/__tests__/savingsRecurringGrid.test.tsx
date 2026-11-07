@@ -1,8 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { AskPresentationBlock } from '@/features/ask/types';
 import { GenericGroupedListBlock } from '../blocks/GroupedListBlock';
+import { MetricRowBlock, SummaryBlock } from '../blocks/CoreBlocks';
 
 type GroupedList = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
+type Summary = Extract<AskPresentationBlock, { type: 'SUMMARY' }>;
+type MetricRow = Extract<AskPresentationBlock, { type: 'METRIC_ROW' }>;
 
 const action = {
   id: 'set-up', label: 'Set up plan', message: 'Set up this plan', operationId: 'SAVINGS_BENEFIT_COMMAND',
@@ -36,4 +39,121 @@ test('renders recurring costs as a compact responsive grid without repeated setu
 
   fireEvent.click(screen.getAllByRole('button', { name: 'Set up plan' })[0]);
   expect(onItemAction).toHaveBeenCalledWith('HOME_SAVINGS_CATEGORY', 'insurance', 'Set up this plan', 'SAVINGS_BENEFIT_COMMAND', 'MUTATE_RECORD');
+});
+
+test('renders savings summary, headline metrics, and opportunity groups as framed conversational panels', () => {
+  const onItemAction = jest.fn();
+  const summary: Summary = {
+    type: 'SUMMARY',
+    id: 'savings-summary',
+    title: 'Here is the current savings picture for this home',
+    body: 'Estimates are planning signals. Realized value counts only after a saving or benefit is recorded as received.',
+    tone: 'DEFAULT',
+    actions: [
+      {
+        id: 'scan-benefits',
+        label: 'Re-scan for benefits',
+        message: 'Scan this home for savings and benefits',
+        operationId: 'SAVINGS_BENEFIT_COMMAND',
+        interactionType: 'START_WORKFLOW',
+        style: 'SECONDARY',
+      },
+    ],
+  };
+
+  const headline: MetricRow = {
+    type: 'METRIC_ROW',
+    id: 'savings-headline',
+    title: 'At a glance',
+    metrics: [
+      { label: 'Best recurring estimate', value: '$312/year', detail: 'The highest single net estimate, not a sum', tone: 'POSITIVE' },
+      { label: 'Ready to review', value: '2', detail: 'opportunities and benefits', tone: 'DEFAULT' },
+    ],
+  };
+
+  const groups: GroupedList = {
+    type: 'GROUPED_LIST',
+    id: 'savings-opportunity-groups',
+    title: 'By category',
+    description: 'Nothing is recorded yet for recurring-cost opportunities, benefits and rebates, work in progress or realized savings.',
+    filters: [],
+    actions: [],
+    sections: [
+      {
+        id: 'related',
+        title: 'Related savings decisions',
+        count: 1,
+        items: [
+          {
+            id: 'related-COVERAGE',
+            title: 'Coverage and premium review',
+            description: '2 coverage gaps — largest exposure Microwave ($1,200)',
+            meta: ['Review this estimate separately before deciding'],
+            status: 'RELATED',
+            href: null,
+            actions: [
+              {
+                id: 'review-coverage-opportunity',
+                label: 'Review coverage gaps',
+                message: 'Show my current coverage gaps.',
+                operationId: 'COVERAGE_GAPS',
+                interactionType: 'CONVERSATION_CONTINUE',
+                style: 'SECONDARY',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
+  const { container } = render(
+    <div>
+      <SummaryBlock
+        block={summary}
+        executionId="execution"
+        propertyId="home"
+        itemActionsDisabled={false}
+        onFilterClick={jest.fn()}
+        onItemAction={onItemAction}
+        onCollectionPage={jest.fn()}
+        onAccessLost={jest.fn()}
+      />
+      <MetricRowBlock
+        block={headline}
+        executionId="execution"
+        propertyId="home"
+        itemActionsDisabled={false}
+        onFilterClick={jest.fn()}
+        onItemAction={onItemAction}
+        onCollectionPage={jest.fn()}
+        onAccessLost={jest.fn()}
+      />
+      <GenericGroupedListBlock
+        block={groups}
+        executionId="execution"
+        propertyId="home"
+        itemActionsDisabled={false}
+        onFilterClick={jest.fn()}
+        onItemAction={onItemAction}
+        onCollectionPage={jest.fn()}
+        onAccessLost={jest.fn()}
+      />
+    </div>,
+  );
+
+  expect(container.querySelector('[data-savings-summary="savings-summary"]')).toBeInTheDocument();
+  expect(container.querySelector('[data-savings-metrics="savings-headline"]')).toBeInTheDocument();
+  expect(container.querySelector('[data-savings-opportunity-groups]')).toBeInTheDocument();
+  expect(screen.getByText('Coverage and premium review')).toBeInTheDocument();
+  expect(screen.getByText('Related decision')).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: /Review coverage gaps/i }));
+  expect(onItemAction).toHaveBeenCalledWith(
+    undefined,
+    'related-COVERAGE',
+    'Show my current coverage gaps.',
+    'COVERAGE_GAPS',
+    'CONVERSATION_CONTINUE',
+  );
 });

@@ -826,6 +826,81 @@ function PlantAdvisorSummaryCard({ block }: { block: Extract<AskPresentationBloc
   );
 }
 
+function SavingsSummaryCard({ block }: { block: Extract<AskPresentationBlock, { type: 'SUMMARY' }> }) {
+  const isCaution = block.tone === 'CAUTION';
+  const isPositive = block.tone === 'POSITIVE';
+  const isUtility = /utility/i.test(block.title);
+  const isRealized = /realized/i.test(block.title);
+  const lensLabel = isCaution
+    ? 'Program Overlap Check'
+    : isUtility
+      ? 'Utility Savings Lens'
+      : isRealized
+        ? 'Realized Value'
+        : isPositive
+          ? 'Opportunities Ready'
+          : 'Planning & Rebates';
+
+  return (
+    <section
+      data-savings-summary={block.id}
+      className={cn(
+        'relative w-full rounded-2xl border px-4 py-3.5 shadow-2xs sm:px-5',
+        isCaution
+          ? 'border-amber-200/90 bg-gradient-to-r from-amber-50/85 via-white to-teal-50/30'
+          : isPositive
+            ? 'border-emerald-200/90 bg-gradient-to-r from-emerald-50/75 via-white to-teal-50/40'
+            : 'border-slate-200/90 bg-gradient-to-r from-teal-50/65 via-white to-slate-50/60',
+      )}
+    >
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-900 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-100">
+              <Sparkles aria-hidden="true" className="h-3 w-3 text-teal-300" />
+              Savings &amp; Benefits Radar
+            </span>
+            <span
+              aria-hidden="true"
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider',
+                isCaution
+                  ? 'border-amber-300/80 bg-amber-100/80 text-amber-900'
+                  : isPositive
+                    ? 'border-emerald-300/80 bg-emerald-100/80 text-emerald-900'
+                    : 'border-teal-200/90 bg-white/90 text-teal-800',
+              )}
+            >
+              <span
+                className={cn(
+                  'h-1.5 w-1.5 rounded-full',
+                  isCaution ? 'bg-amber-600' : isPositive ? 'bg-emerald-600' : 'bg-teal-600',
+                )}
+              />
+              {lensLabel}
+            </span>
+          </div>
+          <h3 className="mt-1.5 text-base font-bold tracking-tight text-slate-950 sm:text-lg">
+            {block.title}
+          </h3>
+          <p className="mt-0.5 whitespace-pre-wrap text-xs leading-5 text-slate-600 sm:text-sm">
+            {block.body}
+          </p>
+          {block.chips && block.chips.length > 0 && <AnswerChips chips={block.chips} />}
+        </div>
+
+        {block.actions.length > 0 && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {block.actions.map((action) => (
+              <ActionLink key={action.id} action={action} />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function SavedResultsSummaryCard({ block }: { block: Extract<AskPresentationBlock, { type: 'SUMMARY' }> }) {
   const rawHeadline = block.headline?.trim() || block.title;
   const supportLine = block.supportLine?.trim() || block.body;
@@ -875,6 +950,7 @@ export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => {
   if (block.id === 'service-price-radar-summary') return <ServicePriceRadarSummaryCard block={block} />;
   if (COVERAGE_SUMMARY_IDS.has(block.id)) return <CoverageSummaryCard block={block} />;
   if (PLANT_ADVISOR_SUMMARY_IDS.has(block.id)) return <PlantAdvisorSummaryCard block={block} />;
+  if (block.id === 'savings-summary' || block.id === 'savings-exclusion-conflicts') return <SavingsSummaryCard block={block} />;
   if (block.id === 'saved-results-summary') return <SavedResultsSummaryCard block={block} />;
   if (calm) return <CalmSummary block={block} />;
   return (
@@ -1183,8 +1259,88 @@ function BreakEvenMetricsCard({ block }: { block: Extract<AskPresentationBlock, 
   );
 }
 
+function SavingsMetricsCard({ block }: { block: Extract<AskPresentationBlock, { type: 'METRIC_ROW' }> }) {
+  return (
+    <section
+      data-savings-metrics={block.id}
+      className="w-full rounded-2xl border border-slate-200/90 bg-white shadow-2xs"
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-2 rounded-t-2xl border-b border-slate-100 bg-gradient-to-r from-slate-50/90 via-white to-teal-50/30 px-4 py-2.5 sm:px-5">
+        <div className="flex items-baseline gap-2">
+          <h3 className="text-sm font-bold tracking-tight text-slate-950 sm:text-base">{block.title}</h3>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">
+            {block.id === 'savings-realized-totals' ? 'Verified Outcomes' : 'Savings Snapshot'}
+          </span>
+        </div>
+        {block.description && <p className="text-xs text-slate-500">{block.description}</p>}
+      </div>
+      <div className="p-3 sm:px-4 sm:py-3">
+        <dl
+          className={cn(
+            'grid grid-cols-2 gap-2',
+            block.metrics.length >= 4
+              ? 'sm:grid-cols-4'
+              : block.metrics.length === 3
+                ? 'sm:grid-cols-3'
+                : 'sm:grid-cols-2',
+          )}
+        >
+          {block.metrics.map((metric) => {
+            const Icon =
+              metric.tone === 'POSITIVE'
+                ? DollarSign
+                : /realized|verified/i.test(metric.label)
+                  ? CheckCircle2
+                  : Sparkles;
+            return (
+              <div
+                key={metric.label}
+                className={cn(
+                  'relative flex flex-col justify-start rounded-xl border px-3 py-2.5',
+                  metric.tone === 'POSITIVE'
+                    ? 'border-emerald-200/90 bg-gradient-to-b from-emerald-50/70 to-white'
+                    : 'border-slate-200/80 bg-slate-50/70',
+                )}
+              >
+                <div className="flex items-center justify-between gap-1.5">
+                  <dt className="truncate text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    {metric.label}
+                  </dt>
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'flex h-5 w-5 shrink-0 items-center justify-center rounded-md',
+                      metric.tone === 'POSITIVE'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-white text-teal-700 ring-1 ring-slate-200/80',
+                    )}
+                  >
+                    <Icon className="h-3 w-3" />
+                  </span>
+                </div>
+                <dd
+                  className={cn(
+                    'mt-1 text-base font-bold tabular-nums tracking-tight sm:text-lg',
+                    metric.tone === 'POSITIVE' ? 'text-emerald-950' : 'text-slate-950',
+                  )}
+                >
+                  {metric.value}
+                </dd>
+                {metric.detail && (
+                  <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{metric.detail}</p>
+                )}
+              </div>
+            );
+          })}
+        </dl>
+      </div>
+    </section>
+  );
+}
+
 export const MetricRowBlock: AskBlockRenderer<'METRIC_ROW'> = ({ block }) => {
   if (block.id === 'break-even-metrics') return <BreakEvenMetricsCard block={block} />;
+  if (block.id === 'savings-headline' || block.id === 'savings-realized-totals') return <SavingsMetricsCard block={block} />;
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4">
       <h3 className="font-semibold text-slate-950">{block.title}</h3>{block.description && <p className="mt-1 text-sm text-slate-600">{block.description}</p>}
