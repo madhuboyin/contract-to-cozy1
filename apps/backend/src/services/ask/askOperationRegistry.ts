@@ -1100,15 +1100,15 @@ export function validateAskOperationDefinitions(): string[] {
 // the selected property has no active buyer journey (see
 // buyerPlanContextProvider). Checked ahead of maintenanceCompletePattern
 // since "task ... complete" would otherwise match generically.
-const buyerTaskCompletePattern = /\b(?:mark|complete|finish|check off)\b.{0,60}\b(?:buyer (?:plan )?task|closing (?:plan )?task|(?:buyer plan |closing )?checklist item)\b|\b(?:buyer (?:plan )?task|closing (?:plan )?task|(?:buyer plan |closing )?checklist item)\b.{0,60}\b(?:complete|completed|done)\b|\bi(?:'ve| have)?\s+(?:completed|finished)\b.{0,60}\b(?:buyer plan|closing plan) task\b|\bi(?:'ve| have)?\s+(?:completed|finished)\b.{0,60}\bchecklist item\b/i;
+const buyerTaskCompletePattern = /\b(?:mark|complete|finish|(?:check|tick|cross) off)\b.{0,40}\b(?:appraisal|title|survey|walk-?through|escrow|lender|closing|mortgage|utilities|movers?|(?:homeowners?\s+)?insurance)\b.{0,20}\b(?:task|item|step)\b|\b(?:appraisal|title|survey|walk-?through|escrow|lender|closing|mortgage|utilities|movers?|(?:homeowners?\s+)?insurance)\b.{0,20}\b(?:task|item|step)\b.{0,30}\b(?:complete|completed|done|finished)\b|\bi(?:'ve| have)?\s+(?:completed|finished|done)\b.{0,40}\b(?:appraisal|title|survey|walk-?through|escrow|lender|closing|mortgage|utilities|movers?|(?:homeowners?\s+)?insurance)\b.{0,20}\btask\b|\b(?:mark|complete|finish|(?:check|tick|cross) off)\b.{0,60}\b(?:buyer (?:plan )?task|closing (?:plan )?task|(?:buyer plan |closing )?checklist item)\b|\b(?:buyer (?:plan )?task|closing (?:plan )?task|(?:buyer plan |closing )?checklist item)\b.{0,60}\b(?:complete|completed|done)\b|\bi(?:'ve| have)?\s+(?:completed|finished)\b.{0,60}\b(?:buyer plan|closing plan) task\b|\bi(?:'ve| have)?\s+(?:completed|finished)\b.{0,60}\bchecklist item\b/i;
 const buyerDeadlinesPattern = /\b(?:next deadline|what'?s due|what is due|upcoming deadlines?)\b.{0,40}\b(?:before closing|for closing|closing)\b|\bdeadlines?\b.{0,40}\b(?:before closing|for (?:this|my) (?:purchase|closing))\b|\bwhat could (?:delay|block)\b.{0,40}\b(?:my )?closing\b|\b(?:is|are)\s+anything\b.{0,40}\bclosing\b.{0,20}\bat risk\b|\bclosing\b.{0,40}\b(?:at risk|in jeopardy|in danger)\b|\b(?:at risk|in jeopardy|in danger)\b.{0,40}\bclosing\b/i;
 const buyerDocumentReadinessPattern = /\b(?:transaction|closing)\b.{0,40}\bdocuments?\b.{0,50}\b(?:missing|still need|readiness|received)\b|\bwhich (?:transaction |closing )?documents?\b.{0,50}\b(?:missing|before closing|for (?:this|my) closing)\b|\bdocuments?\b.{0,20}\breadiness\b.{0,40}\bclosing\b/i;
 const buyerInspectionReviewPattern = /\b(?:inspection )?findings?\b.{0,50}\b(?:need(?:s)? a decision|still need(?:s)? a decision|undecided|need(?:s)? classif(?:y|ication))\b|\breview (?:my |the )?(?:inspection )?findings?\b.{0,30}\b(?:before closing|for (?:this|my) (?:purchase|closing))\b/i;
 const buyerPlanStatusPattern = /\b(?:show|list|see|view|what|which)\b.{0,40}\b(?:closing|buyer)(?: plan)? (?:tasks|checklist)\b|\b(?:what should i do next|next step)\b.{0,50}\b(?:this purchase|my closing|buying this home|closing plan|buyer plan)\b|\bstatus of (?:my |this )?(?:home )?purchase\b|\bhow close am i\b.{0,40}\bclosing\b|\b(?:closing plan|buyer plan) status\b|\b(?:what should i )?focus on\b.{0,50}\b(?:this week|my closing|this closing|this purchase|closing plan|buyer plan)\b/i;
 // "Add a closing task to schedule the final walkthrough" names the closing plan by its own noun; before this it matched only "closing plan task",
 // so the plain phrasing became a maintenance task.
-const buyerTaskCreatePattern = /\b(?:add|create)\b.{0,60}\b(?:to (?:my |the )?(?:buyer plan|closing plan)|as a (?:buyer plan|closing) task)\b|\b(?:add|create) (?:a |an |another )?(?:buyer|closing)(?: plan)? (?:task|checklist item)\b/i;
-const buyerTaskUpdatePattern = /\b(?:reschedule|move|assign|unassign|reassign)\b.{0,60}\b(?:buyer plan|closing plan) task\b|\b(?:buyer plan|closing plan) task\b.{0,60}\b(?:reschedule|assign|due date)\b/i;
+const buyerTaskCreatePattern = /\b(?:add|create)\b.{0,60}\b(?:to (?:my |the )?(?:buyer plan|closing plan|closing checklist|closing list)|as a (?:buyer plan|closing) task)\b|\b(?:add|create) (?:a |an |another )?(?:custom |new )?(?:buyer|closing)(?: plan)? (?:task|checklist item)\b|\bnew (?:buyer|closing)(?: plan)? (?:task|checklist item)\b/i;
+const buyerTaskUpdatePattern = /\b(?:reschedule|move|assign|unassign|reassign|push|postpone|delay)\b.{0,60}\b(?:buyer|closing)(?: plan)? task\b|\b(?:buyer|closing)(?: plan)? task\b.{0,60}\b(?:reschedule|assign|due date)\b|\b(?:reschedule|move|assign|unassign|reassign|push|postpone|delay)\b.{0,40}\b(?:appraisal|title|survey|walk-?through|escrow|lender|closing|mortgage|utilities|movers?|(?:homeowners?\s+)?insurance)\b.{0,20}\btask\b/i;
 const buyerMoveStatusPattern = /\bwhat should i do\b.{0,30}\bbefore (?:i )?move[- ]?in\b|\bmov(?:e|ing)[- ](?:in|out) (?:progress|status|readiness)\b.{0,40}\bpurchase\b|\bmoving\b.{0,40}\b(?:progress|status)\b.{0,30}\b(?:closing|purchase|buyer plan)\b/i;
 const buyerFinancingReadinessPattern = /\b(?:financing|lender|loan|underwriting|appraisal)\b.{0,50}\b(?:delay|block|ready|readiness|status|on track)\b.{0,40}\bclosing\b|\bwhat(?:'s| is)\b.{0,30}\b(?:financing|lender|loan|appraisal)\b.{0,30}\bstatus\b/i;
 const buyerTitleEscrowReadinessPattern = /\b(?:title|escrow|survey|hoa)\b.{0,50}\b(?:open|outstanding|status|ready|readiness|issues?|block|blocking)\b.{0,40}\b(?:closing|purchase)\b|\bwhat(?:'s| is)\b.{0,30}\bopen\b.{0,30}\b(?:title|escrow)\b/i;
@@ -1121,7 +1121,7 @@ const buyerInsuranceReadinessPattern = /\b(?:insurance (?:binder|quotes?)|(?:hom
 const buyerLoanEstimatesPattern = /\b(?:purchase|mortgage) loan estimates?\b|\b(?:my|the|compare|show|review)\b.{0,20}\b(?:lender|mortgage|loan) offers?\b|\bcompare\b.{0,20}\b(?:my )?loan estimates?\b|\b(?:show|review|list)\b.{0,15}\b(?:my )?loan estimates?\b/i;
 const buyerCostReadinessPattern = /\bwhat could cost me money\b.{0,40}\b(?:first 90 days|closing|move[- ]in)\b|\bnear[- ]term costs?\b.{0,40}\bpurchase\b|\bwhat (?:will|could)\b.{0,30}\bcost\b.{0,40}\bthis (?:purchase|closing)\b|\bwhat (?:will|could)\b.{0,20}\bthis (?:purchase|closing)\b.{0,20}\bcost\b/i;
 const buyerFindingDispositionPattern = /\b(?:move|classify|mark)\b.{0,50}\bfinding\b.{0,50}\b(?:post[- ]close|negotiation|dismiss|verified)\b|\bfinding\b.{0,50}\binto (?:my )?post[- ]close plan\b/i;
-const buyerLifecycleUpdatePattern = /\bcancel\b.{0,40}\b(?:this|my)\b.{0,20}\b(?:purchase|buyer plan|closing)\b|\bwe closed today\b|\b(?:change|update|move)\b.{0,40}\b(?:target )?closing date\b.{0,40}\bto\b|\b(?:pause|resume)\b.{0,40}\b(?:this|my)\b.{0,20}\b(?:purchase|buyer plan|deal)\b/i;
+const buyerLifecycleUpdatePattern = /\bcancel\b.{0,40}\b(?:this|my)\b.{0,20}\b(?:purchase|buyer plan|closing)\b|\bwe closed today\b|\b(?:change|update|move)\b.{0,40}\b(?:target )?closing date\b.{0,40}\bto\b|\b(?:pause|resume)\b.{0,40}\b(?:this|my)\b.{0,20}\b(?:purchase|buyer plan|deal)\b|^\s*(?:please\s+)?(?:change|update|move)\s+(?:my |the )?(?:target )?closing date[.!?\s]*$/i;
 
 // A CO alarm/detector is an emergency only as an event; a routine-maintenance noun after it ("Smoke & CO Detector Check", the Home Actions
 // card title the Review-in-Ask prompt quotes) is not. The gate reads the message alone: client launch context is never authoritative here.
@@ -1137,14 +1137,14 @@ const seasonalHomeCarePattern = /\b(?:what home care should (?:i|we) do (?:for |
 // the same questions worded closely, reach it: otherwise the typed starter text fell into a multi-way clarification.
 const homeBasicsGuidePattern = /\b(?:what (?:home )?safety basics (?:should|do) (?:i|we) (?:know|need to know)|what (?:should|do) (?:i|we) (?:check|need to check|look at) (?:around|in|at) (?:my|our|the) (?:home|house)(?: (?:each|every) month| monthly)|what (?:should|do) (?:i|we) (?:need to )?(?:check|look at) (?:each month|every month|monthly) (?:around|in) (?:my|our|the) (?:home|house)|(?:start|begin|do|run) (?:my|our|the) (?:monthly|month['’]s) (?:home )?(?:walkthrough|walk-through|check|inspection|routine)|(?:start|begin|do|run) this month['’]s (?:home )?(?:walkthrough|walk-through|check|inspection)|(?:a )?simple monthly (?:home )?routine(?: for (?:my|our|the) (?:home|house))?)\b/i;
 const seasonalHomeCareRecordedIntentPattern = /\b(?:checklist|recorded|pending|completed|overdue|my tasks|our tasks|task status)\b/i;
-const maintenanceCreatePattern = /\b(?:create|add|schedule|set up)\b.{0,80}\b(?:maintenance(?: task)?|tasks?|gutter (?:cleaning|inspection)|clean(?:ing)? (?:the )?gutters?|filter change|(?:hvac|furnace|boiler|roof|water heater) (?:service|inspection|cleaning|repair|replacement))\b|\b(?:remind me to|put on my maintenance list)\b/i;
+const maintenanceCreatePattern = /\b(?:create|add|schedule|set up)\b.{0,80}\b(?:maintenance(?: task)?|tasks?|gutter (?:cleaning|inspection)|clean(?:ing)? (?:the )?gutters?|filter change|(?:hvac|furnace|boiler|roof|water heater) (?:service|inspection|cleaning|repair|replacement))\b|\b(?:remind me to|put on my maintenance list)\b|\bnew\s+(?:maintenance\s+)?task\b|\bput\b.{0,60}\b(?:cleaning|inspection|service|filter|gutters?|maintenance)\b.{0,30}\bon (?:my|the) (?:maintenance |to-?do |task )?list\b/i;
 // Deliberately checked before the very broad maintenancePattern below
 // (which matches on the bare word "maintenance"/"task" alone and would
 // otherwise swallow this) -- requires a forecast/predict/upcoming word
 // paired with maintenance, or an explicit "when will X need service"
 // phrasing.
 const maintenanceForecastPattern = /\b(?:forecast|predict(?:ed|ion|ive)?|upcoming|coming up)\b.{0,50}\bmaintenance\b|\bmaintenance\b.{0,50}\b(?:forecast|predict(?:ed|ion|ive)?|upcoming|coming up|should i expect)\b|\bwhen will (?:my |the )?(?:hvac|furnace|water heater|roof|boiler) need (?:service|maintenance|replacement|attention)\b/i;
-const maintenanceCompletePattern = /^\s*(?:please\s+)?(?:(?:mark|set)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair)\b.{0,100}\b(?:complete|completed|done)|(?:complete|finish)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair))\b|\b(?:i|we) (?:completed|finished)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair)\b/i;
+const maintenanceCompletePattern = /^\s*(?:please\s+)?(?:(?:mark|set)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair)\b.{0,100}\b(?:complete|completed|done)|(?:complete|finish|(?:check|tick|cross) off)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair))\b|\b(?:i|we) (?:completed|finished)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair)\b/i;
 // First-party collection continuation. It is a read/select step, not a create or blind update: the inventory handler
 // resolves canonical item identity and exposes only that item's missing, supported correction fields.
 const inventoryMissingDetailsContinuationPattern = /^\s*(?:(?:add\s+(?:or|\/)\s+update)|complete|fill\s+in|update)\s+(?:the\s+)?missing\s+details(?:\s+for\s+(?:this\s+)?inventory\s+item(?:\s+"[^"]+")?)?[.!?]*\s*$/i;
@@ -1173,7 +1173,7 @@ const inventoryItemCorrectPattern = new RegExp(
 // names those types when they directly follow the verb; the second finds the same nouns after up to four qualifiers
 // ("an insurance claim", "a household member", "a seasonal home care checklist", "a $500 reserve contribution"), so those reach
 // their own command or a guidance answer instead of an inventory-item form.
-const inventoryCreatePattern = /^\s*(?:please\s+)?(?:add|record|create)\s+(?!(?:(?:a|an|some|the|new)\s+)?(?:room|maintenance(?:\s+task)?|task|home\s+event|event|warranty|purchase\s+date|condition|brand|model|serial|notes?|cost|price)\b)(?!(?:(?:a|an|some|the|new)\s+){0,2}expenses?\b)(?!(?:\S+\s+){0,3}polic(?:y|ies)\b)(?!(?:\S+\s+){0,4}(?:claims?|projects?|plans?|guidance|journeys?|household\s+members?|members?|closing\s+tasks?|deposits?|contributions?|withdrawals?|briefs?|documents?|checklists?|habits?|plants?|materials?|negotiations?|quote\s+comparisons?|comparison\s+workspaces?|reminders?)\b).{1,180}[.!?]*\s*$/i;
+const inventoryCreatePattern = /^\s*(?:please\s+)?(?:add|record|create)\s+(?!.{0,180}\b(?:refinanc\w*|loans?|mortgages?|scenarios?|reserve|sinking|spouse|wife|husband|partner|accounts?)\b)(?!(?:(?:a|an|some|the|new)\s+)?(?:room|maintenance(?:\s+task)?|task|home\s+event|event|warranty|purchase\s+date|condition|brand|model|serial|notes?|cost|price)\b)(?!(?:(?:a|an|some|the|new)\s+){0,2}expenses?\b)(?!(?:\S+\s+){0,3}polic(?:y|ies)\b)(?!(?:\S+\s+){0,4}(?:claims?|projects?|plans?|guidance|journeys?|household\s+members?|members?|closing\s+tasks?|deposits?|contributions?|withdrawals?|briefs?|documents?|checklists?|habits?|plants?|materials?|negotiations?|quote\s+comparisons?|comparison\s+workspaces?|reminders?)\b).{1,180}[.!?]*\s*$/i;
 // Timeline event title/date correction (Phase 3 write slice 2). Requires an
 // explicit correction verb, title/date/name, and the words "timeline event"
 // or "home event" -- checked before the maintenance/inventory patterns.
@@ -1191,9 +1191,13 @@ const warrantyCorrectPattern = /^\s*(?:edit|update|change|correct)\s+(?:this|the
 const roomRenamePattern = /\brename\b.{0,40}\broom\b|\b(?:correct|fix|change|update|edit)\b.{0,40}\bname\b.{0,40}\broom\b|\broom\b.{0,60}\b(?:correct|fix|change|update|edit)\b.{0,30}\bname\b|\b(?:correct|fix|change|update|edit)\b.{0,40}\b(?:type|floor(?:\s+level)?)\b.{0,40}\broom\b|\b(?:correct|fix|change|update|edit)\b.{0,40}\broom\s+(?:type|floor(?:\s+level)?)\b|\broom\b.{0,60}\b(?:correct|fix|change|update|edit)\b.{0,30}\b(?:type|floor(?:\s+level)?)\b/i;
 // A cost edit names the maintenance fields ("estimated cost", "actual cost"); a project, permit, quote or expense that shares the words is not a task.
 const maintenanceCostEditPattern = /^(?!.*\b(?:projects?|permits?|quotes?|expenses?|renovation|claims?|invoices?|warrant(?:y|ies)|polic(?:y|ies))\b).*\b(?:change|set|update|edit|correct|fix|adjust)\b.{0,40}\b(?:estimated cost|actual cost)\b.{0,100}\d/i;
-const maintenanceUpdatePattern = /\b(?:reschedule|move|change|update|edit|assign|unassign|archive|cancel|reopen|restore)\b.{0,100}\b(?:maintenance|task|gutter|filter|service|inspection|cleaning|repair)\b|\b(?:maintenance|task|gutter|filter|service|inspection|cleaning|repair)\b.{0,100}\b(?:reschedule|assign|archive|cancel|reopen|priority|due date)\b/i;
+// "The gutter task is complete" states a completion. A question ("is the gutter task complete?") is a read, so a leading question word keeps it out.
+const maintenanceCompletePassivePattern = /^(?!\s*(?:is|are|was|were|did|has|have|had|what|which|when|how|why|do|does|can|could|should|would)\b)(?=.*\b(?:task|maintenance|gutters?|filter|service|inspection|cleaning|repair)\b.{0,60}\b(?:is|are|was|were|has been|have been)\s+(?:now\s+)?(?:complete|completed|done|finished)\b)/i;
+// "Remind me to change the furnace filter" creates a task; the update verb inside it ("change") is not an edit of an existing one.
+const remindMeToPattern = /^\s*(?:please\s+)?remind me to\b/i;
+const maintenanceUpdatePattern = /\b(?:reschedule|move|change|update|edit|assign|unassign|archive|cancel|reopen|restore|postpone|defer|delay|push (?:back|out))\b.{0,100}\b(?:maintenance|task|gutter|filter|service|inspection|cleaning|repair)\b|\b(?:maintenance|task|gutter|filter|service|inspection|cleaning|repair)\b.{0,100}\b(?:reschedule|assign|archive|cancel|reopen|priority|due date)\b/i;
 const guidanceJourneyCreatePattern = /\b(?:start|create|open|begin)\b.{0,50}\b(?:guided plan|guidance journey|guided journey|step-by-step plan)\b/i;
-const quoteComparisonCreatePattern = /\b(?:create|start|open|set up)\b.{0,50}\b(?:quote comparison|comparison workspace|workspace for (?:my )?(?:quotes|bids|proposals))\b/i;
+const quoteComparisonCreatePattern = /\b(?:create|start|open|set up|new)\b.{0,50}\b(?:(?:quote|bid|estimate|proposal)s? comparison|comparison workspace|workspace for (?:my )?(?:quotes|bids|proposals))\b|\b(?:i|we) (?:have|got|received)\b.{0,40}\b(?:quotes?|bids?|estimates?|proposals?)\b.{0,40}\bto compare\b/i;
 const quoteComparisonReviewPattern = /\b(?:compare|review|show|evaluate|which)\b.{0,70}\b(?:quotes?|bids?|proposals?|estimates?)\b|\b(?:quotes?|bids?|proposals?)\b.{0,70}\b(?:compare|comparison|best|cheapest|differences?|review)\b/i;
 const homeDeadlineMonitorPattern = /\b(?:notify|alert|remind|monitor|tell me)\b.{0,80}\b(?:(?:important\s+)?home deadlines?|maintenance|task|warranty|insurance|policy|coverage)\b(?:.{0,50}\b(?:due|expire|expires|expiring|renewal)\b)?|\b(?:warranty|insurance|policy|coverage)\b.{0,50}\b(?:expire|expires|expiring|renewal)\b.{0,80}\b(?:notify|alert|remind|monitor|tell me)\b/i;
 const capitalReservePattern = /\b(?:capital reserves?(?: (?:plan|outlook|forecast|status|fund|projection))?|reserve (?:plan|outlook|forecast)|reserve fund|sinking fund|capital timeline|capital plan|major replacements?|future home expenses?|how much should i save|how much should i (?:reserve|set aside).{0,60}(?:replace|replacement)|budget for (?:my )?(?:roof|hvac|systems?|replacements?))\b/i;
@@ -1332,6 +1336,16 @@ const homeEventRadarFeedPattern = /\b(?:home event radar|radar feed|radar matche
 // generic operation would be a worse answer than today's existing fallback,
 // so it's left alone for a future phase with real conversational context.
 const homeChangeSummaryPattern = /\bwhat(?:'s| is|s)?\s+(?:changed|new)\b|\banything\s+(?:new|changed)\b|\bany\s+(?:recent\s+)?(?:changes|updates)\b|\brecent(?:ly)?\s+(?:changes|updates)\b|\bwhat happened\s+(?:recently|lately)\b|\bwhat'?s different\b/i;
+// Appliances and systems a repair-or-replace question can be about. HVAC systems are included on purpose: REPLACEMENT_GUIDANCE hands an
+// HVAC item to the HVAC decision itself, so the natural wording reaches the same place for every item.
+const REPLACEABLE_NON_HVAC_ITEM = '(?:microwave|oven|stove|cooktop|refrigerator|fridge|freezer|dishwasher|washer|washing machine|dryer|water heater|garbage disposal|roof|garage door|sump pump|dehumidifier)';
+const KEEP_OR_REPLACE_INTENT = '(?:(?:keep|continue to|continue) (?:use|using)|still (?:good|ok|okay|fine|work(?:s|ing)?)|good enough|worth (?:repair\\w*|fix\\w*|replac\\w*)|(?:need|have|time|ready) (?:to |for )?(?:a |an )?(?:new|replac\\w*|buy|get)|(?:buy|get) (?:a |an )?(?:new|replacement)|replace it|how (?:much )?longer\\b.{0,30}\\blast|end of (?:its |their )?life)';
+const itemKeepOrReplacePattern = new RegExp(`^(?=.*\\b(?:${REPLACEABLE_NON_HVAC_ITEM}|furnace|hvac|heat pump|air conditioner|ac|a\\/?c unit)\\b)(?=.*\\b${KEEP_OR_REPLACE_INTENT}\\b)`, 'i');
+const nonHvacItemPattern = new RegExp(`\\b${REPLACEABLE_NON_HVAC_ITEM}\\b`, 'i');
+/** True when the message names an appliance or system that is not HVAC and names no HVAC system, so no HVAC decision operation can be about it. */
+export function messageNamesOnlyNonHvacItem(message: string): boolean {
+  return nonHvacItemPattern.test(message) && !hvacNamedPattern.test(message);
+}
 const replacementPattern = /\b(when should i (?:replace|upgrade)|replace (?:my|the)|repair or replace|how (?:old|long).*(?:refrigerator|fridge)|(?:refrigerator|fridge).*(?:replace|replacement|lifespan|life expectancy))\b/i;
 // Ask Intelligence FRD Phase 8A: HVAC-specific repair/replace decision
 // routing must win over the generic replacementPattern above for HVAC
@@ -1339,7 +1353,8 @@ const replacementPattern = /\b(when should i (?:replace|upgrade)|replace (?:my|t
 // item (fridge, water heater, etc.) keeps routing to REPLACEMENT_GUIDANCE
 // unchanged -- these four patterns are checked before replacementPattern in
 // the cascade below and all require an HVAC-family keyword.
-const hvacKeyword = '(?:hvac|furnace|heater|heating unit|air conditioner|a\\/?c unit|heat pump|central air|heating system|cooling system)';
+const hvacKeyword = '(?:hvac|furnace|(?<!(?:water|space) )heater|heating unit|air conditioner|a\\/?c unit|heat pump|central air|heating system|cooling system)';
+const hvacNamedPattern = new RegExp(`\\b${hvacKeyword}\\b`, 'i');
 const hvacDecisionContinuePattern = new RegExp(`\\b(?:status of|resume|continue|check on|where (?:are we|do things stand)|update on)\\b.{0,60}\\b${hvacKeyword}\\b.{0,40}\\bdecision\\b|\\bdecision\\b.{0,40}\\b(?:status|update|progress)\\b.{0,60}\\b${hvacKeyword}\\b`, 'i');
 const hvacDecisionScenarioPattern = new RegExp(`\\b(?:new |another )?quote\\b.{0,80}\\b${hvacKeyword}\\b.{0,60}\\b(?:decision|repair or replace|compare|change)\\b|\\b${hvacKeyword}\\b.{0,60}\\bquote\\b.{0,60}\\b(?:decision|compare|scenario)\\b`, 'i');
 const hvacDecisionAbandonPattern = new RegExp(`\\b(?:abandon|cancel|stop tracking|drop)\\b.{0,60}\\b${hvacKeyword}\\b.{0,40}\\bdecision\\b`, 'i');
@@ -1654,10 +1669,10 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (inventoryCreatePattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('INVENTORY_ITEM_CREATE', 0.97);
   }
-  if (maintenanceCompletePattern.test(message) && !explicitCapabilityPattern.test(message)) {
+  if ((maintenanceCompletePattern.test(message) || maintenanceCompletePassivePattern.test(message)) && !explicitCapabilityPattern.test(message)) {
     return resolved('MAINTENANCE_TASK_COMPLETE', 0.97);
   }
-  if (maintenanceUpdatePattern.test(message) || maintenanceCostEditPattern.test(message)) {
+  if ((maintenanceUpdatePattern.test(message) || maintenanceCostEditPattern.test(message)) && !remindMeToPattern.test(message)) {
     return resolved('MAINTENANCE_TASK_UPDATE', 0.97);
   }
   if (guidanceJourneyCreatePattern.test(message)) {
@@ -1862,6 +1877,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (homeChangeSummaryPattern.test(message) && !explicitCapabilityPattern.test(message) && !/\bdecision\b/i.test(message)) {
     return resolved('HOME_CHANGE_SUMMARY', 0.9);
+  }
+  if (itemKeepOrReplacePattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('REPLACEMENT_GUIDANCE', 0.95);
   }
   if (replacementPattern.test(message)) {
     return resolved('REPLACEMENT_GUIDANCE', 0.96);

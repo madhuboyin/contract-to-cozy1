@@ -50,6 +50,7 @@ export function parseReserveFundContributionMessage(message: string): ReserveFun
   const text = normalize(message);
   if (!text || text.length > 240) return null;
   let type: ReserveFundMessageEntryType | null = null;
+  let bareAmountDollars: number | null = null;
 
   const noun = text.match(nounForm);
   if (noun) {
@@ -62,14 +63,17 @@ export function parseReserveFundContributionMessage(message: string): ReserveFun
       const middle = stated[2];
       const preposition = stated[3].toLowerCase().replace(/\s+/g, ' ');
       // A bare "add my roof to my reserve fund" is not a ledger entry: the middle must name money.
-      if (!new RegExp(String.raw`\b(?:${MONEY_WORD})`, 'i').test(`${middle} `) && !/\$\s*\d/.test(middle)) return null;
+      // The fund itself is named, so a bare amount ("add 200 to my reserve fund") is money too.
+      const bareAmount = /^\d[\d,]*(?:\.\d+)?$/.test(middle.trim()) ? Number(middle.trim().replace(/,/g, '')) : null;
+      if (bareAmount == null && !new RegExp(String.raw`\b(?:${MONEY_WORD})`, 'i').test(`${middle} `) && !/\$\s*\d/.test(middle)) return null;
+      bareAmountDollars = bareAmount != null && bareAmount > 0 && bareAmount <= 100_000_000 ? bareAmount : null;
       const fromFund = preposition === 'from' || preposition === 'out of';
       const withdrawVerb = new RegExp(String.raw`^(?:${WITHDRAW_VERBS}|withdrew|took|pulled)$`, 'i').test(verb);
       type = fromFund || withdrawVerb ? 'WITHDRAWAL' : 'DEPOSIT';
     }
   }
   if (!type) return null;
-  return { type, amountDollars: reserveFundAmountFromText(text) };
+  return { type, amountDollars: reserveFundAmountFromText(text) ?? bareAmountDollars };
 }
 
 // ---- typed planning commands: recalculate, posture, and the ambiguous "change my reserve plan" ------------------------------------
@@ -106,7 +110,7 @@ const setBalanceForms = [
   new RegExp(String.raw`^${FUND}\s+balance\s+(?:is|should\s+be|is\s+actually)\s+(\$\s*\d[\d,]*(?:\.\d+)?\s*(?:k|thousand)?|\d[\d,]*(?:\.\d+)?\s*(?:dollars?|bucks|usd))$`, 'i'),
 ];
 // "change my reserve plan", "manage my reserve fund": a change with no named change.
-const chooseForm = new RegExp(String.raw`^${POLITE}(?:change|update|edit|adjust|manage|modify|tweak)\s+${PLAN}$`, 'i');
+const chooseForm = new RegExp(String.raw`^${POLITE}(?:change|update|edit|adjust|manage|modify|tweak)\s+${PLAN}(?:\s+(?:contributions?|amounts?|settings?))?$`, 'i');
 
 /** What a typed message asks of the Reserve Fund command, or null when it is anything else (a question, a read, another command). */
 export function parseReserveFundMessage(message: string): ReserveFundTypedRequest | null {

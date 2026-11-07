@@ -9,6 +9,16 @@ const STOP_WORDS = new Set([
   'this', 'want', 'what', 'when', 'where', 'which', 'with', 'would', 'your',
 ]);
 
+// Words that appear in many questions and many event titles without saying what the question is about. A fact that shares only these
+// with the question is not relevant to it: "is my microwave good enough or do I need to replace it" must not select a carbon monoxide
+// detector event because both mention replacing something. Words that name a subject (appliance, roof, year, cost) are deliberately absent.
+const GENERIC_QUESTION_TOKENS = new Set([
+  'good', 'enough', 'replace', 'replaced', 'replacing', 'new', 'old', 'one', 'ones', 'soon', 'all', 'any', 'use', 'using', 'keep',
+  'continue', 'buy', 'get', 'got', 'done', 'work', 'works', 'working', 'still', 'time', 'many', 'items', 'item', 'details', 'detail',
+  'give', 'tell', 'provide', 'list', 'number', 'check', 'checked', 'last', 'long', 'longer', 'now', 'ever', 'every', 'each', 'know',
+  'current', 'recent', 'latest', 'anything', 'everything', 'something', 'thing', 'things', 'out', 'has', 'was', 'were', 'been', 'there',
+]);
+
 const DOMAIN_EQUIVALENTS: Record<string, string[]> = {
   appliance: ['inventory', 'equipment', 'refrigerator', 'fridge', 'dishwasher', 'washer', 'dryer'],
   hvac: ['furnace', 'heater', 'heating', 'conditioner', 'cooling', 'heatpump', 'boiler'],
@@ -54,7 +64,8 @@ export interface AskPromptFact {
 }
 
 export function selectRelevantAskFacts(message: string, facts: AskPromptFact[]): AskPromptFact[] {
-  const questionTokens = askTopicTokens(message);
+  // Relevance is judged on what the question is about, not on its filler words (see GENERIC_QUESTION_TOKENS).
+  const questionTokens = new Set([...askTopicTokens(message)].filter((token) => !GENERIC_QUESTION_TOKENS.has(token)));
   const ranked = facts
     .map((original) => {
       const fact = original.key === 'events.recentHomeEvents' && Array.isArray(original.value)

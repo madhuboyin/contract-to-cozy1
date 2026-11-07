@@ -719,7 +719,7 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
     if (trace) trace.modelLatencyMs = Number(process.hrtime.bigint() - modelStartedAt) / 1_000_000;
   }
   const blocks: AskPresentationBlock[] = [{
-    type: 'SUMMARY', id: 'grounded-guidance', title: answer.groundingMode === 'PROPERTY' ? 'Guidance for this home' : 'General home guidance',
+    type: 'SUMMARY', id: 'grounded-guidance', title: answer.groundingMode !== 'PROPERTY' ? 'General home guidance' : answer.evidence.length ? 'Guidance for this home' : 'Nothing in your home record answers this',
     // External review [P1]: a declared launch entity that no longer
     // resolves (task deleted, or access to it changed) used to fall back
     // to this same unscoped answer with no indication the specific task

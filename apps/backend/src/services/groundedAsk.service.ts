@@ -31,6 +31,7 @@ import { selectAskGeneralGuidance, type AskGeneralGuidanceEntry } from './ask/as
 import { selectRelevantAskFacts } from './ask/askPromptMinimization';
 import type { PropertyFact, PropertyFactSource } from '../modules/propertyContext';
 import {
+  ASK_NO_SUPPORTED_CLAIM_TEXT,
   selectAndRenderAskRemoteFallbackClaims,
   type AskRemoteFallbackFact,
 } from './ask/askRemoteFallbackTypedClaims';
@@ -149,7 +150,7 @@ export async function answerGroundedAsk(input: {
     text: rendered.length
       ? rendered.map((claim) => claim.text).join(' ')
       : context
-        ? 'The current Living Home Record does not contain a supported severity, deadline, or cost comparison for this question. Ask will not generate an unsupported property-specific answer.'
+        ? ASK_NO_SUPPORTED_CLAIM_TEXT
         : generalGuidance
           ? generalText!
           : 'No relevant published Knowledge Hub guidance is available for this question. Ask will not invent general advice from an unapproved source.',

@@ -1,6 +1,7 @@
 import {
   ASK_OPERATION_DEFINITIONS,
   getAskOperationDefinition,
+  messageNamesOnlyNonHvacItem,
   resolveAskOperation,
   type AskOperationId,
   type AskOperationResolution,
@@ -89,6 +90,11 @@ export function resolveAskRoutingCascade(message: string, options: {
     : new Set((Object.values(ASK_OPERATION_DEFINITIONS)
       .filter((definition) => !definition.safetyClass.endsWith('_BOUNDARY'))
       .map((definition) => definition.operationId)));
+  // A message about a microwave, fridge or water heater is never about an HVAC repair-or-replace decision. Without this, words like
+  // "continue", "still good" or "how old" scored an HVAC decision operation, which then answered about the home's furnace.
+  if (messageNamesOnlyNonHvacItem(message)) {
+    for (const operationId of [...eligibleSet]) if (operationId.startsWith('HVAC_')) eligibleSet.delete(operationId);
+  }
   // Retrieval owns normalization. Passing the already-normalized string here
   // changed concept features for punctuation-bearing phrases and meant the
   // runtime was not using the same input as its calibration evidence.

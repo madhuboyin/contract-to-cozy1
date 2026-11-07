@@ -25,6 +25,12 @@ export function validateAskLlmPurposeContracts(): string[] {
   });
 }
 
+/**
+ * Shown when nothing in the home record answers the question. It says so plainly and names two phrasings that do reach an answer
+ * (a test keeps both routable), instead of describing internal claim types.
+ */
+export const ASK_NO_SUPPORTED_CLAIM_TEXT = 'I couldn’t find anything in your home record that answers this, so I won’t guess. Try naming the appliance, system, task or document you mean, for example “show my dishwasher details” or “what maintenance is due”.';
+
 const TypedFactRefSchema = z.object({ id: z.string().trim().min(1) }).strict();
 export const AskRemoteFallbackTypedClaimSchema = z.object({
   claimType: z.enum(['SEVERITY_STATEMENT', 'DEADLINE_STATEMENT', 'COST_COMPARISON', 'FACT_STATEMENT', 'HOME_EVENT_STATEMENT']),
