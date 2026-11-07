@@ -502,11 +502,16 @@
    "do I need a new roof",
    "do i need a new dishwasher",
    "do i need a new washing machine",
+   "how is my furnace doing",
+   "how is my water heater doing? will it be good for next few years",
+   "how long until my water heater needs replacing",
+   "how many more years does my fridge have left",
    "is my fridge worth repairing",
    "is my microwave good enough or do i need to replace it",
    "is my water heater still good",
    "repair or replace my washer",
-   "should i replace my microwave"
+   "should i replace my microwave",
+   "will my dishwasher last another 5 years"
   ],
   "RESERVE_FUND_COMMAND": [
    "add 200 to my reserve fund",
