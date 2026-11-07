@@ -618,6 +618,37 @@ function OwnershipCostCategoriesBlock({
 
   const totalAnnual = parsedRows.reduce((sum, item) => sum + item.annualVal, 0);
 
+  if (shownCount === 0) {
+    return (
+      <section
+        className="w-full rounded-2xl border border-slate-200/90 bg-slate-50/70 px-4 py-2.5 shadow-2xs sm:px-5"
+        aria-labelledby={`ask-table-${block.id}`}
+        data-ownership-cost-categories=""
+        data-ownership-cost-categories-empty=""
+      >
+        <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <h3 id={`ask-table-${block.id}`} className="text-xs font-bold tracking-tight text-slate-900 sm:text-sm">
+              {block.title}
+            </h3>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Category Breakdown</span>
+            <span className="text-xs text-slate-600">
+              · No recorded amounts in this lens yet — review the missing categories below to populate your breakdown.
+            </span>
+          </div>
+          {block.actions.length > 0 && (
+            <div className="flex shrink-0 flex-wrap gap-2">
+              {block.actions.map((action) => (
+                <span key={action.id}>{renderAction(action)}</span>
+              ))}
+            </div>
+          )}
+        </div>
+        <p className="sr-only" aria-live="polite">0 records.</p>
+      </section>
+    );
+  }
+
   return (
     <section
       className="w-full rounded-2xl border border-slate-200/90 bg-white shadow-2xs"

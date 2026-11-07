@@ -47,6 +47,11 @@ import { CalendarDays, CheckCircle2, CircleHelp, ShieldCheck, Wrench } from 'luc
 import { WorkOverviewResultList } from '../WorkOverviewResultList';
 import { SavedResultsListBlock } from '../SavedResultsListBlock';
 import { RecurringCostsGrid, SavingsOpportunityGroupsBlock } from '../SavingsOpportunityPanels';
+import {
+  OwnershipCostExpensesBlock,
+  OwnershipCostMissingGrid,
+  OwnershipCostViewsBar,
+} from '../OwnershipCostPanels';
 
 // Blocks whose items carry longer text revealed on demand (`item.detail`). The Negotiation Shield draft is collapsed by default so a long
 // message does not push the analysis down; the producer sets the id, the client only implements the expand/collapse.
@@ -226,47 +231,6 @@ const OWNERSHIP_COST_BADGE_BY_ID: Record<string, string> = {
   'ownership-cost-buffer-options': 'Reserve Sizing',
 };
 
-function OwnershipCostViewsBlock({ block, disabled, onItemAction }: {
-  block: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
-  disabled: boolean;
-  onItemAction: Parameters<AskBlockRenderer<'GROUPED_LIST'>>[0]['onItemAction'];
-}) {
-  const views = block.sections.flatMap((section) => section.items);
-  return (
-    <nav className="w-full" aria-label={block.title} data-ownership-cost-views="">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Explore ownership costs</p>
-      <ul className="flex flex-wrap gap-2">
-          {views.map((item) => {
-            const current = item.status === 'CURRENT';
-            const primaryAction = item.actions?.[0];
-            return (
-              <li
-                key={item.id}
-                data-ask-task-id={item.id}
-                className="flex"
-              >
-                {current ? (
-                  <span aria-current="page" className="inline-flex min-h-9 items-center rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white">
-                    {item.title}
-                  </span>
-                ) : primaryAction ? (
-                    <button
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => onItemAction(primaryAction.entityType ?? item.entityType, primaryAction.entityId ?? item.id, primaryAction.message, primaryAction.operationId, primaryAction.interactionType)}
-                      className="inline-flex min-h-9 items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:border-teal-300 hover:bg-teal-50/60 hover:text-teal-900 disabled:opacity-50"
-                    >
-                      {item.title}
-                    </button>
-                ) : null}
-              </li>
-            );
-          })}
-      </ul>
-    </nav>
-  );
-}
-
 function OwnershipCostNotificationsBlock({ block, disabled, onItemAction }: {
   block: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
   disabled: boolean;
@@ -379,7 +343,9 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
   if (block.id === 'savings-recurring-setup') return <RecurringCostsGrid block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
   if (block.id === 'savings-opportunity-groups') return <SavingsOpportunityGroupsBlock block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
   if (block.id === 'reserve-planning-controls') return <ReservePlanningControls block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
-  if (block.id === 'ownership-cost-views') return <OwnershipCostViewsBlock block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
+  if (block.id === 'ownership-cost-missing') return <OwnershipCostMissingGrid block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
+  if (block.id === 'ownership-cost-expenses') return <OwnershipCostExpensesBlock block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
+  if (block.id === 'ownership-cost-views') return <OwnershipCostViewsBar block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
   if (block.id === 'ownership-cost-notifications') return <OwnershipCostNotificationsBlock block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
   if (block.id === 'home-upgrade-options') return <HomeUpgradePlannerList block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
   if (block.id === 'focused-home-action-guidance') {
@@ -883,7 +849,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
         })}
       </div>
       <CollectionStatusNote collection={block.collection} />
-      {block.actions.length > 0 && (
+      {block.actions.length > 0 && !(block.sections.length === 1 && block.sections[0].items.length === 0) && (
         <div className="flex flex-wrap gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-3">
           {block.actions.map((action) => <ActionLink key={action.id} action={action} />)}
         </div>

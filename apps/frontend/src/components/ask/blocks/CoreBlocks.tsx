@@ -375,40 +375,56 @@ function OwnershipCostsSummaryCard({ block }: { block: Extract<AskPresentationBl
           <p className="mt-0.5 whitespace-pre-wrap text-xs leading-5 text-slate-700 sm:text-sm">{block.body}</p>
 
           {annualMatch && confirmedMatch && estimatedMatch && (
-            <div aria-hidden="true" className="mt-2.5 rounded-xl border border-slate-200/80 bg-white/90 px-3 py-2">
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Annual Total</span>
-                  <span className="mt-0.5 block text-xs font-extrabold tabular-nums text-slate-950 sm:text-sm">{annualMatch[1]}/yr</span>
-                </div>
-                <div>
-                  <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                    Confirmed / Observed
-                  </span>
-                  <span className="mt-0.5 block text-xs font-extrabold tabular-nums text-emerald-900 sm:text-sm">
-                    {confirmedMatch[1]}
-                    {confirmedPct !== null && <span className="ml-1 text-[11px] font-semibold text-emerald-700">({confirmedPct}%)</span>}
-                  </span>
-                </div>
-                <div>
-                  <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-700">
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                    Estimated
-                  </span>
-                  <span className="mt-0.5 block text-xs font-extrabold tabular-nums text-amber-900 sm:text-sm">
-                    {estimatedMatch[1]}
-                    {estimatedPct !== null && <span className="ml-1 text-[11px] font-semibold text-amber-700">({estimatedPct}%)</span>}
-                  </span>
-                </div>
+            annualVal === 0 && totalKnown === 0 && missingMatch ? (
+              <div
+                aria-hidden="true"
+                data-ownership-costs-coverage-bar=""
+                className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200/80 bg-white/90 px-3 py-2 text-xs text-slate-700"
+              >
+                <span className="inline-flex items-center gap-1.5 font-semibold text-amber-900">
+                  <span className="h-2 w-2 rounded-full bg-amber-500" />
+                  0 of {missingMatch[1]} included categories recorded yet
+                </span>
+                <span className="text-slate-500">
+                  Add or review a category below to calculate your monthly and annual total.
+                </span>
               </div>
-              {confirmedPct !== null && annualVal && annualVal > 0 && (
-                <div className="mt-1.5 flex h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                  <div className="bg-emerald-600 transition-all" style={{ width: `${confirmedPct}%` }} />
-                  <div className="bg-amber-400 transition-all" style={{ width: `${estimatedPct ?? 0}%` }} />
+            ) : (
+              <div aria-hidden="true" className="mt-2.5 rounded-xl border border-slate-200/80 bg-white/90 px-3 py-2">
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Annual Total</span>
+                    <span className="mt-0.5 block text-xs font-extrabold tabular-nums text-slate-950 sm:text-sm">{annualMatch[1]}/yr</span>
+                  </div>
+                  <div>
+                    <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                      Confirmed / Observed
+                    </span>
+                    <span className="mt-0.5 block text-xs font-extrabold tabular-nums text-emerald-900 sm:text-sm">
+                      {confirmedMatch[1]}
+                      {confirmedPct !== null && <span className="ml-1 text-[11px] font-semibold text-emerald-700">({confirmedPct}%)</span>}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                      Estimated
+                    </span>
+                    <span className="mt-0.5 block text-xs font-extrabold tabular-nums text-amber-900 sm:text-sm">
+                      {estimatedMatch[1]}
+                      {estimatedPct !== null && <span className="ml-1 text-[11px] font-semibold text-amber-700">({estimatedPct}%)</span>}
+                    </span>
+                  </div>
                 </div>
-              )}
-            </div>
+                {confirmedPct !== null && annualVal && annualVal > 0 && (
+                  <div className="mt-1.5 flex h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                    <div className="bg-emerald-600 transition-all" style={{ width: `${confirmedPct}%` }} />
+                    <div className="bg-amber-400 transition-all" style={{ width: `${estimatedPct ?? 0}%` }} />
+                  </div>
+                )}
+              </div>
+            )
           )}
 
           {block.id === 'ownership-cost-forecast-summary' && rangeMatch && (
