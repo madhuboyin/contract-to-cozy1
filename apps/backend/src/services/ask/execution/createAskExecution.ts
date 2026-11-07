@@ -7,7 +7,7 @@ import { logger } from '../../../lib/logger';
 import { recordAskCapabilityLifecycle } from '../askCapabilityLifecycle';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
-import { askTurnStageDurationSeconds, askTurnFailuresTotal, type AskTurnStage, askExecutionDurationSeconds, askExecutionsTotal, askInlineCapturesTotal, askRoutingDecisionsTotal, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../../lib/metrics';
+import { askTurnStageDurationSeconds, askTurnFailuresTotal, type AskTurnStage, askExecutionDurationSeconds, askExecutionsTotal, askInlineCapturesTotal, askRoutingDecisionsTotal, askModelRouterTotal, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../../lib/metrics';
 import { type AskAccountRole } from '../askAccountEligibility';
 import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
 import { runConversationalCaptureForTurn } from '../conversationalUnderstanding/conversationalCapture';
@@ -15,6 +15,8 @@ import { asInputJson, askFailureBlocks, askFailureStatus, assertSkillResultBlock
 import { executeOperation } from '../execution/executeOperation';
 import { classifyLaunchedOutcome, recordHandoffOutcome, resolveHandoffAttribution, type AskHandoffAttribution } from './askHandoffTelemetry';
 import { propertyScopeForAskRouting, resolveAskRoutingCascade, type AskRoutingDecision } from '../askRoutingCascade';
+import { refineAskRoutingWithModel } from '../askModelRouter';
+import { geminiService } from '../../gemini.service';
 import { resolveAskFollowUpMessage, shouldForceAskOperation } from '../askFollowUpContext';
 import { getSkillDefinition, getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../../skills/skillRegistry';
 import { ASK_CAPABILITY_UNIQUE_OPERATION } from '../../intelligence/capabilitySkillGuidanceBridge.registry';
@@ -361,6 +363,20 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       entityResolution: null,
     };
   }
+  // A message the local router could not place (the generic fallback, or a clarification between candidates) may be placed by a model that
+  // chooses between registered read-only operations (askModelRouter.ts). Off unless ASK_MODEL_ROUTER_ENABLED; every other outcome, and any
+  // failure, leaves the decision exactly as it is. A declared or contextual operation never reaches it.
+  if (!forcedOperationId) {
+    routingDecision = await refineAskRoutingWithModel(routingDecision, {
+      enabled: controls.modelRouterEnabled && controls.remoteGenerationEnabled && controls.localRoutingEnabled,
+      message: routingMessage,
+      provider: { select: (request) => geminiService.selectAskOperation(request) },
+      eligibleOperationIds,
+      propertyId: executionPropertyId,
+      launchEntityId: input.launchContext?.entityId,
+      onOutcome: (outcome) => askModelRouterTotal.inc({ outcome: outcome.toLowerCase() }),
+    });
+  }
   // The local classifier already had the concatenated prior+current message
   // to work with; only step in when it still found nothing confident
   // (REMOTE_FALLBACK) — a DETERMINISTIC/LOCAL_CLASSIFIER/CLARIFICATION
@@ -452,7 +468,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
         language: routingDecision.language,
         languageContractVersion: normalizedRoutingMessage.contractVersion,
         normalizedMessageHash: createHash('sha256').update(normalizedRoutingMessage.normalized).digest('hex').slice(0, 16),
-        retrievalMode: routingDecision.stage === 'LOCAL_CLASSIFIER' || routingDecision.stage === 'CLARIFICATION' ? 'HYBRID_LOCAL' : 'DETERMINISTIC',
+        retrievalMode: routingDecision.stage === 'LOCAL_CLASSIFIER' || routingDecision.stage === 'MODEL_CLASSIFIER' || routingDecision.stage === 'CLARIFICATION' ? 'HYBRID_LOCAL' : 'DETERMINISTIC',
         retrievalPath: routingDecision.candidates[0]?.retrievalPath ?? 'DETERMINISTIC',
         routingCalibrationVersion: routingDecision.candidates[0]?.calibrationVersion ?? null,
         routingRawScore: routingDecision.candidates[0]?.rawConfidence ?? null,

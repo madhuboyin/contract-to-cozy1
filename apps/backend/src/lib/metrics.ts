@@ -283,6 +283,13 @@ export const askRoutingDecisionsTotal = new Counter({
   registers: [register],
 });
 
+export const askModelRouterTotal = new Counter({
+  name: 'ask_model_router_total',
+  help: 'Model-assisted routing outcomes for messages the local router could not place',
+  labelNames: ['outcome'] as const,
+  registers: [register],
+});
+
 export const askAnswerTrustTotal = new Counter({
   name: 'ask_answer_trust_total',
   help: 'Final Ask answer trust outcomes by bounded operation, source state, and repair disposition',

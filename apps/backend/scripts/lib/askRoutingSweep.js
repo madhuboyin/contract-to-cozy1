@@ -20,6 +20,16 @@ const EQUIVALENT = {
   HOME_DEADLINE_MONITOR: ['HOME_ACTIONS'], MAJOR_EVENT_ENTRY: ['SELLER_PREP_CHECKLIST'], SELLER_PREP_CHECKLIST: ['MAJOR_EVENT_ENTRY'],
 };
 
+/** Scores one routing decision against the operations that would be a correct answer for the prompt. */
+function classifyDecision(decision, acceptable) {
+  const candidates = decision.candidates.map((candidate) => candidate.operationId);
+  const routed = decision.operation.operationId;
+  const outcome = decision.stage === 'CLARIFICATION' ? (candidates.some((id) => acceptable.has(id)) ? 'clarOk' : 'clarBad')
+    : decision.stage === 'REMOTE_FALLBACK' ? 'fb'
+      : acceptable.has(routed) ? 'hit' : 'mis';
+  return { outcome, routed, candidates, got: decision.stage === 'CLARIFICATION' ? `CLARIFY[${candidates.slice(0, 3).join(',')}]` : routed };
+}
+
 /** Runs every prompt through the real routing cascade with the production options and scores it against the expected operation. */
 function runSweep(corpus, { only = [] } = {}) {
   const { resolveAskRoutingCascade } = require(path.join(BACKEND, 'src/services/ask/askRoutingCascade.ts'));
@@ -34,15 +44,11 @@ function runSweep(corpus, { only = [] } = {}) {
     const acceptable = new Set([operationId, ...(EQUIVALENT[operationId] ?? [])]);
     for (const message of prompts) {
       const decision = resolveAskRoutingCascade(message, { localRoutingEnabled: true, classifierEnabled: true, embeddingRetrievalEnabled: true, propertyId: 'sweep-property' });
-      const candidates = decision.candidates.map((candidate) => candidate.operationId);
-      const routed = decision.operation.operationId;
-      const outcome = decision.stage === 'CLARIFICATION' ? (candidates.some((id) => acceptable.has(id)) ? 'clarOk' : 'clarBad')
-        : decision.stage === 'REMOTE_FALLBACK' ? 'fb'
-          : acceptable.has(routed) ? 'hit' : 'mis';
+      const { outcome, routed, got } = classifyDecision(decision, acceptable);
       row.n += 1; row[outcome] += 1;
       if (outcome === 'hit') row.hits.push(message);
       if (outcome === 'mis') { hijack[routed] = (hijack[routed] ?? 0) + 1; row.misrouted.push(message); }
-      if (outcome !== 'hit') row.misses.push({ message, outcome, got: decision.stage === 'CLARIFICATION' ? `CLARIFY[${candidates.slice(0, 3).join(',')}]` : routed });
+      if (outcome !== 'hit') row.misses.push({ message, outcome, got });
     }
   }
   const total = { hit: 0, clarOk: 0, clarBad: 0, fb: 0, mis: 0, n: 0 };
@@ -82,4 +88,37 @@ function compareToBaseline(result, baseline) {
   return { lost, newMisroutes };
 }
 
-module.exports = { BACKEND, BASELINE_PATH, EQUIVALENT, runSweep, baselineFrom, compareToBaseline };
+/**
+ * The same corpus with the model-assisted router in front of the generic fallback and clarification, using a real model provider.
+ * Needs network and a working GEMINI_API_KEY; counts how often the model was unavailable so a dead key is not mistaken for a bad model.
+ */
+async function runModelSweep(corpus, { provider, only = [], limit = Infinity }) {
+  const { resolveAskRoutingCascade } = require(path.join(BACKEND, 'src/services/ask/askRoutingCascade.ts'));
+  const { ASK_OPERATION_DEFINITIONS } = require(path.join(BACKEND, 'src/services/ask/askOperationRegistry.ts'));
+  const { refineAskRoutingWithModel } = require(path.join(BACKEND, 'src/services/ask/askModelRouter.ts'));
+  const eligible = Object.values(ASK_OPERATION_DEFINITIONS).filter((definition) => !definition.safetyClass.endsWith('_BOUNDARY')).map((definition) => definition.operationId);
+  const local = { hit: 0, mis: 0, fb: 0, clar: 0, n: 0 }; const withModel = { hit: 0, mis: 0, fb: 0, clar: 0, n: 0 };
+  const modelOutcomes = {}; const changed = []; let calls = 0;
+  for (const [operationId, prompts] of Object.entries(corpus)) {
+    if (only.length && !only.includes(operationId)) continue;
+    if (!ASK_OPERATION_DEFINITIONS[operationId]) continue;
+    const acceptable = new Set([operationId, ...(EQUIVALENT[operationId] ?? [])]);
+    for (const message of prompts) {
+      const options = { localRoutingEnabled: true, classifierEnabled: true, embeddingRetrievalEnabled: true, propertyId: 'sweep-property' };
+      const decision = resolveAskRoutingCascade(message, options);
+      const before = classifyDecision(decision, acceptable).outcome;
+      let after = before; let refined = decision;
+      if ((decision.stage === 'REMOTE_FALLBACK' || decision.stage === 'CLARIFICATION') && calls < limit) {
+        calls += 1;
+        refined = await refineAskRoutingWithModel(decision, { enabled: true, message, provider, eligibleOperationIds: eligible, onOutcome: (outcome) => { modelOutcomes[outcome] = (modelOutcomes[outcome] ?? 0) + 1; } });
+        after = classifyDecision(refined, acceptable).outcome;
+      }
+      const bucket = (outcome) => (outcome === 'clarOk' || outcome === 'clarBad' ? 'clar' : outcome);
+      local.n += 1; local[bucket(before)] += 1; withModel.n += 1; withModel[bucket(after)] += 1;
+      if (before !== after) changed.push({ operationId, message, before, after, got: classifyDecision(refined, acceptable).got });
+    }
+  }
+  return { local, withModel, modelOutcomes, changed, modelCalls: calls };
+}
+
+module.exports = { BACKEND, BASELINE_PATH, EQUIVALENT, classifyDecision, runSweep, runModelSweep, baselineFrom, compareToBaseline };

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { sourceRegistryEntry } from '../intelligence/sourceRegistry';
 
-export const ASK_LLM_PURPOSES = ['ASK_COZY_REMOTE_FALLBACK_SYNTHESIS'] as const;
+export const ASK_LLM_PURPOSES = ['ASK_COZY_REMOTE_FALLBACK_SYNTHESIS', 'ASK_COZY_OPERATION_ROUTING'] as const;
 export type AskLlmPurpose = typeof ASK_LLM_PURPOSES[number];
 
 export const ASK_LLM_PURPOSE_CONTRACTS = Object.freeze({
@@ -11,6 +11,15 @@ export const ASK_LLM_PURPOSE_CONTRACTS = Object.freeze({
     modelTier: 'FAST' as const,
     structuredOutputRequired: true,
     maxOutputClaims: 6,
+  },
+  // Chooses one registered, read-only operation for a message the local router could not place (askModelRouter.ts). Output is an enum of the
+  // candidate ids plus a confidence; it never carries prose or home data.
+  ASK_COZY_OPERATION_ROUTING: {
+    purpose: 'ASK_COZY_OPERATION_ROUTING' as const,
+    routeId: 'ai:ask',
+    modelTier: 'FAST' as const,
+    structuredOutputRequired: true,
+    maxOutputClaims: 1,
   },
 });
 
@@ -78,7 +87,7 @@ export interface AskRemoteFallbackFact {
 
 export interface AskRemoteFallbackClaimProvider {
   select(input: {
-    purpose: AskLlmPurpose;
+    purpose: 'ASK_COZY_REMOTE_FALLBACK_SYNTHESIS';
     question: string;
     candidates: readonly AskRemoteFallbackTypedClaim[];
   }): Promise<unknown>;

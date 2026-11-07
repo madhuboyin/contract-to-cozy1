@@ -26,6 +26,8 @@ export interface AskOperationalControls {
   constrainedClassifierEnabled: boolean;
   semanticResponseValidatorEnabled: boolean;
   resultSynthesisEnabled: boolean;
+  /** A model chooses between registered read-only operations for messages the local router could not place. Default off: a new, unmeasured model call. */
+  modelRouterEnabled: boolean;
   askConversationalCaptureEnabled: boolean;
   askGoalCaptureEnabled: boolean;
   askProactiveContinuationEnabled: boolean;
@@ -60,6 +62,8 @@ export function readAskOperationalControls(env: NodeJS.ProcessEnv = process.env)
       && !booleanEnv(env.ASK_CONSTRAINED_CLASSIFIER_KILL_SWITCH, false),
     semanticResponseValidatorEnabled: booleanEnv(env.ASK_SEMANTIC_RESPONSE_VALIDATOR_ENABLED, true)
       && !booleanEnv(env.ASK_SEMANTIC_RESPONSE_VALIDATOR_KILL_SWITCH, false),
+    modelRouterEnabled: booleanEnv(env.ASK_MODEL_ROUTER_ENABLED, false)
+      && !booleanEnv(env.ASK_MODEL_ROUTER_KILL_SWITCH, false),
     resultSynthesisEnabled: booleanEnv(env.ASK_RESULT_SYNTHESIS_ENABLED, false)
       && !booleanEnv(env.ASK_RESULT_SYNTHESIS_KILL_SWITCH, false),
     // Ask Cozy Stage 3, Phase 3 (implementation plan §22). Defaults off,
