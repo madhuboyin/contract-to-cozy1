@@ -314,6 +314,19 @@ export function validateAskAnswerTrust(input: {
   };
 }
 
+const LIMITATION_BLOCK_TYPES = new Set(['SUMMARY', 'EMPTY_STATE', 'BOUNDARY', 'EVIDENCE']);
+
+/**
+ * An operation's own plain "I can't do that with what is recorded" answer: a limitation status with a typed reason, made only of plain
+ * blocks, one of which is a cautionary summary or an empty state. It carries no data that could belong to a different request, so when the
+ * request reached the operation by a certain rule the relevance check can only add a confirmation click (its words rarely resemble the question).
+ */
+export function isAskHonestLimitationResult(result: AskOperationResult): boolean {
+  return result.status === 'READY_WITH_LIMITATIONS' && Boolean(result.reasonCode)
+    && result.blocks.length > 0 && result.blocks.every((block) => LIMITATION_BLOCK_TYPES.has(block.type))
+    && result.blocks.some((block) => block.type === 'EMPTY_STATE' || (block.type === 'SUMMARY' && block.tone === 'CAUTION'));
+}
+
 export function validateAskAnswerTrustPipeline(input: {
   question: string;
   operationId: AskOperationId;
@@ -325,9 +338,11 @@ export function validateAskAnswerTrustPipeline(input: {
   operationConfirmedByUser?: boolean;
   /** The runner-up requests the router weighed when it picked `operationId`; offered as choices if the prepared answer cannot be matched to the question. */
   routingAlternatives?: ReadonlyArray<{ operationId: AskOperationId; confidence: number }>;
+  /** The request reached `operationId` by a certain (deterministic) rule, not by a score; see isAskHonestLimitationResult. */
+  routedDeterministically?: boolean;
 }): { result: AskOperationResult; trust: AskAnswerTrustResult; semantic: AskSemanticAnswerRelevanceResult | null; repaired: boolean } {
   const deterministic = validateAskAnswerTrust(input);
-  if (!input.semanticEnabled) return { ...deterministic, semantic: null };
+  if (!input.semanticEnabled || (input.routedDeterministically && isAskHonestLimitationResult(deterministic.result))) return { ...deterministic, semantic: null };
   const semantic = validateAskSemanticAnswerRelevance({
     question: input.question,
     operationId: input.operationId,

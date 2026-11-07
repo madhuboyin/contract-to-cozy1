@@ -4,7 +4,7 @@
 import { createHash } from 'node:crypto';
 import { prisma } from '../../../lib/prisma';
 import { type AskPresentationBlock, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
-import { type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
+import { resolveAskOperation, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { getHomeActionFeed } from '../../homeActions.service';
 import { AgentRuntimeAuthorizationError, AgentRuntimeCasConflictError, AgentRuntimeDisabledError, AgentRuntimeStateError, invokeAgentRuntime } from '../../agents/agentRuntime.service';
@@ -187,6 +187,12 @@ export async function hvacDecisionStartResult(userId: string, propertyId: string
   };
 }
 
+/** "No active decision yet" is a dead end unless it can start one: the same question the homeowner would ask, sent as the declared action. */
+const hvacStartDecisionAction = (itemName: string) => {
+  const message = `Should I repair or replace ${itemName}?`;
+  return { id: 'hvac-decision-start', label: 'Start a repair-or-replace decision', message, style: 'PRIMARY' as const, interactionType: 'START_WORKFLOW' as const, operationId: resolveAskOperation(message).operationId };
+};
+
 async function hvacDecisionContinueResult(userId: string, propertyId: string, message: string, executionId: string, focusedDecisionThreadId?: string | null): Promise<AskOperationResult> {
   if (focusedDecisionThreadId) {
     const focusedThread = await prisma.decisionThread.findFirst({
@@ -259,7 +265,7 @@ async function hvacDecisionContinueResult(userId: string, propertyId: string, me
   if (selection.kind === 'NONE') {
     return {
       status: 'NOT_APPLICABLE', reasonCode: 'HVAC_DECISION_NOT_STARTED',
-      blocks: [{ type: 'EMPTY_STATE', id: 'hvac-decision-none', title: 'No active decision for this system yet', body: `Ask has not started a repair-or-replace decision for ${item.name}.`, actions: [inventoryViewItemAction(item.name)] }],
+      blocks: [{ type: 'EMPTY_STATE', id: 'hvac-decision-none', title: 'No active decision for this system yet', body: `Ask has not started a repair-or-replace decision for ${item.name}.`, actions: [hvacStartDecisionAction(item.name), inventoryViewItemAction(item.name, 'SECONDARY')] }],
       suggestions: [],
     };
   }

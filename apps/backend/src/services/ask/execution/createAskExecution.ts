@@ -553,7 +553,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     const declaredOperationRan = Boolean(declaredItemActionOperationId) && operation.operationId === declaredItemActionOperationId;
     const validation = routingDecision.requiresClarification
       ? null
-      : validateAskAnswerTrustPipeline({ question: routingMessage, operationId: operation.operationId, result: presentedResult, propertyId: executionPropertyId, semanticEnabled: controls.semanticResponseValidatorEnabled && !declaredOperationRan, language: routingDecision.language, routingAlternatives: routingDecision.stage === 'LOCAL_CLASSIFIER' ? routingDecision.candidates.map((candidate) => ({ operationId: candidate.operationId, confidence: candidate.confidence })) : undefined });
+      : validateAskAnswerTrustPipeline({ question: routingMessage, operationId: operation.operationId, result: presentedResult, propertyId: executionPropertyId, semanticEnabled: controls.semanticResponseValidatorEnabled && !declaredOperationRan, language: routingDecision.language, routedDeterministically: routingDecision.stage === 'DETERMINISTIC', routingAlternatives: routingDecision.stage === 'LOCAL_CLASSIFIER' ? routingDecision.candidates.map((candidate) => ({ operationId: candidate.operationId, confidence: candidate.confidence })) : undefined });
     const result = validation?.result ?? presentedResult;
     markStage('TRUST_VALIDATION', operation.operationId);
     if (validation) recordAskAnswerTrustMetrics(operation.operationId, validation);

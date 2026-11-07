@@ -404,6 +404,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // Item actions on the feed's events (FRD v1.40); the inline detail shows the ones valid for the live state.
   HOME_EVENT_RADAR_FEED: new Set(['radar-include-dismissed', 'radar-save', 'radar-unsave', 'radar-dismiss', 'radar-restore', 'radar-mark-done', 'radar-feedback', 'radar-plan-task', 'radar-notification-settings']),
   HVAC_DECISION_START: new Set(['add-inventory-item', 'view-inventory-item', 'repair-replace-check-warranty']),
+  // The "no active decision yet" answer offers to start one; without an entry here both of its buttons were removed and the answer was a dead end.
+  HVAC_DECISION_CONTINUE: new Set(['hvac-decision-start', 'view-inventory-item']),
   // FRD v1.46: + the blocking-task item action; the inline task detail shows it only while the live task is open.
   BUYER_DEADLINES: new Set(['buyer-task-complete']),
 };

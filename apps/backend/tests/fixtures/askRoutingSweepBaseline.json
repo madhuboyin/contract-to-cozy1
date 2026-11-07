@@ -260,6 +260,12 @@
    "send an invite to my roommate",
    "share my home with my partner"
   ],
+  "HVAC_DECISION_CONTINUE": [
+   "continue my furnace decision",
+   "should i replace my furnace, update on my furnace decision",
+   "update on my furnace decision",
+   "where do things stand on my furnace decision"
+  ],
   "HVAC_DECISION_START": [
    "is my heat pump worth fixing",
    "my ac is old do i replace it",
@@ -470,9 +476,11 @@
    "renovation permit readiness"
   ],
   "REPLACEMENT_GUIDANCE": [
+   "can i continue to use my microwave or should i need to buy new one",
    "can i keep using my oven or replace it",
    "do i need a new dishwasher",
    "is my fridge worth repairing",
+   "is my microwave good enough or do i need to replace it",
    "is my water heater still good",
    "repair or replace my washer",
    "should i replace my microwave"
