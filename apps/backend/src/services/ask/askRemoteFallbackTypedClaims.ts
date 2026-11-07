@@ -25,11 +25,24 @@ export function validateAskLlmPurposeContracts(): string[] {
   });
 }
 
+/** What to do next when Ask cannot answer. Names two phrasings that do reach an answer; a test keeps both routable. */
+export const ASK_NAMING_HINT = 'Try naming the appliance, system, task or document you mean, for example “show my dishwasher details” or “what maintenance is due”.';
+
+/** Shown when nothing in the home record answers the question: says so plainly instead of describing internal claim types. */
+export const ASK_NO_SUPPORTED_CLAIM_TEXT = `I couldn’t find anything in your home record that answers this, so I won’t guess. ${ASK_NAMING_HINT}`;
+
+/** Shown in place of a prepared answer that could not be matched to the question when there is no better request to offer. */
+export const ASK_UNVERIFIABLE_ANSWER_TEXT = `I couldn’t confirm that the answer I prepared matches what you asked, so I haven’t shown it. ${ASK_NAMING_HINT}`;
+
 /**
- * Shown when nothing in the home record answers the question. It says so plainly and names two phrasings that do reach an answer
- * (a test keeps both routable), instead of describing internal claim types.
+ * True for the fallback's own "nothing in the home record answers this" result. It makes no claim about the home, so there is nothing for the
+ * relevance check to verify; treating it as an unverified answer produced a dead-end question whose only option was the same fallback.
  */
-export const ASK_NO_SUPPORTED_CLAIM_TEXT = 'I couldn’t find anything in your home record that answers this, so I won’t guess. Try naming the appliance, system, task or document you mean, for example “show my dishwasher details” or “what maintenance is due”.';
+export function isAskHonestNoAnswerResult(operationId: string, result: { blocks: ReadonlyArray<{ type: string; id?: string; body?: unknown }> }): boolean {
+  return operationId === 'GROUNDED_GUIDANCE' && result.blocks.some((block) => (
+    block.type === 'SUMMARY' && block.id === 'grounded-guidance' && typeof block.body === 'string' && block.body.includes(ASK_NO_SUPPORTED_CLAIM_TEXT)
+  ));
+}
 
 const TypedFactRefSchema = z.object({ id: z.string().trim().min(1) }).strict();
 export const AskRemoteFallbackTypedClaimSchema = z.object({

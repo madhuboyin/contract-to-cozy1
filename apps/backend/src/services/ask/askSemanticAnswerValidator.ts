@@ -1,3 +1,4 @@
+import { isAskHonestNoAnswerResult } from './askRemoteFallbackTypedClaims';
 import { getAskOperationDefinition, type AskOperationId, type AskOperationResult } from './askOperationRegistry';
 import { askSemanticTextSimilarity, retrieveAskOperationCandidates } from './askSemanticRouter';
 import { ASK_DEFAULT_LANGUAGE, requireCertifiedAskLanguage, type AskLanguageCode } from './askLanguageRegistry';
@@ -65,6 +66,13 @@ export function validateAskSemanticAnswerRelevance(input: {
       outcome: 'SKIPPED', selectedOperationId: input.operationId, competingOperationId: null,
       selectedOperationScore: 0, competingOperationScore: 0, questionAnswerScore: 0,
       reasonCodes: ['NON_SUCCESS_RESULT'],
+    });
+  }
+  if (isAskHonestNoAnswerResult(input.operationId, input.result)) {
+    return finish({
+      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
+      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
+      reasonCodes: ['HONEST_NO_ANSWER_STATED'],
     });
   }
   const answer = projectAskSemanticResponse(input.result.blocks);

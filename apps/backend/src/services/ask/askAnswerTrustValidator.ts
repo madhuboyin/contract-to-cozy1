@@ -4,6 +4,7 @@ import type { AskAnswerTrustResult } from './askTrust.contract';
 import { validateAskSemanticAnswerRelevance, type AskSemanticAnswerRelevanceResult } from './askSemanticAnswerValidator';
 import type { AskLanguageCode } from './askLanguageRegistry';
 import type { HouseholdRole } from '@prisma/client';
+import { ASK_NAMING_HINT, ASK_UNVERIFIABLE_ANSWER_TEXT } from './askRemoteFallbackTypedClaims';
 import { applyAskAudiencePresentation } from './askAudiencePresentation';
 import {
   actionsForAskBlock,
@@ -322,6 +323,8 @@ export function validateAskAnswerTrustPipeline(input: {
   language?: AskLanguageCode;
   recoveryAttempted?: boolean;
   operationConfirmedByUser?: boolean;
+  /** The runner-up requests the router weighed when it picked `operationId`; offered as choices if the prepared answer cannot be matched to the question. */
+  routingAlternatives?: ReadonlyArray<{ operationId: AskOperationId; confidence: number }>;
 }): { result: AskOperationResult; trust: AskAnswerTrustResult; semantic: AskSemanticAnswerRelevanceResult | null; repaired: boolean } {
   const deterministic = validateAskAnswerTrust(input);
   if (!input.semanticEnabled) return { ...deterministic, semantic: null };
@@ -357,8 +360,8 @@ export function validateAskAnswerTrustPipeline(input: {
           reasonCode: 'ASK_ANSWER_RELEVANCE_UNRESOLVED_AFTER_CLARIFICATION',
           blocks: [{
             type: 'ERROR_STATE', id: 'answer-relevance-unresolved',
-            title: 'I still couldn’t verify this answer',
-            body: 'I used your clarification, but the prepared response still did not reliably match it. I won’t show a potentially unrelated answer. Open the relevant home workspace or ask with one more specific detail.',
+            title: 'I still can’t confirm that answer',
+            body: `I used your clarification, but I still can’t confirm the answer I prepared matches what you asked, so I haven’t shown it. ${ASK_NAMING_HINT}`,
             retryable: false, actions: [],
           }],
           suggestions: [],
@@ -372,18 +375,41 @@ export function validateAskAnswerTrustPipeline(input: {
     const clearMismatch = semantic.outcome === 'FAIL';
     // An UNKNOWN score is not evidence that the competing operation is relevant. Offering it as a choice exposed arbitrary semantic
     // neighbors (for example, Home Record export for a seasonal-care question). Only a clear mismatch may offer the competitor.
-    const candidateOperationIds = [...new Set([
+    // Runner-up requests the router weighed are real choices only when they were close to the one it picked and above the noise floor.
+    const selectedConfidence = input.routingAlternatives?.find((entry) => entry.operationId === input.operationId)?.confidence ?? 0;
+    const routedAlternatives = (input.routingAlternatives ?? [])
+      .filter((entry) => entry.operationId !== input.operationId && entry.confidence >= 0.3 && selectedConfidence - entry.confidence <= 0.2)
+      .map((entry) => entry.operationId);
+    let candidateOperationIds = [...new Set([
       input.operationId,
       ...(clearMismatch ? [semantic.competingOperationId] : []),
+      ...routedAlternatives,
     ].filter((operationId): operationId is AskOperationId => Boolean(operationId)))]
-      .filter((operationId) => !getAskOperationDefinition(operationId).safetyClass.endsWith('_BOUNDARY'))
-      .slice(0, 3);
+      .filter((operationId) => !getAskOperationDefinition(operationId).safetyClass.endsWith('_BOUNDARY'));
+    // "Get general educational home guidance" is the fallback that just failed; it is a choice only when nothing else is.
+    if (candidateOperationIds.length > 1) candidateOperationIds = candidateOperationIds.filter((operationId) => operationId !== 'GROUNDED_GUIDANCE');
+    candidateOperationIds = candidateOperationIds.slice(0, 3);
+    if (candidateOperationIds.every((operationId) => operationId === 'GROUNDED_GUIDANCE')) {
+      // Nothing real to choose between: a one-option question that re-runs the failed fallback only ends in "I still couldn't verify".
+      return {
+        result: {
+          status: 'READY_WITH_LIMITATIONS',
+          reasonCode: 'ASK_ANSWER_UNVERIFIED_NO_ALTERNATIVE',
+          blocks: [{ type: 'SUMMARY', id: 'answer-unverified', title: 'I’m not sure that answers your question', body: ASK_UNVERIFIABLE_ANSWER_TEXT, tone: 'CAUTION', actions: [] }],
+          suggestions: [],
+          parameters: { ...(deterministic.result.parameters ?? {}), answerTrust: trust, semanticAnswerRelevance: semantic },
+        },
+        trust,
+        semantic,
+        repaired: true,
+      };
+    }
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
     const clarification = {
       version: 1,
       question: clearMismatch
         ? 'Which home request did you want this answer to address?'
-        : 'Which home information should I check for this request?',
+        : 'What did you want to look at?',
       options: candidateOperationIds.map((operationId) => ({
         operationId,
         label: getAskOperationDefinition(operationId).semantic.supportedJobs[0],
@@ -400,10 +426,10 @@ export function validateAskAnswerTrustPipeline(input: {
         blocks: [{
           type: 'ERROR_STATE',
           id: clearMismatch ? 'answer-relevance-mismatch' : 'answer-relevance-uncertain',
-          title: clearMismatch ? 'Let’s make sure I answer the right home question' : 'I need one detail to verify this answer',
+          title: clearMismatch ? 'Let’s make sure I answer the right home question' : 'I’m not sure I understood that',
           body: clearMismatch
             ? 'The prepared response may address a different home request. Choose the home information you meant and I’ll run that canonical workflow again.'
-            : 'I could not confidently connect the prepared response to the exact wording of your request. Choose a focus or add one detail so I can verify it without guessing.',
+            : 'I’m not confident the answer I prepared is what you asked for, so I haven’t shown it. Pick what you meant, or say it another way.',
           retryable: false,
           actions: [],
         }],
