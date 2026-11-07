@@ -59,3 +59,17 @@ test('when something available matches as well as a named unavailable tool, the 
   assert.notEqual(result.status, 'UNAVAILABLE');
   assert.ok(cards(result).includes('Home Records'));
 });
+
+test('tool discovery cards survive the trust step; only the desktop link is removed', async () => {
+  const { validateAskAnswerTrust } = require('../../src/services/ask/askAnswerTrustValidator.ts');
+  const question = 'is there a tool for me to record my bedroom color and other details';
+  const { attachAskAuthoritativeSourceEvidence, completedAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
+  const result = attachAskAuthoritativeSourceEvidence(await capabilityResult('user-1', null, question, { availability: adapterFor(['home-records', 'material-specs', 'property-brief']) }), [completedAskAuthoritativeSourceEvidence('CAPABILITY_DISCOVERY')]);
+  const before = result.blocks.find((block) => block.id === 'capability-matches').capabilities.length;
+  assert.ok(before >= 1);
+  const checked = validateAskAnswerTrust({ question, operationId: 'CAPABILITY_DISCOVERY', result, propertyId: 'p1' });
+  const block = checked.result.blocks.find((b) => b.id === 'capability-matches');
+  assert.ok(block, 'the tool cards are kept');
+  assert.equal(block.capabilities.length, before);
+  for (const card of block.capabilities) assert.ok(card.href === null || card.href.startsWith('/dashboard/ask'), `no desktop link: ${card.href}`);
+});

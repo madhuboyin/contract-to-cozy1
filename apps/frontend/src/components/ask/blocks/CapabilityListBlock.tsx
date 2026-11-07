@@ -37,7 +37,7 @@ function CapabilityCard({ capability }: {
       <p className="mt-3 text-xs text-slate-600">{capability.inlineBoundary}</p>
       {!unavailable && <div className="mt-3 flex flex-wrap gap-2">
         {capability.inlineLaunch && <button type="button" disabled={!actions || actions.disabled || capability.readiness === 'NEEDS_PROPERTY'} onClick={() => actions?.invoke({ id: `launch-${capability.id}`, label: `Explore ${capability.label} in Ask`, interactionType: 'START_WORKFLOW', operationId: capability.inlineLaunch!.operationId, message: capability.inlineLaunch!.message, capabilityId: capability.id, style: 'PRIMARY' })} className="min-h-10 rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Explore in Ask</button>}
-        <AskContextLink href={capability.href} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-teal-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800">Open {capability.label}<ExternalLink className="h-4 w-4" /></AskContextLink>
+        {capability.href && <AskContextLink href={capability.href} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-teal-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800">Open {capability.label}<ExternalLink className="h-4 w-4" /></AskContextLink>}
       </div>}
     </>
   );
@@ -60,7 +60,7 @@ function CalmCapabilityRow({ capability }: { capability: Capability }) {
   const actions = useContext(AskBlockActionContext);
   const unavailable = capability.readiness === 'UNAVAILABLE';
   const notReady = capability.readiness !== 'READY' && capability.readiness !== 'AVAILABLE';
-  const note = notReady ? [capability.readinessLabel, capability.readinessReasons[0]].filter(Boolean).join(' · ') : !capability.inlineLaunch ? 'Opens the full page' : null;
+  const note = notReady ? [capability.readinessLabel, capability.readinessReasons[0]].filter(Boolean).join(' · ') : !capability.inlineLaunch && capability.href ? 'Opens the full page' : null;
   return (
     <li className="flex items-start justify-between gap-3 py-2.5" aria-label={unavailable ? `${capability.label} unavailable` : undefined}>
       <div className="min-w-0">
@@ -70,7 +70,7 @@ function CalmCapabilityRow({ capability }: { capability: Capability }) {
       </div>
       {!unavailable && <div className="flex shrink-0 items-center gap-1">
         {capability.inlineLaunch && <button type="button" disabled={!actions || actions.disabled || capability.readiness === 'NEEDS_PROPERTY'} onClick={() => actions?.invoke({ id: `launch-${capability.id}`, label: `Explore ${capability.label} in Ask`, interactionType: 'START_WORKFLOW', operationId: capability.inlineLaunch!.operationId, message: capability.inlineLaunch!.message, capabilityId: capability.id, style: 'SECONDARY' })} className="min-h-9 rounded-lg px-2.5 text-sm font-medium text-teal-800 hover:bg-teal-50 disabled:opacity-50">Explore<span className="sr-only"> {capability.label} in Ask</span></button>}
-        <AskContextLink href={capability.href} className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"><ExternalLink className="h-4 w-4" aria-hidden="true" /><span className="sr-only">Open {capability.label}</span></AskContextLink>
+        {capability.href && <AskContextLink href={capability.href} className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"><ExternalLink className="h-4 w-4" aria-hidden="true" /><span className="sr-only">Open {capability.label}</span></AskContextLink>}
       </div>}
     </li>
   );

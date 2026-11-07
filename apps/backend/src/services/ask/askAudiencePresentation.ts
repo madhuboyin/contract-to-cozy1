@@ -1,7 +1,7 @@
 import type { HouseholdRole, OnboardingOwnershipState } from '@prisma/client';
 import type { AskPresentationBlock } from '../../productFramework/ask/ask.contract';
 import type { PropertyJourneyContext } from '../skills/context/propertyJourneyContext.contract';
-import type { AskOperationResult } from './askOperationRegistry';
+import { getAskOperationDefinition, type AskOperationId, type AskOperationResult } from './askOperationRegistry';
 import { HOME_JOURNEY_SET_MESSAGE } from './support/homeSettingsConstants';
 import { QUOTE_COMMAND_ACTION_IDS } from './support/quoteComparisonCommand';
 import { GUIDANCE_JOURNEY_RESTORE_ACTION_ID } from './support/guidanceJourneyRestore';
@@ -110,6 +110,16 @@ function lifecycleFraming(ownershipState: OnboardingOwnershipState | null): stri
   return 'This is general home guidance because the ownership stage has not been confirmed.';
 }
 
+// The ownership-stage sentence ("For an established home, this guidance emphasizes…") frames advice. A lookup ("what is in my kitchen"), a status read or an
+// honest "not recorded" answer is not advice, so it carries no such sentence; unknown ownership still gets the general-guidance notice.
+const FRAMED_FAMILIES = new Set(['DECISION_ANALYSIS', 'GENERAL_HOME_GUIDANCE', 'WORKFLOW_GUIDANCE']);
+export function isLifecycleFramingAnswer(operationId: AskOperationId | null | undefined, result: AskOperationResult): boolean {
+  if (!operationId) return true;
+  if (!['ANSWERED', 'READY_WITH_LIMITATIONS'].includes(result.status)) return false;
+  if (result.reasonCode && /NO_ANSWER|NO_SUPPORTED|UNVERIFIED|NOT_RECORDED/i.test(result.reasonCode)) return false;
+  return FRAMED_FAMILIES.has(getAskOperationDefinition(operationId).family);
+}
+
 function suggestionAllowed(suggestion: string, householdRole: HouseholdRole): boolean {
   if (householdRole === 'VIEWER' && MUTATION_SUGGESTION_PATTERN.test(suggestion)) return false;
   if (householdRole === 'CONTRIBUTOR' && OWNER_ONLY_ACTION_PATTERN.test(suggestion)) return false;
@@ -122,9 +132,11 @@ export function applyAskAudiencePresentation(input: {
   journeyContext: PropertyJourneyContext | null;
   propertyId?: string | null;
   lifecycleFramingEnabled?: boolean;
+  operationId?: AskOperationId | null;
 }): AskOperationResult {
   const ownershipState = input.journeyContext?.ownershipState ?? null;
-  const framing = input.lifecycleFramingEnabled === false ? '' : lifecycleFraming(ownershipState);
+  const framing = input.lifecycleFramingEnabled === false ? ''
+    : ownershipState && !isLifecycleFramingAnswer(input.operationId, input.result) ? '' : lifecycleFraming(ownershipState);
   const filteredBlocks = input.result.blocks
     .filter((block) => blockAllowed(block, input.householdRole))
     .map((block) => filterBlockActions(block, input.householdRole));

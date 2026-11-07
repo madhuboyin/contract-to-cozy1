@@ -536,7 +536,7 @@ export function isAskHrefSafeForProperty(href: string, propertyId?: string | nul
 }
 
 export function nestedAskHrefs(block: AskPresentationBlock): string[] {
-  if (block.type === 'CAPABILITY_LIST') return block.capabilities.map((capability) => capability.href);
+  if (block.type === 'CAPABILITY_LIST') return block.capabilities.flatMap((capability) => capability.href ? [capability.href] : []);
   if (block.type === 'GROUPED_LIST') return block.sections.flatMap((section) => section.items.flatMap((item) => item.href ? [item.href] : []));
   if (block.type === 'TIMELINE') return block.items.flatMap((item) => item.href ? [item.href] : []);
   if (block.type === 'CHANGE_SUMMARY') return block.linkedAction ? [block.linkedAction.href] : [];

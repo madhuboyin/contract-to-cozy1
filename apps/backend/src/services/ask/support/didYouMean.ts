@@ -21,14 +21,31 @@ export function isAskUnansweredFallbackResult(operationId: string, result: AskOp
 }
 
 /** The local candidates worth offering: above the floor, eligible here, never a boundary or the fallback itself, best first, at most three. */
-export function didYouMeanOptions(candidates: ReadonlyArray<{ operationId: AskOperationId; confidence: number }>, eligible: ReadonlySet<AskOperationId>): AskOperationId[] {
+// Wording that asks Ask to change something: an imperative verb opening the message or after "please / can you / i want to", or a first-person completed
+// action ("I replaced the filter", "I finished the task", "I paid the bill"). Without it a "did you mean" offers lookups only: a question never
+// gets "update a work item" or "file a claim" as a suggested reading.
+const COMMAND_VERBS = 'add|create|log|record|save|update|change|edit|rename|delete|remove|cancel|complete|finish|mark|schedule|set|start|file|submit|book|move|reschedule|snooze|dismiss|archive|track|upload|attach|assign|send|pay|renew|replace|fix|enable|disable|turn';
+const COMMAND_WORDING = new RegExp(
+  `^\\s*(?:please\\s+)?(?:${COMMAND_VERBS})\\b`
+  + `|\\b(?:please|can you|could you|would you|will you|i(?:'d| would)? (?:want|need|like) (?:you )?to|let'?s|go ahead and)\\s+(?:${COMMAND_VERBS})\\b`
+  + `|\\bi(?:'ve| have)?\\s+(?:just\\s+)?(?:replaced|finished|completed|paid|fixed|installed|renewed|cancelled|canceled|scheduled|booked|changed|serviced|cleaned|upgraded|bought|sold|repaired|done)\\b`,
+  'i',
+);
+export function messageUsesCommandWording(message: string | null | undefined): boolean {
+  return Boolean(message) && COMMAND_WORDING.test(message as string);
+}
+
+export function didYouMeanOptions(candidates: ReadonlyArray<{ operationId: AskOperationId; confidence: number }>, eligible: ReadonlySet<AskOperationId>, message?: string | null): AskOperationId[] {
+  const allowWrites = messageUsesCommandWording(message);
   const seen = new Set<AskOperationId>();
   const options: AskOperationId[] = [];
   for (const candidate of [...candidates].sort((left, right) => right.confidence - left.confidence)) {
     const id = candidate.operationId;
     if (seen.has(id) || candidate.confidence < ASK_DID_YOU_MEAN_FLOOR || !eligible.has(id) || id === 'GROUNDED_GUIDANCE') continue;
     seen.add(id);
-    if (getAskOperationDefinition(id).safetyClass.endsWith('_BOUNDARY')) continue;
+    const definition = getAskOperationDefinition(id);
+    if (definition.safetyClass.endsWith('_BOUNDARY')) continue;
+    if (!allowWrites && definition.semantic.effect !== 'READ') continue;
     options.push(id);
     if (options.length === ASK_DID_YOU_MEAN_LIMIT) break;
   }
@@ -67,9 +84,10 @@ export function offerDidYouMean(input: {
   routingDecision: Pick<AskRoutingDecision, 'stage' | 'candidates' | 'language'>;
   result: AskOperationResult;
   eligibleOperationIds: Iterable<AskOperationId>;
+  message?: string | null;
   now?: Date;
 }): AskOperationResult | null {
   if (input.routingDecision.stage !== 'REMOTE_FALLBACK' || !isAskUnansweredFallbackResult(input.operationId, input.result)) return null;
-  const options = didYouMeanOptions(input.routingDecision.candidates, new Set(input.eligibleOperationIds));
+  const options = didYouMeanOptions(input.routingDecision.candidates, new Set(input.eligibleOperationIds), input.message);
   return options.length ? buildDidYouMeanResult(options, input.routingDecision.language, input.now) : null;
 }

@@ -203,7 +203,14 @@ export function validateAskAnswerTrust(input: {
         })) };
       }
       if (block.type === 'CAPABILITY_LIST') {
-        return { ...block, capabilities: block.capabilities.filter((capability) => source !== 'UNAVAILABLE' && isAskHrefSafeForProperty(capability.href, input.propertyId)) };
+        // Tool discovery keeps its cards when only the full-page link is unsafe: the card still names the tool and says what it does, and the
+        // link is removed (Ask never links to desktop pages). Other capability lists keep dropping such cards.
+        if (block.id === 'capability-matches') {
+          return { ...block, capabilities: block.capabilities.map((capability) => ({
+            ...capability, href: capability.href && source !== 'UNAVAILABLE' && isAskHrefSafeForProperty(capability.href, input.propertyId) ? capability.href : null,
+          })) };
+        }
+        return { ...block, capabilities: block.capabilities.filter((capability) => source !== 'UNAVAILABLE' && capability.href !== null && isAskHrefSafeForProperty(capability.href, input.propertyId)) };
       }
       if (block.type === 'GROUPED_LIST') {
         return { ...block, sections: block.sections.map((section) => ({

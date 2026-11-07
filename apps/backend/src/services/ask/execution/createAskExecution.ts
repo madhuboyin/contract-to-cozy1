@@ -572,7 +572,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     let result = validation?.result ?? presentedResult;
     // The generic fallback found nothing (or could not match its answer to the question): offer the local router's best candidates instead of a dead end.
     if (isAskUnansweredFallbackResult(operation.operationId, result)) {
-      const didYouMean = offerDidYouMean({ operationId: operation.operationId, routingDecision, result, eligibleOperationIds });
+      const didYouMean = offerDidYouMean({ operationId: operation.operationId, routingDecision, result, eligibleOperationIds, message: routingMessage });
       askUnansweredRecoveryTotal.inc({ outcome: didYouMean ? 'offered' : 'none' });
       if (didYouMean) {
         result = await finalizeSuggestedNextActions({

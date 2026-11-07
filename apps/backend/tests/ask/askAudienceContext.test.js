@@ -220,3 +220,15 @@ test('RECALL_REVIEW has an explicit all-mode, viewer-floor, discoverable audienc
   assert.equal(getSkillForOperation('RECALL_REVIEW'), undefined);
   assert.deepEqual(validateAskAudiencePolicies(), [], 'the policy set still validates');
 });
+
+test('the ownership-stage sentence frames guidance and decisions, not lookups or limitation answers', () => {
+  const { applyAskAudiencePresentation } = require('../../src/services/ask/askAudiencePresentation.ts');
+  const summary = () => ({ status: 'ANSWERED', blocks: [{ type: 'SUMMARY', id: 's', title: 'T', body: 'Body text.', tone: 'DEFAULT', actions: [] }], suggestions: [] });
+  const present = (operationId, result = summary()) => applyAskAudiencePresentation({
+    result, householdRole: 'OWNER', journeyContext: { ownershipState: 'ESTABLISHED_OWNER', operatingMode: 'MAINTAIN' }, propertyId: 'p1', lifecycleFramingEnabled: true, operationId,
+  }).blocks[0].body;
+  assert.match(present('REPLACEMENT_GUIDANCE'), /established home/);
+  assert.match(present('GROUNDED_GUIDANCE'), /established home/);
+  assert.equal(present('INVENTORY_LOOKUP'), 'Body text.');
+  assert.equal(present('REPLACEMENT_GUIDANCE', { ...summary(), status: 'READY_WITH_LIMITATIONS', reasonCode: 'ASK_NO_SUPPORTED_CLAIM' }), 'Body text.');
+});

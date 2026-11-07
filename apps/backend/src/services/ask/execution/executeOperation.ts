@@ -319,6 +319,7 @@ export async function executeOperationCore(input: { userId: string; sessionId: s
     const presentedResult = householdRole
       ? applyAskAudiencePresentation({
         result: canonicalResult,
+        operationId: input.operation.operationId,
         householdRole,
         journeyContext: journeyContextFrom(composedContext),
         propertyId: input.propertyId,

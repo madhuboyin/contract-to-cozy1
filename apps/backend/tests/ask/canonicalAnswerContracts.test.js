@@ -97,3 +97,12 @@ test('both handlers that look an item up by appliance name use whole-word matchi
   assert.match(inventory, /specific\.terms\.some\(\(term\) => containsWholeWord\(inventoryItemSearchText\(item\), term\)\)/);
   assert.doesNotMatch(inventory, /specific\.terms\.some\(\(term\) => inventoryItemSearchText\(item\)\.includes\(term\)\)/);
 });
+
+test('the savings contract accepts every savings- block the handler emits, and still rejects a foreign block', () => {
+  const { matchesSavingsOpportunitiesAnswerContract } = require('../../src/services/ask/askSavingsIntent.ts');
+  const block = (id, type = 'METRIC_ROW') => ({ type, id, title: id });
+  const result = (blocks) => ({ status: 'ANSWERED', blocks });
+  assert.equal(matchesSavingsOpportunitiesAnswerContract(result([block('savings-summary', 'SUMMARY'), block('savings-headline'), block('savings-recurring-setup', 'GROUPED_LIST'), block('savings-realized-totals'), block('savings-exclusion-conflicts', 'SUMMARY'), block('related-capabilities', 'CAPABILITY_LIST')])), true);
+  assert.equal(matchesSavingsOpportunitiesAnswerContract(result([block('savings-summary', 'SUMMARY'), block('some-other-block')])), false);
+  assert.equal(matchesSavingsOpportunitiesAnswerContract(result([block('maintenance-summary', 'SUMMARY')])), false);
+});

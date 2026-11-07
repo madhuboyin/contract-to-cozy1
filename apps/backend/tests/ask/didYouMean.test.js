@@ -77,8 +77,22 @@ test('the turn offers it after answer validation and before the result is saved'
   const { resolve } = require('node:path');
   const source = readFileSync(resolve(__dirname, '../../src/services/ask/execution/createAskExecution.ts'), 'utf8');
   const validated = source.indexOf('let result = validation?.result ?? presentedResult;');
-  const offered = source.indexOf('offerDidYouMean({ operationId: operation.operationId, routingDecision, result, eligibleOperationIds })');
+  const offered = source.indexOf('offerDidYouMean({ operationId: operation.operationId, routingDecision, result, eligibleOperationIds, message: routingMessage })');
   const saved = source.indexOf('status: result.status,', validated);
   assert.ok(validated > 0 && offered > validated && saved > offered, 'validate, then offer, then persist');
   assert.match(source, /askUnansweredRecoveryTotal\.inc\(\{ outcome: didYouMean \? 'offered' : 'none' \}\)/);
+});
+
+test('a question is offered readings that look things up; writes only for command wording or a completed action', () => {
+  const { messageUsesCommandWording } = require('../../src/services/ask/support/didYouMean.ts');
+  const candidate = (operationId, confidence) => ({ operationId, confidence });
+  const eligible = new Set(['HOME_ACTIONS', 'OPERATIONAL_WORK_UPDATE', 'CLAIM_FILE', 'MAINTENANCE_STATUS']);
+  const cands = [candidate('OPERATIONAL_WORK_UPDATE', 0.5), candidate('CLAIM_FILE', 0.4), candidate('MAINTENANCE_STATUS', 0.3), candidate('HOME_ACTIONS', 0.2)];
+  const writes = ['OPERATIONAL_WORK_UPDATE', 'CLAIM_FILE'];
+  const question = didYouMeanOptions(cands, eligible, 'how is my water heater doing');
+  assert.ok(question.length >= 1 && question.every((id) => !writes.includes(id)), `no write offered for a question: ${question}`);
+  assert.ok(didYouMeanOptions(cands, eligible, 'please update the work item').includes('OPERATIONAL_WORK_UPDATE'));
+  assert.ok(didYouMeanOptions(cands, eligible, 'i replaced the water heater last week').includes('OPERATIONAL_WORK_UPDATE'));
+  for (const yes of ['add a task', 'can you file a claim', 'I finished the filter change', 'I paid the bill']) assert.equal(messageUsesCommandWording(yes), true, yes);
+  for (const no of ['how is my water heater doing', 'what does my warranty cover', 'when did i replace the roof', 'is there a tool for this']) assert.equal(messageUsesCommandWording(no), false, no);
 });
