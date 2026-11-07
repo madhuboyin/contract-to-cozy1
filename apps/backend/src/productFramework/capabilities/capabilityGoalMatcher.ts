@@ -54,12 +54,17 @@ function normalize(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
-function tokens(value: string): Set<string> {
+// "Record my bedroom color" uses "record" as a verb (to write something down), not as the noun that means documents and paperwork. Expanding it into the
+// document group sent such goals to Quick Document Scan and Home Records and ranked Material Specs last (review screenshot, 2026-11-07).
+const RECORD_AS_VERB = /\brecord\s+(?:my|our|the|a|an|some|all|this|these|those)\b/i;
+
+function tokens(value: string, options: { recordIsVerb?: boolean } = {}): Set<string> {
   const result = new Set<string>();
   for (const raw of normalize(value).split(/\s+/).filter(Boolean)) {
     if (raw.length <= 2 || STOP_WORDS.has(raw)) continue;
     result.add(raw);
     result.add(stem(raw));
+    if (options.recordIsVerb && (raw === 'record' || raw === 'records')) continue;
     for (const equivalent of EQUIVALENTS.get(raw) ?? []) {
       result.add(equivalent);
       result.add(stem(equivalent));
@@ -93,7 +98,7 @@ export type CapabilityGoalMatchResult = z.infer<typeof CapabilityGoalMatchResult
 
 function scoreCapability(goal: string, capability: ToolCapabilityDefinition): CapabilityGoalMatch {
   const normalizedGoal = normalize(goal);
-  const goalTokens = tokens(goal);
+  const goalTokens = tokens(goal, { recordIsVerb: RECORD_AS_VERB.test(goal) });
   const phrases = [
     capability.presentation.label,
     ...capability.presentation.intentAliases,

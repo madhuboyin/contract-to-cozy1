@@ -6,9 +6,30 @@ import { createToolDiscoveryCapabilityAvailabilityAdapter } from '../../toolDisc
 import { getCapabilityDiscoveryReadiness, getRelatedCapabilities } from '../../capabilityRelated.service';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { capabilityCardLaunch } from '../askCapabilityCardLaunch';
+import type { CapabilityAvailabilityAdapter } from '../../../productFramework/capabilities/capabilityAvailability';
 
-export async function capabilityResult(userId: string, propertyId: string | null | undefined, message: string): Promise<AskOperationResult> {
-  const availability = createToolDiscoveryCapabilityAvailabilityAdapter(canonicalCapabilityRegistry);
+const normalizeGoalText = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/**
+ * True when the message says the capability by name: its label or one of its reviewed intent aliases appears in it. A tool that only scored highest on
+ * keywords was not asked for, so "Quick Document Scan is not available here" for "record my bedroom color" told the homeowner about a tool they never
+ * named and hid the ones that were available (review screenshot, 2026-11-07).
+ */
+export function messageNamesCapability(message: string, capability: { presentation: { label: string; intentAliases: readonly string[] } }): boolean {
+  const goal = normalizeGoalText(message);
+  return [capability.presentation.label, ...capability.presentation.intentAliases].some((phrase) => {
+    const normalized = normalizeGoalText(phrase);
+    return normalized.length >= 4 && goal.includes(normalized);
+  });
+}
+
+export async function capabilityResult(
+  userId: string,
+  propertyId: string | null | undefined,
+  message: string,
+  deps: { availability?: CapabilityAvailabilityAdapter } = {},
+): Promise<AskOperationResult> {
+  const availability = deps.availability ?? createToolDiscoveryCapabilityAvailabilityAdapter(canonicalCapabilityRegistry);
   const catalog = buildCapabilityCatalog({
     registry: canonicalCapabilityRegistry,
     availability,
@@ -27,8 +48,10 @@ export async function capabilityResult(userId: string, propertyId: string | null
   });
   const strongest = allMatches.matches[0];
   const strongestAvailable = availableMatches.matches[0];
+  const strongestDefinition = strongest ? canonicalCapabilityRegistry.getById(strongest.capabilityId) : undefined;
   const requestedUnavailable = strongest
     && !catalogById.has(strongest.capabilityId)
+    && Boolean(strongestDefinition && messageNamesCapability(message, strongestDefinition))
     && (!strongestAvailable || strongest.score - strongestAvailable.score >= 8);
 
   if (requestedUnavailable) {
