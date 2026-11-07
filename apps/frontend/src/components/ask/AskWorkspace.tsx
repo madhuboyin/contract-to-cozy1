@@ -202,7 +202,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   useEffect(() => {
     if (!justUpdatedExecutionId || loading) return;
     const timeout = window.setTimeout(() => {
-      const target = document.getElementById(`ask-execution-${justUpdatedExecutionId}`);
+      const article = document.getElementById(`ask-execution-${justUpdatedExecutionId}`);
+      // A fresh review card sits below the form it replaced; bring it into view rather than the article top.
+      const target = article?.querySelector<HTMLElement>('[data-ask-review-card]') ?? article;
       const container = conversationScrollRef.current;
       if (target && container) container.scrollTo({ top: container.scrollTop + target.getBoundingClientRect().top - container.getBoundingClientRect().top - 16, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
     }, 50);

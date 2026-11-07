@@ -194,7 +194,15 @@ export function ConfirmationCard({ executionId, confirmation, onCompleted, autoF
   const calm = useCalmAnswers();
   const fieldCount = confirmation.fields.length + confirmation.editableFields.length;
   const fieldHeavy = fieldCount >= FIELD_HEAVY_REVIEW_MIN_FIELDS;
-  const containerRef = useAutoFocusFirstControl<HTMLElement>(autoFocus);
+  const containerRef = useRef<HTMLElement>(null);
+  // The review card is the next thing the homeowner must read, so on first appearance focus the card itself
+  // (not just its first control) so screen readers announce it. Scrolling is done by AskWorkspace, which
+  // targets [data-ask-review-card]; preventScroll keeps focus from fighting that smooth scroll.
+  useEffect(() => {
+    if (autoFocus) containerRef.current?.focus({ preventScroll: true });
+    // Mount-only, like useAutoFocusFirstControl.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [consent, setConsent] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -303,7 +311,7 @@ export function ConfirmationCard({ executionId, confirmation, onCompleted, autoF
     finally { setSaving(false); }
   };
   return (
-    <section ref={containerRef} data-conversational-review={calm ? '' : undefined} data-review-density={fieldHeavy ? 'field-heavy' : 'compact'} className={calm ? cn(fieldHeavy ? FIELD_HEAVY_REVIEW_PANEL : COMPACT_PENDING_PANEL, 'space-y-3 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5') : 'rounded-2xl border border-violet-200 bg-violet-50/70 p-4'}>
+    <section ref={containerRef} tabIndex={-1} aria-label="Review before saving" data-ask-review-card="" data-conversational-review={calm ? '' : undefined} data-review-density={fieldHeavy ? 'field-heavy' : 'compact'} className={calm ? cn(fieldHeavy ? FIELD_HEAVY_REVIEW_PANEL : COMPACT_PENDING_PANEL, 'space-y-3 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5') : 'rounded-2xl border border-violet-200 bg-violet-50/70 p-4'}>
       {!calm && <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-violet-800">Confirmation required</p>}
       {/* ACUI-005: the stage in plain words. The consent box and the confirm button below are the "Confirm" step. */}
       {calm && (
