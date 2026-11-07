@@ -4,6 +4,7 @@
 import { isItemDocumentsMessage, itemDocumentsResult } from './inventoryDocumentCommands.handler';
 import { inventoryDeleteResult, isInventoryDeleteMessage } from './inventoryDeleteCommands.handler';
 import { INVENTORY_DELETE_MESSAGE } from '../support/inventoryDeleteCommand';
+import { EACH_ROOM_PATTERN, groupRowsByRoom } from '../support/inventoryRoomGrouping';
 import { ITEM_DOCUMENTS_MESSAGE } from '../support/roomDetailCommand';
 import { HouseholdRole } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
@@ -36,6 +37,7 @@ import { diffEditorValues, editorToGroupSchema, readEditorAnswer, type RecordEdi
 export const inventoryService = new InventoryService();
 
 const INVENTORY_QUERY_STOP_WORDS = new Set([
+  'many', 'there', 'are', 'how', 'each', 'every', 'everything', 'anything', 'stuff', 'things', 'give', 'provide', 'number',
   'about', 'appliance', 'appliances', 'details', 'equipment', 'find', 'have', 'home', 'house',
   'incomplete', 'information', 'inventory', 'item', 'items', 'know', 'list', 'missing', 'property', 'record', 'records',
   'show', 'system', 'systems', 'tell', 'that', 'the', 'this', 'what', 'which', 'with', 'your', 'my',
@@ -273,6 +275,8 @@ async function inventoryLookupResult(
     { test: /\bdishwasher\b/i, terms: ['dishwasher'] },
   ];
   const specific = refinement ? undefined : specificAliases.find((candidate) => candidate.test.test(message));
+  // "The item details in each room" asks for every item, grouped by room, not for the items whose text happens to contain the word "room".
+  const eachRoomFocus = !refinement && !specific && EACH_ROOM_PATTERN.test(message);
   // The declared "View this item" action sends `Show inventory item "<name>"`: resolve that quoted name exactly instead of
   // letting the word "inventory" turn it into a whole-home list.
   const quotedName = refinement ? null : /^\s*show inventory item\s+"(.+)"\s*$/i.exec(message)?.[1]?.trim().toLowerCase() ?? null;
@@ -292,6 +296,8 @@ async function inventoryLookupResult(
     matches = allItems;
   } else if (specific) {
     matches = allItems.filter((item) => specific.terms.some((term) => inventoryItemSearchText(item).includes(term)));
+  } else if (eachRoomFocus) {
+    matches = allItems;
   } else if (!genericList && tokens.length) {
     const scored = allItems.map((item) => ({
       item,
@@ -411,7 +417,7 @@ async function inventoryLookupResult(
   // The answer-trust contract (askInventoryIntent) keys the list title on the words of THIS question, so a chip like "Only show HVAC
   // items" is titled "Inventory details" even when a status focus carried over from the prior view; the headline states the real scope.
   const listTitle = isIncompleteInventoryRequest(message) ? 'Incomplete inventory records' : isLifecycleInventoryRequest(message) ? 'Recorded lifecycle dates approaching' : 'Inventory details';
-  const freshCollection = !specific && !historyFocus && (genericList || Boolean(categoryFilter) || incompleteFocus || lifecycleFocus);
+  const freshCollection = !specific && !historyFocus && (genericList || eachRoomFocus || Boolean(categoryFilter) || incompleteFocus || lifecycleFocus);
   const collectionView = !selectedItem && (Boolean(refinement) || freshCollection);
   const activeStatus: InventoryStatusFilter = incompleteFocus ? 'INCOMPLETE' : lifecycleFocus ? 'LIFECYCLE' : 'ALL';
   const viewState = collectionView ? buildInventoryViewState(priorViewState, activeStatus, categoryFilter, ordering) : null;
@@ -492,6 +498,14 @@ async function inventoryLookupResult(
   if (summaryBlock.type === 'SUMMARY' && viewState) {
     const line = withOrdering(summaryBlock.supportLine, INVENTORY_ORDERINGS, ordering, INVENTORY_DEFAULT_ORDERING);
     if (line) summaryBlock.supportLine = line;
+  }
+  if (eachRoomFocus && !selectedItem) {
+    const grouped = blocks.find((block) => block.type === 'GROUPED_LIST' && block.id === 'inventory-results');
+    if (grouped && grouped.type === 'GROUPED_LIST') {
+      const roomByItemId = new Map(shown.map((item) => [item.id, item.room?.name ?? null]));
+      grouped.sections = groupRowsByRoom(grouped.sections.flatMap((section) => section.items), (row) => roomByItemId.get(row.id));
+      grouped.description = 'Grouped by the room each item is recorded in.';
+    }
   }
   const resultsBlock = blocks[0];
   if (resultsBlock.type === 'GROUPED_LIST') resultsBlock.collection = collectionDescriptor({ sourceTotal: matches.length, fetchedCount: matches.length, sections: resultsBlock.sections, nextPageAvailable: false });

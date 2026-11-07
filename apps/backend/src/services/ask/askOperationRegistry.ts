@@ -8,6 +8,7 @@ import { validateAskOperationSemanticPackages } from './askOperationSemanticPack
 import { insurancePoliciesOtherIntentPattern, insurancePoliciesPattern } from './support/insurancePolicyCommand';
 import { communityOtherIntentPattern, communityPattern } from './support/communityUpdates';
 import { parseReserveFundMessage } from './support/reserveFundMessage';
+import { EACH_ROOM_PATTERN } from './support/inventoryRoomGrouping';
 import { isNegotiationShieldStartRequest } from './support/negotiationShieldStart';
 import { isRenovationCaseStartRequest } from './support/renovationCaseStart';
 import { isRiskMitigationPlanRequest } from './support/riskMitigationPlan';
@@ -1301,6 +1302,8 @@ const propertyAreaCaptureCommandPattern = /^\s*fill in the missing (?:core prope
 // A room collection is a focused Property Summary answer. Keep this exact
 // conversational phrase deterministic so the receipt's declared suggestion
 // cannot fall through semantic routing and be replaced by a clarification.
+// Rooms a homeowner names in a question ("the kitchen", "my master bed room"). Used to scope item and colour questions to a room.
+const ROOM_NAME = '(?:master\\s+)?(?:bed\\s?rooms?|bath\\s?rooms?|kitchen|living\\s+room|dining\\s+room|laundry(?:\\s+room)?|garage|basement|attic|office|den|nursery|family\\s+room|guest\\s+room|kids?\\s+room|hallway|pantry|mudroom|sunroom|closet|patio|porch)';
 const roomSummaryPattern = /\b(?:show|list|view|see|review)\b.{0,30}\b(?:my|our|the|this)?\s*rooms?\b|\bhow many rooms?\b.{0,35}\b(?:my|our|the|this)?\s*(?:home|house|property)?\b/i;
 const PROPERTY_COMPLETENESS_PATTERNS = [
   /\b(?:pending|missing|incomplete|unfilled|outstanding|remaining)\b.{0,50}\b(?:details|information|info|facts|fields|records?)\b.{0,60}\b(?:home|house|property|profile|record)\b/i,
@@ -1346,6 +1349,21 @@ const nonHvacItemPattern = new RegExp(`\\b${REPLACEABLE_NON_HVAC_ITEM}\\b`, 'i')
 export function messageNamesOnlyNonHvacItem(message: string): boolean {
   return nonHvacItemPattern.test(message) && !hvacNamedPattern.test(message);
 }
+// Questions about the home's own recorded facts ("how many bedrooms do I have", "what is the square footage", "what year was it built"). The
+// Property Summary reads exactly these fields; before this the words matched nothing and the question fell to the generic fallback.
+const propertyFactQuestionPattern = /\bhow many\s+(?:bed\s?rooms?|bath\s?rooms?|stor(?:y|ies)|floors|levels)\b|\bnumber of\s+(?:bed\s?rooms?|bath\s?rooms?|rooms|stor(?:y|ies)|floors)\b|\b(?:square\s+(?:foot|feet|footage)|sq\.?\s?ft\.?|sqft)\b|\b(?:what|which)\s+year\b.{0,30}\b(?:built|constructed)\b|\bwhen was\b.{0,25}\b(?:home|house|property)\b.{0,15}\bbuilt\b|\bhow old is (?:my |the |this |our )?(?:home|house|property)\b|\byear built\b|\b(?:lot|home|house|property)\s+size\b/i;
+const propertyFactOtherIntentPattern = /\b(?:price|cost|per|value|worth|tax(?:es)?|change|update|set|edit|correct|fix|add|remove)\b/i;
+// Items kept in a room ("everything in my kitchen", "how many items are in my master bedroom", "the item details in each room"). The inventory
+// answer already matches a room by name; this routes the question to it.
+const roomContentsPattern = new RegExp(`\\b(?:items?|appliances?|things|stuff|equipment|inventory|everything|anything)\\b.{0,25}\\b(?:in|inside|from)\\b.{0,15}\\b${ROOM_NAME}\\b|\\bwhat(?:'s| is| do (?:i|we) have)\\s+in\\s+(?:my |our |the |this )?${ROOM_NAME}\\b`, 'i');
+const roomItemWordsPattern = /\b(?:items?|appliances?|stuff|things|equipment|inventory|what(?:'s| is) in)\b/i;
+const roomContentsOtherIntentPattern = /\b(?:add|create|put|move|rename|delete|remove|change|update|edit|correct|fix|set|tasks?|maintenance|chores?|due|overdue|warrant\w*|claims?|plants?|paint|colou?rs?|expenses?|cost)\b/i;
+// A recorded appliance's own details ("the model number of my dishwasher", "when did I buy my fridge", "how old is my water heater"). The inventory
+// answer resolves the item by name and shows its recorded brand, model and purchase date.
+const ITEM_ATTRIBUTE_ITEM = `(?:${REPLACEABLE_NON_HVAC_ITEM.slice(3, -1)}|furnace|hvac|heat pump|air conditioner|thermostat)`;
+const ITEM_ATTRIBUTE_WORD = '(?:model(?:\\s+(?:number|no\\.?|name))?|serial(?:\\s+(?:number|no\\.?))?|brand|make|manufacturer|purchase\\s+date|install(?:ation)?\\s+date)';
+const itemAttributePattern = new RegExp(`\\b${ITEM_ATTRIBUTE_WORD}\\b.{0,30}\\b(?:of|for|on)\\b.{0,15}\\b${ITEM_ATTRIBUTE_ITEM}\\b|\\b(?:my|our|the)\\s+${ITEM_ATTRIBUTE_ITEM}'?s?\\s+${ITEM_ATTRIBUTE_WORD}\\b|\\bwhen did (?:i|we) (?:buy|purchase|get|install)\\b.{0,25}\\b${ITEM_ATTRIBUTE_ITEM}\\b|\\bwhat\\s+(?:brand|make|model)\\b.{0,20}\\b${ITEM_ATTRIBUTE_ITEM}\\b|\\bhow old is (?:my |our |the |this )?${ITEM_ATTRIBUTE_ITEM}\\b|\\bage of (?:my |our |the |this )?${ITEM_ATTRIBUTE_ITEM}\\b`, 'i');
+const itemAttributeWriteIntentPattern = /\b(?:change|update|edit|correct|fix|set|add|record|enter|rename)\b/i;
 const replacementPattern = /\b(when should i (?:replace|upgrade)|replace (?:my|the)|repair or replace|how (?:old|long).*(?:refrigerator|fridge)|(?:refrigerator|fridge).*(?:replace|replacement|lifespan|life expectancy))\b/i;
 // Ask Intelligence FRD Phase 8A: HVAC-specific repair/replace decision
 // routing must win over the generic replacementPattern above for HVAC
@@ -1452,6 +1470,8 @@ const propertyBriefsOtherIntentPattern = /\b(?:create|make|prepare|build|generat
 // The finishes and products recorded in Material Specs ("what paint colour is the living room?"). Choosing, buying or
 // adding a material is not this read.
 const materialSpecsPattern = /\bmaterial specs?\b|\b(?:search|find|look (?:up|for))\b.{0,30}\b(?:my |our |the )?(?:materials?|paint|tiles?|flooring|grout|finishes)\b|\b(?:my|our|which|what) (?:materials?|paints?|tiles?|finishes)\b.{0,30}\b(?:from|by|made by|matching|with (?:code|sku))\b|\b(?:paint|colou?r|tile|grout) (?:code|number|sku)\b|\b(?:my|our|recorded) (?:materials|finishes)\b|\bpaint colou?rs?\b|\bwhat (?:paint|colou?r|tile|flooring|grout|countertops?|cabinets?|wallpaper|siding|trim)\b.{0,50}\b(?:use|used|is|are|did|was|in|on)\b/i;
+// "What is the color of the bedroom" asks for the recorded paint colour of a room, which Material Specs holds.
+const materialSpecsRoomColourPattern = new RegExp(`\\b(?:colou?r|paint)\\b.{0,15}\\b(?:of|in|for)\\b.{0,12}\\b(?:my |our |the |this )?${ROOM_NAME}\\b|\\b${ROOM_NAME}\\b.{0,12}\\b(?:colou?r|paint)\\b`, 'i');
 const materialSpecsOtherIntentPattern = /\b(?:should|recommend|suggest|choose|pick|buy|order|new|add|record|log|best|good|better|nicer?|trend(?:ing|s)?|ideas?|find me|get me|give me)\b/i;
 // The whole-home history on the Home Timeline. Recent changes are HOME_CHANGE_SUMMARY, past hazards are
 // PAST_HAZARD_EXPOSURE, one item's history is INVENTORY_LOOKUP, and logging or correcting an event is a write.
@@ -1796,7 +1816,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (propertyBriefsPattern.test(message) && !propertyBriefsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('PROPERTY_BRIEFS_LIST', 0.96);
   }
-  if (materialSpecsPattern.test(message) && !materialSpecsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+  if ((materialSpecsPattern.test(message) || materialSpecsRoomColourPattern.test(message)) && !materialSpecsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('MATERIAL_SPECS_LIST', 0.96);
   }
   if (homeTimelinePattern.test(message) && !homeTimelineOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
@@ -1854,6 +1874,13 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (scopedEnvelopeObservationPattern.test(message)) {
     return resolved('INTELLIGENCE_ENVELOPE_QUERY', 0.96);
   }
+  if (propertyFactQuestionPattern.test(message) && !propertyFactOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('PROPERTY_SUMMARY', 0.96);
+  }
+  if ((roomContentsPattern.test(message) || (EACH_ROOM_PATTERN.test(message) && roomItemWordsPattern.test(message)))
+    && !roomContentsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('INVENTORY_LOOKUP', 0.96);
+  }
   if (inventoryLookupPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('INVENTORY_LOOKUP', 0.96);
   }
@@ -1883,6 +1910,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (replacementPattern.test(message)) {
     return resolved('REPLACEMENT_GUIDANCE', 0.96);
+  }
+  if (itemAttributePattern.test(message) && !itemAttributeWriteIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('INVENTORY_LOOKUP', 0.96);
   }
   if (refinanceMonitorPattern.test(message)) {
     return resolved('REFINANCE_RATE_MONITOR', 0.98);
