@@ -6,6 +6,7 @@ import { inventoryDeleteResult, isInventoryDeleteMessage } from './inventoryDele
 import { INVENTORY_DELETE_MESSAGE } from '../support/inventoryDeleteCommand';
 import { EACH_ROOM_PATTERN, groupRowsByRoom } from '../support/inventoryRoomGrouping';
 import { containsWholeWord } from '../support/wholeWord';
+import { findSpecificInventoryAlias } from '../support/inventoryItemAliases';
 import { ITEM_DOCUMENTS_MESSAGE } from '../support/roomDetailCommand';
 import { HouseholdRole } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
@@ -268,14 +269,7 @@ async function inventoryLookupResult(
   const categoryFilter = refinement ? refinement.category : detectInventoryCategory(message);
   // The order: a refinement keeps or changes it; a fresh question may name one ("show my appliances oldest first"); otherwise as recorded.
   const ordering = refinement ? refinement.ordering : (orderingFromWords(INVENTORY_ORDERINGS, message) ?? INVENTORY_DEFAULT_ORDERING);
-  const specificAliases: Array<{ test: RegExp; terms: string[] }> = [
-    { test: /\b(?:refrigerator|fridge)\b/i, terms: ['refrigerator', 'fridge'] },
-    { test: /\bwater heater\b/i, terms: ['water heater'] },
-    { test: /\bwasher\b/i, terms: ['washer', 'washing machine'] },
-    { test: /\bdryer\b/i, terms: ['dryer'] },
-    { test: /\bdishwasher\b/i, terms: ['dishwasher'] },
-  ];
-  const specific = refinement ? undefined : specificAliases.find((candidate) => candidate.test.test(message));
+  const specific = refinement ? undefined : findSpecificInventoryAlias(message);
   // "The item details in each room" asks for every item, grouped by room, not for the items whose text happens to contain the word "room".
   const eachRoomFocus = !refinement && !specific && EACH_ROOM_PATTERN.test(message);
   // The declared "View this item" action sends `Show inventory item "<name>"`: resolve that quoted name exactly instead of

@@ -320,11 +320,15 @@
    "how many items are there in my master bed room",
    "how old is my water heater",
    "list everything in my kitchen",
+   "service history for my furnace",
    "show me my appliances",
+   "show me the history of my washing machine repairs",
    "tell me about my water heater",
    "what is the model number of my dishwasher",
+   "what repairs has my dishwasher had",
    "what rooms do I have and what is in each one",
    "when did i buy my fridge",
+   "when was my water heater last serviced",
    "which items have missing details"
   ],
   "MAINTENANCE_BUDGET_FORECAST": [
