@@ -5,6 +5,7 @@ import { isItemDocumentsMessage, itemDocumentsResult } from './inventoryDocument
 import { inventoryDeleteResult, isInventoryDeleteMessage } from './inventoryDeleteCommands.handler';
 import { INVENTORY_DELETE_MESSAGE } from '../support/inventoryDeleteCommand';
 import { EACH_ROOM_PATTERN, groupRowsByRoom } from '../support/inventoryRoomGrouping';
+import { containsWholeWord } from '../support/wholeWord';
 import { ITEM_DOCUMENTS_MESSAGE } from '../support/roomDetailCommand';
 import { HouseholdRole } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
@@ -295,7 +296,7 @@ async function inventoryLookupResult(
     // Every item, then the status focus below: a filter never depends on the words of an earlier question.
     matches = allItems;
   } else if (specific) {
-    matches = allItems.filter((item) => specific.terms.some((term) => inventoryItemSearchText(item).includes(term)));
+    matches = allItems.filter((item) => specific.terms.some((term) => containsWholeWord(inventoryItemSearchText(item), term)));
   } else if (eachRoomFocus) {
     matches = allItems;
   } else if (!genericList && tokens.length) {

@@ -1,3 +1,4 @@
+import { matchesCanonicalAnswerBlocks } from './support/canonicalAnswerBlocks';
 import { isAskHonestNoAnswerResult } from './askRemoteFallbackTypedClaims';
 import { getAskOperationDefinition, type AskOperationId, type AskOperationResult } from './askOperationRegistry';
 import { askSemanticTextSimilarity, retrieveAskOperationCandidates } from './askSemanticRouter';
@@ -232,6 +233,13 @@ export function validateAskSemanticAnswerRelevance(input: {
   // Authored guide operations are reached by their own narrow deterministic wording (or a starter's launch), and their text is evergreen
   // guidance that shares little vocabulary with the question, so word similarity cannot confirm it. Their own canonical result is the match.
   if (AUTHORED_GUIDE_RESULT_CODES[input.operationId]?.includes(input.result.reasonCode ?? '')) {
+    return finish({
+      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
+      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
+      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
+    });
+  }
+  if (matchesCanonicalAnswerBlocks(input.operationId, input.result)) {
     return finish({
       outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
       selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,

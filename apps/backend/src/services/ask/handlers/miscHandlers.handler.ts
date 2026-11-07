@@ -38,6 +38,7 @@ import { listWorkItems } from '../../../modules/homeOperations/application/listW
 import { assertUserWorkItemTransition } from '../../../modules/homeOperations/domain/userGovernance';
 import { operationalWorkSnoozeDays } from '../operationalWorkSnooze';
 import { collectionDescriptor } from '../support/collectionDescriptor';
+import { containsWholeWord } from '../support/wholeWord';
 
 const replaceRepairService = new ReplaceRepairService();
 
@@ -195,7 +196,7 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
   const itemText = (item: typeof allItems[number]) => [item.name, item.category, item.assetType, item.brand, item.model].filter(Boolean).join(' ').toLowerCase();
   const items = focusedInventoryItemId
     ? allItems.filter((item) => item.id === focusedInventoryItemId)
-    : aliases.length ? allItems.filter((item) => aliases.some((alias) => itemText(item).includes(alias) || alias.includes(item.name.toLowerCase()))) : [];
+    : aliases.length ? allItems.filter((item) => aliases.some((alias) => containsWholeWord(itemText(item), alias) || containsWholeWord(alias, item.name))) : [];
   if (!items.length) {
     return {
       status: 'READY_WITH_LIMITATIONS',

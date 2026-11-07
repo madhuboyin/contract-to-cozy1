@@ -36,10 +36,17 @@ test('an operation reached by a certain rule that answers with its own plain lim
   }
 });
 
-test('the same answer from a score-based route is still checked, as before', () => {
-  const validation = validateAskAnswerTrustPipeline({ question: 'is my water heater still good', operationId: 'REPLACEMENT_GUIDANCE', result: notRecorded(), semanticEnabled: true, propertyId: 'p1' });
-  assert.equal(validation.result.status, 'NEEDS_CLARIFICATION');
-  assert.equal(validation.semantic.outcome, 'UNKNOWN');
+test('a plain limitation from a score-based route is still checked, unless the operation has a canonical contract', () => {
+  const plain = () => { const result = notRecorded(); return { ...result, blocks: [{ ...result.blocks[0], id: 'plain-limitation' }] }; };
+  const checked = validateAskAnswerTrustPipeline({ question: 'is my water heater still good', operationId: 'REPLACEMENT_GUIDANCE', result: plain(), semanticEnabled: true, propertyId: 'p1' });
+  assert.equal(checked.result.status, 'NEEDS_CLARIFICATION');
+  assert.equal(checked.semantic.outcome, 'UNKNOWN');
+  const certain = validateAskAnswerTrustPipeline({ question: 'is my water heater still good', operationId: 'REPLACEMENT_GUIDANCE', result: plain(), semanticEnabled: true, propertyId: 'p1', routedDeterministically: true });
+  assert.equal(certain.result.status, 'READY_WITH_LIMITATIONS');
+  // REPLACEMENT_GUIDANCE's own "not recorded" answer carries its canonical block, so it passes whichever way the request was routed.
+  const canonical = validateAskAnswerTrustPipeline({ question: 'is my water heater still good', operationId: 'REPLACEMENT_GUIDANCE', result: notRecorded(), semanticEnabled: true, propertyId: 'p1' });
+  assert.equal(canonical.result.status, 'READY_WITH_LIMITATIONS');
+  assert.equal(canonical.semantic.outcome, 'PASS');
 });
 
 test('only a plain limitation skips the check: an answer with data, or a vague answer, is still verified', () => {

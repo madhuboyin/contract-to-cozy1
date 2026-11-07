@@ -400,7 +400,9 @@ export function validateAskAnswerTrustPipeline(input: {
       ...(clearMismatch ? [semantic.competingOperationId] : []),
       ...routedAlternatives,
     ].filter((operationId): operationId is AskOperationId => Boolean(operationId)))]
-      .filter((operationId) => !getAskOperationDefinition(operationId).safetyClass.endsWith('_BOUNDARY'));
+      .filter((operationId) => !getAskOperationDefinition(operationId).safetyClass.endsWith('_BOUNDARY'))
+      // A competing or runner-up request is offered as a choice only if it is a read: "export the home record" is never what a water-heater question meant.
+      .filter((operationId) => operationId === input.operationId || getAskOperationDefinition(operationId).semantic.effect === 'READ');
     // "Get general educational home guidance" is the fallback that just failed; it is a choice only when nothing else is.
     if (candidateOperationIds.length > 1) candidateOperationIds = candidateOperationIds.filter((operationId) => operationId !== 'GROUNDED_GUIDANCE');
     candidateOperationIds = candidateOperationIds.slice(0, 3);
