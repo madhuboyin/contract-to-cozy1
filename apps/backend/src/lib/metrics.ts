@@ -290,6 +290,13 @@ export const askModelRouterTotal = new Counter({
   registers: [register],
 });
 
+export const askUnansweredRecoveryTotal = new Counter({
+  name: 'ask_unanswered_recovery_total',
+  help: 'Messages the generic fallback could not answer: a "Did you mean" was offered, or no candidate cleared the floor',
+  labelNames: ['outcome'] as const,
+  registers: [register],
+});
+
 export const askAnswerTrustTotal = new Counter({
   name: 'ask_answer_trust_total',
   help: 'Final Ask answer trust outcomes by bounded operation, source state, and repair disposition',

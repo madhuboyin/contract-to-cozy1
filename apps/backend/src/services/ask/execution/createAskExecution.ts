@@ -7,7 +7,7 @@ import { logger } from '../../../lib/logger';
 import { recordAskCapabilityLifecycle } from '../askCapabilityLifecycle';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
-import { askTurnStageDurationSeconds, askTurnFailuresTotal, type AskTurnStage, askExecutionDurationSeconds, askExecutionsTotal, askInlineCapturesTotal, askRoutingDecisionsTotal, askModelRouterTotal, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../../lib/metrics';
+import { askTurnStageDurationSeconds, askTurnFailuresTotal, type AskTurnStage, askExecutionDurationSeconds, askExecutionsTotal, askInlineCapturesTotal, askRoutingDecisionsTotal, askModelRouterTotal, askUnansweredRecoveryTotal, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../../lib/metrics';
 import { type AskAccountRole } from '../askAccountEligibility';
 import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
 import { runConversationalCaptureForTurn } from '../conversationalUnderstanding/conversationalCapture';
@@ -16,6 +16,7 @@ import { executeOperation } from '../execution/executeOperation';
 import { classifyLaunchedOutcome, recordHandoffOutcome, resolveHandoffAttribution, type AskHandoffAttribution } from './askHandoffTelemetry';
 import { propertyScopeForAskRouting, resolveAskRoutingCascade, type AskRoutingDecision } from '../askRoutingCascade';
 import { refineAskRoutingWithModel } from '../askModelRouter';
+import { offerDidYouMean, isAskUnansweredFallbackResult } from '../support/didYouMean';
 import { geminiService } from '../../gemini.service';
 import { resolveAskFollowUpMessage, shouldForceAskOperation } from '../askFollowUpContext';
 import { getSkillDefinition, getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../../skills/skillRegistry';
@@ -570,7 +571,18 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     const validation = routingDecision.requiresClarification
       ? null
       : validateAskAnswerTrustPipeline({ question: routingMessage, operationId: operation.operationId, result: presentedResult, propertyId: executionPropertyId, semanticEnabled: controls.semanticResponseValidatorEnabled && !declaredOperationRan, language: routingDecision.language, routedDeterministically: routingDecision.stage === 'DETERMINISTIC', routingAlternatives: routingDecision.stage === 'LOCAL_CLASSIFIER' ? routingDecision.candidates.map((candidate) => ({ operationId: candidate.operationId, confidence: candidate.confidence })) : undefined });
-    const result = validation?.result ?? presentedResult;
+    let result = validation?.result ?? presentedResult;
+    // The generic fallback found nothing (or could not match its answer to the question): offer the local router's best candidates instead of a dead end.
+    if (isAskUnansweredFallbackResult(operation.operationId, result)) {
+      const didYouMean = offerDidYouMean({ operationId: operation.operationId, routingDecision, result, eligibleOperationIds });
+      askUnansweredRecoveryTotal.inc({ outcome: didYouMean ? 'offered' : 'none' });
+      if (didYouMean) {
+        result = await finalizeSuggestedNextActions({
+          result: didYouMean, executionId: execution.id, userId, sessionId: session.id, propertyId: executionPropertyId ?? null,
+          operationId: null, message: routingMessage,
+        });
+      }
+    }
     markStage('TRUST_VALIDATION', operation.operationId);
     if (validation) recordAskAnswerTrustMetrics(operation.operationId, validation);
     assertSkillResultBlocksAllowed(operation.operationId, result, skillTelemetryTrace);
