@@ -1,4 +1,4 @@
-# Ask Cozy: Natural Language & Free-Form Prompts Comprehensive Audit (Revision 6)
+# Ask Cozy: Natural Language & Free-Form Prompts Comprehensive Audit (Revision 7)
 
 **Date:** 2026-11-08  
 **Scope:** End-to-end audit of Ask Cozy prompt handling (`apps/frontend/src/components/ask/*` and `apps/backend/src/services/ask/*`)  
@@ -372,6 +372,29 @@ No handler needed its block ids namespaced first: every one of the 12 already em
    - **`OD-4.1` / `OD-4.2` / `OD-4.3` (`ASK_COZY_ROUTING_COVERAGE_AND_CALIBRATION.md` §6):** Refreshing the 4 drifted calibration evidence rows and addressing the `0.30–0.50` READ isotonic plateau require paired hard-negative additions and a dedicated calibration design study.
    - **General Guidance When Property Is Selected (`groundedAsk.service.ts:112`):** Decide whether `REMOTE_FALLBACK` turns that yield neither a property claim nor any `offerDidYouMean` option (`9 / 203` fallback prompts in the sweep **[Executed]**) should remain `"Nothing in your home record answers this"` or offer an explicitly badged general homeowner guidance card.
 
+#### Phase 4 Results (item 1 implemented 2026-11-08, commit `e20a49e9`) **[Executed + Code-traced]**
+
+**Item 1, conversational filter follow-ups: done.** `askFollowUpContext.ts` gained `conversationalFilterAsOnlyShow` and a branch in `resolveAskFollowUpMessage`. A conversational narrowing is rewritten, for routing and parsing only, into the existing `Only show ...` wording, which `containsFilterContinuation` and every list handler already understand. The text shown to the homeowner is unchanged. This differs from the plan above, which proposed widening `FILTER_CONTINUATION_PATTERN` itself: widening the shared pattern would change what each handler's own `containsFilterContinuation(message)` check accepts, so a rewrite into the one form they already accept is safer **[Code-traced]**.
+
+| Message after a list | Prior list | Result |
+| :--- | :--- | :--- |
+| "What about the overdue ones?", "Which ones are urgent?", "And the completed ones?", "How about the due soon ones" | `MAINTENANCE_STATUS`, `HOME_ACTIONS`, `WORK_OVERVIEW` | Continues that list, rewritten to `Only show the ... ones` |
+| "How about in the kitchen?" | `MAINTENANCE_STATUS` only | Continues that list, rewritten to `Only show tasks in the kitchen` |
+| "What about my mortgage rate?", "What about the kitchen faucet?", "How about in the budget?", "Which ones are covered by warranty?", "What about the overdue taxes on my property?" | any | Unchanged; routed as a new question |
+| "What about the overdue ones?" | `INVENTORY_LOOKUP`, `DOCUMENT_LOOKUP`, `COVERAGE_GAPS`, `PROPERTY_SUMMARY` | Unchanged (those lists have no such filter) |
+
+**Scope cut from the plan:**
+- `INVENTORY_LOOKUP` is not a target. Its refinement (`resolveInventoryRefinement`) filters by status (incomplete, lifecycle, all) and category (HVAC, appliance, roof) only; a room phrase would continue the list without narrowing anything **[Code-traced]**. The plan's `"How about in the kitchen"` example therefore works for maintenance lists, where the handler matches the room name against task rooms (`maintenance.handler.ts:991`), and not for inventory.
+- The status words are limited to a closed list (overdue, urgent, critical, high priority, due soon, coming up, upcoming, pending, open, completed, done, cancelled); rooms to a closed list of common room names. Anything else is a new question by design.
+
+**Tests:** `tests/ask/conversationalFilterFollowUps.test.js` (7, all pass **[Executed]**) covers the positive phrasings, the rewrite text, the declared-chip form (message alone, no concatenation), the maintenance-only room rule, the topic-switch guards above, wrong-list guards, and that the existing `Only show ...` wording is unchanged. The existing follow-up tests still pass. Including the 124 of 131 related tests that ran through `run-tests-chunked.js`; the 7 failures are all in `documentViews.test.js` and fail identically without this change **[Executed]**. The typecheck printed no errors.
+
+**Not verified:** behaviour with real task data and the full handler path. The tests mock the prior execution row; the handlers' own filter parsing of the rewritten message is covered by their existing tests, not by new ones here.
+
+**Item 2, offline model-router evaluation: not run.** `node apps/backend/scripts/ask-routing-sweep.js --model --misses` needs `GEMINI_API_KEY` and network access; no key is set in this environment. It also sends the corpus prompts to an external service, so it should be run deliberately by the owner. The decision on `ASK_MODEL_ROUTER_ENABLED` still has no measured evidence behind it, and the router stays off by default.
+
+**Item 3, owner decisions: unchanged and open.** `OD-4.1` to `OD-4.3` (refreshing the drifted calibration evidence rows and the `0.30-0.50` isotonic plateau) and the general-guidance-when-a-property-is-selected question (`groundedAsk.service.ts:112`). Phase 2's results show why the first is now the main lever: pattern widening plateaued, and semantic examples cannot be added without refreshing that evidence.
+
 ---
 
 ## 5. Summary of Roadmap, Metrics & Rollback Controls
@@ -381,4 +404,4 @@ No handler needed its block ids namespaced first: every one of the 12 already em
 | **Phase 1** (done, `fcb9efb5`) | `miscHandlers.handler.ts` (`findSpecificInventoryAlias` in `replacementGuidanceResult` with HVAC-first precedence, local `garage door` branch, and spoken-noun `namedNoun`), `CARD_ENTRY_BINDINGS` routing parity (`home-records`, `claims`) | Extend `itemHealthWording.test.js`, new `cardEntryBindingsRouting.test.js` + `node scripts/ask-routing-sweep.js --check` | Gated by the routing ratchet; revert commit if any test regresses |
 | **Phase 2** (partial: pattern widening done, `a7add690` + `4de820aa`; hijacker guards, stemming, negotiation package not done; see Phase 2 Results) | Top 6 hijacker regex guards (`67` misroutes) + top fallback operation patterns/examples (`203` fallbacks, capped at 2–3 examples/op) | `node scripts/ask-routing-sweep.js --check`, new held-out corpus (`askRoutingHoldoutCorpus.js`, to be created; report-only), and `askRoutingCoverageReport.test.js` | CI routing ratchet (`tests/ask/routingSweepRatchet.test.js`) blocks any lost hit or new misroute |
 | **Phase 3** (done for 12 of 16 named operations, `b300a3ff`; the other 4 deferred on purpose, see Phase 3 Results) | Per-operation `CANONICAL_ANSWER_BLOCK_ID_PREFIXES` additions (`support/canonicalAnswerBlocks.ts`) for uncovered `READ` handlers | `tests/ask/canonicalAnswerContracts.test.js` + `ASK_ANSWER_RELEVANCE_CROSS_OPERATION_NEGATIVE_MATRIX` | Remove individual operation prefix entry in `canonicalAnswerBlocks.ts` |
-| **Phase 4** | Multi-turn filter continuations (`askFollowUpContext.ts`) + live `--model` sweep measurement (`Revision 1.527`) | Multi-turn follow-up unit tests + `node scripts/ask-routing-sweep.js --model --misses` report reviewed by owner | `ASK_MODEL_ROUTER_KILL_SWITCH=true` (`askOperationalControls.ts:66`) and `ASK_MODEL_ROUTER_ENABLED=false` (`line 65`) |
+| **Phase 4** (item 1 done, `e20a49e9`; item 2 needs `GEMINI_API_KEY` and was not run; item 3 is owner decisions; see Phase 4 Results) | Multi-turn filter continuations (`askFollowUpContext.ts`) + live `--model` sweep measurement (`Revision 1.527`) | Multi-turn follow-up unit tests + `node scripts/ask-routing-sweep.js --model --misses` report reviewed by owner | `ASK_MODEL_ROUTER_KILL_SWITCH=true` (`askOperationalControls.ts:66`) and `ASK_MODEL_ROUTER_ENABLED=false` (`line 65`) |
