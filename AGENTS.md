@@ -35,3 +35,7 @@ Rules:
 - Do not treat unavailable runtime tests as a blocker. Report what was checked, what was not run, and never claim inspected functionality was executed.
 - Do not add approval gates, gated releases, staged rollouts, pilot cohorts, canary logic, feature flags, manual release certification, or compatibility layers solely to protect nonexistent users. Add them only when explicitly required by the user or an authoritative product requirement.
 - Preserve application-level authentication, authorization, security, data-integrity, consequential-action confirmation, and genuine business approval workflows. If it is unclear whether a gate is release machinery or required product behavior, ask the user.
+
+## Review output
+
+- Always present code-review findings as ordinary visible Markdown, with the priority, file path, line number, and explanation in the response. Do not rely on `::code-comment` directives as the only presentation of review comments.
