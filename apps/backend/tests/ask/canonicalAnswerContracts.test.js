@@ -106,3 +106,42 @@ test('the savings contract accepts every savings- block the handler emits, and s
   assert.equal(matchesSavingsOpportunitiesAnswerContract(result([block('savings-summary', 'SUMMARY'), block('some-other-block')])), false);
   assert.equal(matchesSavingsOpportunitiesAnswerContract(result([block('maintenance-summary', 'SUMMARY')])), false);
 });
+
+// Audit Phase 3: operations added to the canonical contract. Each prefix must be one the operation's own handler really emits (checked against the
+// handler source, so a typo or a renamed block id fails here), must accept that operation's answer block, and must not accept a footer, the fallback, or
+// another operation's block.
+const PHASE3 = {
+  APPLIANCE_FAILURE_RISK: ['applianceOracleBudget.handler.ts', 'appliance-oracle-summary'],
+  WARRANTY_LOOKUP: ['warranties.handler.ts', 'warranty-summary'],
+  INCIDENT_CLAIM_STATUS: ['claims.handler.ts', 'incident-claim-summary'],
+  RECALL_REVIEW: ['recallReview.handler.ts', 'recall-review-summary'],
+  SELL_HOLD_RENT_ANALYSIS: ['sellHoldRent.handler.ts', 'sell-hold-rent-summary'],
+  PROPERTY_TAX_APPEAL_READINESS: ['capitalPlanning.handler.ts', 'tax-readiness-summary'],
+  BREAK_EVEN_ANALYSIS: ['refinance.handler.ts', 'break-even-summary'],
+  DO_NOTHING_SIMULATION: ['doNothingSimulator.handler.ts', 'do-nothing-summary'],
+  HOA_COMPLIANCE_STATUS: ['hoaCompliance.handler.ts', 'hoa-compliance-summary'],
+  SERVICE_PRICE_CHECKS: ['servicePriceRadar.handler.ts', 'service-price-radar-summary'],
+  PROJECT_TRACKER_PROJECTS: ['projectTracker.handler.ts', 'project-tracker-summary'],
+  DIY_PROJECTS: ['diyProjectCenter.handler.ts', 'diy-summary'],
+};
+
+test('every Phase 3 operation accepts its own handler block and nothing else', () => {
+  const block = (type, id) => ({ type, id });
+  const ids = Object.entries(PHASE3);
+  for (const [operationId, [file, ownId]] of ids) {
+    const source = readFileSync(resolve(__dirname, `../../src/services/ask/handlers/${file}`), 'utf8');
+    assert.ok(source.includes(`id: '${ownId}'`), `${operationId}: ${file} emits ${ownId}`);
+    assert.equal(matchesCanonicalAnswerBlocks(operationId, { blocks: [block('SUMMARY', ownId)] }), true, operationId);
+    assert.equal(matchesCanonicalAnswerBlocks(operationId, { blocks: [block('SUMMARY', 'grounded-guidance')] }), false, `${operationId}: the fallback never counts`);
+    assert.equal(matchesCanonicalAnswerBlocks(operationId, { blocks: [block('BOUNDARY', ownId), block('EVIDENCE', ownId)] }), false, `${operationId}: a footer alone is not an answer`);
+    for (const [otherId, [, otherOwn]] of ids) {
+      if (otherId !== operationId) assert.equal(matchesCanonicalAnswerBlocks(operationId, { blocks: [block('SUMMARY', otherOwn)] }), false, `${operationId} must not accept ${otherId}'s block`);
+    }
+  }
+});
+
+test('operations the routing sweep shows other questions misrouted into stay under the relevance check', () => {
+  for (const operationId of ['MAINTENANCE_BUDGET_FORECAST', 'MAINTENANCE_FORECAST', 'DOCUMENT_LOOKUP', 'INSPECTION_FINDINGS']) {
+    assert.equal(CANONICAL_ANSWER_BLOCK_ID_PREFIXES[operationId], undefined, operationId);
+  }
+});

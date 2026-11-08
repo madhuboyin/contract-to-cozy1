@@ -14,6 +14,21 @@ export const CANONICAL_ANSWER_BLOCK_ID_PREFIXES: Readonly<Partial<Record<AskOper
   MATERIAL_SPECS_LIST: ['material-specs-'],
   HOME_TIMELINE_EVENTS: ['home-timeline-'],
   NEIGHBORHOOD_CHANGE_FEED: ['neighborhood-change'],
+  // Audit Phase 3 (2026-11-08): each prefix below was read from the operation's own handler (the ids its answer blocks carry), not guessed. A prefix that
+  // another operation's handler also emits for a different job is not used here. Deliberately NOT listed, because the routing sweep shows other questions
+  // misrouted into them (the relevance check is what catches those): MAINTENANCE_BUDGET_FORECAST, MAINTENANCE_FORECAST, DOCUMENT_LOOKUP, INSPECTION_FINDINGS.
+  APPLIANCE_FAILURE_RISK: ['appliance-oracle-'],
+  WARRANTY_LOOKUP: ['warranty-'],
+  INCIDENT_CLAIM_STATUS: ['incident-claim-'],
+  RECALL_REVIEW: ['recall-review-'],
+  SELL_HOLD_RENT_ANALYSIS: ['sell-hold-rent-'],
+  PROPERTY_TAX_APPEAL_READINESS: ['tax-readiness-'],
+  BREAK_EVEN_ANALYSIS: ['break-even-'],
+  DO_NOTHING_SIMULATION: ['do-nothing-'],
+  HOA_COMPLIANCE_STATUS: ['hoa-'],
+  SERVICE_PRICE_CHECKS: ['service-price-radar-'],
+  PROJECT_TRACKER_PROJECTS: ['project-tracker-'],
+  DIY_PROJECTS: ['diy-'],
 });
 
 // A boundary or an evidence footer alone is not an answer.
