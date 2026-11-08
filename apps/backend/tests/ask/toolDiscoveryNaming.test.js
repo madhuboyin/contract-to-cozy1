@@ -73,3 +73,14 @@ test('tool discovery cards survive the trust step; only the desktop link is remo
   assert.equal(block.capabilities.length, before);
   for (const card of block.capabilities) assert.ok(card.href === null || card.href.startsWith('/dashboard/ask'), `no desktop link: ${card.href}`);
 });
+
+test('the tool discovery answer passes the full trust pipeline, relevance check included (review: "answer the right home question")', async () => {
+  const { validateAskAnswerTrustPipeline } = require('../../src/services/ask/askAnswerTrustValidator.ts');
+  const { attachAskAuthoritativeSourceEvidence, completedAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
+  const question = 'is there a tool for me to record my bedroom color and other details';
+  const result = attachAskAuthoritativeSourceEvidence(await capabilityResult('user-1', null, question, { availability: adapterFor(['home-records', 'material-specs', 'property-brief']) }), [completedAskAuthoritativeSourceEvidence('CAPABILITY_DISCOVERY')]);
+  const validation = validateAskAnswerTrustPipeline({ question, operationId: 'CAPABILITY_DISCOVERY', result, propertyId: 'p1', semanticEnabled: true, routedDeterministically: true });
+  assert.equal(validation.result.status, 'ANSWERED');
+  assert.equal(validation.result.clarification ?? null, null);
+  assert.ok(validation.result.blocks.some((block) => block.id === 'capability-matches'));
+});

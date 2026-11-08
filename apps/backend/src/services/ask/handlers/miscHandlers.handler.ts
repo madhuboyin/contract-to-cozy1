@@ -198,14 +198,23 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
     ? allItems.filter((item) => item.id === focusedInventoryItemId)
     : aliases.length ? allItems.filter((item) => aliases.some((alias) => containsWholeWord(itemText(item), alias) || containsWholeWord(alias, item.name))) : [];
   if (!items.length) {
+    // A system the question names but the home record does not hold ("do I need a new roof"): say so plainly and offer to add it.
+    const namedNoun = aliases.length && aliases[0] !== query ? (aliases[0] === 'hvac' ? 'HVAC system' : aliases[0]) : null;
+    const withArticle = namedNoun ? `${/^(?:[aeiou]|hvac)/i.test(namedNoun) ? 'an' : 'a'} ${namedNoun}` : null;
+    const recordedCount = allItems.length ? ` Your home has ${allItems.length} recorded item${allItems.length === 1 ? '' : 's'}.` : '';
     return {
       status: 'READY_WITH_LIMITATIONS',
       reasonCode: 'REPAIR_REPLACE_ITEM_NOT_IN_HOME_RECORD',
       blocks: [{
-        type: 'SUMMARY', id: 'repair-replace-no-item', title: 'Choose a recorded appliance or home system first',
-        body: `I could not resolve this request to one canonical inventory item. Ask will not manufacture a repair/replace calculation without the item’s condition, lifecycle, cost, and repair history.${allItems.length ? ` This home has ${allItems.length} recorded item${allItems.length === 1 ? '' : 's'}.` : ''}`,
+        type: 'SUMMARY', id: 'repair-replace-no-item',
+        title: withArticle ? `I don’t have ${withArticle} recorded for your home yet` : 'Tell me which item you mean',
+        body: withArticle
+          ? `Without it on record I can’t judge whether it needs repair or replacement. Add it, with its age and condition if you know them, and I’ll look at it.${recordedCount}`
+          : `I couldn’t tell which recorded appliance or home system you mean. Name it, or pick one from your inventory, and I’ll compare repairing it with replacing it.${recordedCount}`,
         tone: 'CAUTION',
-        actions: allItems.length ? [inventoryShowAllAction(), { ...inventoryAddItemAction(), label: 'Add this item to my home' }] : [{ ...inventoryAddItemAction(), label: 'Add an inventory item' }],
+        actions: allItems.length
+          ? [inventoryShowAllAction(), { ...inventoryAddItemAction(), label: withArticle ? `Add ${withArticle} to my home` : 'Add this item to my home' }]
+          : [{ ...inventoryAddItemAction(), label: withArticle ? `Add ${withArticle} to my home` : 'Add an inventory item' }],
       }],
       suggestions: [],
     };

@@ -8,6 +8,8 @@ import type { AskOperationId } from '../askOperationRegistry';
 export const CANONICAL_ANSWER_BLOCK_ID_PREFIXES: Readonly<Partial<Record<AskOperationId, readonly string[]>>> = Object.freeze({
   // REPLACEMENT_GUIDANCE hands an HVAC item to the HVAC decision, whose answer blocks carry the decision's own prefix.
   REPLACEMENT_GUIDANCE: ['repair-replace-', 'hvac-decision-'],
+  // Tool discovery: 'capability-discovery-summary' and 'capability-matches'. The cards describe tools in words that share little with the question.
+  CAPABILITY_DISCOVERY: ['capability-'],
   PLANT_CARE_OUTLOOK: ['plant-care-'],
   MATERIAL_SPECS_LIST: ['material-specs-'],
   HOME_TIMELINE_EVENTS: ['home-timeline-'],

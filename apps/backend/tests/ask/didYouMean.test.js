@@ -24,7 +24,6 @@ const noAnswer = () => ({
 test('the screenshot messages are offered the operation the homeowner meant', () => {
   for (const [message, expected] of [
     ['what need to be taken care for my plant for winter', 'PLANT_CARE_OUTLOOK'],
-    ['how much rent can i expect for my home', 'SELL_HOLD_RENT_ANALYSIS'],
   ]) {
     const decision = cascade(message);
     assert.equal(decision.stage, 'REMOTE_FALLBACK', message);
@@ -60,7 +59,8 @@ test('options: best first, above the floor, eligible, never the fallback or a bo
 });
 
 test('only an unanswered generic fallback is replaced; a real answer, another stage and "no candidate" are left alone', () => {
-  const decision = cascade('how much rent can i expect for my home');
+  // (the rent wording from the same screenshots now routes directly; the rain message still ends in the fallback)
+  const decision = cascade("it's going to rain tomorrow, do i need to take care of anything");
   const offer = (overrides) => offerDidYouMean({ operationId: 'GROUNDED_GUIDANCE', routingDecision: decision, result: noAnswer(), eligibleOperationIds: eligible, ...overrides });
   assert.ok(offer({}));
   assert.ok(offer({ result: { status: 'READY_WITH_LIMITATIONS', reasonCode: 'ASK_ANSWER_UNVERIFIED_NO_ALTERNATIVE', blocks: [], suggestions: [] } }), 'an answer that could not be matched is replaced too');

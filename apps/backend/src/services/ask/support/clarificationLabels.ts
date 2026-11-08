@@ -6,6 +6,8 @@ import { ASK_DEFAULT_LANGUAGE, type AskLanguageCode } from '../askLanguageRegist
 const LABEL_OVERRIDES: Readonly<Partial<Record<AskOperationId, string>>> = Object.freeze({
   GUIDANCE_JOURNEY_CONTINUE: 'View current guided journey steps',
   // The capital timeline accepts a 5-year or 10-year horizon (parseCapitalTimelineHorizonRequest); the upkeep budget is a yearly view.
+  SELLER_PREP_CHECKLIST: 'get the home ready to sell (seller-prep checklist)',
+  HOME_UPGRADE_SCENARIOS: 'see my saved upgrade options and what they would cost and save',
   CAPITAL_RESERVE_PLAN: 'plan reserves for big future home expenses over a 5-year or 10-year horizon',
 });
 

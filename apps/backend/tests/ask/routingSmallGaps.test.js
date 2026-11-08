@@ -45,7 +45,22 @@ test('the repair-or-replace "item not in your home record" answer offers adding 
   const { readFileSync } = require('node:fs');
   const { resolve } = require('node:path');
   const source = readFileSync(resolve(__dirname, '../../src/services/ask/handlers/miscHandlers.handler.ts'), 'utf8');
-  assert.match(source, /actions: allItems\.length \? \[inventoryShowAllAction\(\), \{ \.\.\.inventoryAddItemAction\(\), label: 'Add this item to my home' \}\]/);
+  assert.match(source, /\? \[inventoryShowAllAction\(\), \{ \.\.\.inventoryAddItemAction\(\), label: withArticle \?/);
+  assert.match(source, /I don’t have \$\{withArticle\} recorded for your home yet/);
+  assert.doesNotMatch(source, /canonical inventory item/);
   const { OPERATION_ACTION_IDS } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
   if (OPERATION_ACTION_IDS) assert.ok(OPERATION_ACTION_IDS.REPLACEMENT_GUIDANCE.has('add-inventory-item'));
+});
+
+test('the lifecycle sentence is dropped from the repair-or-replace "not in your home record" answer, and tool discovery is a canonical answer', () => {
+  const { isLifecycleFramingAnswer } = require('../../src/services/ask/askAudiencePresentation.ts');
+  assert.equal(isLifecycleFramingAnswer('REPLACEMENT_GUIDANCE', { status: 'READY_WITH_LIMITATIONS', reasonCode: 'REPAIR_REPLACE_ITEM_NOT_IN_HOME_RECORD', blocks: [] }), false);
+  const { matchesCanonicalAnswerBlocks } = require('../../src/services/ask/support/canonicalAnswerBlocks.ts');
+  assert.equal(matchesCanonicalAnswerBlocks('CAPABILITY_DISCOVERY', { blocks: [{ type: 'SUMMARY', id: 'capability-discovery-summary' }, { type: 'CAPABILITY_LIST', id: 'capability-matches' }] }), true);
+});
+
+test('clarification options for the home-value question are short, and rent "expect" wording reaches the rent analysis', () => {
+  const { clarificationLabelFor } = require('../../src/services/ask/support/clarificationLabels.ts');
+  for (const id of ['SELLER_PREP_CHECKLIST', 'HOME_UPGRADE_SCENARIOS']) assert.ok(clarificationLabelFor(id).length <= 70, id);
+  for (const message of ['how much rent can i expect for my home', 'how much rent would i receive', 'what rent should i expect']) assert.equal(resolveAskOperation(message).operationId, 'SELL_HOLD_RENT_ANALYSIS', message);
 });
