@@ -47,3 +47,41 @@ test('the existing keep-or-replace wording and the neighbouring routes are uncha
   assert.equal(op('show me the history of my washing machine repairs'), 'INVENTORY_LOOKUP');
   assert.equal(op('what is the model number of my dishwasher'), 'INVENTORY_LOOKUP');
 });
+
+// Handler behaviour (audit Phase 1): the router sends microwave/oven/stove/... questions here, so the handler must resolve them too.
+// Only the not-found / ambiguous outcomes are exercised: a single matched item continues into a DB-backed property-context lookup.
+const { prisma } = require('../../src/lib/prisma.ts');
+const propertyAccessService = require('../../src/services/propertyAccess.service.ts');
+const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
+require('../../src/services/ask/handlers/miscHandlers.handler.ts');
+
+const item = (id, name, assetType) => ({ id, name, category: 'APPLIANCE', assetType, brand: 'GE', model: 'X1', condition: 'GOOD', installedOn: null, purchasedOn: null, expectedExpiryDate: null, updatedAt: new Date('2026-01-01T00:00:00Z') });
+async function replacement(message, items) {
+  const originalFind = prisma.inventoryItem.findMany;
+  const originalAccess = propertyAccessService.resolvePropertyAccess;
+  propertyAccessService.resolvePropertyAccess = async () => ({ propertyId: 'p1', userId: 'u1', role: 'OWNER', isOwner: true });
+  prisma.inventoryItem.findMany = async () => items;
+  try {
+    return await capabilityInvoke('REPLACEMENT_GUIDANCE', { userId: 'u1', propertyId: 'p1', sessionId: 's1', executionId: 'e1', message });
+  } finally {
+    prisma.inventoryItem.findMany = originalFind;
+    propertyAccessService.resolvePropertyAccess = originalAccess;
+  }
+}
+
+test('an unrecorded item is named as the user spoke it', async () => {
+  assert.equal((await replacement('Do I need a new stove?', [])).blocks[0].title, 'I don’t have a stove recorded for your home yet');
+  assert.equal((await replacement('Do I need a new microwave?', [])).blocks[0].title, 'I don’t have a microwave recorded for your home yet');
+  assert.equal((await replacement('Do I need a new garage door?', [])).blocks[0].title, 'I don’t have a garage door recorded for your home yet');
+  assert.equal((await replacement('Do I need a new roof?', [])).blocks[0].title, 'I don’t have a roof recorded for your home yet');
+});
+
+test('HVAC wording keeps its own branch ahead of the shared aliases', async () => {
+  assert.equal((await replacement('Should I replace my furnace?', [])).blocks[0].title, 'I don’t have an HVAC system recorded for your home yet');
+});
+
+test('two recorded microwaves ask which one; multi-word names are matched', async () => {
+  const result = await replacement('Is my microwave still good?', [item('a', 'Kitchen Microwave', 'MICROWAVE'), item('b', 'Basement Microwave', 'MICROWAVE')]);
+  assert.equal(result.reasonCode, 'MULTIPLE_REPAIR_REPLACE_ITEMS');
+  assert.equal(result.blocks[0].sections[0].count, 2);
+});

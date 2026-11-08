@@ -284,6 +284,7 @@
   ],
   "INCIDENT_CLAIM_STATUS": [
    "any open claims on the house",
+   "show my insurance claims",
    "what is the status of my claim"
   ],
   "INSPECTION_FINDINGS": [
@@ -662,8 +663,7 @@
    "set my hvac decision preference"
   ],
   "INCIDENT_CLAIM_STATUS": [
-   "did my claim get approved",
-   "show my insurance claims"
+   "did my claim get approved"
   ],
   "INSPECTION_REPORT_COMPARE": [
    "what changed since the last inspection"

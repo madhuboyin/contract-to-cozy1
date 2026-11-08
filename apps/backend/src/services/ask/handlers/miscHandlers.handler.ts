@@ -39,6 +39,7 @@ import { assertUserWorkItemTransition } from '../../../modules/homeOperations/do
 import { operationalWorkSnoozeDays } from '../operationalWorkSnooze';
 import { collectionDescriptor } from '../support/collectionDescriptor';
 import { containsWholeWord } from '../support/wholeWord';
+import { findSpecificInventoryAlias } from '../support/inventoryItemAliases';
 
 const replaceRepairService = new ReplaceRepairService();
 
@@ -186,20 +187,20 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
     select: { id: true, name: true, category: true, assetType: true, brand: true, model: true, condition: true, installedOn: true, purchasedOn: true, expectedExpiryDate: true, updatedAt: true },
   });
   const query = message.toLowerCase().replace(/\b(?:when|should|i|we|repair|replace|replacement|versus|vs|my|our|the|is|it|time|good|to|do)\b/g, ' ').replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  // HVAC stays first (the shared alias table has no HVAC entry, and an HVAC item hands off to the HVAC decision). Every other item the router sends
+  // here resolves through the shared alias table, so "Kitchen Microwave" matches "is my microwave still good" and an unrecorded stove is named as a stove.
+  const sharedAlias = findSpecificInventoryAlias(message);
   const aliases = /\b(?:hvac|furnace|air conditioner|heat pump)\b/i.test(message) ? ['hvac', 'furnace', 'air conditioner', 'heat pump']
-    : /\b(?:refrigerator|fridge)\b/i.test(message) ? ['refrigerator', 'fridge']
-      : /\bwater heater\b/i.test(message) ? ['water heater']
-        : /\b(?:roof|roofing)\b/i.test(message) ? ['roof']
-          : /\b(?:washer|washing machine)\b/i.test(message) ? ['washer', 'washing machine']
-            : /\bdryer\b/i.test(message) ? ['dryer']
-              : /\bdishwasher\b/i.test(message) ? ['dishwasher'] : query ? [query] : [];
+    : sharedAlias ? [...sharedAlias.terms]
+      : /\bgarage door\b/i.test(message) ? ['garage door'] : query ? [query] : [];
   const itemText = (item: typeof allItems[number]) => [item.name, item.category, item.assetType, item.brand, item.model].filter(Boolean).join(' ').toLowerCase();
   const items = focusedInventoryItemId
     ? allItems.filter((item) => item.id === focusedInventoryItemId)
     : aliases.length ? allItems.filter((item) => aliases.some((alias) => containsWholeWord(itemText(item), alias) || containsWholeWord(alias, item.name))) : [];
   if (!items.length) {
     // A system the question names but the home record does not hold ("do I need a new roof"): say so plainly and offer to add it.
-    const namedNoun = aliases.length && aliases[0] !== query ? (aliases[0] === 'hvac' ? 'HVAC system' : aliases[0]) : null;
+    const spokenTerm = aliases.find((term) => containsWholeWord(message, term)) ?? aliases[0];
+    const namedNoun = aliases.length && aliases[0] !== query ? (aliases[0] === 'hvac' ? 'HVAC system' : spokenTerm) : null;
     const withArticle = namedNoun ? `${/^(?:[aeiou]|hvac)/i.test(namedNoun) ? 'an' : 'a'} ${namedNoun}` : null;
     const recordedCount = allItems.length ? ` Your home has ${allItems.length} recorded item${allItems.length === 1 ? '' : 's'}.` : '';
     return {
