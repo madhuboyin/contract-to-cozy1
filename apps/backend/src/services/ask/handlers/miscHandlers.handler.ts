@@ -205,7 +205,7 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
         type: 'SUMMARY', id: 'repair-replace-no-item', title: 'Choose a recorded appliance or home system first',
         body: `I could not resolve this request to one canonical inventory item. Ask will not manufacture a repair/replace calculation without the item’s condition, lifecycle, cost, and repair history.${allItems.length ? ` This home has ${allItems.length} recorded item${allItems.length === 1 ? '' : 's'}.` : ''}`,
         tone: 'CAUTION',
-        actions: [allItems.length ? inventoryShowAllAction() : { ...inventoryAddItemAction(), label: 'Add an inventory item' }],
+        actions: allItems.length ? [inventoryShowAllAction(), { ...inventoryAddItemAction(), label: 'Add this item to my home' }] : [{ ...inventoryAddItemAction(), label: 'Add an inventory item' }],
       }],
       suggestions: [],
     };

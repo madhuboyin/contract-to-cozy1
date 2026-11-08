@@ -254,6 +254,10 @@ export const UNDERSTAND_HOME_CAPABILITIES = buildCapabilityDefinitions([
       'room finishes',
       'tile flooring and product details',
       'material document',
+      'bedroom color',
+      'wall color',
+      'room color and details',
+      'record my paint colors',
     ],
     homeownerOutcome:
       'Keep a reusable record of the exact finishes and products used in each room or project.',

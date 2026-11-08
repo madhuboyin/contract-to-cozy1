@@ -1177,6 +1177,9 @@ const inventoryItemCorrectPattern = new RegExp(
 // names those types when they directly follow the verb; the second finds the same nouns after up to four qualifiers
 // ("an insurance claim", "a household member", "a seasonal home care checklist", "a $500 reserve contribution"), so those reach
 // their own command or a guidance answer instead of an inventory-item form.
+// "Add a repair to my furnace history", "log a repair on my dishwasher", "record a service visit": writing down WORK DONE on an item. It is not a new inventory item
+// and not a lookup of the item's history, so neither rule may take it; it stays with the conversational capture that records events.
+const repairRecordWritePattern = /^\s*(?:please\s+)?(?:add|log|record|create|enter|save)\s+(?:(?:a|an|the|new|another|my)\s+)?(?:repair|service|maintenance)(?:\s+(?:record|event|entry|visit|work|call|job))?\b/i;
 const inventoryCreatePattern = /^\s*(?:please\s+)?(?:add|record|create)\s+(?!.{0,180}\b(?:refinanc\w*|loans?|mortgages?|scenarios?|reserve|sinking|spouse|wife|husband|partner|accounts?)\b)(?!(?:(?:a|an|some|the|new)\s+)?(?:room|maintenance(?:\s+task)?|task|home\s+event|event|warranty|purchase\s+date|condition|brand|model|serial|notes?|cost|price)\b)(?!(?:(?:a|an|some|the|new)\s+){0,2}expenses?\b)(?!(?:\S+\s+){0,3}polic(?:y|ies)\b)(?!(?:\S+\s+){0,4}(?:claims?|projects?|plans?|guidance|journeys?|household\s+members?|members?|closing\s+tasks?|deposits?|contributions?|withdrawals?|briefs?|documents?|checklists?|habits?|plants?|materials?|negotiations?|quote\s+comparisons?|comparison\s+workspaces?|reminders?)\b).{1,180}[.!?]*\s*$/i;
 // Timeline event title/date correction (Phase 3 write slice 2). Requires an
 // explicit correction verb, title/date/name, and the words "timeline event"
@@ -1539,7 +1542,7 @@ const environmentReportPattern = /\benvironment(?:al)? report\b|\bweather prepar
 const environmentReportOtherIntentPattern = /\b(?:claim|file|filing|insurance|insurer|policy|coverage|home event radar|risk replay|plant advisor|plant care)\b/i;
 const breakEvenAnalysisPattern = /\b(?:break[- ]?even|breaks even|broken even)\b|\b(?:owning|ownership of)\b.{0,40}\bpays? off\b|\b(?:owning|ownership|home|house)\b.{0,40}\b(?:pay|pays|paid) for itself\b/i;
 const breakEvenOtherSensePattern = /\b(?:refinanc\w*|mortgage rate|loan estimate|solar|panels?|heat pump|insulation|upgrade|renovat\w*|remodel\w*|project|appliance|replace\w*|quote)\b/i;
-const sellHoldRentAnalysisPattern = /\b(?:should|could|would|will|is|when|benefit|better|compare|decide|planning|plan)\b.{0,55}\b(?:sell|selling|hold|holding|rent(?:ing)?(?: out)?|landlord)\b|\b(?:sell|selling)\b.{0,55}\b(?:hold|holding|rent(?:ing)?(?: out)?|landlord|good time|worth|benefit|better)\b|\b(?:hold|holding|rent(?:ing)?(?: out)?)\b.{0,55}\b(?:sell|selling|better|benefit)\b|\bwhat if\b.{0,40}\b(?:i|we)\b.{0,12}\b(?:rent(?:ed)?|sell|sold|hold|held)\b.{0,20}\b(?:it|the (?:home|house|property)|my (?:home|house|property))\b/i;
+const sellHoldRentAnalysisPattern = /\b(?:should|could|would|will|is|when|benefit|better|compare|decide|planning|plan)\b.{0,55}\b(?:sell|selling|hold|holding|rent(?:ing)?(?: out)?|landlord)\b|\b(?:sell|selling)\b.{0,55}\b(?:hold|holding|rent(?:ing)?(?: out)?|landlord|good time|worth|benefit|better)\b|\b(?:hold|holding|rent(?:ing)?(?: out)?)\b.{0,55}\b(?:sell|selling|better|benefit)\b|\bwhat if\b.{0,40}\b(?:i|we)\b.{0,12}\b(?:rent(?:ed)?|sell|sold|hold|held)\b.{0,20}\b(?:it|the (?:home|house|property)|my (?:home|house|property))\b|\bhow much\b.{0,12}\b(?:rent|rental income)\b.{0,30}\b(?:charge|get|make|earn|collect|ask for|bring in)\b|\bhow much\b.{0,25}\b(?:could|can|would|should)\b.{0,20}\b(?:i|we)\b.{0,12}\b(?:rent|charge)\b|\bwhat\b.{0,20}\b(?:rent|rental income)\b.{0,25}\b(?:can|could|should|would)\b.{0,12}\b(?:i|we)\b.{0,12}\b(?:charge|get|make|earn|ask)\b/i;
 // Read-only "who has access" questions. Any invite/add/remove/change verb is a command and is left to HOUSEHOLD_INVITATION or the model.
 const householdAccessSummaryPattern = /^(?!.*\b(?:invite|add|remove|delete|change|update|revoke|promote|demote|share)\b).*(?:\bwho (?:has|have|can (?:see|access)) (?:access|my home|this home|my home record)\b|\bwho(?:'s| is| are) (?:in|on) (?:my|our|the) household\b|\b(?:show|list|see|view)\b.{0,20}\b(?:my |our |the )?household (?:members?|access)\b|\bhousehold (?:members?|access)\b.{0,20}\b(?:list|summary)\b|\bwho (?:all )?(?:has|have) access\b)/i;
 const householdInvitationPattern = /\b(?:invite|add|share (?:my|the) home with)\b.{0,50}\b(?:wife|husband|spouse|partner|family member|household member|someone|person)\b|\bhousehold\b.{0,40}\b(?:invite|invitation|add (?:a )?member)\b/i;
@@ -1706,7 +1709,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (quoteComparisonCreatePattern.test(message)) {
     return resolved('QUOTE_COMPARISON_CREATE', 0.97);
   }
-  if (inventoryCreatePattern.test(message) && !explicitCapabilityPattern.test(message)) {
+  if (inventoryCreatePattern.test(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message)) {
     return resolved('INVENTORY_ITEM_CREATE', 0.97);
   }
   if ((maintenanceCompletePattern.test(message) || maintenanceCompletePassivePattern.test(message)) && !explicitCapabilityPattern.test(message)) {
@@ -1901,10 +1904,10 @@ export function resolveAskOperation(message: string): AskOperationResolution {
     && !roomContentsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('INVENTORY_LOOKUP', 0.96);
   }
-  if (itemHistoryPattern.test(message) && !itemAttributeWriteIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+  if (itemHistoryPattern.test(message) && !itemAttributeWriteIntentPattern.test(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message)) {
     return resolved('INVENTORY_LOOKUP', 0.96);
   }
-  if (inventoryLookupPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+  if (inventoryLookupPattern.test(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message)) {
     return resolved('INVENTORY_LOOKUP', 0.96);
   }
   if (propertyAreaCaptureCommandPattern.test(message)) {
@@ -1934,7 +1937,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (replacementPattern.test(message)) {
     return resolved('REPLACEMENT_GUIDANCE', 0.96);
   }
-  if (itemAttributePattern.test(message) && !itemAttributeWriteIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+  if (itemAttributePattern.test(message) && !itemAttributeWriteIntentPattern.test(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message)) {
     return resolved('INVENTORY_LOOKUP', 0.96);
   }
   if (refinanceMonitorPattern.test(message)) {
