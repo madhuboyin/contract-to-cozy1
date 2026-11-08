@@ -193,6 +193,7 @@ After an operation handler builds an answer, `createAskExecution.ts:563-595` run
        "unrecordedActions": ["Add an inventory item"]
      }
      ```
+     - **Harness limit **[Executed]**:** This harness exercises only the *not-found* outcomes. A recorded item whose name does match (e.g., a bare `"Microwave"`) passes item matching and then continues into a DB-backed property-context lookup (`evaluateFeatureContext`, `miscHandlers.handler.ts:244`), which throws under the stubbed Prisma. So the matched-path behavior (Branch A) is **[Code-traced]**, not executed.
      - **Why both fail **[Executed + Code-traced]**:**
        1. When `"Kitchen Microwave"` is on record and the user asks `"Is my microwave still good?"`, `query` is `"microwave still"` (`line 188`). At line `199`, `containsWholeWord(itemText(item), "microwave still")` is `false` and `containsWholeWord("microwave still", "Kitchen Microwave")` is `false` (whereas a single-word `item.name === "Microwave"` passes via `containsWholeWord("microwave still", "Microwave")`), so `"Kitchen Microwave"` is not matched and returns `REPAIR_REPLACE_ITEM_NOT_IN_HOME_RECORD` (`"Tell me which item you mean"`).
        2. When no microwave is on record and the user asks `"Do I need a new microwave?"`, `aliases[0] === query` (`line 202`), so `namedNoun` is `null` and the handler returns `"Tell me which item you mean"` instead of `"I don’t have a microwave recorded for your home yet"` (unlike `"Do I need a new roof?"`, which returns `"I don’t have a roof recorded for your home yet"`).
@@ -249,6 +250,8 @@ Every phase below is ordered by measured impact and risk, preserves standing arc
    - **Problem **[Executed]**:** Two `CARD_ENTRY_BINDINGS` messages fail when typed or re-sent without `launchContext.operationId`: `"Show this home’s records"` (`home-records`, expected `PROPERTY_SUMMARY`, currently `REMOTE_FALLBACK`) and `"Show my claims"` (`claims`, expected `INCIDENT_CLAIM_STATUS`, currently misrouted to `WORK_OVERVIEW`).
    - **Fix:** Add deterministic routing coverage in `askOperationRegistry.ts` for `"show (this )?home's records"` -> `PROPERTY_SUMMARY` and `"show my claims"` -> `INCIDENT_CLAIM_STATUS`, and add a unit test asserting all 40 `CARD_ENTRY_BINDINGS` messages resolve to their declared `operationId`.
 
+**Deferred on purpose (not in Phase 1):** `INVENTORY_LOOKUP` stop-word additions and the whole-word change at `inventory.handler.ts:299`. There is no executed repro of a sibling item being hidden, substring matching is intentional (plurals/stems), and broadening the stop words can empty `tokens` and return the whole inventory (Root Cause 5, item 2). Revisit only with a stubbed-`inventoryService` repro showing a real failing query.
+
 **Phase 1 Test & Verification Plan:**
 - Extend `apps/backend/tests/ask/itemHealthWording.test.js` to test `replacementGuidanceResult` (`capabilityInvoke('REPLACEMENT_GUIDANCE', ...)`) with:
   1. Multi-word recorded item names (`"Kitchen Microwave"`, `"Basement Dehumidifier"`).
@@ -283,7 +286,7 @@ Target the top failure classes measured in `node apps/backend/scripts/ask-routin
    - **Constraint:** Because changing `askSemanticEmbedding.ts` shifts raw scores in `askRoutingCalibrationEvidence.ts` (see `ASK_COZY_ROUTING_COVERAGE_AND_CALIBRATION.md` §4), any change to `SEMANTIC_SYNONYM_GROUPS` or `stem()` must pass both `npm run report:ask-routing-coverage` (`askRoutingCoverageReport.test.js`) and `node apps/backend/scripts/ask-routing-sweep.js --check`.
 
 **Phase 2 Test & Verification Plan:**
-- Run `node apps/backend/scripts/ask-routing-sweep.js --check`, `node apps/backend/scripts/ask-routing-sweep.js --corpus=tests/fixtures/askRoutingHoldoutCorpus.js`, and `node --test apps/backend/tests/ask/askRoutingCoverageReport.test.js` before and after each batch; record verified improvements with `--write-baseline`.
+- Run `node apps/backend/scripts/ask-routing-sweep.js --check` (whole default corpus only; the script rejects `--check` combined with `--corpus`), then `node apps/backend/scripts/ask-routing-sweep.js --corpus=tests/fixtures/askRoutingHoldoutCorpus.js` (**new file, does not exist yet; create it before the first batch**; report-only, not part of the ratchet), and `node --test apps/backend/tests/ask/askRoutingCoverageReport.test.js` before and after each batch; record verified improvements with `--write-baseline`.
 
 ---
 
@@ -319,6 +322,6 @@ Target the top failure classes measured in `node apps/backend/scripts/ask-routin
 | Phase | Scope | Primary Metric & Gate | Rollback / Safety Control |
 | :--- | :--- | :--- | :--- |
 | **Phase 1** | `miscHandlers.handler.ts` (`findSpecificInventoryAlias` in `replacementGuidanceResult` with HVAC-first precedence, local `garage door` branch, and spoken-noun `namedNoun`), `CARD_ENTRY_BINDINGS` routing parity (`home-records`, `claims`) | Extend `itemHealthWording.test.js`, new `cardEntryBindingsRouting.test.js` + `node scripts/ask-routing-sweep.js --check` | Gated by the routing ratchet; revert commit if any test regresses |
-| **Phase 2** | Top 6 hijacker regex guards (`67` misroutes) + top fallback operation patterns/examples (`203` fallbacks, capped at 2–3 examples/op) | `node scripts/ask-routing-sweep.js --check`, held-out corpus (`askRoutingHoldoutCorpus.js`), and `askRoutingCoverageReport.test.js` | CI routing ratchet (`tests/ask/routingSweepRatchet.test.js`) blocks any lost hit or new misroute |
+| **Phase 2** | Top 6 hijacker regex guards (`67` misroutes) + top fallback operation patterns/examples (`203` fallbacks, capped at 2–3 examples/op) | `node scripts/ask-routing-sweep.js --check`, new held-out corpus (`askRoutingHoldoutCorpus.js`, to be created; report-only), and `askRoutingCoverageReport.test.js` | CI routing ratchet (`tests/ask/routingSweepRatchet.test.js`) blocks any lost hit or new misroute |
 | **Phase 3** | Per-operation `CANONICAL_ANSWER_BLOCK_ID_PREFIXES` additions (`support/canonicalAnswerBlocks.ts`) for uncovered `READ` handlers | `tests/ask/canonicalAnswerContracts.test.js` + `ASK_ANSWER_RELEVANCE_CROSS_OPERATION_NEGATIVE_MATRIX` | Remove individual operation prefix entry in `canonicalAnswerBlocks.ts` |
 | **Phase 4** | Multi-turn filter continuations (`askFollowUpContext.ts`) + live `--model` sweep measurement (`Revision 1.527`) | Multi-turn follow-up unit tests + `node scripts/ask-routing-sweep.js --model --misses` report reviewed by owner | `ASK_MODEL_ROUTER_KILL_SWITCH=true` (`askOperationalControls.ts:66`) and `ASK_MODEL_ROUTER_ENABLED=false` (`line 65`) |
