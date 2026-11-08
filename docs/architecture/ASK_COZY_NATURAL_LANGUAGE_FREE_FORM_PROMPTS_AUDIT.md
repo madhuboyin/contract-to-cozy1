@@ -1,4 +1,4 @@
-# Ask Cozy: Natural Language & Free-Form Prompts Comprehensive Audit (Revision 4)
+# Ask Cozy: Natural Language & Free-Form Prompts Comprehensive Audit (Revision 5)
 
 **Date:** 2026-11-08  
 **Scope:** End-to-end audit of Ask Cozy prompt handling (`apps/frontend/src/components/ask/*` and `apps/backend/src/services/ask/*`)  
@@ -288,6 +288,32 @@ Target the top failure classes measured in `node apps/backend/scripts/ask-routin
 **Phase 2 Test & Verification Plan:**
 - Run `node apps/backend/scripts/ask-routing-sweep.js --check` (whole default corpus only; the script rejects `--check` combined with `--corpus`), then `node apps/backend/scripts/ask-routing-sweep.js --corpus=tests/fixtures/askRoutingHoldoutCorpus.js` (**new file, does not exist yet; create it before the first batch**; report-only, not part of the ratchet), and `node --test apps/backend/tests/ask/askRoutingCoverageReport.test.js` before and after each batch; record verified improvements with `--write-baseline`.
 
+#### Phase 2 Results (implemented 2026-11-08, commits `a7add690` and `4de820aa`) **[Executed]**
+
+**Done:** deterministic (Stage 2) pattern widening for 11 of the 12 target fallback families, in `askOperationRegistry.ts`. Buyer family (`a7add690`): `BUYER_DEADLINES`, `BUYER_FINANCING_READINESS`, `BUYER_PLAN_STATUS`, `BUYER_TITLE_ESCROW_READINESS`, `BUYER_DISCLOSURE_FUNDS_READINESS`, `BUYER_CONTRACT_TIMELINE`. Non-buyer family (`4de820aa`): `PROJECT_TRACKER_PROJECTS`, `INSPECTION_FINDING_UPDATE`, `HOME_TIMELINE_EVENTS`, `DOCUMENT_LOOKUP`, `COVERAGE_GAPS`. Also added two held-out corpora (`askRoutingHoldoutCorpus.js`, `askRoutingHoldoutCorpus2.js`).
+
+**Not done:** item 1 (hijacker guards for the 35 + 32 misroutes, only incidentally reduced from 67 to 64), item 3 (stemming / synonym groups), `INSPECTION_NEGOTIATION_PACKAGE` (it has no deterministic route and overlaps Negotiation Shield and `BUYER_NEGOTIATION_READINESS`; left on purpose), and `HOME_TIMELINE_EVENTS`' "what has happened at my house" misroute to `HOME_EVENT_RADAR_FEED`.
+
+| Measure | Before Phase 2 | After |
+| :--- | ---: | ---: |
+| 690-prompt sweep hits | 372 (53.9%) after Phase 1 | **392 (56.8%)** |
+| 690-prompt sweep misroutes | 66 | **64** |
+| 690-prompt sweep fallbacks | 203 | **187** |
+| 126-fixture certification (`askRoutingCoverageReport.test.js`) | passes | passes |
+| Held-out slice 2 (24 prompts) | 4 (16.7%) | **9 (37.5%)** |
+| Held-out slice 1 (36 prompts) | 4 (11.1%) | 26 (72.2%) **contaminated, see below** |
+
+**Evidence discipline, stated plainly:**
+- **Slice 1 is contaminated.** The buyer patterns were written after reading slice 1's misses, so its jump (4 to 20 hits after the buyer batch, 26 after both) measures overfitting, not generalization. Do not cite it as a result.
+- **Slice 2 is the fair measure for the non-buyer batch only.** It was written after slice 1 was consumed and its misses were not read before the non-buyer patterns. For the buyer batch, slice 2 showed **no effect** (4/24 with and without the change, measured by stashing the change), so the buyer widening generalized poorly; its gain is limited to the main sweep (+3 hits at that point).
+- **The non-buyer batch** was shaped by the main sweep's misses (allowed: patterns were generalized, not pasted) and moved slice 2 from 4 to 9.
+- **Semantic positive examples were tried and reverted.** Adding 24 examples to `askOperationSemanticPackages.ts` gave about +3 main-sweep hits and no held-out gain, shifted raw scores, and broke the calibration drift ratchet (`askRoutingCoverageReport.test.js`, `COMPETITOR_CHANGED` on fixtures `v2-023` and `v2-043`). That confirms this document's constraint: example changes need the calibration evidence refreshed (`OD-4.1`), an owner decision.
+- **Regression found and fixed in-flight:** one example ("remaining balance on my renovation contracts") created 3 new misroutes into `PROJECT_TRACKER_PROJECTS` (permit and affordability prompts); and the first `coveragePattern` wording captured "am i insured by closing day" from `BUYER_INSURANCE_READINESS`. The latter is fixed with a closing/purchase/escrow lookahead.
+
+**Conclusion for planning:** pattern widening yields real but modest, family-specific gains (+20 main-sweep hits, +5 held-out hits) and does not transfer across families. Fallbacks are still 27.1% of the sweep. Further large gains likely need the calibration work (`OD-4.1` to `OD-4.3`), not more regexes.
+
+**Verification run:** `ask-routing-sweep.js --check` clean; ratchet and coverage tests pass; routing test group 91 of 93 pass. The 2 failures (`routing calibration is derived from traceable labeled fixture rows`, `ordinary read questions never route to a correction command`) also fail on a clean checkout and are unrelated to this work. `tsc --noEmit` is clean. **Not verified:** buyer-mode eligibility gating (the sweep does not model it), live behaviour with real property data.
+
 ---
 
 ### Phase 3: Expand Per-Operation Canonical Answer Block Contracts (`support/canonicalAnswerBlocks.ts`)
@@ -321,7 +347,7 @@ Target the top failure classes measured in `node apps/backend/scripts/ask-routin
 
 | Phase | Scope | Primary Metric & Gate | Rollback / Safety Control |
 | :--- | :--- | :--- | :--- |
-| **Phase 1** | `miscHandlers.handler.ts` (`findSpecificInventoryAlias` in `replacementGuidanceResult` with HVAC-first precedence, local `garage door` branch, and spoken-noun `namedNoun`), `CARD_ENTRY_BINDINGS` routing parity (`home-records`, `claims`) | Extend `itemHealthWording.test.js`, new `cardEntryBindingsRouting.test.js` + `node scripts/ask-routing-sweep.js --check` | Gated by the routing ratchet; revert commit if any test regresses |
-| **Phase 2** | Top 6 hijacker regex guards (`67` misroutes) + top fallback operation patterns/examples (`203` fallbacks, capped at 2–3 examples/op) | `node scripts/ask-routing-sweep.js --check`, new held-out corpus (`askRoutingHoldoutCorpus.js`, to be created; report-only), and `askRoutingCoverageReport.test.js` | CI routing ratchet (`tests/ask/routingSweepRatchet.test.js`) blocks any lost hit or new misroute |
+| **Phase 1** (done, `fcb9efb5`) | `miscHandlers.handler.ts` (`findSpecificInventoryAlias` in `replacementGuidanceResult` with HVAC-first precedence, local `garage door` branch, and spoken-noun `namedNoun`), `CARD_ENTRY_BINDINGS` routing parity (`home-records`, `claims`) | Extend `itemHealthWording.test.js`, new `cardEntryBindingsRouting.test.js` + `node scripts/ask-routing-sweep.js --check` | Gated by the routing ratchet; revert commit if any test regresses |
+| **Phase 2** (partial: pattern widening done, `a7add690` + `4de820aa`; hijacker guards, stemming, negotiation package not done; see Phase 2 Results) | Top 6 hijacker regex guards (`67` misroutes) + top fallback operation patterns/examples (`203` fallbacks, capped at 2–3 examples/op) | `node scripts/ask-routing-sweep.js --check`, new held-out corpus (`askRoutingHoldoutCorpus.js`, to be created; report-only), and `askRoutingCoverageReport.test.js` | CI routing ratchet (`tests/ask/routingSweepRatchet.test.js`) blocks any lost hit or new misroute |
 | **Phase 3** | Per-operation `CANONICAL_ANSWER_BLOCK_ID_PREFIXES` additions (`support/canonicalAnswerBlocks.ts`) for uncovered `READ` handlers | `tests/ask/canonicalAnswerContracts.test.js` + `ASK_ANSWER_RELEVANCE_CROSS_OPERATION_NEGATIVE_MATRIX` | Remove individual operation prefix entry in `canonicalAnswerBlocks.ts` |
 | **Phase 4** | Multi-turn filter continuations (`askFollowUpContext.ts`) + live `--model` sweep measurement (`Revision 1.527`) | Multi-turn follow-up unit tests + `node scripts/ask-routing-sweep.js --model --misses` report reviewed by owner | `ASK_MODEL_ROUTER_KILL_SWITCH=true` (`askOperationalControls.ts:66`) and `ASK_MODEL_ROUTER_ENABLED=false` (`line 65`) |
