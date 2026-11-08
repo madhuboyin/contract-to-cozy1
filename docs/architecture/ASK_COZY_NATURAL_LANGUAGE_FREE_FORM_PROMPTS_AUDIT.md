@@ -1,4 +1,4 @@
-# Ask Cozy: Natural Language & Free-Form Prompts Comprehensive Audit (Revision 3)
+# Ask Cozy: Natural Language & Free-Form Prompts Comprehensive Audit (Revision 4)
 
 **Date:** 2026-11-08  
 **Scope:** End-to-end audit of Ask Cozy prompt handling (`apps/frontend/src/components/ask/*` and `apps/backend/src/services/ask/*`)  
@@ -12,8 +12,8 @@
 
 ## How Claims Are Labelled (`AUDIT_METHODOLOGY.md` §1)
 
-- **[Executed]:** Code, scripts, or pure functions were run in this workspace (`node apps/backend/scripts/ask-routing-sweep.js` and reproducible `node -e` one-liners over `resolveAskRoutingCascade`, `ASK_ROUTING_CERTIFICATION_FIXTURES`, `ASK_DISCOVERY_BINDINGS`, `CARD_ENTRY_BINDINGS`, `normalizeAskMessage`, and `askSemanticConcepts`) and the output was observed. No database or network connection was used.
-- **[Code-traced]:** Verified by reading the TypeScript source files and tracing branches, types, and callers, but not executed end-to-end because the path requires a live PostgreSQL database, property record state, or external Gemini network call.
+- **[Executed]:** Code, scripts, handlers (with in-memory stubbed Prisma/access dependencies), or pure functions were run in this workspace (`node apps/backend/scripts/ask-routing-sweep.js` and reproducible `node -e` commands over `resolveAskRoutingCascade`, `capabilityInvoke`, `ASK_ROUTING_CERTIFICATION_FIXTURES`, `ASK_DISCOVERY_BINDINGS`, `CARD_ENTRY_BINDINGS`, `normalizeAskMessage`, and `askSemanticConcepts`) and the output was observed. No live database or network connection was used.
+- **[Code-traced]:** Verified by reading the TypeScript source files and tracing branches, types, and callers, but not executed end-to-end because the path requires live database state or an external Gemini network call.
 - **[Inferred]:** Extrapolated from code structure or corpus distributions where production traffic telemetry is unavailable.
 - **[Product Decision]:** A behavioral trade-off governed by product policy rather than a code defect (`AUDIT_METHODOLOGY.md` §5, §8).
 
@@ -156,36 +156,50 @@ After an operation handler builds an answer, `createAskExecution.ts:563-595` run
 
 ---
 
-### Root Cause 5 (Rank 5 — Handler-Level Entity & Token Filtering): Post-Routing Mismatches **[Code-traced]**
+### Root Cause 5 (Rank 5 — Handler-Level Entity & Token Filtering): Post-Routing Mismatches **[Executed + Code-traced]**
 
-Even when routing selects `REPLACEMENT_GUIDANCE` or `INVENTORY_LOOKUP`, handler-level matching has specific code-traced gaps:
-
-1. **`REPLACEMENT_GUIDANCE` (`apps/backend/src/services/ask/handlers/miscHandlers.handler.ts:188-221`) **[Code-traced]**:**
+1. **`REPLACEMENT_GUIDANCE` (`apps/backend/src/services/ask/handlers/miscHandlers.handler.ts:188-221`) **[Executed]**:**
    - In `askOperationRegistry.ts:1354-1358, 1934-1935`, `REPLACEABLE_NON_HVAC_ITEM` (`line 1354`), `KEEP_OR_REPLACE_INTENT` (`line 1357`), and `itemKeepOrReplacePattern` (`lines 1358, 1934-1935`) route repair/replace and longevity questions about 17 non-HVAC item terms (`microwave`, `oven`, `stove`, `cooktop`, `refrigerator`, `fridge`, `freezer`, `dishwasher`, `washer`, `washing machine`, `dryer`, `water heater`, `garbage disposal`, `roof`, `garage door`, `sump pump`, `dehumidifier`) plus HVAC terms to `REPLACEMENT_GUIDANCE`.
-   - Note that `apps/backend/tests/ask/itemHealthWording.test.js:1-49` tests **only `resolveAskRoutingCascade`** (confirming routing to `REPLACEMENT_GUIDANCE`), not `replacementGuidanceResult` (`miscHandlers.handler.ts`) **[Code-traced]**.
-   - Inside `replacementGuidanceResult` (`miscHandlers.handler.ts:188-200`):
-     ```ts
-     const query = message.toLowerCase().replace(/\b(?:when|should|i|we|repair|replace|replacement|versus|vs|my|our|the|is|it|time|good|to|do)\b/g, ' ').replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
-     const aliases = /\b(?:hvac|furnace|air conditioner|heat pump)\b/i.test(message) ? ['hvac', 'furnace', 'air conditioner', 'heat pump']
-       : /\b(?:refrigerator|fridge)\b/i.test(message) ? ['refrigerator', 'fridge']
-         : /\bwater heater\b/i.test(message) ? ['water heater']
-           : /\b(?:roof|roofing)\b/i.test(message) ? ['roof']
-             : /\b(?:washer|washing machine)\b/i.test(message) ? ['washer', 'washing machine']
-               : /\bdryer\b/i.test(message) ? ['dryer']
-                 : /\bdishwasher\b/i.test(message) ? ['dishwasher'] : query ? [query] : [];
-     const itemText = (item: typeof allItems[number]) => [item.name, item.category, item.assetType, item.brand, item.model].filter(Boolean).join(' ').toLowerCase();
-     const items = focusedInventoryItemId
-       ? allItems.filter((item) => item.id === focusedInventoryItemId)
-       : aliases.length ? allItems.filter((item) => aliases.some((alias) => containsWholeWord(itemText(item), alias) || containsWholeWord(alias, item.name))) : [];
+   - `apps/backend/tests/ask/itemHealthWording.test.js:1-49` tests **only `resolveAskRoutingCascade`** (confirming routing to `REPLACEMENT_GUIDANCE`), not `replacementGuidanceResult` (`miscHandlers.handler.ts`) **[Code-traced]**.
+   - Inside `replacementGuidanceResult` (`miscHandlers.handler.ts:188-203`), only 7 item groups have regex branches (`hvac|furnace|air conditioner|heat pump`, `refrigerator|fridge`, `water heater`, `roof|roofing`, `washer|washing machine`, `dryer`, `dishwasher`). For any other item (`microwave`, `oven`, `stove`, `cooktop`, `freezer`, `garbage disposal`, `garage door`, `sump pump`, `dehumidifier`), `aliases` falls back to `[query]` (`line 195`).
+   - **Reproducible Handler Execution **[Executed]**:**
+     ```bash
+     node -e '
+     const path = require("node:path");
+     const BACKEND = path.resolve("apps/backend");
+     process.env.TS_NODE_TRANSPILE_ONLY = "true";
+     process.env.TS_NODE_PROJECT = path.join(BACKEND, "tsconfig.test-cache.json");
+     require(path.join(BACKEND, "node_modules/ts-node/register"));
+     const { prisma } = require(path.join(BACKEND, "src/lib/prisma.ts"));
+     const propertyAccessService = require(path.join(BACKEND, "src/services/propertyAccess.service.ts"));
+     const { capabilityInvoke } = require(path.join(BACKEND, "src/services/ask/capabilityHandlerRegistry.ts"));
+     require(path.join(BACKEND, "src/services/ask/handlers/miscHandlers.handler.ts"));
+     propertyAccessService.resolvePropertyAccess = async () => ({ propertyId: "p1", userId: "u1", role: "OWNER", isOwner: true });
+     (async () => {
+       prisma.inventoryItem.findMany = async () => [{ id: "i1", name: "Kitchen Microwave", category: "APPLIANCE", assetType: "MICROWAVE", brand: "GE", model: "JES1145", condition: "GOOD", installedOn: null, purchasedOn: null, expectedExpiryDate: null, updatedAt: new Date("2026-01-01T00:00:00Z") }];
+       const recorded = await capabilityInvoke("REPLACEMENT_GUIDANCE", { userId: "u1", propertyId: "p1", sessionId: "s1", executionId: "e1", message: "Is my microwave still good?" });
+       prisma.inventoryItem.findMany = async () => [];
+       const unrecorded = await capabilityInvoke("REPLACEMENT_GUIDANCE", { userId: "u1", propertyId: "p1", sessionId: "s1", executionId: "e2", message: "Do I need a new microwave?" });
+       console.log({ recordedTitle: recorded.blocks[0].title, recordedReason: recorded.reasonCode, unrecordedTitle: unrecorded.blocks[0].title, unrecordedActions: unrecorded.blocks[0].actions.map(a => a.label) });
+     })();
+     '
      ```
-   - Tracing both branches of line `199` (`containsWholeWord(itemText(item), alias) || containsWholeWord(alias, item.name)`) and lines `202-210` for any item outside the 7 inline regexes (`microwave`, `oven`, `stove`, `cooktop`, `freezer`, `garbage disposal`, `garage door`, `sump pump`, `dehumidifier`) where `aliases` falls back to `[query]` (e.g., for `"Is my microwave still good?"`, `query` is `"microwave still"`; for `"will the microwave be good for the next few years"`, `query` is `"will microwave be for next few years"`) **[Code-traced]**:
-     - **Branch A (Single-word `item.name === "Microwave"`):** `containsWholeWord(alias, item.name)` (`containsWholeWord("microwave still", "Microwave")`) returns **`true`** because `"Microwave"` is a whole word inside `query`.
-     - **Branch B (Multi-word `item.name`, e.g., `"Kitchen Microwave"`, `"Over-the-Range Microwave"`, or a model name `"GE Profile JES1145"` where `"microwave"` is in `item.category`/`item.assetType` rather than equal to `item.name`):** `containsWholeWord(itemText(item), "microwave still")` is **`false`** and `containsWholeWord("microwave still", "Kitchen Microwave")` is **`false`**, so the recorded item fails to match.
-     - **Branch C (Item not recorded, `!items.length` at lines `202-210`):** `const namedNoun = aliases.length && aliases[0] !== query ? ... : null` evaluates to `null` whenever `aliases` fell back to `[query]`, so the handler returns the generic `'Tell me which item you mean'` instead of `'I don’t have a microwave recorded for your home yet'`.
+     Output **[Executed]**:
+     ```json
+     {
+       "recordedTitle": "Tell me which item you mean",
+       "recordedReason": "REPAIR_REPLACE_ITEM_NOT_IN_HOME_RECORD",
+       "unrecordedTitle": "Tell me which item you mean",
+       "unrecordedActions": ["Add an inventory item"]
+     }
+     ```
+     - **Why both fail **[Executed + Code-traced]**:**
+       1. When `"Kitchen Microwave"` is on record and the user asks `"Is my microwave still good?"`, `query` is `"microwave still"` (`line 188`). At line `199`, `containsWholeWord(itemText(item), "microwave still")` is `false` and `containsWholeWord("microwave still", "Kitchen Microwave")` is `false` (whereas a single-word `item.name === "Microwave"` passes via `containsWholeWord("microwave still", "Microwave")`), so `"Kitchen Microwave"` is not matched and returns `REPAIR_REPLACE_ITEM_NOT_IN_HOME_RECORD` (`"Tell me which item you mean"`).
+       2. When no microwave is on record and the user asks `"Do I need a new microwave?"`, `aliases[0] === query` (`line 202`), so `namedNoun` is `null` and the handler returns `"Tell me which item you mean"` instead of `"I don’t have a microwave recorded for your home yet"` (unlike `"Do I need a new roof?"`, which returns `"I don’t have a roof recorded for your home yet"`).
 2. **`INVENTORY_LOOKUP` (`apps/backend/src/services/ask/handlers/inventory.handler.ts:41-58, 272-304`) **[Code-traced]**:**
-   - `inventory.handler.ts:272` calls `findSpecificInventoryAlias(message)` from `apps/backend/src/services/ask/support/inventoryItemAliases.ts:7-24` (which defines the 12-entry `INVENTORY_ITEM_ALIASES` table).
-   - When `specific` is `undefined` (for example, a room-scoped query like *"What items are in my kitchen?"* or an item not in `INVENTORY_ITEM_ALIASES`) and `!genericList`, lines `296-303` score each item by counting how many tokens from `inventorySearchTokens(message)` appear as substrings (`inventoryItemSearchText(item).includes(token)`), keep items with `score > 0`, and return only items tied for `topScore` **[Code-traced]**.
-   - Because line `299` uses `.includes(token)` (substring, rather than `containsWholeWord`) and `INVENTORY_QUERY_STOP_WORDS` (`lines 41-46`) omits conversational words (`still`, `working`, `old`, `new`, `under`, `in`, `inside`, `from`), a conversational word that happens to be a 3+ letter substring of one item's text/tags/model (e.g., `"in"` is 2 chars and filtered, `"from"` or `"old"` or `"under"` is 3–5 chars and retained) can give one item in a room `score: 2` (`topScore = 2`) and filter out the other items in that room that had `score: 1` **[Code-traced]**.
+   - `inventory.handler.ts:272` calls `findSpecificInventoryAlias(message)` from `apps/backend/src/services/ask/support/inventoryItemAliases.ts:7-24` (the 12-entry `INVENTORY_ITEM_ALIASES` list).
+   - When `specific` is `undefined` and `!genericList`, lines `282, 296-303` initialize `let matches = allItems;` and, if `tokens.length > 0`, score each item by how many tokens from `inventorySearchTokens(message)` match via substring `inventoryItemSearchText(item).includes(token)` (`line 299`), keeping items tied for `topScore`.
+   - Substring `.includes(token)` at line `299` is intentional so plurals and stems match (e.g., `"dishwashers"` in a tag or `"appliance"` against `"appliances"`), and if `INVENTORY_QUERY_STOP_WORDS` were broadened to strip all words in a query (`tokens.length === 0`), the `else if (!genericList && tokens.length)` guard at line `296` would be skipped and `matches` would remain `allItems` (returning the entire inventory for a question like `"What's still working?"`) **[Code-traced]**. Therefore, `inventory.handler.ts:299` should keep `.includes(token)` and predicate adjectives (`working`, `still`, `broken`) should **not** be added to `INVENTORY_QUERY_STOP_WORDS`.
 
 ---
 
@@ -225,20 +239,22 @@ Every phase below is ordered by measured impact and risk, preserves standing arc
 
 ### Phase 1: Deterministic Handler Fixes & Starter Parity (No LLM or Scope Change, Gated by the Ratchet)
 
-1. **Unify `replacementGuidanceResult` with `findSpecificInventoryAlias` (`apps/backend/src/services/ask/handlers/miscHandlers.handler.ts:188-221`):**
-   - **Problem **[Code-traced]**:** `REPLACEABLE_NON_HVAC_ITEM` (`askOperationRegistry.ts:1354`) and `itemKeepOrReplacePattern` (`askOperationRegistry.ts:1358, 1934-1935`) route 17 non-HVAC item terms to `REPLACEMENT_GUIDANCE`, whereas `replacementGuidanceResult` (`miscHandlers.handler.ts:189-195`) only has inline regexes for 7 item groups and falls back to `[query]` for `microwave`, `oven`, `stove`, `cooktop`, `freezer`, `garbage disposal`, `garage door`, `sump pump`, and `dehumidifier`—failing on multi-word recorded names (`"Kitchen Microwave"`) and leaving `namedNoun = null` when the item is unrecorded (`lines 202-210`).
-   - **Fix:** Call `findSpecificInventoryAlias(message)` from `apps/backend/src/services/ask/support/inventoryItemAliases.ts:22-24` (and add `garage door` to `INVENTORY_ITEM_ALIASES` at `inventoryItemAliases.ts:7-20` so it matches `REPLACEABLE_NON_HVAC_ITEM`) inside `replacementGuidanceResult`. When `findSpecificInventoryAlias(message)` matches, use `specific.terms` as `aliases` and `specific.terms[0]` for `namedNoun` in the not-recorded message.
+1. **Unify `replacementGuidanceResult` with `findSpecificInventoryAlias` (`apps/backend/src/services/ask/handlers/miscHandlers.handler.ts:188-203`):**
+   - **Problem **[Executed]**:** `REPLACEABLE_NON_HVAC_ITEM` (`askOperationRegistry.ts:1354`) and `itemKeepOrReplacePattern` (`askOperationRegistry.ts:1358, 1934-1935`) route 17 non-HVAC item terms to `REPLACEMENT_GUIDANCE`, whereas `replacementGuidanceResult` (`miscHandlers.handler.ts:189-195`) only has regex branches for 7 item groups and falls back to `[query]` for `microwave`, `oven`, `stove`, `cooktop`, `freezer`, `garbage disposal`, `garage door`, `sump pump`, and `dehumidifier`—failing on multi-word recorded names (`"Kitchen Microwave"`) and leaving `namedNoun = null` when the item is unrecorded (`lines 202-210`).
+   - **Fix Details:**
+     1. **Keep the HVAC branch first:** `INVENTORY_ITEM_ALIASES` (`support/inventoryItemAliases.ts:7-20`) has no HVAC entry, so the existing HVAC check (`/\b(?:hvac|furnace|air conditioner|heat pump)\b/i.test(message) ? ['hvac', 'furnace', 'air conditioner', 'heat pump']` at `miscHandlers.handler.ts:189`) must remain ahead of `findSpecificInventoryAlias(message)` so HVAC items still resolve all four HVAC terms and hand off to `hvacDecisionStartResult` (`line 241`) or set `namedNoun = 'HVAC system'` (`line 202`).
+     2. **Use `findSpecificInventoryAlias(message)` for the 12 shared alias groups, and handle `garage door` in `replacementGuidanceResult` only:** Keep `INVENTORY_ITEM_ALIASES` (`support/inventoryItemAliases.ts:7-20`) unchanged so `INVENTORY_LOOKUP`'s single-vs-multiple entity disambiguation (`inventory.handler.ts:272, 354`) is not altered for garage doors; add an explicit `/\bgarage door\b/i.test(message) ? ['garage door']` branch in `replacementGuidanceResult` after `findSpecificInventoryAlias(message)`.
+     3. **Preserve the user's spoken noun in `namedNoun`:** Because an `InventoryItemAlias` entry can group multiple words (e.g., `{ test: /\b(?:oven|stove|cooktop)\b/i, terms: ['oven', 'stove', 'cooktop'] }` or `['washer', 'washing machine']`), setting `namedNoun` to `specific.terms[0]` would reply `"I don’t have an oven recorded"` when the user asked about a `"stove"`. Instead, select the matched term that actually appears as a whole word in `message.toLowerCase()` (`aliases.find((term) => containsWholeWord(message.toLowerCase(), term)) ?? aliases[0]`) so `"Do I need a new stove?"` sets `namedNoun = 'stove'`.
 2. **Fix `CARD_ENTRY_BINDINGS` Free-Form Message Parity (`apps/backend/src/services/ask/askCapabilityBindings.ts:21, 30` & `askOperationRegistry.ts`):**
    - **Problem **[Executed]**:** Two `CARD_ENTRY_BINDINGS` messages fail when typed or re-sent without `launchContext.operationId`: `"Show this home’s records"` (`home-records`, expected `PROPERTY_SUMMARY`, currently `REMOTE_FALLBACK`) and `"Show my claims"` (`claims`, expected `INCIDENT_CLAIM_STATUS`, currently misrouted to `WORK_OVERVIEW`).
    - **Fix:** Add deterministic routing coverage in `askOperationRegistry.ts` for `"show (this )?home's records"` -> `PROPERTY_SUMMARY` and `"show my claims"` -> `INCIDENT_CLAIM_STATUS`, and add a unit test asserting all 40 `CARD_ENTRY_BINDINGS` messages resolve to their declared `operationId`.
-3. **Whole-Word & Stop-Word Tightening in `INVENTORY_LOOKUP` (`apps/backend/src/services/ask/handlers/inventory.handler.ts:41-51, 296-303`):**
-   - **Problem **[Code-traced]**:** At `inventory.handler.ts:299`, token scoring uses substring `.includes(token)` and `INVENTORY_QUERY_STOP_WORDS` omits prepositions/modifiers (`from`, `inside`, `still`, `working`, `under`, `recorded`), which can inflate `topScore` on one item when a modifier substring-matches and hide sibling items in a room query.
-   - **Fix:** Add `from`, `inside`, `still`, `working`, `under`, `recorded` to `INVENTORY_QUERY_STOP_WORDS`, and use `containsWholeWord(inventoryItemSearchText(item), token)` at line `299`.
-   - **Explicit Empty-Match Rule:** When `scored.length === 0` (no token in `tokens` matches any recorded item and `!genericList`), keep `matches = []` so the handler continues returning `INVENTORY_MATCH_NOT_FOUND` (`0 matching items`)—do **not** fall back to returning the full inventory when a user asks for an unrecorded item.
 
 **Phase 1 Test & Verification Plan:**
-- Extend `apps/backend/tests/ask/itemHealthWording.test.js` (or add a dedicated handler test) to test `replacementGuidanceResult` with multi-word recorded item names (`"Kitchen Microwave"`) and unrecorded items (`namedNoun` in `REPAIR_REPLACE_ITEM_NOT_IN_HOME_RECORD`).
-- Add a unit test verifying all 40 `CARD_ENTRY_BINDINGS` messages route to their declared `operationId`, and a handler test for `inventory.handler.ts` verifying room + modifier queries and `0`-match `INVENTORY_MATCH_NOT_FOUND` preservation.
+- Extend `apps/backend/tests/ask/itemHealthWording.test.js` to test `replacementGuidanceResult` (`capabilityInvoke('REPLACEMENT_GUIDANCE', ...)`) with:
+  1. Multi-word recorded item names (`"Kitchen Microwave"`, `"Basement Dehumidifier"`).
+  2. Unrecorded items where the user says a secondary alias (`"Do I need a new stove?"` -> `"I don’t have a stove recorded for your home yet"`, `"Do I need a new microwave?"` -> `"I don’t have a microwave recorded for your home yet"`).
+  3. HVAC precedence (`"Should I replace my furnace?"` -> `HVAC` branch).
+- Add a unit test (`apps/backend/tests/ask/cardEntryBindingsRouting.test.js`) verifying all 40 `CARD_ENTRY_BINDINGS` messages route to their declared `operationId`.
 - Run `node apps/backend/scripts/ask-routing-sweep.js --check` to verify the baseline ratchet passes.
 
 ---
@@ -302,7 +318,7 @@ Target the top failure classes measured in `node apps/backend/scripts/ask-routin
 
 | Phase | Scope | Primary Metric & Gate | Rollback / Safety Control |
 | :--- | :--- | :--- | :--- |
-| **Phase 1** | `miscHandlers.handler.ts` (`findSpecificInventoryAlias` in `replacementGuidanceResult`), `CARD_ENTRY_BINDINGS` routing parity (`home-records`, `claims`), `inventory.handler.ts` whole-word token scoring (preserving `0`-match `INVENTORY_MATCH_NOT_FOUND`) | Extend `itemHealthWording.test.js`, new `cardEntryBindingsRouting.test.js` & inventory handler tests + `node scripts/ask-routing-sweep.js --check` | Gated by the routing ratchet; revert commit if any test regresses |
+| **Phase 1** | `miscHandlers.handler.ts` (`findSpecificInventoryAlias` in `replacementGuidanceResult` with HVAC-first precedence, local `garage door` branch, and spoken-noun `namedNoun`), `CARD_ENTRY_BINDINGS` routing parity (`home-records`, `claims`) | Extend `itemHealthWording.test.js`, new `cardEntryBindingsRouting.test.js` + `node scripts/ask-routing-sweep.js --check` | Gated by the routing ratchet; revert commit if any test regresses |
 | **Phase 2** | Top 6 hijacker regex guards (`67` misroutes) + top fallback operation patterns/examples (`203` fallbacks, capped at 2–3 examples/op) | `node scripts/ask-routing-sweep.js --check`, held-out corpus (`askRoutingHoldoutCorpus.js`), and `askRoutingCoverageReport.test.js` | CI routing ratchet (`tests/ask/routingSweepRatchet.test.js`) blocks any lost hit or new misroute |
 | **Phase 3** | Per-operation `CANONICAL_ANSWER_BLOCK_ID_PREFIXES` additions (`support/canonicalAnswerBlocks.ts`) for uncovered `READ` handlers | `tests/ask/canonicalAnswerContracts.test.js` + `ASK_ANSWER_RELEVANCE_CROSS_OPERATION_NEGATIVE_MATRIX` | Remove individual operation prefix entry in `canonicalAnswerBlocks.ts` |
 | **Phase 4** | Multi-turn filter continuations (`askFollowUpContext.ts`) + live `--model` sweep measurement (`Revision 1.527`) | Multi-turn follow-up unit tests + `node scripts/ask-routing-sweep.js --model --misses` report reviewed by owner | `ASK_MODEL_ROUTER_KILL_SWITCH=true` (`askOperationalControls.ts:66`) and `ASK_MODEL_ROUTER_ENABLED=false` (`line 65`) |
