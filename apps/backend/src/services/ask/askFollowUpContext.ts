@@ -59,9 +59,17 @@ const FILTER_CONTINUATION_PATTERN = /^\s*(?:only|just|now show|now only show|ins
 // understands, so no handler learns a second grammar. The rewrite happens only when the prior result is a list that has this kind of filter AND what follows
 // the lead-in is a filter word for that list: "What about my mortgage rate?" or "What about the kitchen faucet?" never qualifies and is routed as a new question.
 const CONVERSATIONAL_FILTER_LEAD = /^\s*(?:(?:and\s+)?what about|how about|and|which (?:ones|items|tasks|of them) (?:are|is))\s+(?:just\s+|only\s+)?(?:the\s+|those\s+|any\s+)?([^?.!]{1,40}?)\s*[?.!]*\s*$/i;
+// What each list can actually narrow by, written in the words its own handler parses. Words a list has no equivalent for are left out, so
+// "What about the completed ones?" after a priority list is a new question and is never silently answered with the unfiltered list.
 const STATUS_FILTER_WORDS = /^(overdue|urgent|critical|high[- ]priority|due soon|coming up|upcoming|pending|open|completed|done|cancelled|canceled)(?:\s+(?:ones|items|tasks|things))?$/i;
+const STATUS_WORD_FOR_OPERATION: Record<string, Array<[RegExp, string]>> = {
+  MAINTENANCE_STATUS: [[/^overdue$/, 'overdue'], [/^(?:urgent|critical|high[- ]priority)$/, 'urgent'], [/^(?:due soon|coming up|upcoming)$/, 'due soon'], [/^(?:pending|open)$/, 'open'], [/^(?:completed|done)$/, 'completed'], [/^cancell?ed$/, 'cancelled']],
+  HOME_ACTIONS: [[/^(?:urgent|critical|high[- ]priority|overdue)$/, 'urgent'], [/^(?:due soon|coming up|upcoming)$/, 'due soon']],
+  WORK_OVERVIEW: [[/^(?:completed|done)$/, 'completed'], [/^(?:coming up|upcoming)$/, 'scheduled'], [/^open$/, 'active']],
+};
 const ROOM_FILTER_PHRASE = /^(?:in|for|from)\s+(?:the|my)\s+(kitchen|bathroom|bedroom|master bedroom|garage|basement|attic|living room|dining room|laundry room|office|yard|backyard|hallway|closet|nursery|porch|patio|deck|utility room)$/i;
-const STATUS_CONVERSATIONAL_OPERATIONS: ReadonlySet<string> = new Set(['MAINTENANCE_STATUS', 'HOME_ACTIONS', 'WORK_OVERVIEW']);
+/** True when a message itself names a room ("... in the kitchen"), so a remembered room scope must not be added beside it. */
+export const messageNamesRoom = (message: string): boolean => new RegExp(ROOM_FILTER_PHRASE.source.replace(/^\^/, '\\b').replace(/\$$/, ''), 'i').test(message);
 const ROOM_CONVERSATIONAL_OPERATIONS: ReadonlySet<string> = new Set(['MAINTENANCE_STATUS']);
 
 /** The "Only show ..." form of a conversational narrowing, or null when the message is not one for this prior list. */
@@ -69,7 +77,12 @@ export function conversationalFilterAsOnlyShow(message: string, priorOperationId
   const lead = CONVERSATIONAL_FILTER_LEAD.exec(message);
   if (!lead) return null;
   const rest = lead[1].trim();
-  if (STATUS_CONVERSATIONAL_OPERATIONS.has(priorOperationId) && STATUS_FILTER_WORDS.test(rest)) return `Only show the ${rest.toLowerCase().replace(/\s+(?:ones|items|tasks|things)$/, '')} ones`;
+  const wordsForList = STATUS_WORD_FOR_OPERATION[priorOperationId];
+  if (wordsForList && STATUS_FILTER_WORDS.test(rest)) {
+    const spoken = rest.toLowerCase().replace(/\s+(?:ones|items|tasks|things)$/, '');
+    const word = wordsForList.find(([pattern]) => pattern.test(spoken))?.[1];
+    return word ? `Only show the ${word} ones` : null;
+  }
   const room = ROOM_FILTER_PHRASE.exec(rest);
   if (room && ROOM_CONVERSATIONAL_OPERATIONS.has(priorOperationId)) return `Only show tasks in the ${room[1].toLowerCase()}`;
   return null;
@@ -423,7 +436,8 @@ export async function resolveAskFollowUpMessage(input: {
   const conversationalFilter = isConversationalFilterLead ? conversationalFilterAsOnlyShow(input.message, prior.operationId) : null;
   if (conversationalFilter && FILTER_CONTINUABLE_OPERATIONS.has(prior.operationId as AskOperationId)) {
     return {
-      effectiveMessage: input.declaredSourceExecutionId ? conversationalFilter : `${prior.message}. ${conversationalFilter}`,
+      // The filter stands alone, like a declared chip: joining the prior question kept its old words alive ("right now", "needs me", "bathroom", "overdue"), so the new filter lost to the old one.
+      effectiveMessage: conversationalFilter,
       forcedOperationId: prior.operationId as AskOperationId,
       sourceExecutionId: prior.id,
       continuationCursor: null,

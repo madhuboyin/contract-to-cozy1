@@ -85,3 +85,19 @@ test('two recorded microwaves ask which one; multi-word names are matched', asyn
   assert.equal(result.reasonCode, 'MULTIPLE_REPAIR_REPLACE_ITEMS');
   assert.equal(result.blocks[0].sections[0].count, 2);
 });
+
+// External review P2: the router sends "ac" / "a/c unit" here (itemKeepOrReplacePattern), so the handler's HVAC branch must take them too, and an item
+// named by brand and model must still match its asset type ("WATER_HEATER" is the words "water heater").
+test('an AC question with no HVAC recorded says so, like the other HVAC wording', async () => {
+  for (const message of ['Is my AC still good?', 'Will my AC unit be good for the next few years?', 'Do I need a new a/c unit?']) {
+    assert.equal(op(message), 'REPLACEMENT_GUIDANCE', message);
+    assert.equal((await replacement(message, [])).blocks[0].title, 'I don’t have an HVAC system recorded for your home yet', message);
+  }
+});
+
+test('an item named by brand and model is found by its asset type', async () => {
+  const heater = (id, name) => ({ ...item(id, name, 'WATER_HEATER'), category: 'PLUMBING', brand: 'Rheem', model: 'XE50' });
+  const result = await replacement('Is my water heater still good?', [heater('a', 'Rheem Performance 50 Gal'), heater('b', 'Garage Rheem')]);
+  assert.equal(result.reasonCode, 'MULTIPLE_REPAIR_REPLACE_ITEMS');
+  assert.equal(result.blocks[0].sections[0].count, 2);
+});

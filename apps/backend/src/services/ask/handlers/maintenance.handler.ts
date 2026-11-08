@@ -25,6 +25,7 @@ import { collapseForecastPredictions, reconcileForecast, type ForecastObligation
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { calendarAwareTimeZone, humanDate } from '../askFormatting';
+import { messageNamesRoom } from '../askFollowUpContext';
 import { AskViewState, durableFreeTextClarification, ensurePropertyAccess, MaintenanceCompletionWorkflowInput, MaintenanceCompletionWorkflowInputSchema, MaintenanceTaskUpdateInputSchema, MaintenanceTaskWorkflowInput, MaintenanceTaskWorkflowInputSchema, MAX_RESULT_ITEMS, safeTimezone } from '../askHandlerSupport';
 import { formatAskMaintenanceDescription, formatAskMaintenanceScope, formatAskMaintenanceTitle } from '../askMaintenancePresentation';
 import { extractMaintenanceTaskTitle } from '../askMaintenanceTaskInput';
@@ -852,7 +853,8 @@ export function mergeMaintenanceViewContinuation(
   // scope survives a status-chip continuation the same way they do,
   // instead of silently broadening to every room.
   const effectiveMessage = (priorViewState && !isClearAllFilters)
-    ? [priorViewState.domainScopePhrase, priorViewState.dateScopePhrase, priorViewState.roomScopePhrase, message].filter(Boolean).join(' ')
+    // A message that names its own room replaces the remembered one; both in one sentence made the longer room name win.
+    ? [priorViewState.domainScopePhrase, priorViewState.dateScopePhrase, messageNamesRoom(message) ? null : priorViewState.roomScopePhrase, message].filter(Boolean).join(' ')
     : message;
   return { effectiveMessage, isClearAllFilters };
 }

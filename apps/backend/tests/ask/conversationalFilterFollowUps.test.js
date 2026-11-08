@@ -23,13 +23,19 @@ test('a conversational narrowing of a maintenance list continues that list', asy
     assert.equal(result.isFilterRefinement, true, message);
     assert.equal(result.sourceExecutionId, 'prior-1', message);
     assert.ok(containsFilterContinuation(result.effectiveMessage), `${message} -> ${result.effectiveMessage}`);
-    assert.ok(result.effectiveMessage.startsWith('Show my maintenance tasks. Only show'), result.effectiveMessage);
+    assert.ok(result.effectiveMessage.startsWith('Only show'), result.effectiveMessage);
   }
 });
 
 test('the rewrite names the filter the homeowner named', () => {
   assert.equal(conversationalFilterAsOnlyShow('What about the overdue ones?', 'MAINTENANCE_STATUS'), 'Only show the overdue ones');
-  assert.equal(conversationalFilterAsOnlyShow('Which ones are high priority?', 'HOME_ACTIONS'), 'Only show the high priority ones');
+  assert.equal(conversationalFilterAsOnlyShow('Which ones are high priority?', 'HOME_ACTIONS'), 'Only show the urgent ones');
+  assert.equal(conversationalFilterAsOnlyShow('Which ones are critical?', 'MAINTENANCE_STATUS'), 'Only show the urgent ones');
+  assert.equal(conversationalFilterAsOnlyShow('And the completed ones?', 'WORK_OVERVIEW'), 'Only show the completed ones');
+  assert.equal(conversationalFilterAsOnlyShow('What about the upcoming ones?', 'WORK_OVERVIEW'), 'Only show the scheduled ones');
+  // A word the list cannot narrow by is not a narrowing of it.
+  assert.equal(conversationalFilterAsOnlyShow('And the completed ones?', 'HOME_ACTIONS'), null);
+  assert.equal(conversationalFilterAsOnlyShow('What about the pending ones?', 'WORK_OVERVIEW'), null);
   assert.equal(conversationalFilterAsOnlyShow('How about in the kitchen?', 'MAINTENANCE_STATUS'), 'Only show tasks in the kitchen');
 });
 
@@ -73,4 +79,37 @@ test('with no recent list the message is unchanged, and the existing "Only show"
   const result = await resolve('Only show the urgent ones');
   assert.equal(result.forcedOperationId, 'MAINTENANCE_STATUS');
   assert.equal(result.effectiveMessage, 'Show my maintenance tasks. Only show the urgent ones');
+});
+
+// External review P1: a rewrite that only reads right as a string is not a working feature. The rewritten message must make each list's own
+// parser pick the NEW filter, even when the first question used a different one.
+const { homeActionPriorityFilter } = require('../../src/services/ask/askFocusedGuidance.ts');
+const { resolveWorkState } = require('../../src/services/ask/handlers/workOverview.handler.ts');
+const { mergeMaintenanceViewContinuation } = require('../../src/services/ask/handlers/maintenance.handler.ts');
+
+test('the rewritten message stands alone, so the new filter wins over the first question\'s words', async () => {
+  mockRow = prior('HOME_ACTIONS', 'What needs my attention right now?');
+  assert.deepEqual(homeActionPriorityFilter((await resolve('How about the due soon ones?')).effectiveMessage), ['SOON']);
+  mockRow = prior('HOME_ACTIONS', 'What needs my attention?');
+  for (const word of ['high priority', 'critical', 'overdue', 'urgent']) assert.deepEqual(homeActionPriorityFilter((await resolve(`Which ones are ${word}?`)).effectiveMessage), ['NOW'], word);
+
+  mockRow = prior('WORK_OVERVIEW', 'What needs me?');
+  const viewState = { resultId: 'r1', domainScopePhrase: null, dateScopePhrase: '10', statusFilter: 'NEEDS_YOU', selectedTaskId: null, revision: 1 };
+  assert.equal(resolveWorkState((await resolve('And the completed ones?')).effectiveMessage, viewState).state.view, 'COMPLETED');
+  assert.equal(resolveWorkState((await resolve('What about the upcoming ones?')).effectiveMessage, viewState).state.view, 'SCHEDULED');
+
+  mockRow = prior('MAINTENANCE_STATUS', 'Show my overdue maintenance tasks');
+  const statuses = { domainScopePhrase: null, dateScopePhrase: null, roomScopePhrase: null, queryMessage: null };
+  const dueSoon = mergeMaintenanceViewContinuation(statuses, (await resolve('How about the due soon ones?')).effectiveMessage).effectiveMessage;
+  assert.ok(/due soon/i.test(dueSoon) && !/overdue/i.test(dueSoon), dueSoon);
+});
+
+test('a room named in the follow-up replaces the remembered room instead of joining it', async () => {
+  mockRow = prior('MAINTENANCE_STATUS', 'Show my bathroom maintenance tasks');
+  const rewritten = (await resolve('How about in the kitchen?')).effectiveMessage;
+  const merged = mergeMaintenanceViewContinuation({ domainScopePhrase: null, dateScopePhrase: null, roomScopePhrase: 'in the bathroom', queryMessage: null }, rewritten).effectiveMessage;
+  assert.ok(/kitchen/i.test(merged) && !/bathroom/i.test(merged), merged);
+  // A status chip with no room of its own still keeps the remembered room.
+  const kept = mergeMaintenanceViewContinuation({ domainScopePhrase: null, dateScopePhrase: null, roomScopePhrase: 'in the bathroom', queryMessage: null }, 'Only show the overdue ones').effectiveMessage;
+  assert.ok(/bathroom/i.test(kept), kept);
 });

@@ -15,20 +15,22 @@ export const CANONICAL_ANSWER_BLOCK_ID_PREFIXES: Readonly<Partial<Record<AskOper
   HOME_TIMELINE_EVENTS: ['home-timeline-'],
   NEIGHBORHOOD_CHANGE_FEED: ['neighborhood-change'],
   // Audit Phase 3 (2026-11-08): each prefix below was read from the operation's own handler (the ids its answer blocks carry), not guessed. A prefix that
-  // another operation's handler also emits for a different job is not used here. Deliberately NOT listed, because the routing sweep shows other questions
+  // another operation's handler also emits for a different job is not used here; an entry ending in '$' is an exact block id (used where a sibling
+  // command handler shares the prefix, e.g. 'diy-projects' vs the command's 'diy-projects-back'). The contract test scans every handler to prove this. Deliberately NOT listed, because the routing sweep shows other questions
   // misrouted into them (the relevance check is what catches those): MAINTENANCE_BUDGET_FORECAST, MAINTENANCE_FORECAST, DOCUMENT_LOOKUP, INSPECTION_FINDINGS.
   APPLIANCE_FAILURE_RISK: ['appliance-oracle-'],
-  WARRANTY_LOOKUP: ['warranty-'],
+  WARRANTY_LOOKUP: ['warranty-summary$', 'warranty-results$', 'warranty-empty$', 'warranty-no-match$', 'warranty-show-all$', 'warranty-item-'],
   INCIDENT_CLAIM_STATUS: ['incident-claim-'],
   RECALL_REVIEW: ['recall-review-'],
-  SELL_HOLD_RENT_ANALYSIS: ['sell-hold-rent-'],
+  SELL_HOLD_RENT_ANALYSIS: ['sell-hold-rent-summary$', 'sell-hold-rent-assumptions$', 'sell-hold-rent-comparison$', 'sell-hold-rent-drivers$', 'sell-hold-rent-projection$', 'sell-hold-rent-keep-in-mind$', 'sell-hold-rent-tracked-decision$', 'sell-hold-rent-what-if-'],
   PROPERTY_TAX_APPEAL_READINESS: ['tax-readiness-'],
   BREAK_EVEN_ANALYSIS: ['break-even-'],
-  DO_NOTHING_SIMULATION: ['do-nothing-'],
-  HOA_COMPLIANCE_STATUS: ['hoa-'],
+  DO_NOTHING_SIMULATION: ['do-nothing-summary$', 'do-nothing-board$', 'do-nothing-costs$', 'do-nothing-items$', 'do-nothing-losses$', 'do-nothing-metrics$', 'do-nothing-next$', 'do-nothing-risks$', 'do-nothing-scenarios$', 'do-nothing-status$', 'do-nothing-trace$'],
+  HOA_COMPLIANCE_STATUS: ['hoa-compliance-'],
   SERVICE_PRICE_CHECKS: ['service-price-radar-'],
-  PROJECT_TRACKER_PROJECTS: ['project-tracker-'],
-  DIY_PROJECTS: ['diy-'],
+  // The single-project view of the same operation has its own ids (project-detail-*, project-execution-alignment, project-closeout-preview).
+  PROJECT_TRACKER_PROJECTS: ['project-tracker-', 'project-detail-', 'project-execution-alignment$', 'project-closeout-preview$'],
+  DIY_PROJECTS: ['diy-summary$', 'diy-projects$', 'diy-active$', 'diy-limit$'],
 });
 
 // A boundary or an evidence footer alone is not an answer.
@@ -37,5 +39,5 @@ const NOT_AN_ANSWER_BLOCK_TYPES = new Set(['BOUNDARY', 'EVIDENCE']);
 export function matchesCanonicalAnswerBlocks(operationId: AskOperationId, result: { blocks: ReadonlyArray<{ type: string; id?: string }> }): boolean {
   const prefixes = CANONICAL_ANSWER_BLOCK_ID_PREFIXES[operationId];
   if (!prefixes) return false;
-  return result.blocks.some((block) => !NOT_AN_ANSWER_BLOCK_TYPES.has(block.type) && typeof block.id === 'string' && prefixes.some((prefix) => block.id!.startsWith(prefix)));
+  return result.blocks.some((block) => !NOT_AN_ANSWER_BLOCK_TYPES.has(block.type) && typeof block.id === 'string' && prefixes.some((prefix) => (prefix.endsWith('$') ? block.id === prefix.slice(0, -1) : block.id!.startsWith(prefix))));
 }

@@ -140,6 +140,30 @@ test('every Phase 3 operation accepts its own handler block and nothing else', (
   }
 });
 
+// External review P2: a prefix that a command or capture handler also emits would let a write's review card skip the relevance check. Every block id
+// written as a literal in any handler is checked against every Phase 3 entry; the only file allowed to match is the operation's own read handler.
+test('no Phase 3 entry matches a block id emitted by any other handler', () => {
+  const { readdirSync } = require('node:fs');
+  const dir = resolve(__dirname, '../../src/services/ask/handlers');
+  const emitted = [];
+  for (const file of readdirSync(dir).filter((f) => f.endsWith('.ts'))) {
+    const source = readFileSync(resolve(dir, file), 'utf8');
+    for (const m of source.matchAll(/\bid: '([a-z0-9-]+)'/g)) emitted.push({ file, id: m[1] });
+  }
+  assert.ok(emitted.length > 500, 'the scan must really see the handlers');
+  for (const [operationId, [ownFile]] of Object.entries(PHASE3)) {
+    const foreign = emitted.filter(({ file, id }) => file !== ownFile && matchesCanonicalAnswerBlocks(operationId, { blocks: [{ type: 'SUMMARY', id }] }));
+    assert.deepEqual(foreign, [], `${operationId} accepts blocks emitted outside ${ownFile}`);
+  }
+});
+
+test('the single-project view of PROJECT_TRACKER_PROJECTS is an answer too', () => {
+  for (const id of ['project-detail-summary', 'project-detail-financials', 'project-execution-alignment', 'project-closeout-preview']) {
+    assert.equal(matchesCanonicalAnswerBlocks('PROJECT_TRACKER_PROJECTS', { blocks: [{ type: 'SUMMARY', id }] }), true, id);
+  }
+  assert.equal(matchesCanonicalAnswerBlocks('PROJECT_TRACKER_PROJECTS', { blocks: [{ type: 'BOUNDARY', id: 'project-tracker-boundary' }] }), false);
+});
+
 test('operations the routing sweep shows other questions misrouted into stay under the relevance check', () => {
   for (const operationId of ['MAINTENANCE_BUDGET_FORECAST', 'MAINTENANCE_FORECAST', 'DOCUMENT_LOOKUP', 'INSPECTION_FINDINGS']) {
     assert.equal(CANONICAL_ANSWER_BLOCK_ID_PREFIXES[operationId], undefined, operationId);

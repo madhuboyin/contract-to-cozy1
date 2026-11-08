@@ -15,6 +15,8 @@ test('a question about what happened is a status read, never the command', () =>
   assert.equal(op('did my claim get approved'), 'INCIDENT_CLAIM_STATUS');
   assert.equal(op('has my home record export finished'), 'HOME_RECORD_EXPORT_STATUS');
   assert.equal(op('can i download my export yet'), 'HOME_RECORD_EXPORT_STATUS');
+  // External review P2: the question can open with any question word, not only did/has/was.
+  for (const q of ['why was my claim denied', 'which claim was approved', 'what claim is under review', 'how did my claim get denied']) assert.equal(op(q), 'INCIDENT_CLAIM_STATUS', q);
   assert.notEqual(op('what if i delay home maintenance'), 'MAINTENANCE_TASK_UPDATE');
   assert.equal(op('what if i delay home maintenance'), 'DO_NOTHING_SIMULATION');
   assert.equal(op('what happens if i skip maintenance'), 'DO_NOTHING_SIMULATION');
@@ -23,6 +25,7 @@ test('a question about what happened is a status read, never the command', () =>
 test('the commands those guards sit beside still work', () => {
   assert.equal(op('approve the claim'), 'CLAIM_TRANSITION');
   assert.equal(op('submit my claim'), 'CLAIM_TRANSITION');
+  assert.equal(op('can you submit my claim'), 'CLAIM_TRANSITION'); // a polite command is still a command
   assert.equal(op('export my home record as a pdf'), 'HOME_RECORD_EXPORT');
   assert.equal(op('reschedule the gutter cleaning to next month'), 'MAINTENANCE_TASK_UPDATE');
   assert.equal(op('push back my hvac service by two weeks'), 'MAINTENANCE_TASK_UPDATE');

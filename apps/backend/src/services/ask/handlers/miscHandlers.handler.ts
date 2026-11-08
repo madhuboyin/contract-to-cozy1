@@ -190,10 +190,10 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
   // HVAC stays first (the shared alias table has no HVAC entry, and an HVAC item hands off to the HVAC decision). Every other item the router sends
   // here resolves through the shared alias table, so "Kitchen Microwave" matches "is my microwave still good" and an unrecorded stove is named as a stove.
   const sharedAlias = findSpecificInventoryAlias(message);
-  const aliases = /\b(?:hvac|furnace|air conditioner|heat pump)\b/i.test(message) ? ['hvac', 'furnace', 'air conditioner', 'heat pump']
+  const aliases = /\b(?:hvac|furnace|air conditioner|heat pump|a\/?c(?: unit)?)\b/i.test(message) ? ['hvac', 'furnace', 'air conditioner', 'heat pump']
     : sharedAlias ? [...sharedAlias.terms]
       : /\bgarage door\b/i.test(message) ? ['garage door'] : query ? [query] : [];
-  const itemText = (item: typeof allItems[number]) => [item.name, item.category, item.assetType, item.brand, item.model].filter(Boolean).join(' ').toLowerCase();
+  const itemText = (item: typeof allItems[number]) => [item.name, item.category, item.assetType, item.brand, item.model].filter(Boolean).join(' ').toLowerCase().replace(/_/g, ' ');
   const items = focusedInventoryItemId
     ? allItems.filter((item) => item.id === focusedInventoryItemId)
     : aliases.length ? allItems.filter((item) => aliases.some((alias) => containsWholeWord(itemText(item), alias) || containsWholeWord(alias, item.name))) : [];
