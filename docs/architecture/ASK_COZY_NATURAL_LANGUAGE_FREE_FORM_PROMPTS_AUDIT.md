@@ -1,4 +1,4 @@
-# Ask Cozy: Natural Language & Free-Form Prompts Comprehensive Audit (Revision 7)
+# Ask Cozy: Natural Language & Free-Form Prompts Comprehensive Audit (Revision 8)
 
 **Date:** 2026-11-08  
 **Scope:** End-to-end audit of Ask Cozy prompt handling (`apps/frontend/src/components/ask/*` and `apps/backend/src/services/ask/*`)  
@@ -292,7 +292,7 @@ Target the top failure classes measured in `node apps/backend/scripts/ask-routin
 
 **Done:** deterministic (Stage 2) pattern widening for 11 of the 12 target fallback families, in `askOperationRegistry.ts`. Buyer family (`a7add690`): `BUYER_DEADLINES`, `BUYER_FINANCING_READINESS`, `BUYER_PLAN_STATUS`, `BUYER_TITLE_ESCROW_READINESS`, `BUYER_DISCLOSURE_FUNDS_READINESS`, `BUYER_CONTRACT_TIMELINE`. Non-buyer family (`4de820aa`): `PROJECT_TRACKER_PROJECTS`, `INSPECTION_FINDING_UPDATE`, `HOME_TIMELINE_EVENTS`, `DOCUMENT_LOOKUP`, `COVERAGE_GAPS`. Also added two held-out corpora (`askRoutingHoldoutCorpus.js`, `askRoutingHoldoutCorpus2.js`).
 
-**Not done:** item 1 (hijacker guards for the 35 + 32 misroutes, only incidentally reduced from 67 to 64), item 3 (stemming / synonym groups), `INSPECTION_NEGOTIATION_PACKAGE` (it has no deterministic route and overlaps Negotiation Shield and `BUYER_NEGOTIATION_READINESS`; left on purpose), and `HOME_TIMELINE_EVENTS`' "what has happened at my house" misroute to `HOME_EVENT_RADAR_FEED`.
+**Not done:** item 3 (stemming / synonym groups), `INSPECTION_NEGOTIATION_PACKAGE` (it has no deterministic route and overlaps Negotiation Shield and `BUYER_NEGOTIATION_READINESS`; left on purpose), and `HOME_TIMELINE_EVENTS`' "what has happened at my house" misroute to `HOME_EVENT_RADAR_FEED`.
 
 | Measure | Before Phase 2 | After |
 | :--- | ---: | ---: |
@@ -313,6 +313,24 @@ Target the top failure classes measured in `node apps/backend/scripts/ask-routin
 **Conclusion for planning:** pattern widening yields real but modest, family-specific gains (+20 main-sweep hits, +5 held-out hits) and does not transfer across families. Fallbacks are still 27.1% of the sweep. Further large gains likely need the calibration work (`OD-4.1` to `OD-4.3`), not more regexes.
 
 **Verification run:** `ask-routing-sweep.js --check` clean; ratchet and coverage tests pass; routing test group 91 of 93 pass. The 2 failures (`routing calibration is derived from traceable labeled fixture rows`, `ordinary read questions never route to a correction command`) also fail on a clean checkout and are unrelated to this work. `tsc --noEmit` is clean. **Not verified:** buyer-mode eligibility gating (the sweep does not model it), live behaviour with real property data.
+
+#### Phase 2 Item 1 Results: Hijacker Guards (implemented 2026-11-08, commit `515a0585`) **[Executed]**
+
+**Done:** targeted guards in the Stage 2 patterns of `askOperationRegistry.ts` and `support/homeRecordExport.ts`, in two kinds.
+- **A question about what happened is a status read, never the command.** `CLAIM_TRANSITION` no longer takes "did / has / was / when did my claim get approved" (it goes to `INCIDENT_CLAIM_STATUS`). `HOME_RECORD_EXPORT_STATUS` now takes "has my export finished" and "can i download my export yet" instead of starting a new export. "What if I delay maintenance" and "what happens if I skip maintenance" go to `DO_NOTHING_SIMULATION`, not `MAINTENANCE_TASK_UPDATE`.
+- **Wording goes to the operation that owns it.** `QUOTE_COMPARISON_REVIEW` no longer takes HVAC/AC quotes (`HVAC_DECISION_SCENARIO`), "finalized" quotes (`PRICE_FINALIZATIONS_LIST`) or insurance/policy/coverage comparisons (`COVERAGE_COMPARISON_STATUS`). Catch-all routes gave up prompts that now reach `REFINANCE_RATE_MONITOR`, `SAVINGS_OPPORTUNITIES`, `CAPITAL_RESERVE_PLAN`, `WORK_OVERVIEW` and `MAJOR_EVENT_ENTRY`.
+
+| Measure | Before | After |
+| :--- | ---: | ---: |
+| 690-prompt sweep hits | 392 (56.8%) | **409 (59.3%)** |
+| 690-prompt sweep misroutes | 64 | **48 (7.0%)** |
+| 690-prompt sweep fallbacks | 187 | **186 (27.0%)** |
+| Held-out slice 2 (24 prompts) | 9 | 9 (unchanged) |
+| Held-out slice 1 (36 prompts, contaminated) | 26 | 26 (unchanged) |
+
+**Tests:** new `tests/ask/hijackerGuards.test.js` (4 tests, passing). Each guard has a counterpart proving the real command still works ("approve the claim", "submit my claim", "export my home record as a pdf", "reschedule the gutter cleaning to next month", "push back my hvac service by two weeks", "show my do nothing simulation"). `ask-routing-sweep.js --check` reports no regression and the baseline was re-recorded. Routing test group: 95 of 97 pass; the 2 failures (`askRoutingCalibration`, `correctionRouting`) also fail on a clean checkout. `tsc --noEmit` is clean.
+
+**Not done, on purpose:** the 48 remaining misroutes are mostly the local classifier's home-status and digital-will prompts, or judgment calls (for example "compare my quotes side by side" going to the review rather than `QUOTE_COMPARISON_CREATE`). "Set my hvac decision preference" still reaches the forget-preference command: that command is confirmation-gated and has nothing to forget in that case, but the intent is backwards, and saving a preference such as "quiet furnace" is not supported by the save operation. Held-out slices did not move because they hold fallback-family prompts, not misroutes. Hard negatives for the classifier (`negativeExamples`) were not added: they shift raw scores and need the calibration refresh (`OD-4.1`).
 
 ---
 
@@ -402,6 +420,6 @@ No handler needed its block ids namespaced first: every one of the 12 already em
 | Phase | Scope | Primary Metric & Gate | Rollback / Safety Control |
 | :--- | :--- | :--- | :--- |
 | **Phase 1** (done, `fcb9efb5`) | `miscHandlers.handler.ts` (`findSpecificInventoryAlias` in `replacementGuidanceResult` with HVAC-first precedence, local `garage door` branch, and spoken-noun `namedNoun`), `CARD_ENTRY_BINDINGS` routing parity (`home-records`, `claims`) | Extend `itemHealthWording.test.js`, new `cardEntryBindingsRouting.test.js` + `node scripts/ask-routing-sweep.js --check` | Gated by the routing ratchet; revert commit if any test regresses |
-| **Phase 2** (partial: pattern widening done, `a7add690` + `4de820aa`; hijacker guards, stemming, negotiation package not done; see Phase 2 Results) | Top 6 hijacker regex guards (`67` misroutes) + top fallback operation patterns/examples (`203` fallbacks, capped at 2–3 examples/op) | `node scripts/ask-routing-sweep.js --check`, new held-out corpus (`askRoutingHoldoutCorpus.js`, to be created; report-only), and `askRoutingCoverageReport.test.js` | CI routing ratchet (`tests/ask/routingSweepRatchet.test.js`) blocks any lost hit or new misroute |
+| **Phase 2** (partial: pattern widening done, `a7add690` + `4de820aa`; hijacker guards done for the Stage 2 patterns, `515a0585`; classifier negatives, stemming, negotiation package not done; see Phase 2 Results) | Top 6 hijacker regex guards (`67` misroutes) + top fallback operation patterns/examples (`203` fallbacks, capped at 2–3 examples/op) | `node scripts/ask-routing-sweep.js --check`, new held-out corpus (`askRoutingHoldoutCorpus.js`, to be created; report-only), and `askRoutingCoverageReport.test.js` | CI routing ratchet (`tests/ask/routingSweepRatchet.test.js`) blocks any lost hit or new misroute |
 | **Phase 3** (done for 12 of 16 named operations, `b300a3ff`; the other 4 deferred on purpose, see Phase 3 Results) | Per-operation `CANONICAL_ANSWER_BLOCK_ID_PREFIXES` additions (`support/canonicalAnswerBlocks.ts`) for uncovered `READ` handlers | `tests/ask/canonicalAnswerContracts.test.js` + `ASK_ANSWER_RELEVANCE_CROSS_OPERATION_NEGATIVE_MATRIX` | Remove individual operation prefix entry in `canonicalAnswerBlocks.ts` |
 | **Phase 4** (item 1 done, `e20a49e9`; item 2 needs `GEMINI_API_KEY` and was not run; item 3 is owner decisions; see Phase 4 Results) | Multi-turn filter continuations (`askFollowUpContext.ts`) + live `--model` sweep measurement (`Revision 1.527`) | Multi-turn follow-up unit tests + `node scripts/ask-routing-sweep.js --model --misses` report reviewed by owner | `ASK_MODEL_ROUTER_KILL_SWITCH=true` (`askOperationalControls.ts:66`) and `ASK_MODEL_ROUTER_ENABLED=false` (`line 65`) |
