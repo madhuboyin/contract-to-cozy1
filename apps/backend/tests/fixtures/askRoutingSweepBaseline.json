@@ -133,8 +133,11 @@
    "show my policy comparison"
   ],
   "COVERAGE_GAPS": [
+   "am i properly insured",
    "is my stuff protected by insurance or warranty",
-   "where are my coverage gaps"
+   "what isnt covered at my house",
+   "where are my coverage gaps",
+   "which of my items are not covered"
   ],
   "COVERAGE_REVIEW_STATUS": [
    "policy review questions",
@@ -149,8 +152,11 @@
    "which diy steps are left"
   ],
   "DOCUMENT_LOOKUP": [
+   "do i have the deed on file",
+   "list the files i uploaded",
    "show my uploaded documents",
-   "what documents are in my vault"
+   "what documents are in my vault",
+   "where is my closing paperwork"
   ],
   "DOCUMENT_PROMOTION_REVIEW": [
    "pending document suggestions",
@@ -250,7 +256,10 @@
   ],
   "HOME_TIMELINE_EVENTS": [
    "list my home timeline",
-   "show the history of my home"
+   "show the history of my home",
+   "what has happened at my house over the years",
+   "what improvements did i make",
+   "what repairs have been done"
   ],
   "HOME_UPGRADE_SCENARIOS": [
    "show home upgrade planner",
@@ -298,7 +307,11 @@
   ],
   "INSPECTION_FINDING_UPDATE": [
    "accept the inspection finding about the deck",
-   "dismiss that inspection finding"
+   "dismiss that inspection finding",
+   "i fixed the inspection issue",
+   "ignore that inspection item",
+   "mark the roof finding resolved",
+   "resolve finding"
   ],
   "INSPECTION_NEGOTIATION_PACKAGE": [
    "build a negotiation package from my inspection",
@@ -434,7 +447,11 @@
    "what terms did i accept"
   ],
   "PROJECT_TRACKER_PROJECTS": [
-   "show my contractor projects"
+   "list completed projects",
+   "show my contractor projects",
+   "status of my kitchen remodel project",
+   "what contractors am i working with",
+   "what projects are in progress"
   ],
   "PROPERTY_BRIEFS_LIST": [
    "list saved briefs",
@@ -613,7 +630,6 @@
    "insurance quote comparison status"
   ],
   "DOCUMENT_LOOKUP": [
-   "do i have the deed on file",
    "find my insurance policy document"
   ],
   "DOCUMENT_PROMOTION_REVIEW": [
@@ -646,7 +662,6 @@
    "what is in good shape and what is not"
   ],
   "HOME_TIMELINE_EVENTS": [
-   "what has happened at my house over the years",
    "what projects have i done on the house"
   ],
   "HOME_WORK_ITEMS": [
