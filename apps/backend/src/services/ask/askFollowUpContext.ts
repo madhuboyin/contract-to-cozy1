@@ -54,6 +54,27 @@ const FOLLOW_UP_LOOKBACK_MS = 30 * 60 * 1000;
 
 const ENTITY_CONTINUATION_PATTERN = /\b(?:complete|finish|mark|update|reschedule|cancel|archive|reopen)\b.{0,25}\b(it|that one|this one|that task|this task|the other one)\b/i;
 const FILTER_CONTINUATION_PATTERN = /^\s*(?:only|just|now show|now only show|instead show|filter to|show only|and only)\b/i;
+// Audit Phase 4: conversational ways of narrowing the list just shown ("What about the overdue ones?", "Which ones are urgent?", "How about in the
+// kitchen?", "And the completed ones?"). They are rewritten, for routing and parsing only, into the "Only show ..." wording every list handler already
+// understands, so no handler learns a second grammar. The rewrite happens only when the prior result is a list that has this kind of filter AND what follows
+// the lead-in is a filter word for that list: "What about my mortgage rate?" or "What about the kitchen faucet?" never qualifies and is routed as a new question.
+const CONVERSATIONAL_FILTER_LEAD = /^\s*(?:(?:and\s+)?what about|how about|and|which (?:ones|items|tasks|of them) (?:are|is))\s+(?:just\s+|only\s+)?(?:the\s+|those\s+|any\s+)?([^?.!]{1,40}?)\s*[?.!]*\s*$/i;
+const STATUS_FILTER_WORDS = /^(overdue|urgent|critical|high[- ]priority|due soon|coming up|upcoming|pending|open|completed|done|cancelled|canceled)(?:\s+(?:ones|items|tasks|things))?$/i;
+const ROOM_FILTER_PHRASE = /^(?:in|for|from)\s+(?:the|my)\s+(kitchen|bathroom|bedroom|master bedroom|garage|basement|attic|living room|dining room|laundry room|office|yard|backyard|hallway|closet|nursery|porch|patio|deck|utility room)$/i;
+const STATUS_CONVERSATIONAL_OPERATIONS: ReadonlySet<string> = new Set(['MAINTENANCE_STATUS', 'HOME_ACTIONS', 'WORK_OVERVIEW']);
+const ROOM_CONVERSATIONAL_OPERATIONS: ReadonlySet<string> = new Set(['MAINTENANCE_STATUS']);
+
+/** The "Only show ..." form of a conversational narrowing, or null when the message is not one for this prior list. */
+export function conversationalFilterAsOnlyShow(message: string, priorOperationId: string): string | null {
+  const lead = CONVERSATIONAL_FILTER_LEAD.exec(message);
+  if (!lead) return null;
+  const rest = lead[1].trim();
+  if (STATUS_CONVERSATIONAL_OPERATIONS.has(priorOperationId) && STATUS_FILTER_WORDS.test(rest)) return `Only show the ${rest.toLowerCase().replace(/\s+(?:ones|items|tasks|things)$/, '')} ones`;
+  const room = ROOM_FILTER_PHRASE.exec(rest);
+  if (room && ROOM_CONVERSATIONAL_OPERATIONS.has(priorOperationId)) return `Only show tasks in the ${room[1].toLowerCase()}`;
+  return null;
+}
+
 /** True when a declared filter chip's message will be resolved as a continuation of the prior result (used to keep chip wording honest). */
 export const isFilterContinuationMessage = (message: string): boolean => FILTER_CONTINUATION_PATTERN.test(message);
 const FILTER_CONTINUATION_SENTENCE_PATTERN = new RegExp(`(?:^|[.!?]\\s+)${FILTER_CONTINUATION_PATTERN.source.replace(/^\^\\s\*/, '\\s*')}`, 'i');
@@ -264,7 +285,8 @@ export async function resolveAskFollowUpMessage(input: {
   const isSpecialistContinuation = SPECIALIST_CONTINUATION_PATTERN.test(input.message);
   const isMonitorVagueFollowup = MONITOR_VAGUE_FOLLOWUP_PATTERN.test(input.message);
   const isSellHoldRentVagueFollowup = SELL_HOLD_RENT_VAGUE_FOLLOWUP_PATTERN.test(input.message);
-  if (!entityMatch && !isFilterContinuation && !isEnvelopePagination && !isSpecialistContinuation && !isMonitorVagueFollowup && !isSellHoldRentVagueFollowup) return fallback;
+  const isConversationalFilterLead = CONVERSATIONAL_FILTER_LEAD.test(input.message);
+  if (!entityMatch && !isFilterContinuation && !isConversationalFilterLead && !isEnvelopePagination && !isSpecialistContinuation && !isMonitorVagueFollowup && !isSellHoldRentVagueFollowup) return fallback;
 
   const prior = await findRecentPriorExecution(input.sessionId, input.propertyId, input.declaredSourceExecutionId);
   if (!prior || !prior.operationId) return fallback;
@@ -395,6 +417,18 @@ export async function resolveAskFollowUpMessage(input: {
       continuationCursor: null,
       suppliedInput: null,
       isFilterRefinement: false,
+    };
+  }
+
+  const conversationalFilter = isConversationalFilterLead ? conversationalFilterAsOnlyShow(input.message, prior.operationId) : null;
+  if (conversationalFilter && FILTER_CONTINUABLE_OPERATIONS.has(prior.operationId as AskOperationId)) {
+    return {
+      effectiveMessage: input.declaredSourceExecutionId ? conversationalFilter : `${prior.message}. ${conversationalFilter}`,
+      forcedOperationId: prior.operationId as AskOperationId,
+      sourceExecutionId: prior.id,
+      continuationCursor: null,
+      suppliedInput: null,
+      isFilterRefinement: true,
     };
   }
 
