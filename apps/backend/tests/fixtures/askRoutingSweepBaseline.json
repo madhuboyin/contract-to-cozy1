@@ -27,7 +27,8 @@
   ],
   "BUYER_DISCLOSURE_FUNDS_READINESS": [
    "closing disclosure review",
-   "did my closing disclosure change"
+   "did my closing disclosure change",
+   "how much cash do i need at closing"
   ],
   "BUYER_DOCUMENT_READINESS": [
    "missing transaction documents",
@@ -69,7 +70,8 @@
   ],
   "BUYER_PLAN_STATUS": [
    "buyer plan status",
-   "how is my home purchase going"
+   "how is my home purchase going",
+   "where am i in the buying process"
   ],
   "BUYER_TASK_COMPLETE": [
    "check off the appraisal task",
@@ -89,6 +91,9 @@
    "push the survey task out a week",
    "reassign the title task to my agent",
    "reschedule my closing task"
+  ],
+  "BUYER_TITLE_ESCROW_READINESS": [
+   "what is outstanding with escrow"
   ],
   "BUYER_WALKTHROUGH_READINESS": [
    "am i ready for the final walkthrough",
