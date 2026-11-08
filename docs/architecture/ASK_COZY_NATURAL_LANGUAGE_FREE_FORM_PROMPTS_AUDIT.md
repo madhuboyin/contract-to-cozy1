@@ -1,4 +1,4 @@
-# Ask Cozy: Natural Language & Free-Form Prompts Comprehensive Audit (Revision 5)
+# Ask Cozy: Natural Language & Free-Form Prompts Comprehensive Audit (Revision 6)
 
 **Date:** 2026-11-08  
 **Scope:** End-to-end audit of Ask Cozy prompt handling (`apps/frontend/src/components/ask/*` and `apps/backend/src/services/ask/*`)  
@@ -326,6 +326,37 @@ Target the top failure classes measured in `node apps/backend/scripts/ask-routin
 **Phase 3 Test & Verification Plan:**
 - Extend `apps/backend/tests/ask/canonicalAnswerContracts.test.js` for each added operation, verifying both positive pass (`CANONICAL_TYPED_ANSWER_CONTRACT_MATCH`) and cross-operation rejection against `ASK_ANSWER_RELEVANCE_CROSS_OPERATION_NEGATIVE_MATRIX`.
 
+#### Phase 3 Results (implemented 2026-11-08, commit `b300a3ff`) **[Executed + Code-traced]**
+
+**Done:** 12 operations were added to `CANONICAL_ANSWER_BLOCK_ID_PREFIXES` (`support/canonicalAnswerBlocks.ts`). Each prefix was read from the operation's own handler **[Code-traced]**:
+
+| Operation | Prefix | Handler |
+| :--- | :--- | :--- |
+| `APPLIANCE_FAILURE_RISK` | `appliance-oracle-` | `applianceOracleBudget.handler.ts` |
+| `WARRANTY_LOOKUP` | `warranty-` | `warranties.handler.ts` |
+| `INCIDENT_CLAIM_STATUS` | `incident-claim-` | `claims.handler.ts` |
+| `RECALL_REVIEW` | `recall-review-` | `recallReview.handler.ts` |
+| `SELL_HOLD_RENT_ANALYSIS` | `sell-hold-rent-` | `sellHoldRent.handler.ts` |
+| `PROPERTY_TAX_APPEAL_READINESS` | `tax-readiness-` | `capitalPlanning.handler.ts` |
+| `BREAK_EVEN_ANALYSIS` | `break-even-` | `refinance.handler.ts` |
+| `DO_NOTHING_SIMULATION` | `do-nothing-` | `doNothingSimulator.handler.ts` |
+| `HOA_COMPLIANCE_STATUS` | `hoa-` | `hoaCompliance.handler.ts` |
+| `SERVICE_PRICE_CHECKS` | `service-price-radar-` | `servicePriceRadar.handler.ts` |
+| `PROJECT_TRACKER_PROJECTS` | `project-tracker-` | `projectTracker.handler.ts` |
+| `DIY_PROJECTS` | `diy-` | `diyProjectCenter.handler.ts` |
+
+No handler needed its block ids namespaced first: every one of the 12 already emitted distinct, operation-specific ids for its answer blocks. `tax-appeal-` ids were left out of `PROPERTY_TAX_APPEAL_READINESS` because they belong to the appeal-case list, not the readiness answer.
+
+**Deliberately not done (departure from the plan above):** the plan named `MAINTENANCE_BUDGET_FORECAST`, `MAINTENANCE_FORECAST`, `DOCUMENT_LOOKUP` and `INSPECTION_FINDINGS`. They were left under the relevance check. The routing sweep **[Executed]** shows 10 prompts misrouted into them (`4`, `2`, `2` and `2` respectively), and the relevance check is what catches such a misroute and turns it into a clarification. A canonical-block match skips that check, so adding the four would show a wrong answer to those prompts. The same trade-off applies in smaller form to the 12 that were added (the sweep shows no misroutes into them, but it does not model buyer gating or live data). Adding the four is an owner decision.
+
+**Tests:** `canonicalAnswerContracts.test.js` gained two tests **[Executed]**:
+- For each of the 12: the prefix's example id really appears in the handler source (a typo or renamed block id fails), the operation accepts its own block, and it rejects the fallback block, a footer-only result, and each of the other 11 operations' blocks.
+- The four deferred operations have no entry.
+
+**Verification run:** `canonicalAnswerContracts.test.js` 9 of 9 pass. The 101 test files that touch the answer validator or trust pipeline ran through `scripts/run-tests-chunked.js`: **971 of 976 pass**. The 5 failures (`claimsCalmAnswer.test.js` 1, `quoteReviewStrip.test.js` 4) fail identically on a clean checkout, so they are not from this work. `tsc --noEmit` is clean.
+
+**Not measured:** how many valid answers were being refused on live data before, and how many this removes. The offline sweep runs no DB-backed handlers, so Root Cause 4's consequence stays code-traced and the benefit of Phase 3 is not quantified.
+
 ---
 
 ### Phase 4: Multi-Turn Follow-Up Wording & Model-Router Evaluation (Gated / Owner Decisions)
@@ -349,5 +380,5 @@ Target the top failure classes measured in `node apps/backend/scripts/ask-routin
 | :--- | :--- | :--- | :--- |
 | **Phase 1** (done, `fcb9efb5`) | `miscHandlers.handler.ts` (`findSpecificInventoryAlias` in `replacementGuidanceResult` with HVAC-first precedence, local `garage door` branch, and spoken-noun `namedNoun`), `CARD_ENTRY_BINDINGS` routing parity (`home-records`, `claims`) | Extend `itemHealthWording.test.js`, new `cardEntryBindingsRouting.test.js` + `node scripts/ask-routing-sweep.js --check` | Gated by the routing ratchet; revert commit if any test regresses |
 | **Phase 2** (partial: pattern widening done, `a7add690` + `4de820aa`; hijacker guards, stemming, negotiation package not done; see Phase 2 Results) | Top 6 hijacker regex guards (`67` misroutes) + top fallback operation patterns/examples (`203` fallbacks, capped at 2–3 examples/op) | `node scripts/ask-routing-sweep.js --check`, new held-out corpus (`askRoutingHoldoutCorpus.js`, to be created; report-only), and `askRoutingCoverageReport.test.js` | CI routing ratchet (`tests/ask/routingSweepRatchet.test.js`) blocks any lost hit or new misroute |
-| **Phase 3** | Per-operation `CANONICAL_ANSWER_BLOCK_ID_PREFIXES` additions (`support/canonicalAnswerBlocks.ts`) for uncovered `READ` handlers | `tests/ask/canonicalAnswerContracts.test.js` + `ASK_ANSWER_RELEVANCE_CROSS_OPERATION_NEGATIVE_MATRIX` | Remove individual operation prefix entry in `canonicalAnswerBlocks.ts` |
+| **Phase 3** (done for 12 of 16 named operations, `b300a3ff`; the other 4 deferred on purpose, see Phase 3 Results) | Per-operation `CANONICAL_ANSWER_BLOCK_ID_PREFIXES` additions (`support/canonicalAnswerBlocks.ts`) for uncovered `READ` handlers | `tests/ask/canonicalAnswerContracts.test.js` + `ASK_ANSWER_RELEVANCE_CROSS_OPERATION_NEGATIVE_MATRIX` | Remove individual operation prefix entry in `canonicalAnswerBlocks.ts` |
 | **Phase 4** | Multi-turn filter continuations (`askFollowUpContext.ts`) + live `--model` sweep measurement (`Revision 1.527`) | Multi-turn follow-up unit tests + `node scripts/ask-routing-sweep.js --model --misses` report reviewed by owner | `ASK_MODEL_ROUTER_KILL_SWITCH=true` (`askOperationalControls.ts:66`) and `ASK_MODEL_ROUTER_ENABLED=false` (`line 65`) |
