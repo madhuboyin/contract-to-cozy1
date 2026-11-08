@@ -83,3 +83,15 @@ test('the handler offers the start action in its no-active-decision answer', () 
   const source = readFileSync(resolve(__dirname, '../../src/services/ask/handlers/hvacDecision.handler.ts'), 'utf8');
   assert.match(source, /id: 'hvac-decision-none'[^\n]*actions: \[hvacStartDecisionAction\(item\.name\)/);
 });
+
+test('small talk about the person is not read as a home record request', () => {
+  const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
+  for (const message of ['how is my day going', 'how is my day', 'how are you', 'thanks', 'good morning', 'tell me a joke']) {
+    const decision = resolveAskRoutingCascade(message, { propertyId: 'p1' });
+    assert.equal(decision.stage, 'REMOTE_FALLBACK', message);
+    assert.deepEqual(decision.candidates, [], message);
+  }
+  for (const message of ['how is my home doing', 'how is my water heater doing', 'what is due this week', 'hi, what is due this week']) {
+    assert.notEqual(resolveAskRoutingCascade(message, { propertyId: 'p1' }).candidates.length === 0 && resolveAskRoutingCascade(message, { propertyId: 'p1' }).stage === 'REMOTE_FALLBACK', true, message);
+  }
+});

@@ -14,6 +14,11 @@ import { resolveAskEntityState, type AskEntityResolutionResult } from './askEnti
 
 const HOME_VALUE_GROWTH_PATTERN = /\b(?:increase|raise|boost|grow|improve|add to|maximi[sz]e)\b.{0,25}\b(?:home|house|property)\b.{0,12}\bvalue\b|\b(?:increase|raise|boost|grow|improve|maximi[sz]e)\b.{0,12}\bvalue\b.{0,12}\b(?:home|house|property)\b|\b(?:home|house|property)\s+value\b.{0,20}\b(?:increase|go up|rise|grow|improve)\b|\b(?:improvements?|upgrades?|renovations?|projects?)\b.{0,25}\b(?:add|increase|raise|boost)\b.{0,15}\bvalue\b/i;
 
+// Small talk about the person, not the home ("how is my day going", "how are you", "thanks"). Short whole-message phrases only. The local classifier read
+// "how is my day going" as the Home Record export status at 0.46; with nothing to match, it stays with the fallback, which answers honestly that the home
+// record has nothing on it.
+const SMALL_TALK_PATTERN = /^\s*(?:hi|hello|hey|good (?:morning|afternoon|evening|night)|thanks?|thank you(?: so much| very much)?|ok(?:ay)?|cool|great|how are you(?: doing)?(?: today)?|how'?s it going|how is my day(?: going| been| so far)?|how'?s my day(?: going| been| so far)?|how is your day(?: going)?|what'?s up|tell me a joke)\b[\s\S]{0,20}$/i;
+
 export type AskRoutingStage = 'SAFETY' | 'DETERMINISTIC' | 'LOCAL_CLASSIFIER' | 'MODEL_CLASSIFIER' | 'CLARIFICATION' | 'REMOTE_FALLBACK';
 
 export interface AskRoutingCandidate {
@@ -71,6 +76,10 @@ export function resolveAskRoutingCascade(rawMessage: string, options: {
     return { language, operation: direct, stage: 'DETERMINISTIC', candidates: [{ operationId: direct.operationId, language, confidence: direct.confidence, confidenceBand: 'HIGH' }], requiresClarification: false, entityResolution: resolveAskEntityState({ message, operationId: direct.operationId, propertyId: options.propertyId, launchEntityId: options.launchEntityId, requiresProperty: direct.requiresProperty }) };
   }
   if (options.localRoutingEnabled === false) {
+    return { language, operation: direct, stage: 'REMOTE_FALLBACK', candidates: [], requiresClarification: false, entityResolution: null };
+  }
+
+  if (SMALL_TALK_PATTERN.test(message.trim()) && message.trim().split(/\s+/).length <= 7) {
     return { language, operation: direct, stage: 'REMOTE_FALLBACK', candidates: [], requiresClarification: false, entityResolution: null };
   }
 

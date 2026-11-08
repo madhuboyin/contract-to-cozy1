@@ -129,3 +129,9 @@ test('the router is off by default, has a kill switch, and its model purpose is 
   assert.equal(ASK_LLM_PURPOSE_CONTRACTS.ASK_COZY_OPERATION_ROUTING.structuredOutputRequired, true);
   assert.equal(ASK_LLM_PURPOSE_CONTRACTS.ASK_COZY_OPERATION_ROUTING.routeId, 'ai:ask');
 });
+
+test('a message about a non-HVAC item is never offered an HVAC operation to choose', () => {
+  const hvacIds = (message) => buildAskModelRouterCandidates(message, { eligibleOperationIds: eligible }).map((candidate) => candidate.operationId).filter((id) => id.startsWith('HVAC_'));
+  assert.deepEqual(hvacIds('should i keep going with my water heater or start fresh'), []);
+  assert.deepEqual(hvacIds('is my microwave still worth keeping, it is old'), []);
+});

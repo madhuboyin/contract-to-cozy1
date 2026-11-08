@@ -10,7 +10,7 @@
 // Safety nets kept: safety and deterministic routes never reach it; the chosen operation's answer still goes through the answer-trust and
 //                   semantic relevance checks; any failure leaves the local decision exactly as it was.
 import { z } from 'zod';
-import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId } from './askOperationRegistry';
+import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, messageNamesOnlyNonHvacItem, type AskOperationId } from './askOperationRegistry';
 import { retrieveAskOperationCandidates } from './askSemanticRouter';
 import { resolveAskEntityState } from './askEntityResolution';
 import { ASK_DEFAULT_LANGUAGE } from './askLanguageRegistry';
@@ -65,6 +65,8 @@ export function buildAskModelRouterCandidates(message: string, options: {
 }): AskModelRouterCandidate[] {
   const language = (options.language ?? ASK_DEFAULT_LANGUAGE) as typeof ASK_DEFAULT_LANGUAGE;
   const eligible = new Set([...options.eligibleOperationIds].filter(isAskModelRoutableOperation));
+  // The local router never offers an HVAC decision for a message about a microwave, fridge or water heater; the model must not be offered one either.
+  if (messageNamesOnlyNonHvacItem(message)) for (const id of [...eligible]) if (id.startsWith('HVAC_')) eligible.delete(id);
   const retrieved = eligible.size
     ? retrieveAskOperationCandidates(message, { eligibleOperationIds: eligible, topK: ASK_MODEL_ROUTER_CANDIDATE_LIMIT, language, minimumConfidence: 0 }).map((candidate) => candidate.operationId)
     : [];
