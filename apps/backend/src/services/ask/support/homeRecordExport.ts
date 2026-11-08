@@ -18,7 +18,7 @@ export const isHomeRecordExportRequest = (message: string): boolean =>
 
 /** "Is my export ready?", "export status", "how is my home record export going?". */
 export const isHomeRecordExportStatusRequest = (message: string): boolean =>
-  /\b(?:is|are|check|how(?:'s| is)|what(?:'s| is)|any (?:news|update)(?: on)?)\b.{0,40}\b(?:export|home record (?:pdf|download)|report pack)\b.{0,30}\b(?:ready|done|finished|status|progress|going|yet)\b|\bexport status\b|\b(?:status|progress) of my (?:home record )?(?:export|download)\b/i.test(message);
+  /\b(?:is|are|check|how(?:'s| is)|what(?:'s| is)|any (?:news|update)(?: on)?)\b.{0,40}\b(?:export|home record (?:pdf|download)|report pack)\b.{0,30}\b(?:ready|done|finished|status|progress|going|yet)\b|\b(?:has|have|did)\b.{0,30}\bexport\b.{0,30}\b(?:finish\w*|complete\w*|ready|done)\b|\b(?:can|could) i (?:download|get|see)\b.{0,25}\bexport\b.{0,15}\b(?:yet|now)\b|\bexport status\b|\b(?:status|progress) of my (?:home record )?(?:export|download)\b/i.test(message);
 
 /** What the pack can carry, in the words a homeowner uses. Sections it cannot carry are still recognized so the review can say why they are left out. */
 const SECTION_WORDS: ReadonlyArray<{ id: AskRecordSectionId; test: RegExp }> = [

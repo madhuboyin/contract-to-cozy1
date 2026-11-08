@@ -109,7 +109,9 @@
   ],
   "CAPITAL_RESERVE_PLAN": [
    "capital reserve plan",
+   "how do i save for replacing my hvac",
    "how much should i save for future home expenses",
+   "long term home savings plan",
    "what should i set aside for big repairs"
   ],
   "CLAIM_CHECKLIST_VIEW": [
@@ -129,6 +131,7 @@
    "local community events"
   ],
   "COVERAGE_COMPARISON_STATUS": [
+   "compare my policy to other quotes",
    "how does my insurance stack up against alternatives",
    "show my policy comparison"
   ],
@@ -163,7 +166,10 @@
    "review document candidates"
   ],
   "DO_NOTHING_SIMULATION": [
-   "show the do nothing simulation"
+   "cost of ignoring upkeep",
+   "show the do nothing simulation",
+   "what happens if i skip maintenance",
+   "what if i delay home maintenance"
   ],
   "ENVIRONMENT_REPORT": [
    "10 day forecast for my home",
@@ -246,7 +252,9 @@
    "save my home records as a file"
   ],
   "HOME_RECORD_EXPORT_STATUS": [
+   "can i download my export yet",
    "check export status",
+   "has my home record export finished",
    "is my export ready"
   ],
   "HOME_STATUS_BOARD": [
@@ -287,6 +295,10 @@
    "update on my furnace decision",
    "where do things stand on my furnace decision"
   ],
+  "HVAC_DECISION_SCENARIO": [
+   "compare a new hvac quote",
+   "how does this ac quote compare"
+  ],
   "HVAC_DECISION_START": [
    "is my heat pump worth fixing",
    "my ac is old do i replace it",
@@ -298,6 +310,7 @@
   ],
   "INCIDENT_CLAIM_STATUS": [
    "any open claims on the house",
+   "did my claim get approved",
    "show my insurance claims",
    "what is the status of my claim"
   ],
@@ -391,7 +404,8 @@
   ],
   "MAJOR_EVENT_ENTRY": [
    "i am getting ready to sell",
-   "preparing for a major home event"
+   "preparing for a major home event",
+   "we are planning a big renovation"
   ],
   "MATERIAL_SPECS_LIST": [
    "show my material specs",
@@ -444,6 +458,7 @@
   ],
   "PRICE_FINALIZATIONS_LIST": [
    "price finalization records",
+   "show finalized quotes",
    "what terms did i accept"
   ],
   "PROJECT_TRACKER_PROJECTS": [
@@ -510,6 +525,7 @@
   ],
   "REFINANCE_RATE_MONITOR": [
    "alert me when rates drop",
+   "monitor interest rates",
    "tell me if mortgage rates fall below 6 percent",
    "watch mortgage rates for me",
    "what are current mortgage rates"
@@ -559,6 +575,7 @@
    "what have i bookmarked"
   ],
   "SAVINGS_OPPORTUNITIES": [
+   "any savings i am missing",
    "are there any federal/ state rebates for my home",
    "find ways to lower my home costs",
    "how can i save money on my home"
@@ -600,6 +617,8 @@
    "which warranties expire this year"
   ],
   "WORK_OVERVIEW": [
+   "give me an overview of work in progress",
+   "summarize all the work for my home",
    "what is under way on my house",
    "what is waiting on me and what is scheduled"
   ]
@@ -621,12 +640,7 @@
    "am i ready to move into the new house",
    "how is my move in going"
   ],
-  "CAPITAL_RESERVE_PLAN": [
-   "how do i save for replacing my hvac",
-   "long term home savings plan"
-  ],
   "COVERAGE_COMPARISON_STATUS": [
-   "compare my policy to other quotes",
    "insurance quote comparison status"
   ],
   "DOCUMENT_LOOKUP": [
@@ -634,11 +648,6 @@
   ],
   "DOCUMENT_PROMOTION_REVIEW": [
    "what did you find in my uploaded documents"
-  ],
-  "DO_NOTHING_SIMULATION": [
-   "cost of ignoring upkeep",
-   "what happens if i skip maintenance",
-   "what if i delay home maintenance"
   ],
   "GUIDANCE_JOURNEY_CREATE": [
    "help me plan a bathroom fix step by step"
@@ -651,10 +660,6 @@
    "review my home legacy plan",
    "what happens to the house info if i am gone",
    "who can take over managing my home"
-  ],
-  "HOME_RECORD_EXPORT_STATUS": [
-   "can i download my export yet",
-   "has my home record export finished"
   ],
   "HOME_STATUS_BOARD": [
    "how healthy are my appliances",
@@ -671,19 +676,12 @@
   "HOUSEHOLD_ACCESS_SUMMARY": [
    "household access"
   ],
-  "HVAC_DECISION_SCENARIO": [
-   "compare a new hvac quote",
-   "how does this ac quote compare"
-  ],
   "HVAC_DECISION_START": [
    "help me decide on a new furnace"
   ],
   "HVAC_PREFERENCE_SAVE": [
    "note that i want a quiet furnace",
    "set my hvac decision preference"
-  ],
-  "INCIDENT_CLAIM_STATUS": [
-   "did my claim get approved"
   ],
   "INSPECTION_REPORT_COMPARE": [
    "what changed since the last inspection"
@@ -708,9 +706,6 @@
    "am i caught up on upkeep",
    "what maintenance is coming up"
   ],
-  "MAJOR_EVENT_ENTRY": [
-   "we are planning a big renovation"
-  ],
   "OPERATIONAL_WORK_UPDATE": [
    "snooze that task for a week"
   ],
@@ -719,9 +714,6 @@
   ],
   "PLANT_CARE_OUTLOOK": [
    "which plants need attention"
-  ],
-  "PRICE_FINALIZATIONS_LIST": [
-   "show finalized quotes"
   ],
   "PROPERTY_TAX_APPEAL_READINESS": [
    "how do i lower my property taxes"
@@ -738,18 +730,11 @@
    "change my refinance alert settings",
    "create a refinance what if at 5.5 percent"
   ],
-  "REFINANCE_RATE_MONITOR": [
-   "monitor interest rates"
-  ],
   "RESERVE_FUND_COMMAND": [
    "match this expense to my reserve"
   ],
   "SAVINGS_OPPORTUNITIES": [
-   "any savings i am missing",
    "where am i overspending on the house"
-  ],
-  "WORK_OVERVIEW": [
-   "summarize all the work for my home"
   ]
  }
 }

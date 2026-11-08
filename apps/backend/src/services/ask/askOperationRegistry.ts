@@ -1202,12 +1202,16 @@ const maintenanceCostEditPattern = /^(?!.*\b(?:projects?|permits?|quotes?|expens
 const maintenanceCompletePassivePattern = /^(?!\s*(?:is|are|was|were|did|has|have|had|what|which|when|how|why|do|does|can|could|should|would)\b)(?=.*\b(?:task|maintenance|gutters?|filter|service|inspection|cleaning|repair)\b.{0,60}\b(?:is|are|was|were|has been|have been)\s+(?:now\s+)?(?:complete|completed|done|finished)\b)/i;
 // "Remind me to change the furnace filter" creates a task; the update verb inside it ("change") is not an edit of an existing one.
 const remindMeToPattern = /^\s*(?:please\s+)?remind me to\b/i;
+// "What if I delay the gutters" asks about consequences; it does not ask to reschedule anything.
+const hypotheticalQuestionPattern = /^\s*(?:what|how)\b.{0,15}\bif\b/i;
 const maintenanceUpdatePattern = /\b(?:reschedule|move|change|update|edit|assign|unassign|archive|cancel|reopen|restore|postpone|defer|delay|push (?:back|out))\b.{0,100}\b(?:maintenance|task|gutter|filter|service|inspection|cleaning|repair)\b|\b(?:maintenance|task|gutter|filter|service|inspection|cleaning|repair)\b.{0,100}\b(?:reschedule|assign|archive|cancel|reopen|priority|due date)\b/i;
 const guidanceJourneyCreatePattern = /\b(?:start|create|open|begin)\b.{0,50}\b(?:guided plan|guidance journey|guided journey|step-by-step plan)\b/i;
 const quoteComparisonCreatePattern = /\b(?:create|start|open|set up|new)\b.{0,50}\b(?:(?:quote|bid|estimate|proposal)s? comparison|comparison workspace|workspace for (?:my )?(?:quotes|bids|proposals))\b|\b(?:i|we) (?:have|got|received)\b.{0,40}\b(?:quotes?|bids?|estimates?|proposals?)\b.{0,40}\bto compare\b/i;
+// Quote wording that another operation owns: an HVAC quote is a decision scenario, a finalized quote is a price finalization, an insurance policy is a coverage comparison.
+const quoteReviewOtherOwnerPattern = /\b(?:hvac|furnace|a\/c|ac|air conditioner|heat pump|boiler)\b|\bfinali[sz]ed\b|\b(?:insurance|policy|policies|coverage)\b/i;
 const quoteComparisonReviewPattern = /\b(?:compare|review|show|evaluate|which)\b.{0,70}\b(?:quotes?|bids?|proposals?|estimates?)\b|\b(?:quotes?|bids?|proposals?)\b.{0,70}\b(?:compare|comparison|best|cheapest|differences?|review)\b/i;
 const homeDeadlineMonitorPattern = /\b(?:notify|alert|remind|monitor|tell me)\b.{0,80}\b(?:(?:important\s+)?home deadlines?|maintenance|task|warranty|insurance|policy|coverage)\b(?:.{0,50}\b(?:due|expire|expires|expiring|renewal)\b)?|\b(?:warranty|insurance|policy|coverage)\b.{0,50}\b(?:expire|expires|expiring|renewal)\b.{0,80}\b(?:notify|alert|remind|monitor|tell me)\b/i;
-const capitalReservePattern = /\b(?:capital reserves?(?: (?:plan|outlook|forecast|status|fund|projection))?|reserve (?:plan|outlook|forecast)|reserve fund|sinking fund|capital timeline|capital plan|major replacements?|future home expenses?|how much should i save|how much should i (?:reserve|set aside).{0,60}(?:replace|replacement)|budget for (?:my )?(?:roof|hvac|systems?|replacements?))\b/i;
+const capitalReservePattern = /\b(?:long[- ]term (?:home )?savings plan|save for (?:replacing|replacement of) (?:my |the )?(?:hvac|roof|furnace|water heater)|capital reserves?(?: (?:plan|outlook|forecast|status|fund|projection))?|reserve (?:plan|outlook|forecast)|reserve fund|sinking fund|capital timeline|capital plan|major replacements?|future home expenses?|how much should i save|how much should i (?:reserve|set aside).{0,60}(?:replace|replacement)|budget for (?:my )?(?:roof|hvac|systems?|replacements?))\b/i;
 const propertyTaxAppealPattern = /\b(?:property tax|assessment|assessed value|tax class|tax exemption)\b.{0,80}\b(?:appeal|contest|challenge|readiness|overassessed|too high|evidence|deadline)\b|\b(?:appeal|contest|challenge)\b.{0,60}\b(?:property tax|assessment|assessed value|tax class|exemption)\b/i;
 const renovationPermitPattern = /\b(?:renovation|remodel|addition|project|permit|inspection|hoa)\b.{0,80}\b(?:ready|readiness|start|require|needed|block|blocking|blockers?|compliance|status)\b|\b(?:can i start|am i ready|what is blocking|what are the blockers?)\b.{0,60}\b(?:renovation|remodel|project|work)\b/i;
 // Phase 7 (implementation plan §13; FRD §31 "Seller Prep — expose now").
@@ -1229,7 +1233,7 @@ const sellerPrepChecklistPattern = /\b(?:seller prep|sale readiness|selling read
 // "waive the seller prep item for the roof" would otherwise also match
 // sellerPrepChecklistPattern's own bare "seller prep" alternative.
 const sellerPrepItemDecisionPattern = /\b(?:waive|pursue|reopen|unpursue)\b.{0,60}\b(?:seller[- ]prep|sale readiness|checklist)\b.{0,20}\bitem\b|\b(?:seller[- ]prep|sale readiness|checklist)\b.{0,20}\bitem\b.{0,60}\b(?:waive|pursue|reopen|unpursue)\b/i;
-const majorEventPattern = /\b(?:help|guide|prepare|plan|checklist|what should i do|what do i need)\b.{0,70}\b(?:moving|move in|move out|selling my home|home sale|major renovation|remodeling|insurance claim|storm damage|new baby|aging in place)\b/i;
+const majorEventPattern = /\b(?:help|guide|prepare|plan(?:ning)?|checklist|what should i do|what do i need)\b.{0,70}\b(?:moving|move in|move out|selling my home|home sale|(?:major|big) renovation|remodeling|insurance claim|storm damage|new baby|aging in place)\b/i;
 // Recorded warranties (the Warranties page): what the Home Record says about them, including "what does my HVAC warranty cover?"
 // (the recorded coverage text, never a coverage decision). Missing protection and coverage gaps stay COVERAGE_GAPS, filing or moving
 // a claim stays CLAIM_FILE / CLAIM_TRANSITION, adding, correcting and monitoring stay with their own commands.
@@ -1271,14 +1275,16 @@ const coverageComparisonPattern = /\b(?:compar(?:e|ison)|switch(?:ing)?|shop(?:p
 // A's "What do I need for an insurance claim?"), which is a request to
 // start/navigate a claim, not a query about existing recorded ones -- that
 // pattern is checked earlier in the cascade and wins for that overlap.
-const incidentClaimStatusPattern = /\b(?:show|view|list|see)\s+(?:me\s+)?(?:my|our|the)\s+(?:insurance\s+)?claims?\s*[.?!]?$|\b(?:status of|track|do i have|open|active|recent|pending|filed|submitted)\b.{0,40}\b(?:insurance )?claims?\b|\bclaims?\b.{0,40}\b(?:status|open|active|pending|filed|submitted|history|recorded)\b|\b(?:recorded|logged|detected|any|active|recent|open|new)\b.{0,40}\bincidents?\b|\bincidents?\b.{0,40}\b(?:recorded|logged|detected|history|status|active|recent)\b|\bwhat incidents?\b/i;
+const incidentClaimStatusPattern = /\bclaims?\b.{0,40}\b(?:approved|denied|decided|paid out)\b|\b(?:show|view|list|see)\s+(?:me\s+)?(?:my|our|the)\s+(?:insurance\s+)?claims?\s*[.?!]?$|\b(?:status of|track|do i have|open|active|recent|pending|filed|submitted)\b.{0,40}\b(?:insurance )?claims?\b|\bclaims?\b.{0,40}\b(?:status|open|active|pending|filed|submitted|history|recorded)\b|\b(?:recorded|logged|detected|any|active|recent|open|new)\b.{0,40}\bincidents?\b|\bincidents?\b.{0,40}\b(?:recorded|logged|detected|history|status|active|recent)\b|\bwhat incidents?\b/i;
 const claimFilePattern = /\b(?:file|start|create|open|prepare)\b.{0,60}\b(?:insurance|warranty|manufacturer)?\s*claim\b/i;
+// A question about what already happened to a claim ("did my claim get approved") is a status read, never the command that approves it.
+const claimOutcomeQuestionPattern = /^\s*(?:did|has|have|was|were|is|are|when (?:did|was|will))\b/i;
 const claimTransitionPattern = /\b(?:submit|advance|move|transition|approve|deny|close|reopen)\b.{0,80}\bclaim\b|\bclaim\b.{0,80}\b(?:submit|submitted|under review|approve|approved|deny|denied|close|closed)\b/i;
 const incidentContinuationPattern = /\b(?:emergency|incident)\b.{0,80}\b(?:over|contained|resolved|document|record|follow up|claim)\b|\b(?:document|record|follow up on)\b.{0,60}\b(?:emergency|incident)\b/i;
 const inspectionFindingUpdatePattern = /\b(?:accept|dismiss|resolve|close|track)\b.{0,80}\binspection (?:finding|issue)\b|\binspection (?:finding|issue)\b.{0,80}\b(?:accept|dismiss|resolve|close|track)\b|\b(?:mark|set|resolve|dismiss|accept|ignore|reject|close)\b.{0,50}\b(?:findings?|inspection (?:items?|issues?))\b|\b(?:i|we) (?:fixed|repaired|handled|took care of)\b.{0,30}\b(?:inspection (?:items?|issues?|findings?)|the finding)\b/i;
 const inspectionReportsPattern = /\b(?:show|list|review|which|what|see|open)\b.{0,50}\binspection reports?\b/i;
 // Work and Saved as conversations (FRD v1.1 §1.2): "what needs me", "show my work", "what's waiting", "show my saved results/reports".
-const workOverviewPattern = /^\s*(?:what|which)(?:\s+(?:work|things?|items?))?\s+(?:needs?\s+me|(?:is|are)\s+waiting\s+on\s+me)\b|\b(?:what|which|show|list|see)\b.{0,30}\b(?:work|things?)\s+(?:that\s+needs?\s+me|i\s+need\s+to\s+(?:do|decide|answer))\b|\b(?:show|list|see|open)\s+(?:me\s+)?my\s+(?:open\s+|active\s+|scheduled\s+|completed\s+)?work\b(?!\s+items?\b|\s+list\b)/i;
+const workOverviewPattern = /\b(?:summari[sz]e|overview of)\b.{0,20}\b(?:all )?(?:the )?(?:work|tasks)\b|^\s*(?:what|which)(?:\s+(?:work|things?|items?))?\s+(?:needs?\s+me|(?:is|are)\s+waiting\s+on\s+me)\b|\b(?:what|which|show|list|see)\b.{0,30}\b(?:work|things?)\s+(?:that\s+needs?\s+me|i\s+need\s+to\s+(?:do|decide|answer))\b|\b(?:show|list|see|open)\s+(?:me\s+)?my\s+(?:open\s+|active\s+|scheduled\s+|completed\s+)?work\b(?!\s+items?\b|\s+list\b)/i;
 const savedResultsPattern = /\b(?:show|list|see|open|find|what(?:'s| is| are))\b.{0,30}\b(?:my\s+)?saved\s+(?:results?|reports?|comparisons?|items?|decisions?|briefings?|checklists?)\b|\bwhat (?:have i|did i) saved\b|\b(?:find|search(?: for)?|look(?:ing)? for|locate)\b.{0,30}\bsaved\b|\bwhere did i save\b/i;
 const homeWorkItemsPattern = /\b(?:show|list|what|which|see|open)\b.{0,50}\b(?:home operations?|operational|home)\s+work(?:\s+items?|\s+list)\b|\bmy work items\b/i;
 const inspectionFindingsPattern = /\b(?:show|review|list|what|open|unresolved)\b.{0,70}\binspection (?:findings?|issues?)\b|\bwhat did (?:the |my )?inspection find\b/i;
@@ -1295,7 +1301,7 @@ const documentPromotionReviewPattern = /(?:\b(?:show|review|list|what)\b.{0,80}\
 // document vault itself, not a pending extraction-candidate queue.
 const documentLookupPattern = /\b(?:show|list|see|find|what)\b.{0,40}\b(?:my |the |our )?documents?\b|\bdocuments? (?:do i have|on file|i have)\b|\bhow many documents\b|\bwhere(?:'s| is| are)\b.{0,25}\b(?:paperwork|deed|closing papers|manuals?)\b|\b(?:do i have|have i got)\b.{0,30}\b(?:deed|paperwork|manuals?|closing papers)\b.{0,20}\b(?:on file|saved|uploaded|stored)\b|\b(?:list|show|see)\b.{0,20}\b(?:files|uploads)\b.{0,20}\b(?:i |we )?(?:uploaded|stored|saved|attached)\b/i;
 const operationalWorkUpdatePattern = /\b(?:accept|defer|snooze|complete|finish|dismiss|verify|reopen)\b.{0,80}\b(?:operational work|work item|home work|tracked work|reported completion)\b|\b(?:operational work|work item|tracked work|reported completion)\b.{0,80}\b(?:accept|defer|snooze|complete|finish|dismiss|verify|reopen)\b/i;
-const savingsOpportunitiesPattern = /\b(where|how|ways?|opportunities?)\b.{0,45}\b(save|saving|savings|lower|reduce)\b.{0,35}\b(money|costs?|bills?|expenses?|insurance|internet|utilities|energy|warranty)\b|\b(?:where|how) (?:can|could|do) (?:i|we) save\b|\b(?:saving|savings) opportunities\b|\blower (?:my |our )?(?:home |household )?(?:costs?|bills?|expenses?)\b|\bwhat savings\b.{0,35}\b(?:realized|received|saved)\b|\b(?:fastest|shortest|best) payback\b|\b(?:rebates?|incentives?|tax credits?)\b/i;
+const savingsOpportunitiesPattern = /\bany savings\b.{0,20}\b(?:missing|missed)\b|\b(where|how|ways?|opportunities?)\b.{0,45}\b(save|saving|savings|lower|reduce)\b.{0,35}\b(money|costs?|bills?|expenses?|insurance|internet|utilities|energy|warranty)\b|\b(?:where|how) (?:can|could|do) (?:i|we) save\b|\b(?:saving|savings) opportunities\b|\blower (?:my |our )?(?:home |household )?(?:costs?|bills?|expenses?)\b|\bwhat savings\b.{0,35}\b(?:realized|received|saved)\b|\b(?:fastest|shortest|best) payback\b|\b(?:rebates?|incentives?|tax credits?)\b/i;
 const ownershipCostsPattern = /\b(?:how much|what does|what is|what are|show|break down)\b.{0,45}\b(?:home|house|housing|property|ownership)\b.{0,45}\b(?:cost|costs|expense|expenses|outflow)\b|\b(?:how much am i|what am i)\b.{0,45}\b(?:paying|spending)\b.{0,45}\b(?:home|house|housing|property)\b|\b(?:monthly|annual|yearly|total|true|ownership|operating|cash)\s+(?:home |house |housing |property )?(?:cost|costs|expenses?|outflow)\b|\bcost of (?:owning|ownership)\b|\b(?:largest|biggest|highest|most expensive)\b.{0,35}\b(?:home |ownership )?(?:cost|expense|category)\b|\bwhich (?:cost |expense )?categor(?:y|ies)\b.{0,35}\b(?:most|highest|largest)\b/i;
 // FRD v1.467: asking for the expenses a homeowner recorded, or to record one, is answered inside Ownership Costs, where the list, Add, Change and Delete live.
 const ownershipExpensesPattern = /\b(?:show|list|see|view|open)\b.{0,25}\b(?:my|our|the|recent|recorded)\s+(?:recent\s+|recorded\s+)?expenses\b|\bmy\s+(?:recent\s+|recorded\s+)?expenses\b|\b(?:add|record|log|enter)\s+(?:an?|my|another)\s+(?:new\s+)?expense\b/i;
@@ -1389,7 +1395,7 @@ const replacementPattern = /\b(when should i (?:replace|upgrade)|replace (?:my|t
 const hvacKeyword = '(?:hvac|furnace|(?<!(?:water|space) )heater|heating unit|air conditioner|a\\/?c unit|heat pump|central air|heating system|cooling system)';
 const hvacNamedPattern = new RegExp(`\\b${hvacKeyword}\\b`, 'i');
 const hvacDecisionContinuePattern = new RegExp(`\\b(?:status of|resume|continue|check on|where (?:are we|do things stand)|update on)\\b.{0,60}\\b${hvacKeyword}\\b.{0,40}\\bdecision\\b|\\bdecision\\b.{0,40}\\b(?:status|update|progress)\\b.{0,60}\\b${hvacKeyword}\\b`, 'i');
-const hvacDecisionScenarioPattern = new RegExp(`\\b(?:new |another )?quote\\b.{0,80}\\b${hvacKeyword}\\b.{0,60}\\b(?:decision|repair or replace|compare|change)\\b|\\b${hvacKeyword}\\b.{0,60}\\bquote\\b.{0,60}\\b(?:decision|compare|scenario)\\b`, 'i');
+const hvacDecisionScenarioPattern = new RegExp(`\\bcompare\\b.{0,25}\\b(?:${hvacKeyword}|ac)\\b.{0,15}\\bquotes?\\b|\\b(?:${hvacKeyword}|ac)\\b.{0,15}\\bquotes?\\b.{0,20}\\bcompare\\b|\\b(?:new |another )?quote\\b.{0,80}\\b${hvacKeyword}\\b.{0,60}\\b(?:decision|repair or replace|compare|change)\\b|\\b${hvacKeyword}\\b.{0,60}\\bquote\\b.{0,60}\\b(?:decision|compare|scenario)\\b`, 'i');
 const hvacDecisionAbandonPattern = new RegExp(`\\b(?:abandon|cancel|stop tracking|drop)\\b.{0,60}\\b${hvacKeyword}\\b.{0,40}\\bdecision\\b`, 'i');
 // Ask Intelligence FRD Phase 8B: an explicit save/remember verb combined
 // with a substantive preference mention (sell timeframe or repair/replace
@@ -1434,7 +1440,7 @@ const hvacDecisionOutcomeUnlinkPattern = new RegExp(
   'i',
 );
 const refinanceAnalysisPattern = /\b(is (?:it )?(?:a )?good (?:time|option).*refinanc(?:e|ing)|should i refinanc(?:e|ing)|is refinanc(?:ing|e) (?:now )?(?:worth|good|right)|ideal (?:interest )?rate.*refinanc(?:e|ing)|what rate.*refinanc(?:e|ing)|refinanc(?:e|ing).*(?:worth it|make sense|good option))\b/i;
-const refinanceMonitorPattern = /\b(?:notify|alert|let me know|monitor|tell me).*(?:mortgage |refinanc(?:e|ing) )?rates?.*(?:below|under|drop|reach)|\brates?.*(?:below|under|drop|reach).*(?:notify|alert|let me know|monitor|tell me)\b/i;
+const refinanceMonitorPattern = /\bmonitor\b.{0,15}\b(?:interest|mortgage) rates?\b|\b(?:notify|alert|let me know|monitor|tell me).*(?:mortgage |refinanc(?:e|ing) )?rates?.*(?:below|under|drop|reach)|\brates?.*(?:below|under|drop|reach).*(?:notify|alert|let me know|monitor|tell me)\b/i;
 // Ownership break-even: when appreciation catches up with cumulative ownership costs. Break-even in another sense
 // (a refinance, a solar or energy upgrade, a renovation or a replacement) belongs to those tools, not this one.
 // Reviewed local changes around the home (planning, development, zoning, infrastructure, land use, flood maps,
@@ -1472,7 +1478,7 @@ const maintenanceBudgetPattern = /\bbudget planner\b|\b(?:home |house )?(?:maint
 const maintenanceBudgetOtherIntentPattern = /\b(?:create|add|log|record|change|update|set up|renovation|remodel|closing|mortgage)\b/i;
 // The latest saved Do-Nothing Simulator run: what putting off home upkeep could cost. One item's repair-or-replace timing
 // is REPLACEMENT_GUIDANCE; running, saving or editing a simulation is not this read.
-const doNothingPattern = /\bdo[- ]nothing (?:simulat\w*|scenarios?|runs?|results?|analysis|report)\b|\bcost of (?:doing nothing|inaction|waiting)\b|\bwhat (?:happens|would happen|could happen) if (?:i|we) (?:do nothing|don'?t do anything|keep putting (?:it|things|everything) off)\b/i;
+const doNothingPattern = /\bwhat (?:happens|would happen|if)\b.{0,12}\bif (?:i|we) (?:skip|ignore|neglect|put off|stop doing)\b.{0,25}\b(?:maintenance|upkeep|repairs?)\b|\bcost of (?:ignoring|skipping|neglecting)\b.{0,20}\b(?:maintenance|upkeep|repairs?)\b|\bwhat if (?:i|we) (?:delay|postpone|defer)\b.{0,20}\b(?:home )?(?:maintenance|upkeep)\b|\bdo[- ]nothing (?:simulat\w*|scenarios?|runs?|results?|analysis|report)\b|\bcost of (?:doing nothing|inaction|waiting)\b|\bwhat (?:happens|would happen|could happen) if (?:i|we) (?:do nothing|don'?t do anything|keep putting (?:it|things|everything) off)\b/i;
 const doNothingOtherIntentPattern = /\b(?:run|rerun|re-run|create|save|new|edit|rename|delete|remove|change)\b/i;
 // The prices and terms recorded in Price Finalization ("what price did we agree with the plumber?"). Comparing quotes,
 // checking a price and negotiating stay with their own operations; finalizing, saving or booking is not this read.
@@ -1715,7 +1721,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if ((maintenanceCompletePattern.test(message) || maintenanceCompletePassivePattern.test(message)) && !explicitCapabilityPattern.test(message)) {
     return resolved('MAINTENANCE_TASK_COMPLETE', 0.97);
   }
-  if ((maintenanceUpdatePattern.test(message) || maintenanceCostEditPattern.test(message)) && !remindMeToPattern.test(message)) {
+  if ((maintenanceUpdatePattern.test(message) || maintenanceCostEditPattern.test(message)) && !remindMeToPattern.test(message) && !hypotheticalQuestionPattern.test(message)) {
     return resolved('MAINTENANCE_TASK_UPDATE', 0.97);
   }
   if (guidanceJourneyCreatePattern.test(message)) {
@@ -1730,7 +1736,8 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (negotiationShieldNamedPattern.test(message) && !negotiationShieldCreatePattern.test(message)) {
     return resolved('NEGOTIATION_SHIELD_CASES', 0.96);
   }
-  if (quoteComparisonReviewPattern.test(message) && !explicitCapabilityPattern.test(message) && !/\bcan you help me\b/i.test(message)) {
+  if (quoteComparisonReviewPattern.test(message) && !explicitCapabilityPattern.test(message) && !/\bcan you help me\b/i.test(message)
+    && !quoteReviewOtherOwnerPattern.test(message)) {
     return resolved('QUOTE_COMPARISON_REVIEW', 0.97);
   }
   if (homeDeadlineMonitorPattern.test(message)) {
@@ -1805,7 +1812,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (coveragePattern.test(message)) {
     return resolved('COVERAGE_GAPS', 0.96);
   }
-  if (claimTransitionPattern.test(message)) return resolved('CLAIM_TRANSITION', 0.98);
+  if (claimTransitionPattern.test(message) && !claimOutcomeQuestionPattern.test(message)) return resolved('CLAIM_TRANSITION', 0.98);
   if (claimFilePattern.test(message)) return resolved('CLAIM_FILE', 0.98);
   if (incidentContinuationPattern.test(message)) return resolved('INCIDENT_CONTINUATION', 0.97);
   if (incidentClaimStatusPattern.test(message) && !explicitCapabilityPattern.test(message)) {
