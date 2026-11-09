@@ -21,8 +21,8 @@
 |---|---|
 | Compound corpus + ratchet (§8 Phase 0) | Built: `tests/fixtures/askCompoundCorpus.js` (33 prompts, each with the operations its answer needs; first run 15 full / 11 partial / 1 clarify / 4 wrong / 2 fallback), `scripts/ask-compound-sweep.js`, `tests/ask/compoundSweepRatchet.test.js`, baseline `tests/fixtures/askCompoundSweepBaseline.json` |
 | Item funding goal operation (§8 Phase 1) | Built: `CAPITAL_ITEM_FUNDING_GOAL`, FRD Revision 1.539. Owner prompt now FULL. Handler not run against a real database |
-| Shared slot parsing (§8 Phase 2) | Started: `support/targetDate.ts` (dates) used by the funding goal and the capital plan horizon |
-| Bounded multi-operation answers (§8 Phase 3) | Not built; see §9 for the decision it needs |
+| Shared slot parsing (§8 Phase 2) | Partly done: `support/targetDate.ts` is used by the funding goal. The capital plan's own horizon parser is deliberately unchanged: `capitalTimelineHorizonRequestParsing.test.js` pins "unsupported horizons (not 5 or 10) are not matched" because the traditional page offers only those two, so mapping "in 3 years" to the 5-year view is an owner decision (§9) |
+| Bounded multi-operation answers (§8 Phase 3) | Not built, on purpose. A second operation's blocks must pass the first operation's answer-trust checks (block-id contracts, per-operation action allowlists, boundary requirements, relevance), and a stripped action fails silently. That path cannot be exercised here without a database, and the result semantics (what status when one half needs context) are an owner decision (§9). The compound corpus measures it: 11 of 33 prompts get one clause answered and the rest dropped |
 | Single-fact building blocks (§8 Phase 4) | Condition and "cost of a new X" routed to existing item answers (FRD 1.539); a dedicated item-cost read is not built |
 
 ## 1. Verdict
