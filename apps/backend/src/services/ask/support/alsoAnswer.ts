@@ -5,7 +5,8 @@
 // Only clauses that the deterministic router resolves, with confidence, to a different READ operation are offered. A write operation, a guided-guidance
 // fallback, a boundary and the answer's own operation are never offered.
 
-import { type AskOperationId, resolveAskOperation } from '../askOperationRegistry';
+import { type AskOperationId, getAskOperationDefinition, resolveAskOperation } from '../askOperationRegistry';
+import { parseTargetDate } from './targetDate';
 
 export const ALSO_ANSWER_ACTION_PREFIX = 'also-answer-';
 const MIN_CLAUSE_WORDS = 4;
@@ -46,6 +47,24 @@ function standalone(clause: string, subject: string | null): string {
     : clause.replace(/\b(?:it|that|this|them|those items|these items)\b(?!\s+(?:cost|do|mean))/i, subject);
 }
 
+// Follow-up shapes the global router deliberately does not claim: on their own they are ambiguous ("what happens if I skip them"), but as the later
+// part of a two-part question the first part says what they are about. They apply ONLY here, so standalone routing is unchanged. Each names a read operation.
+const CLAUSE_SHAPES: ReadonlyArray<{ operationId: AskOperationId; pattern: RegExp }> = [
+  { operationId: 'DO_NOTHING_SIMULATION', pattern: /^what (?:happens|would happen) if i (?:skip|ignore|put off|delay|neglect) (?:them|those|these|all of them)\b/i },
+  { operationId: 'CAPITAL_ITEM_FUNDING_GOAL', pattern: /^what should i (?:save|set aside|put aside)(?: each| every| per| a)? month\b.*\bmy [a-z][a-z -]+/i },
+  { operationId: 'OWNERSHIP_COSTS', pattern: /^(?:is|are) (?:that|this|it) more than i (?:spent|paid)\b|^what would (?:that|it) do to my (?:monthly )?(?:budget|costs?)\b/i },
+];
+
+/** The operation a part belongs to: the router's confident answer, else one of the follow-up shapes. Null when neither claims it. */
+export function resolveClauseOperation(clause: string): { operationId: AskOperationId; family: string; confidence: number } | null {
+  const routed = resolveAskOperation(clause);
+  if (routed.operationId !== 'GROUNDED_GUIDANCE') return routed;
+  const shape = CLAUSE_SHAPES.find((candidate) => candidate.pattern.test(clause));
+  if (!shape) return null;
+  const definition = getAskOperationDefinition(shape.operationId);
+  return { operationId: shape.operationId, family: definition.family, confidence: MIN_CONFIDENCE };
+}
+
 export interface AlsoAnswerOffer { operationId: AskOperationId; clause: string }
 
 /** The first clause (the answered operation may have been picked by any of them) that clearly belongs to a different read operation, or null. */
@@ -54,8 +73,12 @@ export function findAlsoAnswerOffer(message: string, answeredOperationId: AskOpe
   if (clauses.length < 2) return null;
   const subject = subjectOf(clauses[0]);
   for (const part of clauses) {
-    const clause = standalone(part, subject);
-    const resolved = resolveAskOperation(clause);
+    const dated = standalone(part, subject);
+    // A saving question leans on the first part's date as well ("…in 5 years"), and the funding read needs it in its own words.
+    const date = parseTargetDate(clauses[0]);
+    const clause = date && !parseTargetDate(dated) && /\b(?:save|set aside|put aside)\b/i.test(dated) ? `${dated} ${date.label}` : dated;
+    const resolved = resolveClauseOperation(clause);
+    if (!resolved) continue;
     if (resolved.operationId === answeredOperationId || NEVER_OFFERED.has(resolved.operationId)) continue;
     if (ALREADY_COVERED_UNLESS_REPAIR[answeredOperationId] === resolved.operationId && !/\brepair/i.test(clause)) continue;
     if (!READ_FAMILIES.has(resolved.family) || resolved.confidence < MIN_CONFIDENCE) continue;
@@ -82,8 +105,8 @@ export function isAlsoAnswerAction(action: { id: string; label?: string; href?: 
   if (NEVER_OFFERED.has(action.operationId)) return false;
   const expected = alsoAnswerAction({ operationId: action.operationId as AskOperationId, clause: action.message });
   if (action.id !== expected.id || action.label !== expected.label) return false;
-  const resolved = resolveAskOperation(action.message);
-  return resolved.operationId === action.operationId && READ_FAMILIES.has(resolved.family);
+  const resolved = resolveClauseOperation(action.message);
+  return resolved != null && resolved.operationId === action.operationId && READ_FAMILIES.has(resolved.family);
 }
 
 /** The result with the offer's button added to its first SUMMARY block; unchanged when there is nothing to offer or no summary to carry it. */

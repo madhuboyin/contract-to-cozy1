@@ -52,3 +52,19 @@ test('the button is added to the first summary only, once, and the rest of the r
   assert.equal(withAlsoAnswerAction(out, 'Are there any recalls on my appliances and are those items still under warranty?', 'WARRANTY_LOOKUP').blocks[0].actions.length, 1);
   assert.equal(withAlsoAnswerAction(result, 'Is my dishwasher still under warranty?', 'WARRANTY_LOOKUP'), result);
 });
+
+test('follow-up shapes work only inside a two-part question; standalone routing does not claim them', () => {
+  const { resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');
+  for (const alone of ['what happens if I skip them', 'what would that do to my monthly budget', 'is that more than I spent last year']) {
+    assert.equal(resolveAskOperation(alone).operationId, 'GROUNDED_GUIDANCE', alone);
+  }
+  assert.equal(findAlsoAnswerOffer('What are the top three things I should spend money on this year and what happens if I skip them?', 'HOME_ACTIONS').operationId, 'DO_NOTHING_SIMULATION');
+  assert.equal(findAlsoAnswerOffer('Should I repair my dishwasher or replace it, and what would that do to my monthly budget?', 'REPLACEMENT_GUIDANCE').operationId, 'OWNERSHIP_COSTS');
+  assert.equal(findAlsoAnswerOffer('How much should I budget for maintenance this year and is that more than I spent last year?', 'MAINTENANCE_BUDGET_FORECAST').operationId, 'OWNERSHIP_COSTS');
+  const saving = findAlsoAnswerOffer('How old is my roof in 5 years, and what should I save per month for it?', 'INVENTORY_LOOKUP');
+  assert.equal(saving.operationId, 'CAPITAL_ITEM_FUNDING_GOAL');
+  assert.match(saving.clause, /my roof in 5 years/i, 'the date and the item travel with the part');
+  const action = alsoAnswerAction(findAlsoAnswerOffer('What are the top three things I should spend money on this year and what happens if I skip them?', 'HOME_ACTIONS'));
+  assert.equal(isAlsoAnswerAction(action), true);
+  assert.equal(isAlsoAnswerAction({ ...action, operationId: 'OWNERSHIP_COSTS' }), false, 'a shape only vouches for the operation it names');
+});
