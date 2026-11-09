@@ -146,7 +146,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOME_HABITS_GENERATE: new Set(),
   DO_NOTHING_SIMULATION_RUN: new Set(),
   SERVICE_PRICE_CHECK_RUN: new Set(['service-price-check-negotiate']),
-  INVENTORY_ITEM_CREATE: new Set(['open-rooms', 'view-inventory-item']),
+  INVENTORY_ITEM_CREATE: new Set(['open-rooms', 'view-inventory-item', 'add-inventory-item', 'add-inventory-item-to-room']),
   PROPERTY_CONTEXT_AREA_CAPTURE: new Set(['continue-area-capture', ...PROPERTY_AREA_CAPTURE_SCOPES.map((scope) => `next-area-capture-${scope.toLowerCase()}`)]),
   // Every action id PROPERTY_SUMMARY actually emits: the contributor-only inline add workflow actions (Ask links to no desktop page).
   PROPERTY_SUMMARY: new Set(['add-warranty', 'add-timeline-event', 'add-room', 'add-inventory-item']),

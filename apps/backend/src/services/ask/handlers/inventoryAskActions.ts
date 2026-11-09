@@ -17,3 +17,10 @@ export const inventoryShowAllAction = (style: 'PRIMARY' | 'SECONDARY' = 'PRIMARY
   id: 'show-inventory', label: 'Show my home inventory', interactionType: 'START_WORKFLOW' as const,
   message: 'Show my home inventory', operationId: 'INVENTORY_LOOKUP', style,
 });
+
+// After an item is added: another one in the same room, in one tap. The message is the plain create grammar ("Add an item to the Kitchen"), which
+// the create handler resolves to the room by exact name, so the form opens with the room already chosen.
+export const inventoryAddAnotherToRoomAction = (roomName: string) => ({
+  id: 'add-inventory-item-to-room', label: `Add another item to the ${roomName}`.slice(0, 80), interactionType: 'START_WORKFLOW' as const,
+  message: `Add an item to the ${roomName}`, operationId: 'INVENTORY_ITEM_CREATE', style: 'SECONDARY' as const,
+});

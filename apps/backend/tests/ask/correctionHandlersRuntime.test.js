@@ -1487,8 +1487,15 @@ test('INVENTORY_ITEM_CREATE confirm creates the item through createItem with a n
     ['ADD_PURCHASE_DATE', 'item-new', 'INVENTORY_ITEM_CORRECT'], ['ADD_MODEL', 'item-new', 'INVENTORY_ITEM_CORRECT'], ['ADD_SERIAL_NUMBER', 'item-new', 'INVENTORY_ITEM_CORRECT'],
   ], 'brand was entered, so it is not offered');
   assert.deepEqual([artifactType, artifactId], ['INVENTORY_ITEM', 'item-new']);
+  // Owner screenshot 2026-11-09: the receipt offered no way to add more to the room. It now offers another item in the same room, in one tap.
+  const receiptActions = result.blocks[0].actions;
+  assert.deepEqual(receiptActions.map((action) => action.id), ['view-inventory-item', 'add-inventory-item-to-room']);
+  assert.equal(receiptActions[1].label, 'Add another item to the Kitchen');
+  assert.equal(receiptActions[1].message, 'Add an item to the Kitchen');
+  assert.equal(receiptActions[1].operationId, 'INVENTORY_ITEM_CREATE');
   calls.createItem.length = 0;
-  await invoke('INVENTORY_ITEM_CREATE', itemCreateParams(itemInput({ name: 'Furnace', category: 'HVAC', roomId: 'NONE', brand: null })));
+  const whole = await invoke('INVENTORY_ITEM_CREATE', itemCreateParams(itemInput({ name: 'Furnace', category: 'HVAC', roomId: 'NONE', brand: null })));
+  assert.deepEqual(whole.result.blocks[0].actions.map((action) => [action.id, action.label]), [['view-inventory-item', 'View this item'], ['add-inventory-item', 'Add another item']], 'no room: the plain add action');
   assert.equal(calls.createItem[0][1].roomId, null, '"No room" is stored as no room');
 });
 

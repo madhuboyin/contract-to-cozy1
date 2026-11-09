@@ -27,7 +27,7 @@ import { areaCaptureProgress, otherAreasWithAskableFacts, areaLabel, areaProgres
 import { homeEventContextVersion, homeEventCorrectionBlocker, homeEventCorrectionConfirmation, homeEventCorrectionValueError, homeEventFieldCurrent, homeEventFieldPatch, homeEventLinkOptions, homeEventsServiceForCapture, homeEventVisibilityBlocker, homeEventVisibilityConfirmation, householdService, householdWorkflowVersion, ROOM_CORRECTION_FIELDS, roomContextVersion, roomCorrectionNormalized, roomCorrectionValueError, roomFieldCurrent, roomFieldDisplay, roomRenameConfirmation, roomTypeLabel, warrantyContextVersion } from '../handlers/homeRecordWrites.handler';
 import { warrantyExpiryReminderCandidates } from '../handlers/warranties.handler';
 import { homeEventFollowUpCandidates } from '../handlers/homeRecordWrites.handler';
-import { inventoryViewItemAction } from './inventoryAskActions';
+import { inventoryAddAnotherToRoomAction, inventoryAddItemAction, inventoryViewItemAction } from './inventoryAskActions';
 import { INVENTORY_CORRECTION_FIELDS, INVENTORY_CORRECTION_NO_ROOM_VALUE, INVENTORY_NO_ROOM_VALUE, INVENTORY_ROOM_LINK_FIELD, inventoryCategoryLabel, inventoryCorrectionBlocker, inventoryCorrectionConfirmation, inventoryCreateBlocker, inventoryCreateRooms, inventoryFieldCurrent, inventoryFieldDisplay, inventoryFieldNormalized, inventoryFieldPatch, inventoryFieldValueError, inventoryItemContextVersion, inventoryMissingDetailCandidates, inventoryRoomLinkOptions, inventoryService, roomAddItemCandidates } from '../handlers/inventory.handler';
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { recordDocumentPromotionOutcome, recordOperationalWorkOutcome } from '../../decisionPlatform/outcomeObservationService';
@@ -749,13 +749,14 @@ async function confirmInventoryItemCreate(ctx: ConfirmCapabilityContext): Promis
     await markRiskPremiumOptimizerStale(propertyId);
     await markDoNothingRunsStale(propertyId);
   }
+  const createdRoomName = input.roomId === INVENTORY_NO_ROOM_VALUE ? null : rooms.find((room) => room.id === input.roomId)?.name ?? null;
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: 'INVENTORY_ITEM_CREATED',
     blocks: [{
       type: 'WORKFLOW_PROGRESS', id: `inventory-created-${itemId}`, title: alreadyAdded ? 'Item already added' : 'Item added', status: 'COMPLETED',
       description: 'The item is now part of your home record and dependent coverage analysis was marked for refresh. Ask can correct its dates, condition, costs and notes.',
       details: [{ label: 'Item name', value: input.name }, { label: 'Category', value: inventoryCategoryLabel(input.category) }, { label: 'Room', value: input.roomId === INVENTORY_NO_ROOM_VALUE ? 'No room (whole-home)' : rooms.find((room) => room.id === input.roomId)?.name ?? 'Recorded room' }, ...(input.brand ? [{ label: 'Brand', value: input.brand }] : []), ...(input.model ? [{ label: 'Model', value: input.model }] : [])],
-      actions: [inventoryViewItemAction(input.name)],
+      actions: [inventoryViewItemAction(input.name), createdRoomName ? inventoryAddAnotherToRoomAction(createdRoomName) : { ...inventoryAddItemAction(), label: 'Add another item', style: 'SECONDARY' as const }],
     }],
     // The item the homeowner just created is the exact target of the next details to add; typed candidates name it, so a chip can never
     // be re-read as a different item. The plain suggestion is only the fallback when the record is already complete.
