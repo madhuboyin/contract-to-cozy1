@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { ACTIVATION_CONTEXT_SIGNAL, ACTIVATION_GAP_LABELS, activationMissingGaps } from './activationContextGaps';
 import { z } from 'zod';
 import { Prisma, type OnboardingOwnershipState, type PropertyOnboarding } from '@prisma/client';
 import { prisma } from '../lib/prisma';
@@ -638,14 +639,14 @@ export async function getActivationFirstValue(
   const actionId = `activation:${onboarding.activeTriggerId}`;
   const storedEvidence = parseStoredTriggerEvidence(onboarding.triggerEvidenceJson);
   const evidenceDetailPresent = storedEvidence.some((item) => Boolean(item.detail));
-  const missing = [
-    !property.yearBuilt ? 'Year built' : null,
-    !property.propertySize ? 'Property size' : null,
-    !entryContext.activeTrigger.entityId && entryContext.activeTrigger.entityType !== 'PROPERTY'
-      ? 'Specific affected item or record'
-      : null,
-    !entryContext.activeTrigger.detail && !evidenceDetailPresent ? 'Trigger details' : null,
-  ].filter((value): value is string => Boolean(value));
+  const missing = activationMissingGaps({
+    yearBuilt: property.yearBuilt,
+    propertySize: property.propertySize,
+    triggerEntityId: entryContext.activeTrigger.entityId,
+    triggerEntityType: entryContext.activeTrigger.entityType,
+    triggerDetail: entryContext.activeTrigger.detail,
+    evidenceDetailPresent,
+  }).map((gap) => ACTIVATION_GAP_LABELS[gap]);
   const confidenceLabel = missing.length >= 3 ? 'LOW' : missing.length > 0 ? 'MEDIUM' : 'HIGH';
   const confidenceScore = confidenceLabel === 'HIGH' ? 0.85 : confidenceLabel === 'MEDIUM' ? 0.65 : 0.4;
 
@@ -787,7 +788,7 @@ export async function getActivationFirstValue(
     job: 'STAY_AHEAD',
     state: 'OPEN',
     priority: 'PLAN',
-    signal: 'Complete only the home facts that improve this decision',
+    signal: ACTIVATION_CONTEXT_SIGNAL,
     whyItMatters: `The current action still has ${missing.length} explicit unknown${missing.length === 1 ? '' : 's'}.`,
     recommendedAction: `Review and correct: ${missing.join(', ')}. Skip anything that does not change the active decision.`,
     expectedOutcome: 'Improve future guidance confidence without creating an unnecessary setup burden.',

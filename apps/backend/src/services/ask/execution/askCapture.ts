@@ -42,6 +42,7 @@ import { isSettledForCompletion, recordSelectedSuggestedActionCompletion } from 
 import { loadCompletedSuggestedActionKeyHashes, loadRecentCompletedMessages, loadRecentCompletedTurns } from '../suggestedActions/suggestedNextActionHistory';
 import { homeJourneyContextVersion, homeJourneyResult, purchaseDateContextVersion, purchaseDateResult } from '../handlers/homeSettingsWrites.handler';
 import { HOME_JOURNEY_CAPTURE_KEY, PURCHASE_DATE_CAPTURE_KEY } from '../support/homeSettingsConstants';
+import { ACTIVATION_CONTEXT_CAPTURE_KEY, ActivationCaptureError, isActivationContextRequirement, saveActivationContextAnswer } from '../support/activationContextCapture';
 import { HOME_PLANT_CAPTURE_KEY, MATERIAL_SPEC_CAPTURE_KEY } from '../support/homeRecordAddConstants';
 import { HomePlantAddInputSchema, MaterialSpecAddInputSchema, OwnershipCostDecisionInputSchema, OwnershipCostScenarioInputSchema, OwnershipCostScenarioRenameInputSchema, ProjectTrackerCreateInputSchema, ReserveFundContributionInputSchema } from '../support/commandInputs';
 import { RoomPlantRecommendationInputSchema } from '../support/commandInputs';
@@ -636,6 +637,22 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
       ? homeActionsParameters.captureFeature as { featureKey?: unknown; operationKey?: unknown; operationInput?: unknown }
       : null;
     const useFocusedFeature = typeof focusedCaptureFeature?.featureKey === 'string' && typeof focusedCaptureFeature?.operationKey === 'string';
+    if (input.captureKey === ACTIVATION_CONTEXT_CAPTURE_KEY && isActivationContextRequirement(input.requirementId)) {
+      // The activation "Review and correct" card's own questions (affected item, trigger details): saved on the onboarding trigger, not in Property Context.
+      const access = await ensurePropertyAccess(userId, execution.propertyId);
+      if (access.role === HouseholdRole.VIEWER) {
+        throw Object.assign(new Error('A contributor or owner is required to add home details.'), { code: 'ASK_PERMISSION_REQUIRED' });
+      }
+      try {
+        capturedContextVersion = await saveActivationContextAnswer({
+          userId, propertyId: execution.propertyId, requirementId: input.requirementId, answer: input.answer, expectedContextVersion: input.expectedContextVersion,
+        });
+      } catch (error) {
+        if (error instanceof ActivationCaptureError) throw Object.assign(new Error(error.message), { code: error.code });
+        throw error;
+      }
+      captureId = input.idempotencyKey;
+    } else {
     const capture = await captureFeatureContext(execution.propertyId, userId, {
       ...input,
       featureKey: useFocusedFeature ? focusedCaptureFeature!.featureKey as string : 'HOME_ACTIONS',
@@ -649,6 +666,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     }
     captureId = capture.captureId;
     capturedContextVersion = capture.contextVersion;
+    }
     const operation = resolveAskOperation(execution.message);
     const focusedHomeActionId = typeof homeActionsParameters.focusedHomeActionId === 'string' ? homeActionsParameters.focusedHomeActionId : null;
     result = await executeOperation({
@@ -658,7 +676,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
       // homeActions.handler.ts's `home-actions.feed` registration.
       ...(focusedHomeActionId ? { launchContext: { surface: 'ASK_CAPTURE', entityType: 'HOME_ACTION', actionId: focusedHomeActionId } } : {}),
     });
-    canonicalOwner = 'PropertyContext';
+    canonicalOwner = input.captureKey === ACTIVATION_CONTEXT_CAPTURE_KEY ? 'PropertyOnboarding' : 'PropertyContext';
   } else if (execution.operationId === 'COVERAGE_GAPS') {
     const parameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
       ? execution.parametersJson as Record<string, unknown>

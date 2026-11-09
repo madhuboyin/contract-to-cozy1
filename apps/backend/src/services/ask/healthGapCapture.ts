@@ -15,6 +15,7 @@
  * documents, safety devices) is intentionally absent.
  */
 import { HEALTH_FACTOR_COPY } from '../../content/healthFactorCopy';
+import { ACTIVATION_CONTEXT_TITLE_PATTERN } from '../activationContextGaps';
 
 export const HEALTH_INSIGHT_LINEAGE_PREFIX = 'health-insight:';
 
@@ -93,4 +94,11 @@ export function isHealthGapActionTitle(message: string): boolean {
     const missing = (states as Record<string, { mode?: string; headline?: string } | undefined>)['Missing Data'];
     return missing?.mode === 'DATA_GAP' && missing.headline === title;
   });
+}
+
+/** The quoted title of the activation "Review and correct: …" action, which also leaves the feed once its last fact is saved. */
+export function isActivationContextActionTitle(message: string): boolean {
+  const quoted = /“([^”]+)”|"([^"]+)"/.exec(message);
+  const title = (quoted?.[1] ?? quoted?.[2] ?? '').trim();
+  return ACTIVATION_CONTEXT_TITLE_PATTERN.test(title);
 }

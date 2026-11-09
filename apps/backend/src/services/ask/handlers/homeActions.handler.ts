@@ -14,7 +14,8 @@ import { getHomeActionFeed, type HomeActionEmptyStateReason } from '../../homeAc
 import { buildBuyerPlanHomeActionsResult } from '../askBuyerPlanPresentation';
 import { resolveHomeActionsFollowUp } from '../homeActionsFollowUp';
 import { policyConflictTermIdFromLineage } from '../policyConflictPresentation';
-import { deriveHealthGapCapture, healthGapProgress, isAppliancesInsight, isHealthGapActionTitle } from '../healthGapCapture';
+import { deriveActivationContextCapture, isActivationContextAction } from '../support/activationContextCapture';
+import { deriveHealthGapCapture, healthGapProgress, isActivationContextActionTitle, isAppliancesInsight, isHealthGapActionTitle } from '../healthGapCapture';
 import { getConflictedInsurancePolicyTerms } from '../../coverageConflict.service';
 import { humanDate } from '../askFormatting';
 import { ensurePropertyAccess, MAX_RESULT_ITEMS, propertyLabel } from '../askHandlerSupport';
@@ -368,7 +369,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
 
   if (focusedActionId) {
     const focusedAction = feed.actions.find((action) => action.id === focusedActionId);
-    if (!focusedAction && isHealthGapActionTitle(message)) {
+    if (!focusedAction && (isHealthGapActionTitle(message) || isActivationContextActionTitle(message))) {
       // A "missing details" action leaves the feed when its last fact is saved. The save re-runs this same turn, so reaching here
       // with that title means the details are now on record; "no longer active" read as an error right after the homeowner answered.
       return {
@@ -379,7 +380,9 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
           type: 'SUMMARY',
           id: 'focused-home-action-gap-filled',
           title: 'Thanks — those details are saved',
-          body: 'This action is complete, so it no longer appears in your Home Actions. Your Home Record and health score now use what you entered.',
+          body: isActivationContextActionTitle(message)
+            ? 'This action is complete, so it no longer appears in your Home Actions. Ask will use what you entered in the guidance it gives you.'
+            : 'This action is complete, so it no longer appears in your Home Actions. Your Home Record and health score now use what you entered.',
           tone: 'POSITIVE',
           actions: [],
         }],
@@ -425,7 +428,11 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
       ? await deriveHealthGapCapture(focusedAction, (feature) => evaluateFeatureContext(propertyId, userId, feature))
       : null;
     const captureEvaluation = featureCaptureEvaluation ?? derivedCapture?.evaluation ?? null;
-    const captureFeature = featureCaptureEvaluation ? (focusedAction.propertyContextFeature ?? null) : derivedCapture?.feature ?? null;
+    // Activation "Review and correct" action: up to four starting facts, asked one per turn (support/activationContextCapture.ts).
+    const activationCapture = !featureCaptureEvaluation && !derivedCapture && access.role !== HouseholdRole.VIEWER && isActivationContextAction(focusedAction)
+      ? await deriveActivationContextCapture(propertyId, (feature) => evaluateFeatureContext(propertyId, userId, feature))
+      : null;
+    const captureFeature = featureCaptureEvaluation ? (focusedAction.propertyContextFeature ?? null) : activationCapture ? activationCapture.feature : derivedCapture?.feature ?? null;
     const featureCaptureRequirement = captureEvaluation?.requirements[0];
     const featureCaptureSupported = featureCaptureRequirement
       && access.role !== HouseholdRole.VIEWER
@@ -443,7 +450,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
     // unknown, so the re-derived card would ask the same question again. A derived data-gap card exists only to fill a
     // missing fact, so it does not offer "Not sure"; leaving the card (or the page link) is how a homeowner declines.
     const gapProgress = derivedCapture ? healthGapProgress(focusedAction, derivedCapture.factKey) : null;
-    const captureRequest = baseCaptureRequest && derivedCapture
+    const captureRequest = activationCapture ? activationCapture.request : baseCaptureRequest && derivedCapture
       ? {
         ...baseCaptureRequest, allowNotSure: false,
         // Say where the homeowner is in the sequence; after the first question, that the last answer was kept.
