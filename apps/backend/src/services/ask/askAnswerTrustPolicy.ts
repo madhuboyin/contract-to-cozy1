@@ -5,6 +5,7 @@ import { isAskActionAllowedForHouseholdRole } from './askAudiencePresentation';
 import { getAskOperationDefinition, type AskOperationId, type AskOperationResult } from './askOperationRegistry';
 import type { AskAnswerTrustEvidence, AskAuthoritativeSourceEvidence } from './askTrust.contract';
 import { isReceiptFollowUpAction } from './support/receiptFollowUps';
+import { isAlsoAnswerAction } from './support/alsoAnswer';
 import { PROPERTY_AREA_CAPTURE_SCOPES } from '../../modules/propertyContext/catalog/featureRequirementRegistry';
 import { DIY_FILTER_ACTION_IDS } from './support/diyTemplateBrowseFilter';
 
@@ -572,6 +573,8 @@ export function isAskActionApplicable(input: {
   if (getAskOperationDefinition(operationId).requiresProperty && mutation && !householdRole) return false;
   // A receipt's own "show me that record" question (exact match to receiptFollowUpAction) needs no per-operation entry.
   if (isReceiptFollowUpAction(action)) return true;
+  // The second part of a two-part question, offered as its own one-tap question (support/alsoAnswer.ts).
+  if (isAlsoAnswerAction(action)) return true;
   const focusedHomeAction = operationId === 'HOME_ACTIONS' && action.id.startsWith('home-action-primary-');
   if (!input.trustedDynamicAction && !audienceAction && !focusedHomeAction
     && !(OPERATION_ACTION_IDS[operationId]?.has(action.id) ?? false)) return false;

@@ -28,6 +28,7 @@ import { getSkillAdapter } from '../../skills/adapters/skillAdapterRegistry';
 import { type SkillExecutionTimingTrace } from '../../skills/skillExecutionTelemetry';
 import { resolveSkillHandoffSuggestion, SKILL_HANDOFF_DEFINITIONS } from '../../skills/skillHandoff';
 import { applyAskAudiencePresentation } from '../askAudiencePresentation';
+import { withAlsoAnswerAction } from '../support/alsoAnswer';
 import { validateAskAnswerTrustPipeline } from '../askAnswerTrustValidator';
 import { attachAskAuthoritativeSourceEvidence, includeAskContextSourceEvidence } from '../askAnswerTrustPolicy';
 import type { AskAuthoritativeSourceEvidence } from '../askTrust.contract';
@@ -426,7 +427,7 @@ export async function executeOperation(input: { userId: string; sessionId: strin
     // Phase 0 measurement: the real suggested-next-action finalization for ordinary answers runs here, inside ROUTE_AND_EXECUTE, so it is timed on its own.
     const finalizeStartedAt = Date.now();
     const suggestionAwareResult = await finalizeSuggestedNextActions({
-      result: { ...result, skillHandoff }, executionId: input.executionId, userId: input.userId, sessionId: input.sessionId,
+      result: withAlsoAnswerAction({ ...result, skillHandoff }, input.message, input.operation.operationId), executionId: input.executionId, userId: input.userId, sessionId: input.sessionId,
       propertyId: input.propertyId ?? null, operationId: input.operation.operationId, message: input.message,
       completedSemanticKeyHashes: () => loadCompletedSuggestedActionKeyHashes({ executionId: input.executionId, sessionId: input.sessionId, userId: input.userId }),
       recentCompletedMessages,

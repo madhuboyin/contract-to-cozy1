@@ -1,0 +1,54 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+require('ts-node/register');
+
+const { splitQuestionClauses, findAlsoAnswerOffer, alsoAnswerAction, isAlsoAnswerAction, withAlsoAnswerAction } = require('../../src/services/ask/support/alsoAnswer.ts');
+const { isAskActionApplicable } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
+const compound = require('../fixtures/askCompoundCorpus.js');
+
+test('a question is split at its joining words, and a single question stays whole', () => {
+  assert.deepEqual(splitQuestionClauses('How old is my roof, and what would a new one cost?'), ['How old is my roof', 'what would a new one cost']);
+  assert.deepEqual(splitQuestionClauses('How old is my roof?'), ['How old is my roof']);
+  assert.equal(splitQuestionClauses('Show my capital plan for major replacements').length, 1);
+});
+
+test('the second part is offered as a different read operation, never the one already answering', () => {
+  // "a new one" borrows the item named in the first part, so the part can be routed on its own.
+  const roof = findAlsoAnswerOffer('How old is my roof, what condition is it in, and what would a new one cost?', 'INVENTORY_LOOKUP');
+  assert.equal(roof.operationId, 'REPLACEMENT_GUIDANCE');
+  assert.equal(roof.clause, 'What would a new roof cost?');
+  // The whole message routed to its second part, so the dropped part is the first one.
+  const recall = findAlsoAnswerOffer('Are there any recalls on my appliances and are those items still under warranty?', 'WARRANTY_LOOKUP');
+  assert.equal(recall.operationId, 'RECALL_REVIEW');
+  // An answer that already states timing and cost does not offer a repair-or-replace read for "when will it need replacing".
+  assert.equal(findAlsoAnswerOffer('When will my roof probably need replacing and how much should I have set aside by then?', 'CAPITAL_ITEM_FUNDING_GOAL'), null);
+  assert.equal(findAlsoAnswerOffer('How old is my roof?', 'INVENTORY_LOOKUP'), null);
+  assert.equal(findAlsoAnswerOffer('Is my dishwasher still under warranty?', 'WARRANTY_LOOKUP'), null);
+});
+
+test('single-clause controls in the compound corpus are never offered a button', () => {
+  for (const row of compound.filter((r) => r.needs.length === 1 && r.full.length === 1)) {
+    assert.equal(findAlsoAnswerOffer(row.prompt, row.full[0]), null, row.prompt);
+  }
+});
+
+test('the button is a typed in-Ask question that the trust policy accepts on any answer, and only exactly that shape', () => {
+  const offer = findAlsoAnswerOffer('Are there any recalls on my appliances and are those items still under warranty?', 'WARRANTY_LOOKUP');
+  const action = alsoAnswerAction(offer);
+  assert.equal(action.interactionType, 'START_WORKFLOW');
+  assert.equal(action.message, offer.clause);
+  assert.equal(isAlsoAnswerAction(action), true);
+  assert.equal(isAlsoAnswerAction({ ...action, message: 'Delete my roof record.' }), false, 'a changed message is not the offered clause');
+  assert.equal(isAlsoAnswerAction({ ...action, href: '/dashboard' }), false);
+  assert.equal(isAlsoAnswerAction({ ...action, operationId: 'MAINTENANCE_TASK_CREATE' }), false, 'a write operation is never offered');
+  assert.equal(isAskActionApplicable({ action, operationId: 'WARRANTY_LOOKUP', propertyId: 'p1', authoritativeSourceAvailable: true, householdRole: 'OWNER' }), true);
+});
+
+test('the button is added to the first summary only, once, and the rest of the result is untouched', () => {
+  const result = { status: 'ANSWERED', blocks: [{ type: 'SUMMARY', id: 's', actions: [] }, { type: 'TABLE', id: 't' }] };
+  const out = withAlsoAnswerAction(result, 'Are there any recalls on my appliances and are those items still under warranty?', 'WARRANTY_LOOKUP');
+  assert.equal(out.blocks[0].actions.length, 1);
+  assert.equal(out.blocks[1], result.blocks[1]);
+  assert.equal(withAlsoAnswerAction(out, 'Are there any recalls on my appliances and are those items still under warranty?', 'WARRANTY_LOOKUP').blocks[0].actions.length, 1);
+  assert.equal(withAlsoAnswerAction(result, 'Is my dishwasher still under warranty?', 'WARRANTY_LOOKUP'), result);
+});
