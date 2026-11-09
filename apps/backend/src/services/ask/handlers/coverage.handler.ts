@@ -176,6 +176,9 @@ async function coverageResult(userId: string, propertyId: string, message: strin
       inventoryItemId: captureCandidate.inventoryItemId,
       responsibilityScope: captureCandidate.responsibilityScope,
       hasDisclosedEstimate: captureCandidate.replacementValueSource === 'ESTIMATED',
+      // The edit form was opened with these two, which is what makes the coverage-evidence requirement active for an item that already
+      // records coverage. The submit must evaluate with the same input, or it finds the requirement "no longer active".
+      ...(inventoryItemId ? { editCoverageEvidence: true, preferredCaptureKey: 'INVENTORY_ITEM_COVERAGE_EVIDENCE' } : {}),
     } : undefined,
     captureRequests,
     blocks,

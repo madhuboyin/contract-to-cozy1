@@ -694,6 +694,9 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
         inventoryItemId: parameters.inventoryItemId,
         responsibilityScope: parameters.responsibilityScope,
         hasDisclosedEstimate: parameters.hasDisclosedEstimate,
+        // Same input the form was opened with (coverage.handler.ts); without it an item that already records coverage has no active requirement.
+        ...(parameters.editCoverageEvidence === true ? { editCoverageEvidence: true } : {}),
+        ...(typeof parameters.preferredCaptureKey === 'string' ? { preferredCaptureKey: parameters.preferredCaptureKey } : {}),
       },
     });
     if (!capture || typeof capture !== 'object' || Array.isArray(capture)

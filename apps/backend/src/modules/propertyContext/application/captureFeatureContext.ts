@@ -176,7 +176,8 @@ async function captureFeatureContextInternal(propertyId: string, userId: string,
   }
   const evaluation = await evaluateFeatureContext(propertyId, userId, input);
   const active = evaluation.requirements.find((requirement) => requirement.requirementId === input.requirementId);
-  if (!active || active.capture.captureKey !== input.captureKey) throw new Error('Capture requirement is no longer active.');
+  // A typed error so the caller answers 400 with this message; a plain Error reached the homeowner as "An unexpected error occurred".
+  if (!active || active.capture.captureKey !== input.captureKey) throw new PropertyContextCaptureValidationError('Capture requirement is no longer active.');
   if (evaluation.contextVersion !== input.expectedContextVersion) throw new PropertyContextVersionConflictError(evaluation);
   const access = await resolvePropertyAccess(userId, propertyId);
   if (!access || ROLE_RANK[access.role] < ROLE_RANK.CONTRIBUTOR) throw new PropertyContextAccessDeniedError();
