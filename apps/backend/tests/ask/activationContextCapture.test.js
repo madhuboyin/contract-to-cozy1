@@ -7,7 +7,7 @@ const { activationMissingGaps, ACTIVATION_GAP_LABELS, ACTIVATION_CONTEXT_SIGNAL,
 const { prisma } = require('../../src/lib/prisma.ts');
 const entryContextService = require('../../src/services/entryContext.service.ts');
 const {
-  deriveActivationContextCapture, saveActivationContextAnswer, activationContextVersion, isActivationContextAction, ACTIVATION_CONTEXT_CAPTURE_KEY, isActivationContextRequirement,
+  deriveActivationContextCapture, dismissedActivationRequirements, saveActivationContextAnswer, activationContextVersion, isActivationContextAction, ACTIVATION_CONTEXT_CAPTURE_KEY, isActivationContextRequirement,
 } = require('../../src/services/ask/support/activationContextCapture.ts');
 const { isActivationContextActionTitle } = require('../../src/services/ask/healthGapCapture.ts');
 
@@ -130,4 +130,37 @@ test('wiring: the focused handler derives the card, and the submit path saves th
   assert.match(handler, /!focusedAction && \(isHealthGapActionTitle\(message\) \|\| isActivationContextActionTitle\(message\)\)/);
   const capture = readFileSync(resolve(__dirname, '../../src/services/ask/execution/askCapture.ts'), 'utf8');
   assert.match(capture, /input\.captureKey === ACTIVATION_CONTEXT_CAPTURE_KEY && isActivationContextRequirement\(input\.requirementId\)/);
+});
+
+// Owner ruling 2026-11-09: skipping is for the Ask session only. The card's dismiss button records CAPTURE_DISMISSED on the execution; the next
+// derivation in the same session leaves that question out, and a new session asks again.
+test('a question dismissed in this session is left out, the rest are renumbered, and nothing is stored across sessions', async () => {
+  const restore = stubPrisma();
+  const originalEvents = prisma.askExecutionEvent.findMany;
+  try {
+    let query;
+    prisma.askExecutionEvent.findMany = async (args) => {
+      query = args;
+      return [{ metadataJson: { requirementId: 'activation-trigger-details', captureKey: 'ACTIVATION_CONTEXT_INPUTS' } }, { metadataJson: null }, { metadataJson: { requirementId: 7 } }];
+    };
+    const dismissed = await dismissedActivationRequirements('session-1');
+    assert.deepEqual([...dismissed], ['activation-trigger-details'], 'only well-formed requirement ids count');
+    assert.deepEqual(query.where, { eventType: 'CAPTURE_DISMISSED', execution: { sessionId: 'session-1' } }, 'scoped to this Ask session');
+
+    state.yearBuilt = 1990; state.propertySize = 1800;
+    let card = await deriveActivationContextCapture('p1', evaluateAll, dismissed);
+    assert.equal(card.request.requirementId, 'activation-affected-item');
+    assert.doesNotMatch(card.request.helpText, /Question/, 'the dismissed details question is not counted: one question left');
+    card = await deriveActivationContextCapture('p1', evaluateAll, new Set(['activation-trigger-details', 'activation-affected-item']));
+    assert.equal(card, null, 'everything dismissed: no card');
+    card = await deriveActivationContextCapture('p1', evaluateAll);
+    assert.match(card.request.helpText, /^Question 1 of 2\./, 'a new session (nothing dismissed) asks both again');
+
+    state.yearBuilt = null;
+    const first = await deriveActivationContextCapture('p1', evaluateAll);
+    assert.ok(first.feature, 'year built is asked first when missing');
+    const next = await deriveActivationContextCapture('p1', evaluateAll, new Set([first.request.requirementId]));
+    assert.notEqual(next.request.requirementId, first.request.requirementId, 'a dismissed fact question is skipped');
+    assert.match(next.request.helpText, /^Question 1 of 2\./, 'three missing, one dismissed: two left');
+  } finally { prisma.askExecutionEvent.findMany = originalEvents; restore(); }
 });

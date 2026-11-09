@@ -84,31 +84,56 @@ export interface ActivationCapture {
   feature: { featureKey: 'ASK_NEXT_ACTION'; operationKey: string } | null;
 }
 
+/** Requirement ids the homeowner dismissed in this Ask session (the card's dismiss button records a CAPTURE_DISMISSED event on the execution). */
+export async function dismissedActivationRequirements(sessionId: string): Promise<Set<string>> {
+  const events = await prisma.askExecutionEvent.findMany({
+    where: { eventType: 'CAPTURE_DISMISSED', execution: { sessionId } },
+    select: { metadataJson: true },
+    take: 50,
+  });
+  const ids = new Set<string>();
+  for (const event of events) {
+    const requirementId = event.metadataJson && typeof event.metadataJson === 'object' && !Array.isArray(event.metadataJson) ? (event.metadataJson as { requirementId?: unknown }).requirementId : null;
+    if (typeof requirementId === 'string') ids.add(requirementId);
+  }
+  return ids;
+}
+
 /**
  * The card for the first fact still missing, or null when none is. A Property Context fact that already has an answer there (so no
  * requirement is outstanding) is skipped rather than asked again, which also keeps a mismatch between the two sources from stalling the card.
+ * A question the homeowner dismissed in this Ask session is skipped too; skipping lasts for the session only, so a new session asks again.
  */
 export async function deriveActivationContextCapture(
   propertyId: string,
   evaluate: (feature: { featureKey: 'ASK_NEXT_ACTION'; operationKey: string }) => Promise<{ requirements: readonly any[]; contextVersion: string }>,
+  dismissed: ReadonlySet<string> = new Set(),
 ): Promise<ActivationCapture | null> {
   const state = await activationContextState(propertyId);
-  const total = state.gaps.length;
-  for (const [index, gap] of state.gaps.entries()) {
-    const position = total > 1 ? `Question ${index + 1} of ${total}. ` : '';
+  // Every askable question first, so "Question N of M" counts only what will actually be asked.
+  const askable: Array<{ requirementId: string; build: (position: string) => Promise<ActivationCapture> | ActivationCapture }> = [];
+  for (const gap of state.gaps) {
     const factKey = FACT_KEY_FOR_GAP[gap];
     if (factKey) {
       const feature = healthGapCaptureFeature(factKey);
       const evaluation = await evaluate(feature);
       const requirement = evaluation.requirements[0];
-      if (!requirement) continue;
-      const request = askCaptureRequest(requirement, evaluation.contextVersion, 'Saved to this home’s Property Context', null);
-      return { request: { ...request, allowNotSure: false, helpText: `${position}${request.helpText ?? ''}`.trim() || null }, feature };
+      if (!requirement || dismissed.has(requirement.requirementId)) continue;
+      askable.push({
+        requirementId: requirement.requirementId,
+        build: (position) => {
+          const request = askCaptureRequest(requirement, evaluation.contextVersion, 'Saved to this home’s Property Context', null);
+          return { request: { ...request, allowNotSure: false, helpText: `${position}${request.helpText ?? ''}`.trim() || null }, feature };
+        },
+      });
+    } else if (gap === 'AFFECTED_ITEM') {
+      if (!dismissed.has('activation-affected-item')) askable.push({ requirementId: 'activation-affected-item', build: async (position) => ({ request: await itemRequest(propertyId, state, position), feature: null }) });
+    } else if (!dismissed.has('activation-trigger-details')) {
+      askable.push({ requirementId: 'activation-trigger-details', build: (position) => ({ request: detailRequest(state, position), feature: null }) });
     }
-    if (gap === 'AFFECTED_ITEM') return { request: await itemRequest(propertyId, state, position), feature: null };
-    return { request: detailRequest(state, position), feature: null };
   }
-  return null;
+  if (!askable.length) return null;
+  return askable[0].build(askable.length > 1 ? `Question 1 of ${askable.length}. ` : '');
 }
 
 export class ActivationCaptureError extends Error {

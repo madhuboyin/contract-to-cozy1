@@ -14,7 +14,7 @@ import { getHomeActionFeed, type HomeActionEmptyStateReason } from '../../homeAc
 import { buildBuyerPlanHomeActionsResult } from '../askBuyerPlanPresentation';
 import { resolveHomeActionsFollowUp } from '../homeActionsFollowUp';
 import { policyConflictTermIdFromLineage } from '../policyConflictPresentation';
-import { deriveActivationContextCapture, isActivationContextAction } from '../support/activationContextCapture';
+import { deriveActivationContextCapture, dismissedActivationRequirements, isActivationContextAction } from '../support/activationContextCapture';
 import { deriveHealthGapCapture, healthGapProgress, isActivationContextActionTitle, isAppliancesInsight, isHealthGapActionTitle } from '../healthGapCapture';
 import { getConflictedInsurancePolicyTerms } from '../../coverageConflict.service';
 import { humanDate } from '../askFormatting';
@@ -301,7 +301,7 @@ async function loadWorkEvidence(propertyId: string, workItemId: string) {
 }
 const formatEvidenceDate = (date: Date) => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 
-async function homeActionsResult(userId: string, propertyId: string, message: string, focusedActionId?: string | null): Promise<AskOperationResult> {
+async function homeActionsResult(userId: string, propertyId: string, message: string, focusedActionId?: string | null, sessionId?: string | null): Promise<AskOperationResult> {
   const [access, buyerContextValue] = await Promise.all([
     ensurePropertyAccess(userId, propertyId),
     loadOptionalBuyerPlanContext({
@@ -430,7 +430,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
     const captureEvaluation = featureCaptureEvaluation ?? derivedCapture?.evaluation ?? null;
     // Activation "Review and correct" action: up to four starting facts, asked one per turn (support/activationContextCapture.ts).
     const activationCapture = !featureCaptureEvaluation && !derivedCapture && access.role !== HouseholdRole.VIEWER && isActivationContextAction(focusedAction)
-      ? await deriveActivationContextCapture(propertyId, (feature) => evaluateFeatureContext(propertyId, userId, feature))
+      ? await deriveActivationContextCapture(propertyId, (feature) => evaluateFeatureContext(propertyId, userId, feature), sessionId ? await dismissedActivationRequirements(sessionId) : undefined)
       : null;
     const captureFeature = featureCaptureEvaluation ? (focusedAction.propertyContextFeature ?? null) : activationCapture ? activationCapture.feature : derivedCapture?.feature ?? null;
     const featureCaptureRequirement = captureEvaluation?.requirements[0];
@@ -691,4 +691,5 @@ registerCapabilityHandler('home-actions.feed', async (envelope) => homeActionsRe
   envelope.launchContext?.entityType === 'HOME_ACTION'
     ? envelope.launchContext.actionId ?? envelope.launchContext.entityId
     : null,
+  envelope.sessionId,
 ));
