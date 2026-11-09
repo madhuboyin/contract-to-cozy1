@@ -171,7 +171,25 @@ test('handler wiring: viewers are never offered capture, and the derived feature
   const source = readFileSync(resolve(__dirname, '../../src/services/ask/handlers/homeActions.handler.ts'), 'utf8');
   assert.match(source, /!featureCaptureEvaluation && access\.role !== HouseholdRole\.VIEWER\s*\?\s*await deriveHealthGapCapture\(/);
   // Derived cards never offer "Not sure": it is stored as an UNKNOWN observation and would re-ask the same question.
-  assert.match(source, /baseCaptureRequest && derivedCapture \? \{ \.\.\.baseCaptureRequest, allowNotSure: false \} : baseCaptureRequest/);
+  assert.match(source, /baseCaptureRequest && derivedCapture\s*\?\s*\{\s*\.\.\.baseCaptureRequest, allowNotSure: false,/);
   assert.match(source, /prisma\.inventoryItem\.count\(\{ where: \{ propertyId, category: 'APPLIANCE' \} \}\)/);
   assert.match(source, /\{ canContribute: access\.role !== HouseholdRole\.VIEWER, policyConflict, captureFeature, applianceCount, applianceNeedingDetails(?:, workEvidence)? \}/);
+});
+
+// Owner screenshots 2026-11-09: after the last missing fact was saved, the re-run said "This Home Action is no longer active", and between facts
+// the next card gave no sign that the previous answer was kept.
+test('a health-gap headline quoted in a focused message is recognised; other titles are not', () => {
+  const { isHealthGapActionTitle, healthGapProgress } = require('../../src/services/ask/healthGapCapture.ts');
+  assert.equal(isHealthGapActionTitle('What should I do next for “Add your home type and roof type”?'), true);
+  assert.equal(isHealthGapActionTitle('What should I do next for “Add your heating, cooling, and water heater types”?'), true);
+  assert.equal(isHealthGapActionTitle('What should I do next for “Replace the water heater anode rod”?'), false);
+  assert.equal(isHealthGapActionTitle('What should I do next for this home?'), false);
+});
+
+test('progress is the fact\'s place in the ask order, and absent for a single-fact insight', () => {
+  const { healthGapProgress } = require('../../src/services/ask/healthGapCapture.ts');
+  const systems = { lineageId: 'health-insight:p1:systems-factor', signal: 'Systems Factor' };
+  assert.deepEqual(healthGapProgress(systems, 'systems.heatingType'), { position: 1, total: 3 });
+  assert.deepEqual(healthGapProgress(systems, 'systems.waterHeaterType'), { position: 3, total: 3 });
+  assert.equal(healthGapProgress({ lineageId: 'health-insight:p1:size-factor', signal: 'Size Factor' }, 'core.propertySizeSqFt'), null);
 });

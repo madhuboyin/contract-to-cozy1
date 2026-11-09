@@ -14,7 +14,7 @@ import { getHomeActionFeed, type HomeActionEmptyStateReason } from '../../homeAc
 import { buildBuyerPlanHomeActionsResult } from '../askBuyerPlanPresentation';
 import { resolveHomeActionsFollowUp } from '../homeActionsFollowUp';
 import { policyConflictTermIdFromLineage } from '../policyConflictPresentation';
-import { deriveHealthGapCapture, isAppliancesInsight } from '../healthGapCapture';
+import { deriveHealthGapCapture, healthGapProgress, isAppliancesInsight, isHealthGapActionTitle } from '../healthGapCapture';
 import { getConflictedInsurancePolicyTerms } from '../../coverageConflict.service';
 import { humanDate } from '../askFormatting';
 import { ensurePropertyAccess, MAX_RESULT_ITEMS, propertyLabel } from '../askHandlerSupport';
@@ -368,6 +368,24 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
 
   if (focusedActionId) {
     const focusedAction = feed.actions.find((action) => action.id === focusedActionId);
+    if (!focusedAction && isHealthGapActionTitle(message)) {
+      // A "missing details" action leaves the feed when its last fact is saved. The save re-runs this same turn, so reaching here
+      // with that title means the details are now on record; "no longer active" read as an error right after the homeowner answered.
+      return {
+        status: 'ANSWERED',
+        reasonCode: 'HOME_ACTION_GAP_FILLED',
+        contextVersion: evaluation.contextVersion,
+        blocks: [{
+          type: 'SUMMARY',
+          id: 'focused-home-action-gap-filled',
+          title: 'Thanks — those details are saved',
+          body: 'This action is complete, so it no longer appears in your Home Actions. Your Home Record and health score now use what you entered.',
+          tone: 'POSITIVE',
+          actions: [],
+        }],
+        suggestions: [],
+      };
+    }
     if (!focusedAction) {
       return {
         status: 'NOT_APPLICABLE',
@@ -424,7 +442,14 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
     // A "Not sure" answer is stored as an explicit UNKNOWN observation, which Property Context still evaluates as
     // unknown, so the re-derived card would ask the same question again. A derived data-gap card exists only to fill a
     // missing fact, so it does not offer "Not sure"; leaving the card (or the page link) is how a homeowner declines.
-    const captureRequest = baseCaptureRequest && derivedCapture ? { ...baseCaptureRequest, allowNotSure: false } : baseCaptureRequest;
+    const gapProgress = derivedCapture ? healthGapProgress(focusedAction, derivedCapture.factKey) : null;
+    const captureRequest = baseCaptureRequest && derivedCapture
+      ? {
+        ...baseCaptureRequest, allowNotSure: false,
+        // Say where the homeowner is in the sequence; after the first question, that the last answer was kept.
+        ...(gapProgress ? { helpText: `${gapProgress.position > 1 ? 'Saved. ' : ''}Question ${gapProgress.position} of ${gapProgress.total}.${baseCaptureRequest.helpText ? ` ${baseCaptureRequest.helpText}` : ''}` } : {}),
+      }
+      : baseCaptureRequest;
     // Appliances insight (FRD v1.172): one appliance at a time through the existing inventory-create workflow. The
     // count only decides the wording ("Add an appliance" vs "Add another appliance"); it uses the producer's own filter.
     const applianceCount = isAppliancesInsight(focusedAction) && access.role !== HouseholdRole.VIEWER

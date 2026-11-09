@@ -14,6 +14,8 @@
  * Facts are listed in the order they are asked. Anything that is not a single bounded scalar (the appliance list,
  * documents, safety devices) is intentionally absent.
  */
+import { HEALTH_FACTOR_COPY } from '../../content/healthFactorCopy';
+
 export const HEALTH_INSIGHT_LINEAGE_PREFIX = 'health-insight:';
 
 const HEALTH_GAP_FACTS: Readonly<Record<string, readonly string[]>> = {
@@ -64,4 +66,31 @@ export async function deriveHealthGapCapture<E extends { requirements: readonly 
     if (evaluation.requirements[0]) return { factKey, feature, evaluation };
   }
   return null;
+}
+
+/**
+ * Where a derived card stands: "Question 2 of 3", and that the previous answer was saved. The card is re-derived after every
+ * save and asks for the next unknown fact, so without this the homeowner sees a new, empty-looking card and no sign that the
+ * last answer was kept. Counts the facts still unknown plus the ones already answered, in ask order.
+ */
+export function healthGapProgress(action: { lineageId: string; signal: string }, factKey: string): { position: number; total: number } | null {
+  const keys = healthGapFactKeys(action);
+  if (!keys || keys.length < 2) return null;
+  const index = keys.indexOf(factKey);
+  return index < 0 ? null : { position: index + 1, total: keys.length };
+}
+
+/**
+ * True when the title quoted in a focused Home Action message is a health-insight data-gap headline ("Add your home type and
+ * roof type"). Such an action disappears from the feed once its last missing fact is saved, so a focused request that no longer
+ * finds it right after a save means the gap was filled, not that the action went stale.
+ */
+export function isHealthGapActionTitle(message: string): boolean {
+  const quoted = /“([^”]+)”|"([^"]+)"/.exec(message);
+  const title = (quoted?.[1] ?? quoted?.[2] ?? '').trim();
+  if (!title) return false;
+  return Object.values(HEALTH_FACTOR_COPY).some((states) => {
+    const missing = (states as Record<string, { mode?: string; headline?: string } | undefined>)['Missing Data'];
+    return missing?.mode === 'DATA_GAP' && missing.headline === title;
+  });
 }

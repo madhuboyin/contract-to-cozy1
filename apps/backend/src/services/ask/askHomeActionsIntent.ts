@@ -22,6 +22,7 @@ const FOCUSED_BLOCK_IDS = new Set([
   'focused-home-action-guidance',
   'focused-home-action-evidence',
   'focused-home-action-boundary',
+  'focused-home-action-gap-filled',
   'related-capabilities',
   'ask-next-actions',
 ]);
