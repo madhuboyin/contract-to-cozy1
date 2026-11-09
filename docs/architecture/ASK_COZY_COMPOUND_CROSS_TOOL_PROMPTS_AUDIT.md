@@ -15,15 +15,18 @@
 
 ---
 
-## 0. Implementation status (updated 2026-11-08)
+## 0. Implementation status (updated 2026-11-09)
 
 | Step | State |
 |---|---|
 | Compound corpus + ratchet (§8 Phase 0) | Built: `tests/fixtures/askCompoundCorpus.js` (33 prompts, each with the operations its answer needs; first run 15 full / 11 partial / 1 clarify / 4 wrong / 2 fallback), `scripts/ask-compound-sweep.js`, `tests/ask/compoundSweepRatchet.test.js`, baseline `tests/fixtures/askCompoundSweepBaseline.json` |
 | Item funding goal operation (§8 Phase 1) | Built: `CAPITAL_ITEM_FUNDING_GOAL`, FRD Revision 1.539. Owner prompt now FULL. Handler not run against a real database |
-| Shared slot parsing (§8 Phase 2) | Partly done: `support/targetDate.ts` is used by the funding goal. The capital plan's own horizon parser is deliberately unchanged: `capitalTimelineHorizonRequestParsing.test.js` pins "unsupported horizons (not 5 or 10) are not matched" because the traditional page offers only those two, so mapping "in 3 years" to the 5-year view is an owner decision (§9) |
+| Shared slot parsing (§8 Phase 2) | Done for dates (FRD 1.539, 1.540): `support/targetDate.ts` is used by the funding goal, and a named date now picks the capital plan view in `parseCapitalTimelineHorizonRequest` (up to 5 years gives the 5-year view, up to 10 gives the 10-year view, longer is not matched; the 15/20-year tests still hold). The "in 3 years" question in §9 was decided as recommended: it maps to the 5-year view |
 | Bounded multi-operation answers (§8 Phase 3) | Not built, on purpose. A second operation's blocks must pass the first operation's answer-trust checks (block-id contracts, per-operation action allowlists, boundary requirements, relevance), and a stripped action fails silently. That path cannot be exercised here without a database, and the result semantics (what status when one half needs context) are an owner decision (§9). The compound corpus measures it: 11 of 33 prompts get one clause answered and the rest dropped |
 | Single-fact building blocks (§8 Phase 4) | Condition and "cost of a new X" routed to existing item answers (FRD 1.539); a dedicated item-cost read is not built |
+| Dropped second part: "Also answer" button (§8 Phase 3 alternative, step 4) | Built, FRD 1.540: `support/alsoAnswer.ts` splits a two-part question, routes each part, and adds one secondary button "Also answer: …" for a part that clearly (confidence 0.85 or more) belongs to a different READ operation. Tapping it asks that part as its own question, so it is routed, executed and trust-checked like any turn; no blocks from two operations are merged. Three elliptical follow-up shapes are recognised only inside a two-part question. Measured: 5 of the 21 two-part rows get a button, all 5 correct, none on single-question rows. The other 16 need a phrasing per second part. A tapped button's second answer was checked by reading the START_WORKFLOW path, not by running it |
+| Roof recorded only on the home profile | Built, FRD 1.541: the funding goal, "how old is my roof" and the repair-or-replace read answer from `Property.roofReplacementYear` and the timeline's roof default when no roof item is tracked. Not run against a real database |
+| Still open | Multi-operation answers in one turn (Phase 3, owner decision on UX and status); a dedicated item-cost read; baseline for "currently saving" (stays a six-month deposit average); calibration refresh for fixtures 015, 065, 075, 121, 068, 122 |
 
 ## 1. Verdict
 
