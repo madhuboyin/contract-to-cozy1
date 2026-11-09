@@ -107,9 +107,16 @@
    "what features are available",
    "which tools do you have"
   ],
+  "CAPITAL_ITEM_FUNDING_GOAL": [
+   "am i saving enough to replace my roof in 5 years",
+   "how do i save for replacing my hvac",
+   "how much capital will i need for a new roof in 4 years",
+   "how much should i put aside each month for a new roof",
+   "if the water heater has to go in 3 years how much more should i save",
+   "what do i need saved to replace the furnace by 2030"
+  ],
   "CAPITAL_RESERVE_PLAN": [
    "capital reserve plan",
-   "how do i save for replacing my hvac",
    "how much should i save for future home expenses",
    "long term home savings plan",
    "what should i set aside for big repairs"
@@ -356,9 +363,11 @@
    "show me my appliances",
    "show me the history of my washing machine repairs",
    "tell me about my water heater",
+   "the condition of my dishwasher",
    "what is the model number of my dishwasher",
    "what repairs has my dishwasher had",
    "what rooms do I have and what is in each one",
+   "what's my roof's condition",
    "when did i buy my fridge",
    "when was my water heater last serviced",
    "which items have missing details"
@@ -538,6 +547,7 @@
   "REPLACEMENT_GUIDANCE": [
    "can i continue to use my microwave or should i need to buy new one",
    "can i keep using my oven or replace it",
+   "cost of a new dishwasher",
    "do I need a new roof",
    "do i need a new dishwasher",
    "do i need a new washing machine",
@@ -545,6 +555,7 @@
    "how is my water heater doing? will it be good for next few years",
    "how long until my water heater needs replacing",
    "how many more years does my fridge have left",
+   "how much does a new roof cost",
    "is my fridge worth repairing",
    "is my microwave good enough or do i need to replace it",
    "is my water heater still good",

@@ -100,9 +100,12 @@ test('guardrail: the execution, high-band and ambiguity thresholds per operation
 });
 
 test('calibration drift ratchet: the stored evidence differs from live scoring only for the known fixtures, and drift cannot grow unnoticed', () => {
-  // Known at the measured baseline (2026-11-05): the strongest competitor changed for 015, 065 and 075, and 121 has no rows. Refreshing them is an owner
+  // Known at the measured baseline (2026-11-05): the strongest competitor changed for 015, 065 and 075, and 121 has no rows (068 and 122 added 2026-11-08, below). Refreshing them is an owner
   // decision recorded in docs/architecture/ASK_COZY_ROUTING_COVERAGE_AND_CALIBRATION.md. When it is applied, this set becomes empty.
-  const KNOWN = new Set(['ask-routing-independent-v2-015', 'ask-routing-independent-v2-065', 'ask-routing-independent-v2-075', 'ask-routing-independent-v2-121']);
+  // 2026-11-08: 122 (CAPITAL_ITEM_FUNDING_GOAL) has no rows, and 068's strongest competitor is now that operation. Recording either refits the shared
+  // confidence curve, which moved 40 operations' sweep results at once (+20 hits, +15 misroutes, 51 fewer fallbacks), so it is left with the other known
+  // fixtures for the same owner decision rather than bundled into an unrelated feature.
+  const KNOWN = new Set(['ask-routing-independent-v2-015', 'ask-routing-independent-v2-065', 'ask-routing-independent-v2-075', 'ask-routing-independent-v2-121', 'ask-routing-independent-v2-068', 'ask-routing-independent-v2-122']);
   const drift = calibrationDrift(ASK_ROUTING_CERTIFICATION_FIXTURES);
   assert.deepEqual(drift, report.calibrationDrift);
   const unexpected = drift.rows.filter((row) => !KNOWN.has(row.fixtureId));

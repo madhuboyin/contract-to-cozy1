@@ -29,6 +29,12 @@ export const CAPITAL_PLANNING_SKILL = Object.freeze({
       "optionalContextProviders": [PROPERTY_JOURNEY_CONTEXT_PROVIDER]
     },
     {
+      "operationId": "CAPITAL_ITEM_FUNDING_GOAL",
+      "version": "1.0",
+      "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
+      "optionalContextProviders": [PROPERTY_JOURNEY_CONTEXT_PROVIDER]
+    },
+    {
       "operationId": "RESERVE_FUND_COMMAND",
       "version": "1.0",
       "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
@@ -43,6 +49,10 @@ export const CAPITAL_PLANNING_SKILL = Object.freeze({
       "version": "1.0"
     },
     {
+      "id": "capital-item-funding.goal",
+      "version": "1.0"
+    },
+    {
       "id": "reserve-fund.command",
       "version": "1.0"
     }
@@ -53,6 +63,7 @@ export const CAPITAL_PLANNING_SKILL = Object.freeze({
       "consumer": "ASK",
       "operations": [
         "CAPITAL_RESERVE_PLAN",
+        "CAPITAL_ITEM_FUNDING_GOAL",
         "RESERVE_FUND_COMMAND"
       ]
     }
@@ -88,6 +99,12 @@ export const CAPITAL_PLANNING_SKILL = Object.freeze({
     {
       "type": "OPERATION_CONTRACT",
       "id": "CAPITAL_RESERVE_PLAN",
+      "version": "1.0",
+      "required": true
+    },
+    {
+      "type": "OPERATION_CONTRACT",
+      "id": "CAPITAL_ITEM_FUNDING_GOAL",
       "version": "1.0",
       "required": true
     },

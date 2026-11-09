@@ -38,6 +38,13 @@ export const CAPITAL_PLANNING_SKILL_EVALUATION = deepFreezeSkillPackage({
       }
     },
     {
+      "operationId": "CAPITAL_ITEM_FUNDING_GOAL",
+      "expectedAdapter": {
+        "id": "capital-item-funding.goal",
+        "version": "1.0"
+      }
+    },
+    {
       "operationId": "RESERVE_FUND_COMMAND",
       "expectedAdapter": {
         "id": "reserve-fund.command",
@@ -59,6 +66,11 @@ export const CAPITAL_PLANNING_SKILL_EVALUATION = deepFreezeSkillPackage({
     {
       "consumer": "ASK",
       "operationId": "CAPITAL_RESERVE_PLAN",
+      "allowed": true
+    },
+    {
+      "consumer": "ASK",
+      "operationId": "CAPITAL_ITEM_FUNDING_GOAL",
       "allowed": true
     },
     {
@@ -138,6 +150,10 @@ export const CAPITAL_PLANNING_SKILL_EVALUATION = deepFreezeSkillPackage({
       "version": "1.0"
     },
     {
+      "id": "capital-item-funding.goal",
+      "version": "1.0"
+    },
+    {
       "id": "reserve-fund.command",
       "version": "1.0"
     }
@@ -170,6 +186,10 @@ export const CAPITAL_PLANNING_SKILL_EVALUATION = deepFreezeSkillPackage({
   "expectedCanonicalCalls": [
     {
       "id": "capital-reserve.plan",
+      "version": "1.0"
+    },
+    {
+      "id": "capital-item-funding.goal",
       "version": "1.0"
     },
     {

@@ -79,6 +79,7 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   INCIDENT_CONTINUATION: new Set(['incident-continuation-boundary', 'claim-status-boundary']),
   QUOTE_COMPARISON_REVIEW: new Set(['quote-review-boundary']),
   CAPITAL_RESERVE_PLAN: new Set(['capital-plan-boundary']),
+  CAPITAL_ITEM_FUNDING_GOAL: new Set(['item-funding-boundary']),
   HOME_EVENT_RADAR_FEED: new Set(['home-event-radar-partial', 'radar-feed-boundary']),
   HOME_EVENT_RADAR_STATE: new Set(['radar-write-boundary']),
   HOME_EVENT_RADAR_MARK_DONE: new Set(['radar-write-boundary']),
@@ -398,6 +399,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOME_DEADLINE_MONITOR: new Set(['resolve-coverage-conflict']),
   // The page-link ids (open-inventory, open-timeline, open-reserve, open-reserve-fund) were retired with the desktop-link sweep.
   CAPITAL_RESERVE_PLAN: new Set(['add-inventory-item', 'rerun-horizon-5', 'rerun-horizon-10', 'reserve-fund-add-contribution', 'reserve-fund-set-balance', 'reserve-fund-confirm-allocation', 'reserve-fund-remove-contribution', 'reserve-fund-recalculate', 'reserve-fund-posture-conservative', 'reserve-fund-posture-moderate', 'reserve-fund-posture-aggressive', 'reserve-fund-accept-reconciliation', 'capital-timeline-adjust', 'capital-timeline-remove-adjustment', 'capital-bundle-price-check']),
+  CAPITAL_ITEM_FUNDING_GOAL: new Set(['add-inventory-item', 'item-funding-capital-plan', 'reserve-fund-add-contribution']),
   // The typed "change my reserve plan" choice and the posture picker offer the plan-wide actions that need no target entry.
   RESERVE_FUND_COMMAND: new Set(['reserve-fund-show-current', 'reserve-fund-add-contribution', 'reserve-fund-set-balance', 'reserve-fund-recalculate', 'reserve-fund-choose-posture', 'reserve-fund-posture-conservative', 'reserve-fund-posture-moderate', 'reserve-fund-posture-aggressive']),
   PROPERTY_BRIEF_COMMAND: new Set(['property-brief-show-current', 'property-brief-open-share']),

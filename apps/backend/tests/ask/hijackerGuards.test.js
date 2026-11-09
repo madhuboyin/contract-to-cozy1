@@ -45,7 +45,8 @@ test('broad catch-all wording no longer takes a specific operation’s question'
   assert.equal(op('monitor interest rates'), 'REFINANCE_RATE_MONITOR');
   assert.equal(op('any savings i am missing'), 'SAVINGS_OPPORTUNITIES');
   assert.equal(op('long term home savings plan'), 'CAPITAL_RESERVE_PLAN');
-  assert.equal(op('how do i save for replacing my hvac'), 'CAPITAL_RESERVE_PLAN');
+  // Names one item and a saving goal: the item funding goal answers it for that item (moved from the whole-home plan, 2026-11-08).
+  assert.equal(op('how do i save for replacing my hvac'), 'CAPITAL_ITEM_FUNDING_GOAL');
   assert.equal(op('summarize all the work for my home'), 'WORK_OVERVIEW');
   assert.equal(op('we are planning a big renovation'), 'MAJOR_EVENT_ENTRY');
 });

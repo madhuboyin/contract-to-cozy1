@@ -19,6 +19,8 @@ export const CANONICAL_ANSWER_BLOCK_ID_PREFIXES: Readonly<Partial<Record<AskOper
   // command handler shares the prefix, e.g. 'diy-projects' vs the command's 'diy-projects-back'). The contract test scans every handler to prove this. Deliberately NOT listed, because the routing sweep shows other questions
   // misrouted into them (the relevance check is what catches those): MAINTENANCE_BUDGET_FORECAST, MAINTENANCE_FORECAST, DOCUMENT_LOOKUP, INSPECTION_FINDINGS.
   APPLIANCE_FAILURE_RISK: ['appliance-oracle-'],
+  // Item funding goal: every block its handler emits (summary, steps, items, evidence, boundary, and the not-found/empty notices) starts 'item-funding-'.
+  CAPITAL_ITEM_FUNDING_GOAL: ['item-funding-'],
   WARRANTY_LOOKUP: ['warranty-summary$', 'warranty-results$', 'warranty-empty$', 'warranty-no-match$', 'warranty-show-all$', 'warranty-item-'],
   INCIDENT_CLAIM_STATUS: ['incident-claim-'],
   RECALL_REVIEW: ['recall-review-'],

@@ -1,3 +1,4 @@
+import { isItemFundingGoalMessage } from './support/itemFundingWording';
 import { isNotificationSettingsCommandRequest, isNotificationSettingsOverviewRequest, isNotificationsOverviewRequest } from './support/notificationConversation';
 import { isHomeRecordExportRequest, isHomeRecordExportShareRequest, isHomeRecordExportStatusRequest } from './support/homeRecordExport';
 import type { AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionStatus, AskPresentationBlock, SuggestedNextAction, SuggestedNextActionsStatus } from '../../productFramework/ask/ask.contract';
@@ -309,6 +310,7 @@ export type AskOperationId =
   | 'QUOTE_COMPARISON_REVIEW'
   | 'HOME_DEADLINE_MONITOR'
   | 'CAPITAL_RESERVE_PLAN'
+  | 'CAPITAL_ITEM_FUNDING_GOAL'
   | 'PROPERTY_TAX_APPEAL_READINESS'
   | 'RENOVATION_PERMIT_READINESS'
   // Phase 7 (implementation plan §13; FRD §31 "Seller Prep — expose now,
@@ -654,7 +656,7 @@ export interface AskOperationResult {
 const CAPABILITY_CONTINUITY_OPERATIONS = new Set<AskOperationId>([
   'MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE',
   'MAINTENANCE_TASK_UPDATE', 'MAINTENANCE_FORECAST', 'GUIDANCE_JOURNEY_CREATE', 'QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW', 'HOME_DEADLINE_MONITOR',
-  'CAPITAL_RESERVE_PLAN', 'RESERVE_FUND_COMMAND', 'PROPERTY_BRIEF_COMMAND', 'PROPERTY_TAX_APPEAL_READINESS', 'RENOVATION_PERMIT_READINESS', 'MAJOR_EVENT_ENTRY', 'SELLER_PREP_CHECKLIST', 'SELLER_PREP_ITEM_DECISION', 'INVENTORY_ITEM_CORRECT', 'HOME_EVENT_CORRECT', 'HOME_EVENT_UPDATE', 'HOME_EVENT_VISIBILITY', 'WARRANTY_UPDATE', 'ROOM_RENAME', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'MATERIAL_SPEC_UPDATE', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'OWNERSHIP_COST_COMMAND', 'HOME_HABITS_GENERATE', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN',
+  'CAPITAL_RESERVE_PLAN', 'CAPITAL_ITEM_FUNDING_GOAL', 'RESERVE_FUND_COMMAND', 'PROPERTY_BRIEF_COMMAND', 'PROPERTY_TAX_APPEAL_READINESS', 'RENOVATION_PERMIT_READINESS', 'MAJOR_EVENT_ENTRY', 'SELLER_PREP_CHECKLIST', 'SELLER_PREP_ITEM_DECISION', 'INVENTORY_ITEM_CORRECT', 'HOME_EVENT_CORRECT', 'HOME_EVENT_UPDATE', 'HOME_EVENT_VISIBILITY', 'WARRANTY_UPDATE', 'ROOM_RENAME', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'MATERIAL_SPEC_UPDATE', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'OWNERSHIP_COST_COMMAND', 'HOME_HABITS_GENERATE', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN',
   'COVERAGE_GAPS', 'COVERAGE_COMPARISON_STATUS', 'SAVINGS_OPPORTUNITIES', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'DOCUMENT_LOOKUP',
   'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS',
   'REFINANCE_RATE_MONITOR', 'SELL_HOLD_RENT_ANALYSIS',
@@ -846,6 +848,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // IW-FRESH-003 fix: BOUNDARY added, same reason as above.
   HOME_DEADLINE_MONITOR: definition('HOME_DEADLINE_MONITOR', 'MONITOR', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-deadline.monitor', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   CAPITAL_RESERVE_PLAN: definition('CAPITAL_RESERVE_PLAN', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'capital-reserve.plan', ['SUMMARY', 'PROGRESS', 'GROUPED_LIST', 'TABLE', 'TIMELINE', 'EVIDENCE', 'BOUNDARY']),
+  CAPITAL_ITEM_FUNDING_GOAL: definition('CAPITAL_ITEM_FUNDING_GOAL', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'capital-item-funding.goal', ['SUMMARY', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   RESERVE_FUND_COMMAND: definition('RESERVE_FUND_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'reserve-fund.command', ['SUMMARY', 'WORKFLOW_PROGRESS']),
   PROPERTY_TAX_APPEAL_READINESS: definition('PROPERTY_TAX_APPEAL_READINESS', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'property-tax.appeal-readiness', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   RENOVATION_PERMIT_READINESS: definition('RENOVATION_PERMIT_READINESS', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'renovation-permit.readiness', ['SUMMARY', 'GROUPED_LIST', 'PROGRESS', 'EVIDENCE', 'COMPARISON', 'BOUNDARY']),
@@ -1380,11 +1383,14 @@ const roomContentsOtherIntentPattern = /\b(?:add|create|put|move|rename|delete|r
 // A recorded appliance's own details ("the model number of my dishwasher", "when did I buy my fridge", "how old is my water heater"). The inventory
 // answer resolves the item by name and shows its recorded brand, model and purchase date.
 const ITEM_ATTRIBUTE_ITEM = `(?:${REPLACEABLE_NON_HVAC_ITEM.slice(3, -1)}|furnace|hvac|heat pump|air conditioner|thermostat)`;
-const ITEM_ATTRIBUTE_WORD = '(?:model(?:\\s+(?:number|no\\.?|name))?|serial(?:\\s+(?:number|no\\.?))?|brand|make|manufacturer|purchase\\s+date|install(?:ation)?\\s+date)';
+const ITEM_ATTRIBUTE_WORD = '(?:condition|model(?:\\s+(?:number|no\\.?|name))?|serial(?:\\s+(?:number|no\\.?))?|brand|make|manufacturer|purchase\\s+date|install(?:ation)?\\s+date)';
 const itemAttributePattern = new RegExp(`\\b${ITEM_ATTRIBUTE_WORD}\\b.{0,30}\\b(?:of|for|on)\\b.{0,15}\\b${ITEM_ATTRIBUTE_ITEM}\\b|\\b(?:my|our|the)\\s+${ITEM_ATTRIBUTE_ITEM}'?s?\\s+${ITEM_ATTRIBUTE_WORD}\\b|\\bwhen did (?:i|we) (?:buy|purchase|get|install)\\b.{0,25}\\b${ITEM_ATTRIBUTE_ITEM}\\b|\\bwhat\\s+(?:brand|make|model)\\b.{0,20}\\b${ITEM_ATTRIBUTE_ITEM}\\b|\\bhow old is (?:my |our |the |this )?${ITEM_ATTRIBUTE_ITEM}\\b|\\bage of (?:my |our |the |this )?${ITEM_ATTRIBUTE_ITEM}\\b`, 'i');
 // The history of one named appliance or system ("show me the history of my washing machine repairs", "service history for my furnace", "has my dishwasher ever
 // been repaired"): the inventory answer lists that item's recorded events. Ahead of the broad maintenance word, which would send "service history" to the task list.
 const itemHistoryPattern = new RegExp(`\\b(?:history|timeline|log)\\b.{0,15}\\b(?:of|for|on)\\b.{0,15}\\b(?:my|our|the)\\b.{0,25}\\b${ITEM_ATTRIBUTE_ITEM}\\b|\\b(?:repair|service|maintenance)\\s+(?:history|log)\\b.{0,25}\\b(?:my|our|the)\\b.{0,15}\\b${ITEM_ATTRIBUTE_ITEM}\\b|\\bwhat\\s+(?:repairs?|work|service)\\b.{0,30}\\b(?:has|have|did)\\b.{0,30}\\b${ITEM_ATTRIBUTE_ITEM}\\b|\\bwhen\\s+(?:was|did)\\b.{0,25}\\b${ITEM_ATTRIBUTE_ITEM}\\b.{0,20}\\b(?:last )?(?:repaired|serviced|fixed|replaced)\\b|\\b(?:has|have)\\b.{0,15}\\b${ITEM_ATTRIBUTE_ITEM}\\b.{0,25}\\b(?:ever )?(?:been )?(?:repaired|serviced|fixed)\\b`, 'i');
+// What a new or replacement item costs, with no date or saving goal ("how much does a new roof cost"): the repair-or-replace answer carries the planning
+// estimate for the recorded item. With a date or a saving goal the item funding goal takes it first.
+const itemReplacementCostPattern = new RegExp(`\\b(?:new|replacement)\\s+${ITEM_ATTRIBUTE_ITEM}\\b.{0,20}\\b(?:cost|price)\\b|\\b(?:cost|price)\\b.{0,20}\\b(?:new|replacement)\\s+${ITEM_ATTRIBUTE_ITEM}\\b|\\b(?:cost|price) (?:to|of) replac\\w*\\b.{0,20}\\b${ITEM_ATTRIBUTE_ITEM}\\b|\\bhow much\\b.{0,30}\\b(?:to|for) replac\\w*\\b.{0,20}\\b${ITEM_ATTRIBUTE_ITEM}\\b`, 'i');
 const itemAttributeWriteIntentPattern = /\b(?:change|update|edit|correct|fix|set|add|record|enter|rename)\b/i;
 const replacementPattern = /\b(when should i (?:replace|upgrade)|replace (?:my|the)|repair or replace|how (?:old|long).*(?:refrigerator|fridge)|(?:refrigerator|fridge).*(?:replace|replacement|lifespan|life expectancy))\b/i;
 // Ask Intelligence FRD Phase 8A: HVAC-specific repair/replace decision
@@ -1747,6 +1753,11 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (propertyTaxAppealPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('PROPERTY_TAX_APPEAL_READINESS', 0.98);
   }
+  // "If I replace my roof in 5 years, how much do I need and how much more should I save?" names an item and a saving goal. Ahead of the plan read (which
+  // is whole-home) and of the repair-or-replace rule (which would answer a verdict and ignore the date and the saving).
+  if (isItemFundingGoalMessage(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('CAPITAL_ITEM_FUNDING_GOAL', 0.97);
+  }
   if (capitalReservePattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('CAPITAL_RESERVE_PLAN', 0.97);
   }
@@ -1944,6 +1955,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (replacementPattern.test(message)) {
     return resolved('REPLACEMENT_GUIDANCE', 0.96);
+  }
+  if (itemReplacementCostPattern.test(message) && !itemAttributeWriteIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('REPLACEMENT_GUIDANCE', 0.95);
   }
   if (itemAttributePattern.test(message) && !itemAttributeWriteIntentPattern.test(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message)) {
     return resolved('INVENTORY_LOOKUP', 0.96);

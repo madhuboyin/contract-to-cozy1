@@ -323,6 +323,7 @@ export const RESULT_OWNERSHIP_RELATIONSHIPS: Readonly<Record<string, readonly st
   FINANCING_PROFILE_COMMAND: operationSpecificContinuationOutcomeKeys('FINANCING_PROFILE_COMMAND'),
   REFINANCE_ANALYSIS: operationSpecificContinuationOutcomeKeys('REFINANCE_ANALYSIS'),
   CAPITAL_RESERVE_PLAN: operationSpecificContinuationOutcomeKeys('CAPITAL_RESERVE_PLAN'),
+  CAPITAL_ITEM_FUNDING_GOAL: operationSpecificContinuationOutcomeKeys('CAPITAL_ITEM_FUNDING_GOAL'),
   CAPITAL_TIMELINE_COMMAND: operationSpecificContinuationOutcomeKeys('CAPITAL_TIMELINE_COMMAND'),
   PROPERTY_TAX_APPEAL_READINESS: operationSpecificContinuationOutcomeKeys('PROPERTY_TAX_APPEAL_READINESS'),
   PROPERTY_TAX_APPEAL_COMMAND: operationSpecificContinuationOutcomeKeys('PROPERTY_TAX_APPEAL_COMMAND'),
