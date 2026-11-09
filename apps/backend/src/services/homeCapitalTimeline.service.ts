@@ -89,6 +89,12 @@ const CATEGORY_DEFAULTS: Record<HomeCapitalTimelineCategory, CategoryDefault> = 
   OTHER:        { lifespanYears: 15, costMinCents: 100000,  costMaxCents: 500000,  eventType: 'REPLACE' },
 };
 
+/** The planning default for a category (expected life and cost range in today's dollars), for answers that must quote the timeline's own assumption. */
+export function capitalCategoryDefault(category: HomeCapitalTimelineCategory): { lifespanYears: number; costMinCents: number; costMaxCents: number } {
+  const { lifespanYears, costMinCents, costMaxCents } = CATEGORY_DEFAULTS[category];
+  return { lifespanYears, costMinCents, costMaxCents };
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────
 function mapInventoryCategory(cat: InventoryItemCategory): HomeCapitalTimelineCategory {
   switch (cat) {

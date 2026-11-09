@@ -251,3 +251,35 @@ test('"replace everything that is due" and a no-date plan question keep their re
   assert.equal(isItemFundingGoalMessage('What will it cost to replace everything that is due in the next 10 years and what should I save per month for it?'), true);
   assert.equal(isItemFundingGoalMessage('How much should I save for major replacements?'), false);
 });
+
+// ---- the roof is on the home profile, not a tracked item ----
+test('handler: a roof recorded only on the home profile is planned for, from the profile year and the timeline roof default', async () => {
+  stub({ items: [], inventoryCount: 0 });
+  prisma.property.findUnique = async () => ({ homeownerProfileId: 'h1', roofReplacementYear: 2008 });
+  const result = await itemFundingGoalResult('u1', 'p1', 'replace my roof in 5 years how much capital do i need and how much additional capital i need to start saving', NOW);
+  assert.equal(result.reasonCode, 'ITEM_FUNDING_FROM_PROFILE');
+  const summary = result.blocks.find((b) => b.id === 'item-funding-summary');
+  assert.match(summary.title, /Roof/);
+  const evidence = result.blocks.find((b) => b.id === 'item-funding-evidence');
+  assert.ok(evidence.items.some((item) => item.label === 'Home profile'), 'the answer says where the roof came from');
+  // Planned for 2031 against a 2033 end of life: the model expects it later, so nothing says "sooner".
+  assert.doesNotMatch(summary.body, /sooner than you planned/);
+});
+
+test('handler: with no tracked item and no roof on the profile the answer still asks for the item', async () => {
+  stub({ items: [], inventoryCount: 0 });
+  prisma.property.findUnique = async () => ({ homeownerProfileId: 'h1', roofReplacementYear: null });
+  const result = await itemFundingGoalResult('u1', 'p1', 'how much should I save for a new roof in 5 years', NOW);
+  assert.equal(result.reasonCode, 'ITEM_FUNDING_INVENTORY_REQUIRED');
+});
+
+const { profileRoofTimelineItem } = require('../../src/services/ask/support/profileRoof.ts');
+test('profile roof: window is the roof default life after the recorded year; a roof past its life is due now; cost is grown to the window middle', () => {
+  const roofDefault = { lifespanYears: 25, costMinCents: 800_000, costMaxCents: 1_500_000 };
+  const later = profileRoofTimelineItem({ roofReplacementYear: 2015, now: NOW, growthRate: 0.035, roofDefault });
+  assert.equal(later.windowStart.getFullYear(), 2040);
+  assert.ok(later.estimatedCostMinCents > roofDefault.costMinCents, 'grown to 2040');
+  const past = profileRoofTimelineItem({ roofReplacementYear: 1995, now: NOW, growthRate: 0.035, roofDefault });
+  assert.equal(past.windowStart.getFullYear(), 2026);
+  assert.ok(past.windowEnd > past.windowStart);
+});

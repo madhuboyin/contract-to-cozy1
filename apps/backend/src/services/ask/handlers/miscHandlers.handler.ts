@@ -19,6 +19,8 @@ import { queryIntelligenceEnvelope } from '../../intelligenceEnvelope';
 import { ReplaceRepairService } from '../../replaceRepairAnalysis.service';
 import { REPAIR_REPLACE_WHAT_IF_ACTION_ID, REPAIR_REPLACE_WHAT_IF_CAPTURE_KEY, REPAIR_REPLACE_WHAT_IF_MESSAGE, RepairReplaceWhatIfAnswerSchema, whatIfOverrides, whatIfSummary, type RepairReplaceOverrides } from '../support/repairReplaceWhatIf';
 import { humanDate, money } from '../askFormatting';
+import { capitalCategoryDefault } from '../../homeCapitalTimeline.service';
+import { PROFILE_ROOF_MESSAGE_PATTERN, profileRoofSummary } from '../support/profileRoof';
 import { getAskPropertyTimezone } from '../askExecutionContext';
 import { buildMaintenanceImportanceResult } from '../support/maintenanceImportance';
 import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, GuidanceJourneyCommandInputSchema, guidanceJourneyContextVersion, HOME_CHANGE_SUMMARY_WINDOW_DAYS, HOME_DEADLINE_DEFAULT_LEAD_DAYS, HomeDeadlineMonitorInputSchema, homeDeadlineSourceVersion, MaintenanceCompletionWorkflowInput, RadarEnvelopeQuerySuppliedInput } from '../askHandlerSupport';
@@ -180,7 +182,7 @@ export async function homeDeadlineMonitorResult(userId: string, propertyId: stri
 /** A what-if run (FRD v1.466): the homeowner's own numbers, computed without saving. Absent for the ordinary analysis. */
 interface RepairReplaceWhatIf { overrides: RepairReplaceOverrides }
 
-async function replacementGuidanceResult(userId: string, propertyId: string, message: string, focusedInventoryItemId: string | null | undefined, executionId: string, whatIf?: RepairReplaceWhatIf): Promise<AskOperationResult> {
+export async function replacementGuidanceResult(userId: string, propertyId: string, message: string, focusedInventoryItemId: string | null | undefined, executionId: string, whatIf?: RepairReplaceWhatIf): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const allItems = await prisma.inventoryItem.findMany({
     where: { propertyId }, orderBy: [{ isVerified: 'desc' }, { updatedAt: 'desc' }], take: 200,
@@ -197,6 +199,17 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
   const items = focusedInventoryItemId
     ? allItems.filter((item) => item.id === focusedInventoryItemId)
     : aliases.length ? allItems.filter((item) => aliases.some((alias) => containsWholeWord(itemText(item), alias) || containsWholeWord(alias, item.name))) : [];
+  if (!items.length && PROFILE_ROOF_MESSAGE_PATTERN.test(message)) {
+    // The roof lives on the home profile (year and type), not as a tracked item, so a home with no roof item still has a roof on record.
+    const profile = await prisma.property.findUnique({ where: { id: propertyId }, select: { roofReplacementYear: true, roofType: true } });
+    if (profile?.roofReplacementYear) {
+      const summary = profileRoofSummary({ roofReplacementYear: profile.roofReplacementYear, roofType: profile.roofType ? String(profile.roofType) : null, now: new Date(), roofDefault: capitalCategoryDefault('ROOF'), repairNote: true });
+      return {
+        status: 'READY_WITH_LIMITATIONS', reasonCode: 'REPAIR_REPLACE_ROOF_FROM_PROFILE',
+        blocks: [{ type: 'SUMMARY', id: 'repair-replace-roof-profile', ...summary, actions: [] }], suggestions: [],
+      };
+    }
+  }
   if (!items.length) {
     // A system the question names but the home record does not hold ("do I need a new roof"): say so plainly and offer to add it.
     const spokenTerm = aliases.find((term) => containsWholeWord(message, term)) ?? aliases[0];

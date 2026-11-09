@@ -10,7 +10,8 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { evaluateFeatureContext } from '../../../modules/propertyContext/application/evaluateFeatureContext';
 import { getFinancialContextDecisions } from '../../financialContext/context';
 import { homeReserveFundService } from '../../homeReserveFund.service';
-import { HomeCapitalTimelineService } from '../../homeCapitalTimeline.service';
+import { HomeCapitalTimelineService, capitalCategoryDefault } from '../../homeCapitalTimeline.service';
+import { PROFILE_ROOF_MESSAGE_PATTERN, profileRoofTimelineItem } from '../support/profileRoof';
 import { deriveExpenseGrowthRate } from '../../financialAssumption.service';
 import { humanDate, money } from '../askFormatting';
 import { ensurePropertyAccess, isCapitalTimelineAnalysisStale } from '../askHandlerSupport';
@@ -54,11 +55,14 @@ export async function itemFundingGoalResult(userId: string, propertyId: string, 
 
   const [capitalContext, property, inventoryCount, financialContext] = await Promise.all([
     evaluateFeatureContext(propertyId, userId, { featureKey: 'CAPITAL_TIMELINE', operationKey: 'RUN_TIMELINE' }),
-    prisma.property.findUnique({ where: { id: propertyId }, select: { homeownerProfileId: true } }),
+    prisma.property.findUnique({ where: { id: propertyId }, select: { homeownerProfileId: true, roofReplacementYear: true } }),
     prisma.inventoryItem.count({ where: { propertyId } }),
     getFinancialContextDecisions(propertyId, userId, 'CAPITAL_TIMELINE'),
   ]);
-  if (inventoryCount === 0) {
+  const roofNamed = PROFILE_ROOF_MESSAGE_PATTERN.test(message);
+  // The roof is recorded on the home profile, not as a tracked item, so a home with no items can still have one.
+  const profileRoofYear = roofNamed ? property?.roofReplacementYear ?? null : null;
+  if (inventoryCount === 0 && !profileRoofYear) {
     return notice('ITEM_FUNDING_INVENTORY_REQUIRED', 'item-funding-empty', 'Add the item to your home first',
       'A savings goal needs the item’s age and condition. Add the roof, HVAC, water heater or appliance to your home and I’ll work out what to put aside.',
       canManage ? [{ ...inventoryAddItemAction(), label: 'Add an inventory item' }] : []);
@@ -73,7 +77,10 @@ export async function itemFundingGoalResult(userId: string, propertyId: string, 
       createdByUserId: userId, propertyContextVersion: capitalContext.contextVersion, awaitReserveFundSync: true,
     });
   }
-  const timelineItems: any[] = Array.isArray(analysis?.items) ? analysis.items : [];
+  const timelineItems: any[] = Array.isArray(analysis?.items) ? [...analysis.items] : [];
+  if (profileRoofYear && !timelineItems.some((item) => item.category === 'ROOF')) {
+    timelineItems.push(profileRoofTimelineItem({ roofReplacementYear: profileRoofYear, now, growthRate: growthRateOf(analysis), roofDefault: capitalCategoryDefault('ROOF') }));
+  }
   const named = namedFundingTerms(message);
   const everything = wantsAllFundingItems(message);
   const matched = everything
@@ -111,6 +118,7 @@ export async function itemFundingGoalResult(userId: string, propertyId: string, 
       setAsideCents: line ? line.allocatedBalanceCents : 0,
     };
   });
+  const fromProfile = matched.some((item) => item.fromProfile === true);
   const missingCost = fundingItems.some((item) => item.costMinCents === 0 && item.costMaxCents === 0);
   const growthRate = growthRateOf(analysis);
   const plan = buildFundingPlan({
@@ -175,14 +183,15 @@ export async function itemFundingGoalResult(userId: string, propertyId: string, 
     { type: 'TABLE', id: 'item-funding-items', title: plan.items.length > 1 ? 'Items included' : 'The item', description: 'The expected window is the Home Capital Timeline’s estimate from the item’s age and condition.', columns: [{ key: 'item', label: 'Item' }, { key: 'window', label: 'Expected window' }, { key: 'cost', label: 'Cost range' }, { key: 'funded', label: 'Set aside' }], rows: itemRows, actions: [] },
     { type: 'EVIDENCE', id: 'item-funding-evidence', title: 'Sources and freshness', items: [
       { label: 'Home Capital Timeline', source: `${plan.items.length} item${plan.items.length === 1 ? '' : 's'}, ${analysis?.horizonYears ?? 10}-year horizon`, observedAt: analysis?.computedAt?.toISOString?.() ?? null },
+      ...(fromProfile ? [{ label: 'Home profile', source: 'Roof year on your home profile, with the capital timeline’s roof default for life and cost (no tracked roof item)', observedAt: null }] : []),
       { label: 'Reserve Fund', source: `Self-reported balance and ledger, ${posture.toLowerCase()} planning style`, observedAt: fund.lastRecalculatedAt?.toISOString?.() ?? null },
     ] },
     { type: 'BOUNDARY', id: 'item-funding-boundary', title: 'Planning figure—not a quote', body: 'Actual prices depend on materials, labor, permits and when you do the work. The reserve ledger is self-reported and is not connected to a bank.', severity: 'INFO', suggestions: [] },
   ];
 
   return {
-    status: analysis?.confidence === 'LOW' || missingCost ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
-    reasonCode: analysis?.confidence === 'LOW' ? 'ITEM_FUNDING_LOW_CONFIDENCE' : missingCost ? 'ITEM_FUNDING_COST_MISSING' : undefined,
+    status: analysis?.confidence === 'LOW' || missingCost || fromProfile ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: analysis?.confidence === 'LOW' ? 'ITEM_FUNDING_LOW_CONFIDENCE' : missingCost ? 'ITEM_FUNDING_COST_MISSING' : fromProfile ? 'ITEM_FUNDING_FROM_PROFILE' : undefined,
     contextVersion: capitalContext.contextVersion,
     parameters: { itemTimelineIds: plan.items.map((item) => item.id), planningDate: plan.planningDate.toISOString(), planningDateFromHomeowner: plan.planningDateFromHomeowner },
     blocks, suggestions: [],

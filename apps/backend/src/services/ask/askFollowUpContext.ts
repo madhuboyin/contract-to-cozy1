@@ -72,6 +72,40 @@ const ROOM_FILTER_PHRASE = /^(?:in|for|from)\s+(?:the|my)\s+(kitchen|bathroom|be
 export const messageNamesRoom = (message: string): boolean => new RegExp(ROOM_FILTER_PHRASE.source.replace(/^\^/, '\\b').replace(/\$$/, ''), 'i').test(message);
 const ROOM_CONVERSATIONAL_OPERATIONS: ReadonlySet<string> = new Set(['MAINTENANCE_STATUS']);
 
+// A filter sentence joined to the prior question used to leave the prior question's own filter words in place, so a new filter of the same kind lost to the
+// old one ("right now" over "soon", "needs me" over "completed", "overdue" over "due soon", the first room over the second). The rule now, per list:
+//  - WORK_OVERVIEW and HOME_ACTIONS keep their state in the saved view (or have none), so the filter stands alone. HOME_ACTIONS carries over the one scope
+//    its message can hold, the all-properties mode.
+//  - MAINTENANCE_STATUS keeps joining, because a filter of a different kind should still narrow ("due soon" then "only the urgent ones" is both), but
+//    the prior question's words of the SAME kind as the new filter are removed first.
+//  - Every other list keeps the older join; its handler reads scope from the joined sentence and nothing here shows otherwise.
+const FILTER_STANDS_ALONE_OPERATIONS: ReadonlySet<string> = new Set(['WORK_OVERVIEW', 'HOME_ACTIONS']);
+const ALL_PROPERTIES_PHRASE = /\b(?:all (?:my |our )?(?:propert(?:y|ies)|homes)|across (?:all )?(?:my |our )?(?:propert(?:y|ies)|homes)|every propert(?:y|ies))\b/i;
+const ROOM_NAMES = 'kitchen|bathroom|bedroom|master bedroom|garage|basement|attic|living room|dining room|laundry room|office|yard|backyard|hallway|closet|nursery|porch|patio|deck|utility room';
+const MAINTENANCE_TIMING_WORDS = /\b(?:overdue|past due|due soon|coming up|upcoming|what(?:'s| is) due|due)\b/gi;
+const MAINTENANCE_STATE_WORDS = /\b(?:completed|finished|done|cancelled|canceled|archived|dismissed)\b/gi;
+const MAINTENANCE_OPEN_WORDS = /\b(?:open|pending|remaining|in progress)\b/gi;
+const MAINTENANCE_PRIORITY_WORDS = /\b(?:urgent|high priority|highest priority|priority tasks?)\b/gi;
+const MAINTENANCE_ROOM_WORDS = new RegExp(`\\b(?:${ROOM_NAMES})\\b`, 'gi');
+const hasWords = (pattern: RegExp, text: string) => new RegExp(pattern.source, 'i').test(text);
+function maintenanceBaseWithoutSameKind(priorMessage: string, filter: string): string {
+  let base = priorMessage;
+  const strip = (...patterns: RegExp[]) => { for (const pattern of patterns) base = base.replace(pattern, ' '); };
+  if (hasWords(MAINTENANCE_TIMING_WORDS, filter) || hasWords(MAINTENANCE_OPEN_WORDS, filter)) strip(MAINTENANCE_TIMING_WORDS, MAINTENANCE_STATE_WORDS);
+  if (hasWords(MAINTENANCE_STATE_WORDS, filter)) strip(MAINTENANCE_TIMING_WORDS, MAINTENANCE_STATE_WORDS, MAINTENANCE_OPEN_WORDS);
+  if (hasWords(MAINTENANCE_PRIORITY_WORDS, filter)) strip(MAINTENANCE_PRIORITY_WORDS);
+  if (hasWords(MAINTENANCE_ROOM_WORDS, filter)) strip(MAINTENANCE_ROOM_WORDS);
+  return base.replace(/\s{2,}/g, ' ').trim();
+}
+function filterEffectiveMessage(prior: { operationId: string | null; message: string }, filterMessage: string, declaredSource: boolean): string {
+  if (declaredSource) return filterMessage;
+  if (prior.operationId === 'MAINTENANCE_STATUS') return `${maintenanceBaseWithoutSameKind(prior.message, filterMessage)}. ${filterMessage}`;
+  if (!prior.operationId || !FILTER_STANDS_ALONE_OPERATIONS.has(prior.operationId)) return `${prior.message}. ${filterMessage}`;
+  return prior.operationId === 'HOME_ACTIONS' && ALL_PROPERTIES_PHRASE.test(prior.message) && !ALL_PROPERTIES_PHRASE.test(filterMessage)
+    ? `${filterMessage} across all my properties`
+    : filterMessage;
+}
+
 /** The "Only show ..." form of a conversational narrowing, or null when the message is not one for this prior list. */
 export function conversationalFilterAsOnlyShow(message: string, priorOperationId: string): string | null {
   const lead = CONVERSATIONAL_FILTER_LEAD.exec(message);
@@ -436,8 +470,8 @@ export async function resolveAskFollowUpMessage(input: {
   const conversationalFilter = isConversationalFilterLead ? conversationalFilterAsOnlyShow(input.message, prior.operationId) : null;
   if (conversationalFilter && FILTER_CONTINUABLE_OPERATIONS.has(prior.operationId as AskOperationId)) {
     return {
-      // The filter stands alone, like a declared chip: joining the prior question kept its old words alive ("right now", "needs me", "bathroom", "overdue"), so the new filter lost to the old one.
-      effectiveMessage: conversationalFilter,
+      // See filterEffectiveMessage: these lists take the filter on its own, like a declared chip.
+      effectiveMessage: filterEffectiveMessage(prior, conversationalFilter, Boolean(input.declaredSourceExecutionId)),
       forcedOperationId: prior.operationId as AskOperationId,
       sourceExecutionId: prior.id,
       continuationCursor: null,
@@ -459,7 +493,7 @@ export async function resolveAskFollowUpMessage(input: {
       // source) still needs concatenation, since free text like that
       // relies on the prior turn for context the new message doesn't
       // repeat (e.g. an earlier scope/room word).
-      effectiveMessage: input.declaredSourceExecutionId ? input.message : `${prior.message}. ${input.message}`,
+      effectiveMessage: filterEffectiveMessage(prior, input.message, Boolean(input.declaredSourceExecutionId)),
       forcedOperationId: prior.operationId as AskOperationId,
       sourceExecutionId: prior.id,
       continuationCursor: null,

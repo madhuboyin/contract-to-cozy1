@@ -23,7 +23,7 @@ test('a conversational narrowing of a maintenance list continues that list', asy
     assert.equal(result.isFilterRefinement, true, message);
     assert.equal(result.sourceExecutionId, 'prior-1', message);
     assert.ok(containsFilterContinuation(result.effectiveMessage), `${message} -> ${result.effectiveMessage}`);
-    assert.ok(result.effectiveMessage.startsWith('Only show'), result.effectiveMessage);
+    assert.ok(/Only show/.test(result.effectiveMessage) && result.effectiveMessage.startsWith('Show my maintenance tasks'), result.effectiveMessage);
   }
 });
 
@@ -78,7 +78,7 @@ test('with no recent list the message is unchanged, and the existing "Only show"
   mockRow = prior('MAINTENANCE_STATUS', 'Show my maintenance tasks');
   const result = await resolve('Only show the urgent ones');
   assert.equal(result.forcedOperationId, 'MAINTENANCE_STATUS');
-  assert.equal(result.effectiveMessage, 'Show my maintenance tasks. Only show the urgent ones');
+  assert.equal(result.effectiveMessage, 'Show my maintenance tasks. Only show the urgent ones'); // nothing of the same kind to remove, so the join is unchanged
 });
 
 // External review P1: a rewrite that only reads right as a string is not a working feature. The rewritten message must make each list's own
@@ -99,6 +99,7 @@ test('the rewritten message stands alone, so the new filter wins over the first 
   assert.equal(resolveWorkState((await resolve('What about the upcoming ones?')).effectiveMessage, viewState).state.view, 'SCHEDULED');
 
   mockRow = prior('MAINTENANCE_STATUS', 'Show my overdue maintenance tasks');
+  assert.ok(!/overdue/i.test((await resolve('How about the due soon ones?')).effectiveMessage));
   const statuses = { domainScopePhrase: null, dateScopePhrase: null, roomScopePhrase: null, queryMessage: null };
   const dueSoon = mergeMaintenanceViewContinuation(statuses, (await resolve('How about the due soon ones?')).effectiveMessage).effectiveMessage;
   assert.ok(/due soon/i.test(dueSoon) && !/overdue/i.test(dueSoon), dueSoon);
@@ -107,9 +108,44 @@ test('the rewritten message stands alone, so the new filter wins over the first 
 test('a room named in the follow-up replaces the remembered room instead of joining it', async () => {
   mockRow = prior('MAINTENANCE_STATUS', 'Show my bathroom maintenance tasks');
   const rewritten = (await resolve('How about in the kitchen?')).effectiveMessage;
+  assert.ok(/kitchen/i.test(rewritten) && !/bathroom/i.test(rewritten), `the first room is removed from the joined sentence: ${rewritten}`);
   const merged = mergeMaintenanceViewContinuation({ domainScopePhrase: null, dateScopePhrase: null, roomScopePhrase: 'in the bathroom', queryMessage: null }, rewritten).effectiveMessage;
   assert.ok(/kitchen/i.test(merged) && !/bathroom/i.test(merged), merged);
   // A status chip with no room of its own still keeps the remembered room.
   const kept = mergeMaintenanceViewContinuation({ domainScopePhrase: null, dateScopePhrase: null, roomScopePhrase: 'in the bathroom', queryMessage: null }, 'Only show the overdue ones').effectiveMessage;
   assert.ok(/bathroom/i.test(kept), kept);
+});
+
+// The typed "Only show ..." form has the same problem the conversational form had: joined to the prior question, the prior question's filter words won.
+test('a typed "Only show" sentence beats the prior question\'s own filter words', async () => {
+  mockRow = prior('HOME_ACTIONS', 'What needs my attention right now?');
+  assert.deepEqual(homeActionPriorityFilter((await resolve('Only show the due soon ones')).effectiveMessage), ['SOON']);
+
+  mockRow = prior('WORK_OVERVIEW', 'What needs me?');
+  const viewState = { resultId: 'r1', domainScopePhrase: null, dateScopePhrase: '10', statusFilter: 'NEEDS_YOU', selectedTaskId: null, revision: 1 };
+  assert.equal(resolveWorkState((await resolve('Only show completed work')).effectiveMessage, viewState).state.view, 'COMPLETED');
+
+  mockRow = prior('MAINTENANCE_STATUS', 'Show my overdue maintenance tasks');
+  const none = { domainScopePhrase: null, dateScopePhrase: null, roomScopePhrase: null, queryMessage: null };
+  const merged = mergeMaintenanceViewContinuation(none, (await resolve('Only show tasks due soon')).effectiveMessage).effectiveMessage;
+  assert.ok(/due soon/i.test(merged) && !/overdue/i.test(merged), merged);
+  // A filter of a DIFFERENT kind still narrows what was asked: due soon, then only the urgent ones, is both.
+  mockRow = prior('MAINTENANCE_STATUS', 'What maintenance is due soon?');
+  const both = (await resolve('Only show the urgent ones')).effectiveMessage;
+  assert.ok(/due soon/i.test(both) && /urgent/i.test(both), both);
+  // Same kind switches: completed after overdue drops overdue; priority after priority is just the new word.
+  mockRow = prior('MAINTENANCE_STATUS', 'Show my overdue maintenance tasks');
+  const done = (await resolve('Only show the completed ones')).effectiveMessage;
+  assert.ok(/completed/i.test(done) && !/overdue/i.test(done), done);
+});
+
+test('home actions keep the all-properties scope the first question set; other lists keep the older join', async () => {
+  mockRow = prior('HOME_ACTIONS', 'What needs my attention across all my properties?');
+  const result = await resolve('Only show the urgent ones');
+  assert.match(result.effectiveMessage, /urgent/);
+  assert.match(result.effectiveMessage, /across all my properties/);
+  assert.deepEqual(homeActionPriorityFilter(result.effectiveMessage), ['NOW']);
+  // A list that is not in the stand-alone set is untouched.
+  mockRow = prior('INVENTORY_LOOKUP', 'Show my inventory');
+  assert.equal((await resolve('Only show HVAC items')).effectiveMessage, 'Show my inventory. Only show HVAC items');
 });

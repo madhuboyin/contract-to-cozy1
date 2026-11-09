@@ -21,6 +21,8 @@ import { classifiedApplianceType, formatMajorApplianceType, inferMajorApplianceT
 import { InventoryService, ROOM_REQUIRED_CATEGORIES } from '../../inventory.service';
 import { type CorrectionOption } from '../askCorrectionFields';
 import { humanDate } from '../askFormatting';
+import { capitalCategoryDefault } from '../../homeCapitalTimeline.service';
+import { PROFILE_ROOF_MESSAGE_PATTERN, profileRoofSummary } from '../support/profileRoof';
 import { collectionDescriptor } from '../support/collectionDescriptor';
 import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, homeEventEditItemActions, INVENTORY_CATEGORY_VALUES, InventoryCreateInputSchema, InventoryItemCorrectionInputSchema, isValidDateEditInput, MAX_RESULT_ITEMS } from '../askHandlerSupport';
 import { INVENTORY_ADD_MESSAGE, inventoryAddItemAction, inventoryShowAllAction } from './inventoryAskActions';
@@ -238,7 +240,16 @@ export function inventoryFilterChips(status: InventoryStatusFilter, category: In
   ];
 }
 
-async function inventoryLookupResult(
+/** The roof is recorded on the home profile, not as an inventory item: a question about it is answered from the profile rather than "no matching record". */
+async function profileRoofAnswer(propertyId: string, message: string, recordVersion: string): Promise<AskOperationResult | null> {
+  if (!PROFILE_ROOF_MESSAGE_PATTERN.test(message)) return null;
+  const profile = await prisma.property.findUnique({ where: { id: propertyId }, select: { roofReplacementYear: true, roofType: true } });
+  if (!profile?.roofReplacementYear) return null;
+  const summary = profileRoofSummary({ roofReplacementYear: profile.roofReplacementYear, roofType: profile.roofType ? String(profile.roofType) : null, now: new Date(), roofDefault: capitalCategoryDefault('ROOF'), repairNote: false });
+  return { status: 'ANSWERED', reasonCode: 'INVENTORY_ROOF_FROM_PROFILE', contextVersion: recordVersion, blocks: [{ type: 'SUMMARY', id: 'inventory-roof-profile', ...summary, actions: [] }], suggestions: [] };
+}
+
+export async function inventoryLookupResult(
   userId: string,
   propertyId: string,
   message: string,
@@ -249,6 +260,8 @@ async function inventoryLookupResult(
   const allItems = await inventoryService.listItems(propertyId, {});
   const recordVersion = createHash('sha256').update(JSON.stringify(allItems.map((item) => ({ id: item.id, updatedAt: item.updatedAt })))).digest('hex');
   if (!allItems.length) {
+    const roofOnProfile = await profileRoofAnswer(propertyId, message, recordVersion);
+    if (roofOnProfile) return roofOnProfile;
     return {
       status: 'READY_WITH_LIMITATIONS', reasonCode: 'INVENTORY_NOT_RECORDED', contextVersion: recordVersion,
       blocks: [{
@@ -338,6 +351,8 @@ async function inventoryLookupResult(
   }
 
   if (!matches.length) {
+    const roofOnProfile = await profileRoofAnswer(propertyId, message, recordVersion);
+    if (roofOnProfile) return roofOnProfile;
     const focus = incompleteFocus ? 'incomplete inventory records' : lifecycleFocus ? 'items with a recorded end-of-life date in the next three years' : 'a matching inventory record';
     return {
       status: 'ANSWERED', reasonCode: 'INVENTORY_MATCH_NOT_FOUND', contextVersion: recordVersion,
