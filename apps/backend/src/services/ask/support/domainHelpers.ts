@@ -1,4 +1,5 @@
 // Ask handler support: domainHelpers. Moved out of askHandlerSupport.ts unchanged (FRD v1.110); that file re-exports these modules.
+import { parseTargetDate } from './targetDate';
 import { type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import { HouseholdRole } from '@prisma/client';
 import { type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
@@ -39,6 +40,9 @@ export function isCapitalTimelineAnalysisStale(
 export function parseCapitalTimelineHorizonRequest(message: string): 5 | 10 | null {
   if (/\b5[\s-]*year/i.test(message)) return 5;
   if (/\b10[\s-]*year/i.test(message)) return 10;
+  // A named date ("in 3 years", "by 2031") picks the smallest offered view that covers it; beyond 10 years there is no view, so null.
+  const named = parseTargetDate(message);
+  if (named) return named.months <= 60 ? 5 : named.months <= 120 ? 10 : null;
   return null;
 }
 

@@ -51,3 +51,9 @@ test('the horizon re-run actions survive the answer-trust action whitelist', () 
     assert.equal(isAskActionApplicable({ action, operationId: 'CAPITAL_RESERVE_PLAN', propertyId: 'property-1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), true);
   }
 });
+
+test('a named date picks the smallest offered view that covers it; beyond 10 years there is none', () => {
+  assert.equal(parseCapitalTimelineHorizonRequest('What do I need for the roof in 3 years?'), 5);
+  assert.equal(parseCapitalTimelineHorizonRequest('Show my capital plan in 8 years'), 10);
+  assert.equal(parseCapitalTimelineHorizonRequest('Show my capital plan in 15 years'), null);
+});
