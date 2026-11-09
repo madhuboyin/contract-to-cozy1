@@ -58,13 +58,16 @@ require('../../src/services/ask/handlers/miscHandlers.handler.ts');
 const item = (id, name, assetType) => ({ id, name, category: 'APPLIANCE', assetType, brand: 'GE', model: 'X1', condition: 'GOOD', installedOn: null, purchasedOn: null, expectedExpiryDate: null, updatedAt: new Date('2026-01-01T00:00:00Z') });
 async function replacement(message, items) {
   const originalFind = prisma.inventoryItem.findMany;
+  const originalProperty = prisma.property.findUnique;
   const originalAccess = propertyAccessService.resolvePropertyAccess;
   propertyAccessService.resolvePropertyAccess = async () => ({ propertyId: 'p1', userId: 'u1', role: 'OWNER', isOwner: true });
   prisma.inventoryItem.findMany = async () => items;
+  prisma.property.findUnique = async () => ({ roofReplacementYear: null, roofType: null });
   try {
     return await capabilityInvoke('REPLACEMENT_GUIDANCE', { userId: 'u1', propertyId: 'p1', sessionId: 's1', executionId: 'e1', message });
   } finally {
     prisma.inventoryItem.findMany = originalFind;
+    prisma.property.findUnique = originalProperty;
     propertyAccessService.resolvePropertyAccess = originalAccess;
   }
 }
