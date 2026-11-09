@@ -213,7 +213,7 @@ function ChangeSummaryCard({ block }: { block: ChangeSummary }) {
           </dl>
           {(block.reviewAction || block.linkedAction) && <div className="mt-3 flex flex-wrap items-center gap-3">
             {block.reviewAction && <ActionLink action={block.reviewAction} />}
-            {block.linkedAction && <AskContextLink href={block.linkedAction.href} className="inline-flex min-h-10 items-center gap-1 text-xs font-medium text-slate-600 hover:text-teal-800">View full record<ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" /><span className="sr-only">: {block.linkedAction.label}</span></AskContextLink>}
+            {block.linkedAction?.href && <AskContextLink href={block.linkedAction.href} className="inline-flex min-h-10 items-center gap-1 text-xs font-medium text-slate-600 hover:text-teal-800">View full record<ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" /><span className="sr-only">: {block.linkedAction.label}</span></AskContextLink>}
           </div>}
         </div>
       )}

@@ -10,7 +10,7 @@ export const EvidenceBlock: AskBlockRenderer<'EVIDENCE'> = ({ block, onOpenConte
   onOpenContext ? null : <InlineEvidenceBlock block={block} />;
 
 export const OutputArtifactsBlock: AskBlockRenderer<'OUTPUT_ARTIFACTS'> = ({ block, onOpenContext }) =>
-  onOpenContext ? null : <InlineOutputArtifactsBlock block={block} renderNavigation={(navigation) => navigation ? <AskContextLink href={navigation.href} className="text-sm font-semibold text-teal-700 hover:underline">{navigation.label}</AskContextLink> : null} />;
+  onOpenContext ? null : <InlineOutputArtifactsBlock block={block} renderNavigation={(navigation) => navigation?.href ? <AskContextLink href={navigation.href} className="text-sm font-semibold text-teal-700 hover:underline">{navigation.label}</AskContextLink> : null} />;
 
 export const RelatedRecordsBlock: AskBlockRenderer<'RELATED_RECORDS'> = ({ block, onOpenContext }) =>
-  onOpenContext ? null : <InlineRelatedRecordsBlock block={block} renderNavigation={(navigation) => navigation ? <AskContextLink href={navigation.href} className="text-sm font-semibold text-teal-700 hover:underline">{navigation.label}</AskContextLink> : null} />;
+  onOpenContext ? null : <InlineRelatedRecordsBlock block={block} renderNavigation={(navigation) => navigation?.href ? <AskContextLink href={navigation.href} className="text-sm font-semibold text-teal-700 hover:underline">{navigation.label}</AskContextLink> : null} />;

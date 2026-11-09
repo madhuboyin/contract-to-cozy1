@@ -31,6 +31,8 @@ function inlineAskTarget(href: string): string | null {
 export function AskContextLink({ href, onClick, ...props }: Omit<ComponentProps<typeof Link>, 'href'> & { href: string }) {
   const askReturnHref = useContext(AskActionReturnContext);
   const controls = useContext(ResultViewContext);
+  // A link without a destination (an older saved answer, or a link the server removed) shows its text instead of crashing the page.
+  if (typeof href !== 'string' || !href) return <span className={props.className}>{props.children}</span>;
   let destination = href;
   if (controls && href.startsWith('/dashboard/maintenance?')) {
     const url = new URL(href, 'https://contracttocozy.local');
