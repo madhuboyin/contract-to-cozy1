@@ -42,6 +42,9 @@ function standalone(clause: string, subject: string | null): string {
   if (!subject) return clause;
   const noun = subject.replace(/^(?:my|our)\s+/, '');
   // "a new one" -> "a new roof"; "is it" -> "is my roof".
+  // "how much would a replacement cost if it is not" -> "how much would a replacement water heater cost".
+  const trimmed = clause.replace(/\s+if (?:it|that|they) (?:is|are) not$/i, '');
+  if (/^how much would (?:a|the) replacement cost$/i.test(trimmed)) return `how much would a replacement ${noun} cost`;
   return /\b(?:new|replacement|another)\s+one\b/i.test(clause)
     ? clause.replace(/\b(new|replacement|another)\s+one\b/i, `$1 ${noun}`)
     : clause.replace(/\b(?:it|that|this|them|those items|these items)\b(?!\s+(?:cost|do|mean))/i, subject);
@@ -52,6 +55,12 @@ function standalone(clause: string, subject: string | null): string {
 const CLAUSE_SHAPES: ReadonlyArray<{ operationId: AskOperationId; pattern: RegExp }> = [
   { operationId: 'DO_NOTHING_SIMULATION', pattern: /^what (?:happens|would happen) if i (?:skip|ignore|put off|delay|neglect) (?:them|those|these|all of them)\b/i },
   { operationId: 'CAPITAL_ITEM_FUNDING_GOAL', pattern: /^what should i (?:save|set aside|put aside)(?: each| every| per| a)? month\b.*\bmy [a-z][a-z -]+/i },
+  // Whole-home money follow-ups: "how much more per month would close the gap", "what would replacing them all cost", "how does that compare to my reserve contributions".
+  { operationId: 'CAPITAL_RESERVE_PLAN', pattern: /^how much more\b.*\b(?:per month|a month|each month|setting aside|set aside|save|saving|close the gap)\b|^what (?:would|will) (?:replacing|it cost to replace) (?:them all|all of them|everything)\b|^how does (?:that|it) compare to my (?:reserve|savings)\b/i },
+  // "which of those items are old enough to fail": the items are the ones the first part listed.
+  { operationId: 'APPLIANCE_FAILURE_RISK', pattern: /^which of (?:those|these|them)(?: items| appliances| systems)?\b.*\b(?:fail|failing|break|old enough|likely to)\b/i },
+  // "how much would a replacement cost if it is not": rewritten with the first part's item by `standalone`.
+  { operationId: 'REPLACEMENT_GUIDANCE', pattern: /^how much would (?:a|the) replacement (?:[a-z -]+ )?cost\b/i },
   { operationId: 'OWNERSHIP_COSTS', pattern: /^(?:is|are) (?:that|this|it) more than i (?:spent|paid)\b|^what would (?:that|it) do to my (?:monthly )?(?:budget|costs?)\b/i },
 ];
 

@@ -68,3 +68,29 @@ test('follow-up shapes work only inside a two-part question; standalone routing 
   assert.equal(isAlsoAnswerAction(action), true);
   assert.equal(isAlsoAnswerAction({ ...action, operationId: 'OWNERSHIP_COSTS' }), false, 'a shape only vouches for the operation it names');
 });
+
+test('whole-home money, failure-risk and replacement-cost follow-up shapes (second batch)', () => {
+  const cases = [
+    ['Is my reserve fund enough for the big replacements coming over the next 5 years, and how much more per month would close the gap?', 'CAPITAL_ITEM_FUNDING_GOAL', 'CAPITAL_RESERVE_PLAN'],
+    ['How much am I spending on the house each month and how much more should I be setting aside for big repairs?', 'OWNERSHIP_COSTS', 'CAPITAL_RESERVE_PLAN'],
+    ['What does it cost me per year to keep the house maintained, and how does that compare to my reserve contributions?', 'MAINTENANCE_BUDGET_FORECAST', 'CAPITAL_RESERVE_PLAN'],
+    ['Which warranties expire this year and which of those items are old enough to fail?', 'WARRANTY_LOOKUP', 'APPLIANCE_FAILURE_RISK'],
+  ];
+  for (const [message, answered, expected] of cases) {
+    const offer = findAlsoAnswerOffer(message, answered);
+    assert.equal(offer && offer.operationId, expected, message);
+    assert.equal(isAlsoAnswerAction(alsoAnswerAction(offer)), true, message);
+  }
+  // "a replacement" borrows the first part's item and drops the trailing "if it is not".
+  const water = findAlsoAnswerOffer('Is my water heater covered by warranty, and how much would a replacement cost if it is not?', 'WARRANTY_LOOKUP');
+  assert.equal(water.operationId, 'REPLACEMENT_GUIDANCE');
+  assert.equal(water.clause, 'How much would a replacement water heater cost?');
+  // Never on the answered operation itself, and never on a single question.
+  assert.equal(findAlsoAnswerOffer('Which warranties expire this year and which of those items are old enough to fail?', 'APPLIANCE_FAILURE_RISK').operationId, 'WARRANTY_LOOKUP', 'the dropped part is the other one');
+  assert.equal(findAlsoAnswerOffer('How much more per month would close the gap?', 'CAPITAL_RESERVE_PLAN'), null);
+  // The shapes live only inside a two-part question: standalone routing does not claim them.
+  const { resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');
+  for (const alone of ['how much more per month would close the gap', 'which of those items are old enough to fail', 'how does that compare to my reserve contributions']) {
+    assert.equal(resolveAskOperation(alone).operationId, 'GROUNDED_GUIDANCE', alone);
+  }
+});
