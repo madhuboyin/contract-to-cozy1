@@ -65,7 +65,7 @@ When a homeowner types a free-form question in the composer (`AskWorkspace.tsx:3
 
 ## 2. Ranked Root-Cause Analysis
 
-Root causes below are ordered by the number of affected prompts in the 690-prompt sweep (`askRoutingCorpus.js`), followed by post-routing handler and validation gates. **Counts and command outputs in this section are as measured at audit time (2026-11-07); where a later phase changed one, the line says so and gives the current value.**
+Root causes 1-3 are ranked by the number of affected prompts in the 690-prompt sweep (`askRoutingCorpus.js`). Root Cause 4 is **not** on that scale: it is an unquantified exposure (operations without a contract), listed after the ranked causes because the offline sweep runs no handlers and so cannot count refusals. **Counts and command outputs in this section are as measured at audit time (2026-11-07); where a later phase changed one, the line says so and gives the current value.**
 
 ### Root Cause 1 (Rank 1 — 203 / 690 prompts, 29.4%): Local Router Fallthrough to `REMOTE_FALLBACK` **[Executed]**
 
@@ -129,7 +129,9 @@ In the 690-prompt sweep, **49 prompts** stop at Stage `CLARIFICATION` (`"What wo
 
 ---
 
-### Root Cause 4 (Rank 4 — 62 / 85 non-fallback routable `READ` operations uncovered at audit time; 50 / 85 after Phase 3): Post-Execution Semantic Answer Relevance Refusals **[Executed count + Code-traced behavior]**
+### Root Cause 4 (unranked, unquantified risk — 62 / 85 non-fallback routable `READ` operations had no canonical contract at audit time; 50 after Phase 3; 50 / 86 at commit `c6c2f16d`): Post-Execution Semantic Answer Relevance Refusals **[Executed count of operations; refusal frequency NOT measured]**
+
+> An uncovered operation is exposure, not an observed failure. The number of prompts actually refused is unknown and cannot be compared with the 203 fallbacks, 67 misroutes or 49 clarifications above.
 
 After an operation handler builds an answer, `createAskExecution.ts:563-595` runs `validateAskAnswerTrustPipeline` (`askAnswerTrustValidator.ts:364-450`), which calls `validateAskSemanticAnswerRelevance` (`askSemanticAnswerValidator.ts:48-322`) unless `skipSemanticAnswerRelevance` is set (which applies to declared item actions / `launchContext.operationId` or `routedDeterministically && isAskHonestLimitationResult(result)`, Revision 1.526) **[Code-traced]**.
 
@@ -239,7 +241,7 @@ A review of the governing architecture documents establishes five constraints th
 
 ## 4. Evidence-Backed Enhancement Plan & Phased Roadmap
 
-Every phase below is ordered by measured impact and risk, preserves standing architectural boundaries, and is gated by `node apps/backend/scripts/ask-routing-sweep.js --check` (`npm run test:ask:routing`) and `npm run report:ask-routing-coverage`.
+Every phase below is ordered by measured impact and risk, preserves standing architectural boundaries, and requires `node apps/backend/scripts/ask-routing-sweep.js --check` (`npm run test:ask:routing`). `npm run report:ask-routing-coverage` is required only for phases that change the local classifier, synonym groups or calibration evidence (Phase 2); Phases 1, 3 and 4 record the checks they actually ran (sweep, contract tests, related-test batch, typecheck) and did not run the coverage report.
 
 ### Phase 1: Deterministic Handler Fixes & Starter Parity (No LLM or Scope Change, Gated by the Ratchet)
 
@@ -382,13 +384,13 @@ Target the top failure classes measured in `node apps/backend/scripts/ask-routin
 
 **Correction (Revision 9, external review):** the original claim that every one of the 12 already emitted distinct ids was wrong for six of them. `hoa-` also matched the HOA command handler's ids, `diy-` matched five other DIY handlers' ids, `warranty-`, `do-nothing-` and `sell-hold-rent-` matched command and capture handlers' ids, and `PROJECT_TRACKER_PROJECTS` missed the single-project view's ids. A command's review card could therefore have skipped the relevance check. Those entries are now exact ids or narrower prefixes (an entry ending in `$` in `canonicalAnswerBlocks.ts` is an exact id), and a new test scans every handler's literal block ids and fails if any entry matches a block emitted outside the operation's own read handler **[Executed]**. `tax-appeal-` ids were left out of `PROPERTY_TAX_APPEAL_READINESS` because they belong to the appeal-case list, not the readiness answer.
 
-**Deliberately not done (departure from the plan above):** the plan named `MAINTENANCE_BUDGET_FORECAST`, `MAINTENANCE_FORECAST`, `DOCUMENT_LOOKUP` and `INSPECTION_FINDINGS`. They were left under the relevance check. The routing sweep **[Executed]** shows 10 prompts misrouted into them (`4`, `2`, `2` and `2` respectively), and the relevance check is what catches such a misroute and turns it into a clarification. A canonical-block match skips that check, so adding the four would show a wrong answer to those prompts. The same trade-off applies in smaller form to the 12 that were added (the sweep shows no misroutes into them, but it does not model buyer gating or live data). Adding the four is an owner decision.
+**Deliberately not done (departure from the plan above):** the plan named `MAINTENANCE_BUDGET_FORECAST`, `MAINTENANCE_FORECAST`, `DOCUMENT_LOOKUP` and `INSPECTION_FINDINGS`. They were left under the relevance check. The routing sweep **[Executed]** shows 10 prompts misrouted into them (`4`, `2`, `2` and `2` respectively), and the relevance check is what catches such a misroute and turns it into a clarification. A canonical-block match skips that check, so adding the four would show a wrong answer to those prompts. **Known false-accept exposure for the 12 added (review finding, accepted, not measured):** `validateAskSemanticAnswerRelevance` returns PASS on a canonical-block match before any question/answer or competitor scoring, so for these 12 a *misrouted* question that reaches the right handler's normal output is shown, not turned into a clarification. The tests prove block ownership and cross-handler rejection of *blocks*; they do not inject wrong *questions* into each operation, so the false-accept rate is unmeasured and no corpus size makes it zero. This reduces defense in depth and is an owner decision; limiting the bypass to declared, deterministic or user-confirmed routes (as `skipSemanticAnswerRelevance` already does for declared actions) is the alternative, and an adversarial wrong-question test per operation is the missing evidence. Related: the same trade-off applies in smaller form to the 12 that were added (the sweep shows no misroutes into them, but it does not model buyer gating or live data). Adding the four is an owner decision.
 
 **Tests:** `canonicalAnswerContracts.test.js` gained two tests **[Executed]**:
 - For each of the 12: the prefix's example id really appears in the handler source (a typo or renamed block id fails), the operation accepts its own block, and it rejects the fallback block, a footer-only result, and each of the other 11 operations' blocks.
 - The four deferred operations have no entry.
 
-**Verification run:** `canonicalAnswerContracts.test.js` 9 of 9 pass. The 101 test files that touch the answer validator or trust pipeline ran through `scripts/run-tests-chunked.js`: **971 of 976 pass**. The 5 failures (`claimsCalmAnswer.test.js` 1, `quoteReviewStrip.test.js` 4) fail identically on a clean checkout, so they are not from this work. `tsc --noEmit` is clean.
+**Verification run (commit `b300a3ff`, Phase 3 only; later revisions changed the counts):** `canonicalAnswerContracts.test.js` 9 of 9 pass. The 101 test files that touch the answer validator or trust pipeline ran through `scripts/run-tests-chunked.js`: **971 of 976 pass**. The 5 failures (`claimsCalmAnswer.test.js` 1, `quoteReviewStrip.test.js` 4) fail identically on a clean checkout, so they are not from this work. `tsc --noEmit` is clean.
 
 **Not measured:** how many valid answers were being refused on live data before, and how many this removes. The offline sweep runs no DB-backed handlers, so Root Cause 4's consequence stays code-traced and the benefit of Phase 3 is not quantified.
 
@@ -438,7 +440,7 @@ An external review found five gaps in the Phase 1–4 implementation and documen
 
 | # | Finding | Fix | Evidence |
 | :--- | :--- | :--- | :--- |
-| 1 (P1) | Phase 4 conversational filters did not filter in `HOME_ACTIONS`, `WORK_OVERVIEW` or multi-turn `MAINTENANCE_STATUS` | Per-list rule for conversational and typed `Only show` filters: stand alone, or drop the prior words of the same kind; per-list word tables; a named room replaces the remembered room (see Phase 4 Results) | `conversationalFilterFollowUps.test.js` 9 / 9, runs the rewrite through each handler's parser |
+| 1 (P1) | Phase 4 conversational filters did not filter in `HOME_ACTIONS`, `WORK_OVERVIEW` or multi-turn `MAINTENANCE_STATUS` | Per-list rule for conversational and typed `Only show` filters: stand alone, or drop the prior words of the same kind; per-list word tables; a named room replaces the remembered room (see Phase 4 Results) | `conversationalFilterFollowUps.test.js` 11 / 11, runs the rewrite through each handler's parser |
 | 2 (P2) | `replacementGuidanceResult` missed `ac` / `a/c unit` and underscore asset types | HVAC branch takes `a/?c( unit)?`; `itemText` turns `_` into a space | 2 new tests in `itemHealthWording.test.js`; both fail without the fix |
 | 3 (P2) | Phase 3 prefixes shared with command handlers; `PROJECT_TRACKER_PROJECTS` detail view missed | Narrowed to exact ids / specific prefixes; detail ids added (see Phase 3 Results) | New scan test over every handler's block ids; fails with the old `hoa-` prefix restored |
 | 4 (P2) | `claimOutcomeQuestionPattern` only guarded did / has / was ... questions | Now also what / which / how / why / who / where / do / does / had; "can / could / would you ..." deliberately left out because it is a polite command ("can you submit my claim"); `under review` added to the claim-status read | `hijackerGuards.test.js` |
@@ -447,6 +449,10 @@ An external review found five gaps in the Phase 1–4 implementation and documen
 Verification: `ask-routing-sweep.js --check` clean, sweep unchanged at 409 hits / 186 fallbacks / 48 misroutes; `tsc --noEmit` clean.
 
 ---
+
+### Current-HEAD addendum (commit `c6c2f16d`, 2026-11-09) **[Executed]**
+
+Re-running the Phase 3 counting command at this commit gives `{ routableReadWithFallback: 86, nonFallbackRead: 86, covered: 36, uncovered: 50 }`, not 85 / 35 / 50: `CAPITAL_ITEM_FUNDING_GOAL` became routable and has an `item-funding-` contract (`canonicalAnswerBlocks.ts:23`) that the Phase 3 inventory above predates. Figures elsewhere in this document are pinned to the commit named beside them.
 
 ## 5. Summary of Roadmap, Metrics & Rollback Controls
 
