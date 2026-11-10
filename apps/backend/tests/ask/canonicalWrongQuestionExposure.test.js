@@ -5,7 +5,7 @@ require('ts-node/register');
 
 const { validateAskSemanticAnswerRelevance } = require('../../src/services/ask/askSemanticAnswerValidator.ts');
 const { attachAskAuthoritativeSourceEvidence: attachEvidence, completedAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
-const { CANONICAL_ANSWER_BLOCK_ID_PREFIXES } = require('../../src/services/ask/support/canonicalAnswerBlocks.ts');
+const { CANONICAL_ANSWER_BLOCK_ID_PREFIXES, AUDITED_DETERMINISTIC_CANONICAL_BYPASS, canonicalBypassAllowed } = require('../../src/services/ask/support/canonicalAnswerBlocks.ts');
 
 // Audit review finding P1: a canonical-block match returns PASS before any question scoring. These tests inject questions that belong to a DIFFERENT
 // operation into each of the 12 Phase 3 operations (selected operation = the one the router "chose", block = that operation's own answer block) and
@@ -30,18 +30,29 @@ const answerFor = (operationId, blockId) => attachEvidence({
 
 const ownBlockId = (operationId) => CANONICAL_ANSWER_BLOCK_ID_PREFIXES[operationId][0].replace(/\$$/, '');
 
-test('each Phase 3 operation: an unrelated question with the operation’s own block is accepted (documented false-accept exposure)', () => {
-  const accepted = [];
+test('each Phase 3 operation: an unrelated question with the operation’s own block is NOT accepted on the canonical contract unless intent is confirmed', () => {
   for (const operationId of PHASE3_OPERATIONS) {
     for (const question of WRONG_QUESTIONS) {
-      const v = validateAskSemanticAnswerRelevance({ question, operationId, result: answerFor(operationId, ownBlockId(operationId)) });
-      assert.equal(v.outcome, 'PASS', `${operationId} / ${question}`);
-      assert.deepEqual(v.reasonCodes, ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH']);
-      accepted.push(`${operationId}`);
+      const block = ownBlockId(operationId);
+      // Classifier/model-routed or unmarked: relevance check stays on, wrong question is not passed by the bypass.
+      for (const route of [{}, { routedDeterministically: false }, { routedDeterministically: true }]) {
+        const v = validateAskSemanticAnswerRelevance({ question, operationId, result: answerFor(operationId, block), ...route });
+        assert.ok(!v.reasonCodes.includes('CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'), `${operationId} / ${question} / ${JSON.stringify(route)}`);
+        assert.equal(v.outcome, 'FAIL', `${operationId} / ${question}`);
+      }
+      // Homeowner-confirmed operation keeps the bypass.
+      const confirmed = validateAskSemanticAnswerRelevance({ question, operationId, result: answerFor(operationId, block), operationConfirmedByUser: true });
+      assert.deepEqual(confirmed.reasonCodes, ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'], operationId);
     }
   }
-  // 12 operations x 3 unrelated questions = 36 of 36 accepted: the bypass has no question check.
-  assert.equal(accepted.length, PHASE3_OPERATIONS.length * WRONG_QUESTIONS.length);
+});
+
+test('a deterministic route bypasses only for an operation on the audited list (empty today)', () => {
+  assert.equal(AUDITED_DETERMINISTIC_CANONICAL_BYPASS.size, 0);
+  assert.equal(canonicalBypassAllowed('WARRANTY_LOOKUP', { routedDeterministically: true }), false);
+  assert.equal(canonicalBypassAllowed('WARRANTY_LOOKUP', { operationConfirmedByUser: true }), true);
+  assert.equal(canonicalBypassAllowed('PLANT_CARE_OUTLOOK', {}), true, 'operations outside the restricted set keep their earlier bypass');
+  assert.equal(canonicalBypassAllowed('DOCUMENT_LOOKUP', {}), true, 'no entry, so the bypass is moot: matchesCanonicalAnswerBlocks is false');
 });
 
 test('each Phase 3 operation: another operation’s block under it never passes on the canonical contract', () => {

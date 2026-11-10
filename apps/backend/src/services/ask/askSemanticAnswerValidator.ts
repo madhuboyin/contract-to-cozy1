@@ -1,4 +1,4 @@
-import { matchesCanonicalAnswerBlocks } from './support/canonicalAnswerBlocks';
+import { canonicalBypassAllowed, matchesCanonicalAnswerBlocks } from './support/canonicalAnswerBlocks';
 import { isAskHonestNoAnswerResult } from './askRemoteFallbackTypedClaims';
 import { getAskOperationDefinition, type AskOperationId, type AskOperationResult } from './askOperationRegistry';
 import { askSemanticTextSimilarity, retrieveAskOperationCandidates } from './askSemanticRouter';
@@ -51,6 +51,7 @@ export function validateAskSemanticAnswerRelevance(input: {
   result: AskOperationResult;
   language?: AskLanguageCode;
   operationConfirmedByUser?: boolean;
+  routedDeterministically?: boolean;
 }): AskSemanticAnswerRelevanceResult {
   const startedAt = process.hrtime.bigint();
   const language = input.language ?? ASK_DEFAULT_LANGUAGE;
@@ -239,7 +240,7 @@ export function validateAskSemanticAnswerRelevance(input: {
       reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
     });
   }
-  if (matchesCanonicalAnswerBlocks(input.operationId, input.result)) {
+  if (matchesCanonicalAnswerBlocks(input.operationId, input.result) && canonicalBypassAllowed(input.operationId, input)) {
     return finish({
       outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
       selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
