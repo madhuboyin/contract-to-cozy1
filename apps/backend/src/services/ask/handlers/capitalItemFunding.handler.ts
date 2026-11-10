@@ -18,6 +18,7 @@ import { ensurePropertyAccess, isCapitalTimelineAnalysisStale } from '../askHand
 import { inventoryAddItemAction } from './inventoryAskActions';
 import { namedFundingTerms, selectFundingItems, wantsAllFundingItems } from '../support/itemFundingWording';
 import { parseTargetDate } from '../support/targetDate';
+import { parseMonthlyBudget } from '../support/moneyAmount';
 import {
   DEFAULT_CAPITAL_COST_GROWTH_RATE, DEPOSIT_RATE_WINDOW_MONTHS, buildFundingPlan, depositsPerMonth, pointEstimate,
   type FundingPosture, type FundingTimelineItem,
@@ -143,6 +144,14 @@ export async function itemFundingGoalResult(userId: string, propertyId: string, 
       ? `Save about ${dollars(plan.additionalPerMonthCents!)} more a month.`
       : 'You are already saving enough to get there.');
   }
+  // A monthly amount the homeowner says they can save: how long it takes at that rate, against the months to go.
+  const stated = !plan.nearTerm && plan.stillToFundCents > 0 ? parseMonthlyBudget(message) : null;
+  const statedMonths = stated ? Math.ceil(plan.stillToFundCents / (stated.dollars * 100)) : null;
+  if (stated && statedMonths != null) {
+    sentences.push(statedMonths <= plan.months
+      ? `At the ${stated.label} you mentioned, you would have it in about ${statedMonths} month${statedMonths === 1 ? '' : 's'}, within the ${plan.months} you have.`
+      : `At the ${stated.label} you mentioned, it would take about ${statedMonths} months, which is ${statedMonths - plan.months} more than the ${plan.months} you have.`);
+  }
   const sooner = plan.items.filter((item) => item.modelExpectsSooner);
   if (sooner.length) sentences.push(`Your home record expects ${list(sooner.map((item) => item.name))} to need replacing as early as ${humanDate(sooner.reduce((a, b) => (a.windowStart < b.windowStart ? a : b)).windowStart)}, sooner than you planned.`);
   if (missingCost) sentences.push('One item has no cost estimate yet, so its share is counted as $0.');
@@ -157,6 +166,7 @@ export async function itemFundingGoalResult(userId: string, propertyId: string, 
       { id: 'needed', values: { measure: 'Needed per month', amount: dollars(plan.neededPerMonthCents!), how: 'Still to fund divided by months to go' } },
       { id: 'current', values: { measure: 'Putting toward it now', amount: dollars(plan.currentPerMonthCents), how: `Average logged reserve deposit over ${DEPOSIT_RATE_WINDOW_MONTHS} months, by this item’s share of the reserve targets` } },
       { id: 'additional', values: { measure: 'Additional per month', amount: dollars(plan.additionalPerMonthCents!), how: 'Needed minus putting toward it now' } },
+      ...(stated && statedMonths != null ? [{ id: 'stated', values: { measure: `Months to fund at ${stated.label}`, amount: String(statedMonths), how: 'Still to fund divided by the monthly amount you gave' } }] : []),
     ]),
   ];
   const itemRows = plan.items.map((item) => ({

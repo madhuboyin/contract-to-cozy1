@@ -4,6 +4,7 @@
 // value. Ask does the same with an explicit hypothetical framing ("what if appreciation is 5%"), computes the projection with those values for this answer only
 // (nothing is saved: the page's route saves each override set as a reusable assumption set, Ask does not) and shows it beside the standard projection.
 import type { BreakEvenInput } from '../../breakEven.service';
+import { moneyFromParts } from './moneyAmount';
 
 export type BreakEvenWhatIf = Pick<BreakEvenInput,
   'appreciationRate' | 'expenseGrowthRate' | 'inflationRate' | 'propertyTaxGrowthRate' | 'insuranceGrowthRate' | 'maintenanceGrowthRate' | 'sellingCostPercent' | 'homeValueNow'>;
@@ -47,10 +48,8 @@ export function parseBreakEvenWhatIf(message: string): BreakEvenWhatIf | null {
   set('expenseGrowthRate', String.raw`(?:ownership )?(?:cost|expense)s?(?: growth| growing| rising| increas\w*| inflation)?|costs? (?:grow\w*|rise\w*|increas\w*)`);
   const worth = message.match(/\b(?:home|house|property)(?: is| was)?(?: now)?(?: worth| valued(?: at)?| value(?: of)?)\s*\$?\s*([\d,]+(?:\.\d+)?)\s*(k|m|million|thousand)?\b/i);
   if (worth) {
-    const base = Number(worth[1].replace(/,/g, ''));
-    const unit = (worth[2] ?? '').toLowerCase();
-    const value = unit === 'k' || unit === 'thousand' ? base * 1_000 : unit === 'm' || unit === 'million' ? base * 1_000_000 : base;
-    if (Number.isFinite(value) && value >= 10_000 && value <= 100_000_000) found.homeValueNow = value;
+    const value = moneyFromParts(worth[1], worth[2]);
+    if (value != null && value >= 10_000 && value <= 100_000_000) found.homeValueNow = value;
   }
   return Object.keys(found).length ? found : null;
 }
