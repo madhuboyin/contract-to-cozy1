@@ -1,6 +1,6 @@
 # Ask Cozy — Conversational Concierge: Bounded Read Composition FRD
 
-**Status:** Draft v0.2 for owner review (revised after review of v0.1)
+**Status:** Draft v0.3 for owner review (D7 settled by a registry scan)
 **Date:** 2026-11-09
 **Owner decisions needed:** §15
 **Related:**
@@ -13,6 +13,7 @@
 
 **Revision history**
 - v0.1: first draft.
+- v0.3: registry scan done and D7 settled (§4.3); corrected the v0.2 claim that `CAPITAL_ITEM_FUNDING_GOAL` is `STANDARD` (it is `MATERIAL_DECISION`), so the roof prompt needs a new `STANDARD` atomic cost read (R-ATM-3, D2); added the corpus-reach finding (C14) and a per-operation purity test as the admission gate (FR-ELG-6).
 - v0.2: composition limited to an explicit registry of standard-materiality reads (§4.1); validated blocks are immutable and basis handling moves to a separate projection (§6.3, §6.8); full-message safety before decomposition (FR-DEC-0); parent/child idempotency, persistence, replay and reconciliation (§5.2); dependency-based clarification (§6.2); typed `coverage` field instead of a new status (D5 decided); two-component first version (D6 decided); evidence counts corrected; zero-wrong-execution floor kept; assembly-failure fallback is one envelope, not separate answers; provenance and freshness derivation rules (§6.9); runtime verification matrix (§12.4).
 
 ---
@@ -69,6 +70,8 @@ Ask Cozy does not become an unrestricted general-purpose chatbot, and a model ne
 | C10 | Sessions, bounded follow-up rewriting, continuation contracts and capture context exist. General cross-operation carry-over of item/date/amount does not. | [Code-traced] |
 | C11 | Shared slot readers exist: dates (`support/targetDate.ts`), item names (`inventoryItemAliases`, `itemFundingWording`), dollar amounts (`support/moneyAmount.ts`). | [Code-traced] |
 | C12 | Operation definitions carry `safetyClass` (`STANDARD`, `MATERIAL_DECISION`, and three boundary classes) and a `family`. Family alone is not a safety classification: many `DECISION_ANALYSIS` operations are `MATERIAL_DECISION`. | [Code-traced] |
+| C14 | **Registry scan** (227 operations, over `ASK_OPERATION_DEFINITIONS`, 2026-11-09): 55 are `STANDARD`, routable, deterministic, property-scoped RECORD_QUERY/STATUS_SUMMARY reads (candidates); 76 are `MATERIAL_DECISION` and routable or not (13 decision analyses, 15 status summaries, 46 commands, 1 monitor, 1 workflow). `CAPITAL_ITEM_FUNDING_GOAL`, `CAPITAL_RESERVE_PLAN`, `REPLACEMENT_GUIDANCE` and `OWNERSHIP_COSTS` — the four operations the compound corpus needs most (10, 8, 6 and 5 rows) — are all `MATERIAL_DECISION`. Of the corpus's 21 multi-operation rows, **only 4 need `STANDARD` reads alone**. | [Executed] |
+| C15 | Handler files contain no direct `prisma.<model>.<write>` calls; writes go through services, and handler files are shared with command handlers. A static scan therefore **cannot certify an operation as read-only**; certification needs a per-operation runtime test (FR-ELG-6). | [Executed] scan, [Inferred] conclusion |
 | C13 | `AskExecution` has `parentExecutionId` (turn-level parent for child captures) and a unique constraint on `(userId, clientRequestId)`. | [Code-traced] |
 
 ---
@@ -95,9 +98,39 @@ Ask Cozy does not become an unrestricted general-purpose chatbot, and a model ne
 | FR-ELG-2 | An operation may carry `composableRead: true` only if **all** hold: it is read-only (no write, no confirmation, no capture, no proposal, no transmission); `safetyClass === 'STANDARD'`; it creates or continues no workflow, journey, decision thread or specialist engagement; it is `messageRoutable`; and it needs no entity selection the clause cannot supply from slots. |
 | FR-ELG-3 | `MATERIAL_DECISION` operations are **never** composable in the first version, including refinance, sell/hold/rent, repair-or-replace, break-even, quote comparison, capital planning, property-tax appeal readiness and HVAC scenarios. Lifting this needs its own FRD and owner decision. |
 | FR-ELG-4 | A startup validation test fails the build if a `composableRead` operation violates FR-ELG-2, mirroring the existing registry validation. |
-| FR-ELG-5 | The initial allowlist is proposed in §15 (D7) and contains only operations an owner has approved by name. |
+| FR-ELG-5 | The initial allowlist is §4.3 and contains only operations the owner has approved by name. |
+| FR-ELG-6 | **Admission gate.** An operation joins the allowlist only with a per-operation runtime test that runs its handler against a recording fake `prisma` and fake services that **throw on any write**, and asserts the result has no confirmation, capture request, `WORKFLOW_PROGRESS` block or write action. The existing `correctionHandlersRuntime` test is the pattern. A static scan is not sufficient (C15). |
 
-> Consequence to note: the first allowlist is narrow. `CAPITAL_ITEM_FUNDING_GOAL` is `STANDARD`-class today, which is why the roof prompt can compose; `REPLACEMENT_GUIDANCE` is `MATERIAL_DECISION` and cannot.
+> Consequence: the allowlist is narrow, and it does **not** include `CAPITAL_ITEM_FUNDING_GOAL` (`MATERIAL_DECISION`). The roof prompt composes only if its cost clause is answered by a `STANDARD` atomic read (R-ATM-3), not by the funding goal.
+
+### 4.3 The initial allowlist (D7, settled)
+
+Selection rule: the operation is `STANDARD`, routable, deterministic, a RECORD_QUERY or STATUS_SUMMARY, property-scoped, with no workflow, capture or confirmation block type, and it either appears in the compound corpus's needs or answers a core item fact. Approved by name, **subject to FR-ELG-6 passing for each**:
+
+| Operation | Why | Role floor |
+|---|---|---|
+| `INVENTORY_LOOKUP` | Item age, condition, install year; includes the home-profile roof read | VIEWER |
+| `WARRANTY_LOOKUP` | In 5 corpus rows | VIEWER |
+| `APPLIANCE_FAILURE_RISK` | Age-based failure risk, replacement estimate; in 3 rows. Report path calls `generateOracleReport` with recommendations off; the separate `recalculateLifespan` writer is not on that path (to be proven by FR-ELG-6) | OWNER |
+| `MAINTENANCE_BUDGET_FORECAST` | Yearly upkeep forecast; in 2 rows. Calls `generateBudgetForecast` with recommendations off | OWNER |
+| `DO_NOTHING_SIMULATION` | Latest saved simulation read; in 2 rows | OWNER |
+| `HOME_UPGRADE_SCENARIOS` | Saved upgrade options; in 1 row | VIEWER |
+| `RECALL_REVIEW` | In 1 row | VIEWER |
+| `HOME_TIMELINE_EVENTS` | Home timeline read; no mutator calls found | VIEWER |
+| `ITEM_REPLACEMENT_COST` (new, R-ATM-3) | A `STANDARD` fact: the replacement-cost estimate for an item in today's dollars and at the expected window | VIEWER |
+
+**Excluded on purpose:**
+
+| Operation | Reason |
+|---|---|
+| `MAINTENANCE_STATUS` | Emits a `WORKFLOW_PROGRESS` block |
+| `PROPERTY_SUMMARY` | Same handler file carries area-capture confirmation paths; needs a trace before admission |
+| `INTELLIGENCE_ENVELOPE_QUERY`, `HOME_CHANGE_SUMMARY` | Call `runItemAnalysis` |
+| `INSPECTION_NEGOTIATION_PACKAGE` | Builds a package (`generateNegotiationPackage`) |
+| `CLAIM_CHECKLIST_VIEW`, `GUIDANCE_JOURNEYS_LIST`, `HOME_HABITS`, `HOME_EVENT_RADAR_FEED`, `PROJECT_TRACKER_PROJECTS` | Same handler file calls mutators (`updateChecklistItem`, `dismissJourney`, `dismissHabit`, `updateState`, `createSpec`); admit only after a per-operation test proves the read path is clean |
+| Every `MATERIAL_DECISION` operation, including `CAPITAL_ITEM_FUNDING_GOAL`, `CAPITAL_RESERVE_PLAN`, `REPLACEMENT_GUIDANCE`, `OWNERSHIP_COSTS`, `COVERAGE_GAPS` | FR-ELG-3 |
+
+**Reach, stated plainly.** With this list only a minority of today's compound corpus rows can compose (4 of 21 multi-operation rows need `STANDARD` reads alone, C14). The headline roof prompt composes only through `ITEM_REPLACEMENT_COST`. Rows that need funding, reserve planning, replacement guidance or ownership costs keep the "Also answer" button. If the owner wants those composed, that is a separate decision with its own tier and thresholds (§15, D8).
 
 ### 4.2 Decomposition
 
@@ -205,11 +238,11 @@ A **quantity** is a named figure such as *replacement cost of the roof*. For eac
 
 | Quantity | Authority | Note |
 |---|---|---|
-| Replacement cost, item, no date | `CAPITAL_ITEM_FUNDING_GOAL` cost line, restated in today's dollars | Requires R-ATM-3 |
-| Replacement cost, item, dated | `CAPITAL_ITEM_FUNDING_GOAL` | Already grown to the date |
+| Replacement cost, item, no date | `ITEM_REPLACEMENT_COST`, in today's dollars | R-ATM-3 |
+| Replacement cost, item, dated | `ITEM_REPLACEMENT_COST`, grown to the date | Same shared cost function as the funding read, so they agree |
 | Item age / install year | The inventory/profile read | |
-| Reserve allocated to an item | `CAPITAL_ITEM_FUNDING_GOAL` (target-share allocation, labeled estimate) | |
-| Monthly saving currently going toward an item | `CAPITAL_ITEM_FUNDING_GOAL` | Unknown, not $0, when no deposits are logged (FRD 1.553) |
+| Reserve allocated to an item | Not composable in v1 | `CAPITAL_ITEM_FUNDING_GOAL` is `MATERIAL_DECISION`; stays single-operation |
+| Monthly saving currently going toward an item | Not composable in v1 | Same; unknown, not $0, when no deposits are logged (FRD 1.553) |
 
 Adding a row is a registry change with a test (§12.2).
 
@@ -264,7 +297,7 @@ Composition works only if small, trustworthy reads exist.
 |---|---|
 | R-ATM-1 | **Item age / install year** read that answers from inventory and the home profile (roof year included) and states its source. |
 | R-ATM-2 | **Item condition** read. |
-| R-ATM-3 | **Replacement cost** exposed in both *today's dollars* and *at the expected window*, each labeled, from one source (the capital timeline estimate), so the two cost bases in C3 cannot diverge. The inventory profile-roof wording and the capital timeline's roof default must read the same estimate. |
+| R-ATM-3 | **`ITEM_REPLACEMENT_COST`**, a new `STANDARD`, composable read (§4.3) exposing the replacement cost in both *today's dollars* and *at the expected window*, each labeled, from one source (the capital timeline estimate), so the two cost bases in C3 cannot diverge. It is needed because `CAPITAL_ITEM_FUNDING_GOAL` is `MATERIAL_DECISION` and cannot compose. The inventory profile-roof wording, the funding read's cost line and this operation all call **one shared cost function**. |
 | R-ATM-4 | **Reserve allocation for an item** (estimate, labeled). |
 | R-ATM-5 | **Funding gap** for an item and date (exists: `CAPITAL_ITEM_FUNDING_GOAL`). |
 
@@ -390,8 +423,8 @@ The repository does not require a development database, but the owner's backend 
 | Phase | Content | Gate |
 |---|---|---|
 | 0 | This FRD accepted; §15 decisions taken; compound corpus grown to ≥ 100 with held-out slice and required component sets | Owner sign-off |
-| 1 | R-ATM-3 single cost source (fixes the C3 divergence even without composition) | Test: profile-roof read and funding read give one figure per basis |
-| 2 | `composableRead` registry property and validation; composite contract §6 and validator; parent/child persistence §5.2; two components, deterministic splitting, the roof prompt first | §12.2 tests green; §12.4 matrix rows 1–16 recorded by the owner; compound corpus component-set correctness measured |
+| 1 | Shared cost function and the new `ITEM_REPLACEMENT_COST` operation (fixes the C3 divergence even without composition) | Test: profile-roof read, funding read and `ITEM_REPLACEMENT_COST` give one figure per basis |
+| 2 | `composableRead` registry property and validation; FR-ELG-6 purity test for each allowlisted operation; composite contract §6 and validator; parent/child persistence §5.2; two components, deterministic splitting, the roof prompt first | §12.2 tests green; §12.4 matrix rows 1–16 recorded by the owner; compound corpus component-set correctness measured |
 | 3 | Slots §8 and elliptical follow-ups | Multi-turn corpus at target; no regression in sweeps |
 | 4 | Remaining atomic reads R-ATM-1/2/4 | Each with registry footprint and certification fixture |
 | 5 | Answer-first narration (template first) | Guard tests green |
@@ -426,13 +459,19 @@ Decided in v0.2 (confirm or overrule):
 | D5 | How to represent a partially answered composite | **Decided:** `READY_WITH_LIMITATIONS` plus a typed composite-only `coverage: COMPLETE | PARTIAL`. No new global execution-status value. |
 | D6 | Component cap | **Decided:** **two** for the first version. Three only after latency, authorization and compound-corpus results justify it (Phase 7). |
 
+Settled in v0.3 by the registry scan (confirm or overrule):
+
+| ID | Decision | Position in this draft |
+|---|---|---|
+| D7 | The composable-operation allowlist | **Settled:** §4.3. `STANDARD` reads only, approved by name, each admitted only after the FR-ELG-6 runtime purity test. Nine operations including the new `ITEM_REPLACEMENT_COST`. |
+| D2 | One shared cost function, or a new atomic operation? | **Settled: both.** One shared cost function behind the profile-roof answer, the funding read and the new `STANDARD` `ITEM_REPLACEMENT_COST` operation, because the funding read is `MATERIAL_DECISION` and cannot compose. |
+
 Open:
 
 | ID | Decision | Recommendation |
 |---|---|---|
-| D7 | **The composable-operation allowlist.** Which operations get `composableRead: true`. This precedes Phase 2. | Start with `STANDARD`-class reads only, approved by name; confirm the initial list (candidates: `CAPITAL_ITEM_FUNDING_GOAL`, `INVENTORY_LOOKUP`, `APPLIANCE_FAILURE_RISK`, `MAINTENANCE_BUDGET_FORECAST`) after a registry scan of every operation's `safetyClass` and side effects. |
+| D8 | **Should `MATERIAL_DECISION` reads ever compose?** The scan shows only 4 of 21 multi-operation corpus rows are composable without them, and the four operations the corpus needs most are all `MATERIAL_DECISION` (C14). The trust addendum protects material *actions* and requires stronger routing and entity confidence for material decisions (clarify at medium confidence); it does not itself forbid composing material *reads*. | Not in v1: keep FR-ELG-3. Revisit after Phase 2 with a separate tier (read-only, HIGH confidence only, per-operation owner approval) if the measured reach is too low. This is a product-risk tradeoff, not a mechanical rule. |
 | D1 | Replacement cost without a date: today's dollars first, expected-window figure as a second labeled line? | Yes (FR-BAS-4). The current cost-only mode leads with the future-dollar figure. |
-| D2 | One shared cost function for the profile-roof inventory answer and the funding read, or a new atomic replacement-cost operation? | One shared function: smaller, and it removes the divergence at its source. |
 | D3 | Calibration isolation: per operation, per family, or accept the global curve with the known-drift list? | Per family; keep the known-drift list until then. |
 | D4 | Slot turn window and whether `objective` is carried | 5 turns; carry `objective` only when the homeowner stated it. |
 
@@ -460,6 +499,6 @@ Open:
 - No composite has been built or run; every §5–§6 requirement is a proposal.
 - The §2 findings about handlers are code-traced, not run against a real database.
 - The 126-fixture and 690-prompt figures are offline sweeps on authored corpora, not live traffic.
-- Whether any operation currently satisfies FR-ELG-2 beyond `safetyClass` is not verified; D7 requires a scan of side effects, not only the class.
+- Whether any allowlisted operation is actually side-effect-free is **not verified**: the scan found no direct database writes in handler files, but writes go through services and handler files are shared with commands (C15). FR-ELG-6 is the proof and has not been written.
 - Whether two-component composition lifts the compound corpus enough to justify Phases 3–6 is unmeasured; Phases 0 and 2 exist to measure it.
 - The child-key and resumption design assumes the existing execution lifecycle can wait on or resume a non-terminal child; that has not been checked against the code and must be confirmed before Phase 2.
