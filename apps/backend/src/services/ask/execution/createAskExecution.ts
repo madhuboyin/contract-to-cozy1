@@ -2,6 +2,7 @@
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
 import { createHash } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { logger } from '../../../lib/logger';
 import { recordAskCapabilityLifecycle } from '../askCapabilityLifecycle';
@@ -35,6 +36,9 @@ import { isSettledForCompletion } from '../suggestedActions/suggestedActionCompl
 import { suggestedNextActionSemanticKeyHash } from '../suggestedActions/suggestedNextActionIdentity';
 import { recordSuggestedActionCompleted, recordSuggestedActionSelected } from '../suggestedActions/askSuggestedActionLifecycle.service';
 import { recordSuggestedActionOutcomeAnalytics, recordSuggestedActionSelectedAnalytics } from '../suggestedActions/suggestedActionAnalytics';
+import { decomposeForComposition } from '../composition/decompose';
+import { runComposedTurn } from '../composition/runComposedTurn';
+import { buildAuthorizationView } from '../composition/authorizationView';
 import { resolveSuggestedActionSelection, type SuggestedActionResolution, type SuggestedActionRejectionReason } from '../suggestedActions/suggestedNextActionSelection';
 
 function stableSkillRoutingReasonCode(outcome: SkillRoutingOutcome): string | null {
@@ -127,7 +131,10 @@ function suggestedActionRecoveryResultJson(reason: SuggestedActionRejectionReaso
 }
 
 // `input` is rebound once a selected Suggested Next Action is verified; everything before that point is selection-independent.
-export async function createAskExecution(userId: string, requestInput: CreateAskExecutionRequest, accountRole?: AskAccountRole): Promise<AskExecutionResponse> {
+/** Set only by the composition runner for a component child; never part of the public request schema. */
+export interface CreateAskExecutionInternal { composition?: { parentExecutionId: string; expiresAt: Date | null } }
+
+export async function createAskExecution(userId: string, requestInput: CreateAskExecutionRequest, accountRole?: AskAccountRole, internal: CreateAskExecutionInternal = {}): Promise<AskExecutionResponse> {
   // Phase 3: the request clock. REQUEST_SETUP and REQUEST_TOTAL are measured from here; every older stage is measured from `startedAt` below.
   const requestStartedAt = Date.now();
   let input = requestInput;
@@ -159,7 +166,8 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     );
   }
 
-  const expiresAt = new Date(Date.now() + controls.rawConversationRetentionDays * 24 * 60 * 60 * 1000);
+  // FR-PER-14: a component child expires with its parent, never after it.
+  const expiresAt = internal.composition?.expiresAt ?? new Date(Date.now() + controls.rawConversationRetentionDays * 24 * 60 * 60 * 1000);
   const existingSession = await prisma.askSession.findUnique({ where: { id: input.sessionId } });
   if (existingSession && existingSession.userId !== userId) {
     const error = new Error('Ask session not found.');
@@ -230,9 +238,45 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       // this same-named AskExecutionEvent.eventType below.
       status: 'RECEIVED',
       expiresAt,
+      ...(internal.composition ? { parentExecutionId: internal.composition.parentExecutionId, parentRole: 'COMPONENT' } : {}),
     },
+  }).catch((error: unknown) => {
+    // Composition FRD D10(b): two concurrent requests with the same clientRequestId race between the duplicate check and this create. The loser reads the
+    // winner's row instead of failing with a unique-violation (the same convention askConfirm and askCapture already follow).
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
+    return null;
   });
+  if (!execution) {
+    const winner = await prisma.askExecution.findUnique({ where: { userId_clientRequestId: { userId, clientRequestId: input.clientRequestId } } });
+    if (!winner) throw new Error('Ask execution could not be created.');
+    return mapPersistedExecution(await reclaimOrphanedRunningExecution(winner), await propertySummary(safetyFirstDecision.stage === 'SAFETY' ? null : winner.propertyId));
+  }
   await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'RECEIVED', metadataJson: asInputJson({ surface: input.launchContext?.surface ?? 'unknown' }) } });
+  // Composition FRD Phase 2b: a typed two-part question whose parts are both composable reads is answered as ONE response made of two component turns. Only an
+  // ordinary typed question qualifies (no declared operation, no selected suggestion, not itself a component); every other turn is unchanged. A message the
+  // decomposer does not compose (one part, a safety phrase, a part that is not a composable read) takes the single-operation path below.
+  if (!internal.composition && executionPropertyId && !input.launchContext?.operationId && !input.suggestedActionSelection) {
+    const decomposition = decomposeForComposition(input.message, { eligibleOperationIds: new Set(eligibleOperationIds) });
+    if (decomposition.kind === 'NOT_COMPOSED') {
+      await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'COMPOSITION_DECLINED', metadataJson: asInputJson({ reason: decomposition.reason, clauses: decomposition.clauseCount }) } });
+    } else if (decomposition.kind === 'COMPOSE') {
+      const composedPropertyId = executionPropertyId;
+      let composed: Awaited<ReturnType<typeof runComposedTurn>> | null = null;
+      try {
+      composed = await runComposedTurn({
+        db: prisma as never, userId, accountRole, parent: execution, message: input.message, sessionId: session.id, propertyId: composedPropertyId,
+        clauses: decomposition.clauses, createChild: createAskExecution, executionTimeoutMs: controls.executionTimeoutMs,
+        loadAuthorizationView: () => buildAuthorizationView(userId, composedPropertyId, controls),
+      });
+      } catch (error) {
+        // The composition itself failed (not a component): fall back to the ordinary single-operation path on this same row rather than failing the question.
+        logger.warn({ error, executionId: execution.id }, '[ask-composition] composed turn failed; answering as a single operation');
+        await prisma.askExecution.update({ where: { id: execution.id }, data: { assemblyVersion: null, parametersJson: Prisma.DbNull } }).catch(() => undefined);
+        await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'COMPOSITION_FAILED', metadataJson: asInputJson({ reason: error instanceof Error ? error.name : 'unknown' }) } }).catch(() => undefined);
+      }
+      if (composed) return mapPersistedExecution(composed, await propertySummary(executionPropertyId));
+    }
+  }
   // Plan §11.1: the selection correlation record linking the verified offered action to this resulting execution. Restricted
   // operational identifiers only (no label/message text, no entity ids); deliberately not handoffFromExecutionId.
   if (suggestionResolution?.kind === 'VERIFIED') {

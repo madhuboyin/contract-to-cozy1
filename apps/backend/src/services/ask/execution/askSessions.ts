@@ -9,12 +9,14 @@ import { ASK_RESPONSE_SCHEMA_VERSION, INTERACTIVE_ASK_EXECUTION_STATUSES, type A
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
 import { ASK_SESSION_HISTORY_PAGE_SIZE, askHistoryAccessiblePropertyWhere, askSessionHistoryWhere, decodeAskSessionHistoryCursor, encodeAskSessionHistoryCursor } from '../askSessionHistoryPagination';
 import { resolvePropertyAccess } from '../../propertyAccess.service';
+import { buildAuthorizationView } from '../composition/authorizationView';
+import { isStoredComposite, replayComposite } from '../composition/replayGate';
 import { asInputJson, ensurePropertyAccess, expireIfSkillBindingChanged, mapPersistedExecution, preservedExecutionHistory, propertyLabel, propertySummary } from '../askHandlerSupport';
 
 export async function getAskSession(userId: string, sessionId: string): Promise<AskExecutionResponse[]> {
   const session = await prisma.askSession.findFirst({ where: { id: sessionId, userId }, select: { id: true } });
   if (!session) return [];
-  const executions = await prisma.askExecution.findMany({ where: { sessionId, userId }, orderBy: { createdAt: 'asc' } });
+  const executions = await prisma.askExecution.findMany({ where: { sessionId, userId, parentRole: null }, orderBy: { createdAt: 'asc' } });
   const propertyIds = [...new Set(executions.map((execution) => execution.propertyId).filter((value): value is string => Boolean(value)))];
   // Row ownership (userId) proves this is the homeowner's own conversation,
   // not that they still hold current access to every property it touches.
@@ -28,7 +30,17 @@ export async function getAskSession(userId: string, sessionId: string): Promise<
   const visibleExecutions = executions.filter((execution) => !execution.propertyId || accessiblePropertyIds.has(execution.propertyId));
   const properties = await prisma.property.findMany({ where: { id: { in: [...accessiblePropertyIds] } }, select: { id: true, name: true, address: true, city: true, state: true } });
   const labels = new Map(properties.map((property) => [property.id, { id: property.id, label: propertyLabel(property) }]));
-  return visibleExecutions.map((execution) => mapPersistedExecution(execution, execution.propertyId ? labels.get(execution.propertyId) ?? null : null));
+  // Composition FRD FR-PER-6: a stored composite is replayed only after its CURRENT authorization is applied; the stored domain answer is never recomputed.
+  const gated = await Promise.all(visibleExecutions.map((execution) => gateComposedExecution(userId, execution)));
+  return gated.flatMap((execution) => (execution ? [mapPersistedExecution(execution, execution.propertyId ? labels.get(execution.propertyId) ?? null : null)] : []));
+}
+
+/** Null when the whole composite must be withheld (property access lost or nothing still authorized); otherwise the row with its projection recomputed. */
+export async function gateComposedExecution<T extends { propertyId: string | null; resultJson: unknown }>(userId: string, execution: T): Promise<T | null> {
+  if (!execution.propertyId || !isStoredComposite(execution.resultJson)) return execution;
+  const outcome = replayComposite(execution.resultJson, await buildAuthorizationView(userId, execution.propertyId));
+  if (outcome.kind === 'WITHHELD') return null;
+  return outcome.kind === 'DELIVER' ? { ...execution, resultJson: outcome.delivered } : execution;
 }
 
 export async function getRecentAskSessions(userId: string, propertyId: string | null, cursorValue?: string, searchQuery?: string, view: 'RECENT' | 'ARCHIVED' = 'RECENT'): Promise<AskRecentSessionPage> {
@@ -51,9 +63,9 @@ export async function getRecentAskSessions(userId: string, propertyId: string | 
     titleSetByUserAt: true,
     pinnedAt: true,
     archivedAt: true,
-    _count: { select: { executions: { where: { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] } } } },
+    _count: { select: { executions: { where: { parentRole: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] } } } },
     executions: {
-      where: { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      where: { parentRole: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
       orderBy: [{ createdAt: 'desc' as const }, { id: 'desc' as const }],
       take: 1,
       select: { id: true, message: true, status: true },
@@ -160,7 +172,13 @@ export async function getAskExecution(userId: string, executionId: string): Prom
     throw error;
   }
   if (execution.propertyId) await ensurePropertyAccess(userId, execution.propertyId);
-  return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
+  const delivered = await gateComposedExecution(userId, execution);
+  if (!delivered) {
+    const error = new Error('Ask execution not found.');
+    (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
+    throw error;
+  }
+  return mapPersistedExecution(delivered, await propertySummary(execution.propertyId));
 }
 
 export const INTERACTIVE_ASK_STATUSES: AskExecutionStatus[] = [...INTERACTIVE_ASK_EXECUTION_STATUSES];
@@ -277,6 +295,7 @@ export async function getAskPendingWork(userId: string, propertyId: string | nul
     where: {
       userId,
       propertyId,
+      parentRole: null,
       AND: [
         { OR: [
           { status: { in: INTERACTIVE_ASK_STATUSES } },

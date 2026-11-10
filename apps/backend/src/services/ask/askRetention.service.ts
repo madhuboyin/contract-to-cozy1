@@ -30,9 +30,27 @@ export async function purgeExpiredAskExecutions(now = new Date(), batchSize = 50
     orderBy: { expiresAt: 'asc' },
     take: Math.max(1, Math.min(batchSize, 2_000)),
   });
-  if (!expired.length) return 0;
-  const deleted = await prisma.askExecution.deleteMany({ where: { id: { in: expired.map(({ id }) => id) } } });
-  askRetentionDeletionsTotal.inc({ reason: 'execution_expired' }, deleted.count);
+  if (!expired.length) return purgeOrphanedComponentChildren();
+  const ids = expired.map(({ id }) => id);
+  // Composition FRD FR-PER-14: a composite is one retention family. Its component children share the parent's expiresAt, and they are deleted with the parent in
+  // the same transaction (a database cascade cannot do this: onDelete is SetNull and capture children must keep their behavior).
+  const [children, deleted] = await prisma.$transaction([
+    prisma.askExecution.deleteMany({ where: { parentRole: 'COMPONENT', parentExecutionId: { in: ids } } }),
+    prisma.askExecution.deleteMany({ where: { id: { in: ids } } }),
+  ]);
+  askRetentionDeletionsTotal.inc({ reason: 'execution_expired' }, deleted.count + children.count);
+  return deleted.count + children.count + await purgeOrphanedComponentChildren();
+}
+
+/**
+ * Component children whose parent is gone (an interrupted deletion). Detected by BOTH parentRole and a missing parent, so capture children, which have no
+ * parentRole and keep their behavior, are never touched.
+ */
+export async function purgeOrphanedComponentChildren(batchSize = 500): Promise<number> {
+  const orphans = await prisma.askExecution.findMany({ where: { parentRole: 'COMPONENT', parentExecutionId: null }, select: { id: true }, take: Math.max(1, Math.min(batchSize, 2_000)) });
+  if (!orphans.length) return 0;
+  const deleted = await prisma.askExecution.deleteMany({ where: { id: { in: orphans.map(({ id }) => id) }, parentRole: 'COMPONENT', parentExecutionId: null } });
+  askRetentionDeletionsTotal.inc({ reason: 'component_orphan' }, deleted.count);
   return deleted.count;
 }
 

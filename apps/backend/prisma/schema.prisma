@@ -8167,6 +8167,12 @@ model AskExecution {
   // ASK_CAPTURE_LINK_RECONCILE DomainEvent, not a synchronous check.
   parentExecutionId String?
   linkedExecutionId String?
+  // Composition FRD (docs/product/ASK_COZY_CONVERSATIONAL_CONCIERGE_COMPOSITION_FRD.md) D10: `parentRole` is 'COMPONENT' on a child that is one part of a
+  // composed answer and null on every other execution, including capture children (which stay visible transcript cards). Component children are hidden from
+  // session history and pending work and are deleted with their parent. `assemblyVersion` is the compare-and-set value on a composed parent: null on every
+  // other execution, 0 when the composite parent is created, +1 for every accepted attempt-set mutation.
+  parentRole      String?
+  assemblyVersion Int?
 
   session  AskSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
