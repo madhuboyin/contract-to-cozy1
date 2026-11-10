@@ -1371,7 +1371,7 @@ function itemModels({ rooms = [ROOM_KITCHEN], existingByHash = null, earlier = n
 }
 const itemInput = (over = {}) => ({ name: 'Bosch dishwasher', category: 'APPLIANCE', roomId: ROOM_KITCHEN.id, brand: 'Bosch', model: null, ...over });
 
-test('Add item: the declared action returns the form (name, category, room with a no-room option, optional brand/model), carries the source list, and writes nothing', async () => {
+test('Add item: the declared action returns one upfront form with required identity and optional details, carries the source list, and writes nothing', async () => {
   itemModels();
   const result = await capabilityInvoke('INVENTORY_ITEM_CREATE', itemAddEnvelope(declaredItemAdd));
   assert.equal(result.status, 'NEEDS_CONTEXT');
@@ -1382,8 +1382,8 @@ test('Add item: the declared action returns the form (name, category, room with 
   assert.equal(request.classification, 'WORKFLOW_INPUT');
   assert.equal(request.expectedContextVersion, result.contextVersion);
   const byKey = Object.fromEntries(request.inputSchema.fields.map((field) => [field.key, field]));
-  assert.deepEqual(Object.keys(byKey), ['name', 'category', 'roomId', 'brand', 'model']);
-  assert.deepEqual([byKey.name.required, byKey.category.required, byKey.roomId.required, byKey.brand.required, byKey.model.required], [true, true, true, false, false]);
+  assert.deepEqual(Object.keys(byKey), ['name', 'category', 'roomId', 'brand', 'model', 'condition', 'serialNo', 'purchasedOn', 'lastServicedOn', 'purchaseCostUsd', 'replacementCostUsd', 'notes']);
+  assert.deepEqual([byKey.name.required, byKey.category.required, byKey.roomId.required, byKey.brand.required, byKey.notes.required], [true, true, true, false, false]);
   assert.deepEqual(byKey.roomId.inputSchema.options.map((option) => option.value), [ROOM_KITCHEN.id, 'NONE']);
   assert.equal(byKey.category.inputSchema.options.length, 14);
   assert.equal(request.currentAnswer.roomId, null);

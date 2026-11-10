@@ -1,5 +1,5 @@
 // Ask handler support: commandInputs. Moved out of askHandlerSupport.ts unchanged (FRD v1.110); that file re-exports these modules.
-import { HouseholdRole, InventoryItemCategory, MaintenanceTaskPriority, MaterialCategory, MaterialSurface, PlantGoalType, PlantLightLevel, PlantMaintenanceLevel, RecurrenceFrequency, ServiceCategory } from '@prisma/client';
+import { HouseholdRole, InventoryItemCategory, InventoryItemCondition, MaintenanceTaskPriority, MaterialCategory, MaterialSurface, PlantGoalType, PlantLightLevel, PlantMaintenanceLevel, RecurrenceFrequency, ServiceCategory } from '@prisma/client';
 import { z } from 'zod';
 import { optionalText } from './inputPrimitives';
 export * from './projectTrackerInputs';
@@ -122,6 +122,13 @@ export const InventoryCreateInputSchema = z.object({
   roomId: z.string().min(1).max(64),
   brand: optionalShortText(80),
   model: optionalShortText(80),
+  condition: z.nativeEnum(InventoryItemCondition).nullish().transform((value) => value ?? InventoryItemCondition.UNKNOWN),
+  serialNo: optionalShortText(160),
+  purchasedOn: z.object({ precision: z.literal('EXACT_DATE'), value: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).strict().transform((value) => value.value).nullish().transform((value) => value ?? null),
+  lastServicedOn: z.object({ precision: z.literal('EXACT_DATE'), value: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).strict().transform((value) => value.value).nullish().transform((value) => value ?? null),
+  purchaseCostUsd: z.number().min(0).max(10_000_000).nullish().transform((value) => value ?? null),
+  replacementCostUsd: z.number().min(0).max(10_000_000).nullish().transform((value) => value ?? null),
+  notes: optionalShortText(2000),
 }).strict();
 
 export const HouseholdInvitationInputSchema = z.object({

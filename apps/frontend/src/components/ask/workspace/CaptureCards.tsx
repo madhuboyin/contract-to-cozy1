@@ -23,6 +23,7 @@ import { ACCESS_LOST_CODES, FOCUSABLE_SELECTOR, askFailureCode, captureDraftStor
 const COMPACT_PENDING_PANEL = 'w-full max-w-[680px]';
 const FIELD_HEAVY_REVIEW_PANEL = 'w-full max-w-[880px]';
 const FIELD_HEAVY_REVIEW_MIN_FIELDS = 6;
+const FORM_FIRST_CAPTURE_KEYS = new Set(['ROOM_CREATE_INPUTS', 'INVENTORY_ITEM_CREATE_INPUTS']);
 
 /** The one rule the warranty forms share: the expiration date must be after the start date (the server enforces it too). */
 const warrantyDateOrder = (values: Record<string, string>): Record<string, string> => (
@@ -439,7 +440,7 @@ export function InlineCaptureCard({
   const policy = capturePolicy[request.classification];
   const scalarCapture = schema.type !== 'RELATIONAL_UPDATE' && schema.type !== 'RELATIONAL_SELECT_CREATE' && schema.type !== 'GROUP';
   // UX-04: the homeowner can leave the one-question-at-a-time flow for the full form (and back); the entered values live above both.
-  const [fullFormChosen, setFullFormChosen] = useState(false);
+  const [fullFormChosen, setFullFormChosen] = useState(() => FORM_FIRST_CAPTURE_KEYS.has(request.captureKey));
   const [values, setValues] = useState<Record<string, unknown>>(() => {
     const canonical = schema.type === 'RELATIONAL_UPDATE'
       ? schema.currentValues

@@ -8,6 +8,7 @@ import type { ScalarCaptureInputSchema, StructuredCaptureField } from '@/compone
 // anything sensitive or financial still keep the full form.
 const LEGACY_STEPPABLE = new Set<ScalarCaptureInputSchema['type']>(['SINGLE_SELECT', 'BOOLEAN', 'INTEGER', 'DECIMAL', 'SHORT_TEXT', 'TIME']);
 const STEPPABLE = new Set<ScalarCaptureInputSchema['type']>([...LEGACY_STEPPABLE, 'APPROXIMATE_DATE', 'MULTI_SELECT']);
+const FORM_FIRST_CAPTURE_KEYS: ReadonlySet<string> = new Set(['ROOM_CREATE_INPUTS', 'INVENTORY_ITEM_CREATE_INPUTS']);
 /**
  * Captures with a purpose-built layout in CaptureCards keep the original rules (three fields, no date or multi-select steps) until each is
  * reviewed for the stepped flow; the extended limits apply to every other plain workflow group.
@@ -17,9 +18,10 @@ export const LEGACY_MAX_CONVERSATIONAL_FIELDS = 3;
 /** A capture is asked as a conversation only when it is a short set of questions; a longer group stays one form. */
 export const MAX_CONVERSATIONAL_FIELDS = 5;
 /** A multi-select is asked as toggle chips only while its option list is as short as a quick reply. */
-const fieldIsSteppable = (field: StructuredCaptureField, designed: boolean): boolean => {
+const fieldIsSteppable = (field: StructuredCaptureField, designed: boolean, formFirst: boolean): boolean => {
   const schema = field.inputSchema as ScalarCaptureInputSchema;
-  if (!(designed ? LEGACY_STEPPABLE : STEPPABLE).has(schema.type)) return false;
+  if (formFirst && schema.type === 'LONG_TEXT') return true;
+  if (!(formFirst ? STEPPABLE : designed ? LEGACY_STEPPABLE : STEPPABLE).has(schema.type)) return false;
   return schema.type === 'MULTI_SELECT' ? schema.options.length > 0 && schema.options.length <= QUICK_REPLY_LIMIT : true;
 };
 /** A bounded choice is offered as chips; a longer list uses a picker. */
@@ -32,12 +34,13 @@ export const QUICK_REPLY_LIMIT = 8;
 export function canAskConversationally(request: Pick<AskCaptureRequest, 'classification' | 'sensitivity' | 'inputSchema' | 'skippable'> & { captureKey?: string }): boolean {
   const schema = request.inputSchema;
   const designed = DESIGNED_LAYOUT_CAPTURE_KEYS.has(request.captureKey ?? '');
+  const formFirst = FORM_FIRST_CAPTURE_KEYS.has(request.captureKey ?? '');
   return request.classification === 'WORKFLOW_INPUT'
     && request.sensitivity === 'STANDARD'
     && schema.type === 'GROUP'
     && schema.fields.length > 0
-    && schema.fields.length <= (designed ? LEGACY_MAX_CONVERSATIONAL_FIELDS : MAX_CONVERSATIONAL_FIELDS)
-    && schema.fields.every((field) => fieldIsSteppable(field, designed));
+    && schema.fields.length <= (formFirst ? 12 : designed ? LEGACY_MAX_CONVERSATIONAL_FIELDS : MAX_CONVERSATIONAL_FIELDS)
+    && schema.fields.every((field) => fieldIsSteppable(field, designed, formFirst));
 }
 
 export function isFieldActive(field: StructuredCaptureField, values: Record<string, unknown>): boolean {

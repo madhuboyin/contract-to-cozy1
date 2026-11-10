@@ -2450,7 +2450,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     }
     const candidate = InventoryCreateInputSchema.safeParse(input.answer);
     if (!candidate.success) {
-      const error = new Error('Enter a name of up to 120 characters and choose a category and a room (or "No room"); brand and model, if given, are up to 80 characters.');
+      const error = new Error('Enter a name of up to 120 characters and choose a category and a room (or "No room"). Check that optional dates, costs and item details are valid.');
       (error as Error & { code?: string }).code = 'ASK_CAPTURE_VALIDATION_ERROR';
       throw error;
     }

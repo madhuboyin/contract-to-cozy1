@@ -737,7 +737,11 @@ async function confirmInventoryItemCreate(ctx: ConfirmCapabilityContext): Promis
       const created = await inventoryService.createItem(propertyId, {
         name: input.name, category: input.category,
         roomId: input.roomId === INVENTORY_NO_ROOM_VALUE ? null : input.roomId,
-        brand: input.brand, model: input.model,
+        brand: input.brand, model: input.model, condition: input.condition,
+        serialNo: input.serialNo, purchasedOn: input.purchasedOn, lastServicedOn: input.lastServicedOn,
+        purchaseCostCents: input.purchaseCostUsd === null ? null : Math.round(input.purchaseCostUsd * 100),
+        replacementCostCents: input.replacementCostUsd === null ? null : Math.round(input.replacementCostUsd * 100),
+        notes: input.notes,
       }, userId);
       itemId = created.id;
     } catch (error) {
@@ -754,16 +758,16 @@ async function confirmInventoryItemCreate(ctx: ConfirmCapabilityContext): Promis
     status: 'COMPLETED', reasonCode: 'INVENTORY_ITEM_CREATED',
     blocks: [{
       type: 'WORKFLOW_PROGRESS', id: `inventory-created-${itemId}`, title: alreadyAdded ? 'Item already added' : 'Item added', status: 'COMPLETED',
-      description: 'The item is now part of your home record and dependent coverage analysis was marked for refresh. Ask can correct its dates, condition, costs and notes.',
-      details: [{ label: 'Item name', value: input.name }, { label: 'Category', value: inventoryCategoryLabel(input.category) }, { label: 'Room', value: input.roomId === INVENTORY_NO_ROOM_VALUE ? 'No room (whole-home)' : rooms.find((room) => room.id === input.roomId)?.name ?? 'Recorded room' }, ...(input.brand ? [{ label: 'Brand', value: input.brand }] : []), ...(input.model ? [{ label: 'Model', value: input.model }] : [])],
+      description: 'The item and the details you supplied are now part of your home record. Dependent coverage analysis was marked for refresh.',
+      details: [{ label: 'Item name', value: input.name }, { label: 'Category', value: inventoryCategoryLabel(input.category) }, { label: 'Room', value: input.roomId === INVENTORY_NO_ROOM_VALUE ? 'No room (whole-home)' : rooms.find((room) => room.id === input.roomId)?.name ?? 'Recorded room' }, ...(input.brand ? [{ label: 'Brand', value: input.brand }] : []), ...(input.model ? [{ label: 'Model', value: input.model }] : []), ...(input.condition !== 'UNKNOWN' ? [{ label: 'Condition', value: input.condition }] : []), ...(input.serialNo ? [{ label: 'Serial number', value: input.serialNo }] : []), ...(input.purchasedOn ? [{ label: 'Purchase date', value: input.purchasedOn }] : []), ...(input.lastServicedOn ? [{ label: 'Last serviced', value: input.lastServicedOn }] : []), ...(input.purchaseCostUsd !== null ? [{ label: 'Purchase cost', value: `$${input.purchaseCostUsd.toLocaleString('en-US', { maximumFractionDigits: 2 })}` }] : []), ...(input.replacementCostUsd !== null ? [{ label: 'Replacement cost', value: `$${input.replacementCostUsd.toLocaleString('en-US', { maximumFractionDigits: 2 })}` }] : []), ...(input.notes ? [{ label: 'Notes', value: input.notes }] : [])],
       actions: [inventoryViewItemAction(input.name), createdRoomName ? inventoryAddAnotherToRoomAction(createdRoomName) : { ...inventoryAddItemAction(), label: 'Add another item', style: 'SECONDARY' as const }],
     }],
     // The item the homeowner just created is the exact target of the next details to add; typed candidates name it, so a chip can never
     // be re-read as a different item. The plain suggestion is only the fallback when the record is already complete.
     suggestions: [],
-    // A just-created item has no purchase date or serial number; brand and model are whatever the homeowner entered. No version is
-    // stamped (no extra read): the entity validator still confirms the item exists in this property before anything is offered.
-    suggestedNextActionCandidates: inventoryMissingDetailCandidates({ id: itemId, name: input.name, brand: input.brand, model: input.model }, { propertyId, sourceOperationId: 'INVENTORY_ITEM_CREATE' }),
+    // Only details still absent after the upfront form are suggested. No version is stamped (no extra read): the entity validator still
+    // confirms the item exists in this property before anything is offered.
+    suggestedNextActionCandidates: inventoryMissingDetailCandidates({ id: itemId, name: input.name, brand: input.brand, model: input.model, serialNo: input.serialNo, purchasedOn: input.purchasedOn }, { propertyId, sourceOperationId: 'INVENTORY_ITEM_CREATE' }),
   };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
   if (refresh.attemptedAndFailed) {
