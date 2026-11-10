@@ -39,6 +39,7 @@ export const ASK_HANDLER_MANIFEST: readonly AskHandlerManifestEntry[] = [
   { id: 'handlers/propertySummary.handler', load: () => require('./handlers/propertySummary.handler') },
   { id: 'handlers/capitalPlanning.handler', load: () => require('./handlers/capitalPlanning.handler') },
   { id: 'handlers/capitalItemFunding.handler', load: () => require('./handlers/capitalItemFunding.handler') },
+  { id: 'handlers/itemReplacementCost.handler', load: () => require('./handlers/itemReplacementCost.handler') },
   { id: 'handlers/inspection.handler', load: () => require('./handlers/inspection.handler') },
   { id: 'handlers/recallReview.handler', load: () => require('./handlers/recallReview.handler') },
   { id: 'handlers/documents.handler', load: () => require('./handlers/documents.handler') },

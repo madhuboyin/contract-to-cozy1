@@ -21,6 +21,8 @@ export const CANONICAL_ANSWER_BLOCK_ID_PREFIXES: Readonly<Partial<Record<AskOper
   APPLIANCE_FAILURE_RISK: ['appliance-oracle-'],
   // Item funding goal: every block its handler emits (summary, steps, items, evidence, boundary, and the not-found/empty notices) starts 'item-funding-'.
   CAPITAL_ITEM_FUNDING_GOAL: ['item-funding-'],
+  // Item replacement cost: every block its handler emits (summary, items, evidence, boundary, and the notices) starts 'item-cost-'.
+  ITEM_REPLACEMENT_COST: ['item-cost-'],
   WARRANTY_LOOKUP: ['warranty-summary$', 'warranty-results$', 'warranty-empty$', 'warranty-no-match$', 'warranty-show-all$', 'warranty-item-'],
   INCIDENT_CLAIM_STATUS: ['incident-claim-'],
   RECALL_REVIEW: ['recall-review-'],

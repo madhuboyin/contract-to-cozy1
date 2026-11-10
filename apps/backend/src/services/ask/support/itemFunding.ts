@@ -8,6 +8,9 @@
 // one number, not partitioned). What the homeowner is putting aside now is the reserve ledger's DEPOSITs over the last six months, as a monthly average,
 // times the same share. Neither is a bank balance: the ledger is self-reported.
 
+import { grow, itemCostBases, yearsBetween } from './itemCost';
+export { grow, yearsBetween };
+
 export const DEFAULT_CAPITAL_COST_GROWTH_RATE = 0.035;
 export const NEAR_TERM_MONTHS = 6;
 export const DEPOSIT_RATE_WINDOW_MONTHS = 6;
@@ -31,15 +34,6 @@ export function pointEstimate(min: number, max: number, posture: FundingPosture)
   if (posture === 'CONSERVATIVE') return max;
   if (posture === 'AGGRESSIVE') return min;
   return Math.round((min + max) / 2);
-}
-
-/** Money in the future, from today's money: value × (1 + rate)^years. */
-export function grow(cents: number, rate: number, years: number): number {
-  return Math.round(cents * Math.pow(1 + rate, Math.max(0, years)));
-}
-
-export function yearsBetween(from: Date, to: Date): number {
-  return Math.max(0, (to.getTime() - from.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
 }
 
 export interface FundingItemResult {
@@ -99,16 +93,11 @@ export function buildFundingPlan(input: {
   const months = monthsUntil(now, planningDate);
 
   const items: FundingItemResult[] = input.items.map((item) => {
-    const windowMid = new Date((item.windowStart.getTime() + item.windowEnd.getTime()) / 2);
-    const yearsToMid = yearsBetween(now, windowMid);
-    let min = item.costMinCents;
-    let max = item.costMaxCents;
-    if (input.targetDate) {
-      // Back to today's money, forward to the homeowner's date.
-      const yearsToTarget = yearsBetween(now, input.targetDate);
-      min = grow(min / Math.pow(1 + growthRate, yearsToMid), growthRate, yearsToTarget);
-      max = grow(max / Math.pow(1 + growthRate, yearsToMid), growthRate, yearsToTarget);
-    }
+    // One shared cost function (support/itemCost.ts): stored cost as is, or back to today's money and forward to the homeowner's date.
+    const bases = itemCostBases({ storedMinCents: item.costMinCents, storedMaxCents: item.costMaxCents, windowStart: item.windowStart, windowEnd: item.windowEnd, growthRate, now, targetDate: input.targetDate });
+    const chosen = bases.target ?? bases.window;
+    const min = chosen.minCents;
+    const max = chosen.maxCents;
     const cost = pointEstimate(min, max, posture);
     const setAside = Math.min(item.setAsideCents ?? 0, cost);
     return {

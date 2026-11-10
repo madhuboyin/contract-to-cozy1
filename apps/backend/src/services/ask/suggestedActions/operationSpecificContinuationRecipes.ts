@@ -357,6 +357,10 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
     recipe('Review capital outlook', 'Show my capital reserve outlook', 'CAPITAL_RESERVE_PLAN', 'REVIEW_CAPITAL_OUTLOOK', 'ITEM_FUNDING_REVIEW_CAPITAL_PLAN'),
     recipe('Review ownership costs', 'Show my home ownership costs', 'OWNERSHIP_COSTS', 'REVIEW_OWNERSHIP_COSTS', 'ITEM_FUNDING_REVIEW_OWNERSHIP_COSTS'),
   ],
+  ITEM_REPLACEMENT_COST: [
+    recipe('Plan saving for it', 'Show my capital reserve outlook', 'CAPITAL_RESERVE_PLAN', 'REVIEW_CAPITAL_OUTLOOK', 'ITEM_COST_REVIEW_CAPITAL_PLAN'),
+    recipe('Review ownership costs', 'Show my home ownership costs', 'OWNERSHIP_COSTS', 'REVIEW_OWNERSHIP_COSTS', 'ITEM_COST_REVIEW_OWNERSHIP_COSTS'),
+  ],
   CAPITAL_TIMELINE_COMMAND: [
     recipe('Review capital outlook', 'Show my capital reserve outlook', 'CAPITAL_RESERVE_PLAN', 'REVIEW_CAPITAL_OUTLOOK', 'CAPITAL_UPDATED_REVIEW_PLAN'),
     recipe('Review maintenance forecast', 'What maintenance might be coming up?', 'MAINTENANCE_FORECAST', 'REVIEW_MAINTENANCE_FORECAST', 'CAPITAL_UPDATED_REVIEW_MAINTENANCE'),

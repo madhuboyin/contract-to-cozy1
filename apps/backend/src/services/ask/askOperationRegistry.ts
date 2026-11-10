@@ -311,6 +311,7 @@ export type AskOperationId =
   | 'HOME_DEADLINE_MONITOR'
   | 'CAPITAL_RESERVE_PLAN'
   | 'CAPITAL_ITEM_FUNDING_GOAL'
+  | 'ITEM_REPLACEMENT_COST'
   | 'PROPERTY_TAX_APPEAL_READINESS'
   | 'RENOVATION_PERMIT_READINESS'
   // Phase 7 (implementation plan §13; FRD §31 "Seller Prep — expose now,
@@ -656,7 +657,7 @@ export interface AskOperationResult {
 const CAPABILITY_CONTINUITY_OPERATIONS = new Set<AskOperationId>([
   'MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE',
   'MAINTENANCE_TASK_UPDATE', 'MAINTENANCE_FORECAST', 'GUIDANCE_JOURNEY_CREATE', 'QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW', 'HOME_DEADLINE_MONITOR',
-  'CAPITAL_RESERVE_PLAN', 'CAPITAL_ITEM_FUNDING_GOAL', 'RESERVE_FUND_COMMAND', 'PROPERTY_BRIEF_COMMAND', 'PROPERTY_TAX_APPEAL_READINESS', 'RENOVATION_PERMIT_READINESS', 'MAJOR_EVENT_ENTRY', 'SELLER_PREP_CHECKLIST', 'SELLER_PREP_ITEM_DECISION', 'INVENTORY_ITEM_CORRECT', 'HOME_EVENT_CORRECT', 'HOME_EVENT_UPDATE', 'HOME_EVENT_VISIBILITY', 'WARRANTY_UPDATE', 'ROOM_RENAME', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'MATERIAL_SPEC_UPDATE', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'OWNERSHIP_COST_COMMAND', 'HOME_HABITS_GENERATE', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN',
+  'CAPITAL_RESERVE_PLAN', 'CAPITAL_ITEM_FUNDING_GOAL', 'ITEM_REPLACEMENT_COST', 'RESERVE_FUND_COMMAND', 'PROPERTY_BRIEF_COMMAND', 'PROPERTY_TAX_APPEAL_READINESS', 'RENOVATION_PERMIT_READINESS', 'MAJOR_EVENT_ENTRY', 'SELLER_PREP_CHECKLIST', 'SELLER_PREP_ITEM_DECISION', 'INVENTORY_ITEM_CORRECT', 'HOME_EVENT_CORRECT', 'HOME_EVENT_UPDATE', 'HOME_EVENT_VISIBILITY', 'WARRANTY_UPDATE', 'ROOM_RENAME', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'MATERIAL_SPEC_UPDATE', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'OWNERSHIP_COST_COMMAND', 'HOME_HABITS_GENERATE', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN',
   'COVERAGE_GAPS', 'COVERAGE_COMPARISON_STATUS', 'SAVINGS_OPPORTUNITIES', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'DOCUMENT_LOOKUP',
   'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS',
   'REFINANCE_RATE_MONITOR', 'SELL_HOLD_RENT_ANALYSIS',
@@ -849,6 +850,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   HOME_DEADLINE_MONITOR: definition('HOME_DEADLINE_MONITOR', 'MONITOR', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-deadline.monitor', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   CAPITAL_RESERVE_PLAN: definition('CAPITAL_RESERVE_PLAN', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'capital-reserve.plan', ['SUMMARY', 'PROGRESS', 'GROUPED_LIST', 'TABLE', 'TIMELINE', 'EVIDENCE', 'BOUNDARY']),
   CAPITAL_ITEM_FUNDING_GOAL: definition('CAPITAL_ITEM_FUNDING_GOAL', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'capital-item-funding.goal', ['SUMMARY', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
+  ITEM_REPLACEMENT_COST: definition('ITEM_REPLACEMENT_COST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'item-replacement-cost.read', ['SUMMARY', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   RESERVE_FUND_COMMAND: definition('RESERVE_FUND_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'reserve-fund.command', ['SUMMARY', 'WORKFLOW_PROGRESS']),
   PROPERTY_TAX_APPEAL_READINESS: definition('PROPERTY_TAX_APPEAL_READINESS', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'property-tax.appeal-readiness', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   RENOVATION_PERMIT_READINESS: definition('RENOVATION_PERMIT_READINESS', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'renovation-permit.readiness', ['SUMMARY', 'GROUPED_LIST', 'PROGRESS', 'EVIDENCE', 'COMPARISON', 'BOUNDARY']),
@@ -1397,7 +1399,7 @@ const itemHistoryPattern = new RegExp(`\\b(?:history|timeline|log)\\b.{0,15}\\b(
 // estimate for the recorded item. With a date or a saving goal the item funding goal takes it first.
 const itemReplacementCostPattern = new RegExp(`\\b(?:new|replacement)\\s+${ITEM_ATTRIBUTE_ITEM}\\b.{0,20}\\b(?:cost|price)\\b|\\b(?:cost|price)\\b.{0,20}\\b(?:new|replacement)\\s+${ITEM_ATTRIBUTE_ITEM}\\b|\\b(?:cost|price) (?:to|of) replac\\w*\\b.{0,20}\\b${ITEM_ATTRIBUTE_ITEM}\\b|\\bhow much\\b.{0,30}\\b(?:to|for) replac\\w*\\b.{0,20}\\b${ITEM_ATTRIBUTE_ITEM}\\b`, 'i');
 const itemAttributeWriteIntentPattern = /\b(?:change|update|edit|correct|fix|set|add|record|enter|rename)\b/i;
-const replacementPattern = /\b(when should i (?:replace|upgrade)|replace (?:my|the)|repair or replace|how (?:old|long).*(?:refrigerator|fridge)|(?:refrigerator|fridge).*(?:replace|replacement|lifespan|life expectancy))\b/i;
+const replacementPattern = /\b(when should i (?:replace|upgrade)|replace (?:my|the)|repair (?:it |now |first )?or replace|how (?:old|long).*(?:refrigerator|fridge)|(?:refrigerator|fridge).*(?:replace|replacement|lifespan|life expectancy))\b/i;
 // Ask Intelligence FRD Phase 8A: HVAC-specific repair/replace decision
 // routing must win over the generic replacementPattern above for HVAC
 // systems (the FRD's certified first vertical slice), while every other
@@ -1763,9 +1765,10 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (isItemFundingGoalMessage(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('CAPITAL_ITEM_FUNDING_GOAL', 0.97);
   }
-  // "How much does a new roof cost": the cost-only mode of the same read, from the capital timeline's estimate for the recorded item.
+  // "How much does a new roof cost" (with or without a date): a STANDARD read of the capital timeline's estimate for the recorded item, through the shared
+  // cost function. The funding goal above keeps every question that asks how much to save.
   if (isItemCostMessage(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('CAPITAL_ITEM_FUNDING_GOAL', 0.95);
+    return resolved('ITEM_REPLACEMENT_COST', 0.95);
   }
   if (capitalReservePattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('CAPITAL_RESERVE_PLAN', 0.97);

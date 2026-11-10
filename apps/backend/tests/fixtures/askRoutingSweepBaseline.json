@@ -109,10 +109,8 @@
   ],
   "CAPITAL_ITEM_FUNDING_GOAL": [
    "am i saving enough to replace my roof in 5 years",
-   "cost of a new dishwasher",
    "how do i save for replacing my hvac",
    "how much capital will i need for a new roof in 4 years",
-   "how much does a new roof cost",
    "how much should i put aside each month for a new roof",
    "if the water heater has to go in 3 years how much more should i save",
    "what do i need saved to replace the furnace by 2030"
@@ -373,6 +371,13 @@
    "when did i buy my fridge",
    "when was my water heater last serviced",
    "which items have missing details"
+  ],
+  "ITEM_REPLACEMENT_COST": [
+   "cost of a new dishwasher",
+   "how much does a new roof cost",
+   "how much will a new furnace cost",
+   "price of a new refrigerator",
+   "what does a replacement water heater cost"
   ],
   "MAINTENANCE_BUDGET_FORECAST": [
    "budget for home upkeep",
@@ -686,9 +691,6 @@
   ],
   "HOUSEHOLD_ACCESS_SUMMARY": [
    "household access"
-  ],
-  "HVAC_DECISION_START": [
-   "help me decide on a new furnace"
   ],
   "HVAC_PREFERENCE_SAVE": [
    "note that i want a quiet furnace",

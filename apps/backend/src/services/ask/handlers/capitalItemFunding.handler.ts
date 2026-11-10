@@ -12,15 +12,15 @@ import { getFinancialContextDecisions } from '../../financialContext/context';
 import { homeReserveFundService } from '../../homeReserveFund.service';
 import { HomeCapitalTimelineService, capitalCategoryDefault } from '../../homeCapitalTimeline.service';
 import { PROFILE_ROOF_MESSAGE_PATTERN, profileRoofTimelineItem } from '../support/profileRoof';
-import { deriveExpenseGrowthRate } from '../../financialAssumption.service';
+import { growthRateOf } from '../support/capitalTimelineCost';
 import { humanDate, money } from '../askFormatting';
 import { ensurePropertyAccess, isCapitalTimelineAnalysisStale } from '../askHandlerSupport';
 import { inventoryAddItemAction } from './inventoryAskActions';
-import { isItemCostMessage, namedFundingTerms, selectFundingItems, wantsAllFundingItems } from '../support/itemFundingWording';
+import { namedFundingTerms, selectFundingItems, wantsAllFundingItems } from '../support/itemFundingWording';
 import { parseTargetDate } from '../support/targetDate';
 import { parseMonthlyBudget } from '../support/moneyAmount';
 import {
-  DEFAULT_CAPITAL_COST_GROWTH_RATE, DEPOSIT_RATE_WINDOW_MONTHS, buildFundingPlan, depositsPerMonth, pointEstimate,
+  DEPOSIT_RATE_WINDOW_MONTHS, buildFundingPlan, depositsPerMonth, pointEstimate,
   type FundingPosture, type FundingTimelineItem,
 } from '../support/itemFunding';
 import { RESERVE_FUND_ACTION_IDS, RESERVE_FUND_COMMAND_MESSAGE } from '../support/reserveFundConstants';
@@ -32,18 +32,6 @@ export const ITEM_FUNDING_ACTION_IDS = Object.freeze({ CAPITAL_PLAN: 'item-fundi
 const words = (value: unknown) => String(value).toLowerCase().replace(/_/g, ' ');
 const dollars = (cents: number) => money(Math.round(cents / 100));
 const list = (names: string[]) => (names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`);
-
-function growthRateOf(analysis: { inputsSnapshot?: unknown } | null): number {
-  const snapshot = analysis?.inputsSnapshot;
-  const stored = snapshot && typeof snapshot === 'object' ? (snapshot as Record<string, unknown>).financialAssumptions : null;
-  if (stored && typeof stored === 'object') {
-    const a = stored as Record<string, unknown>;
-    if (['propertyTaxGrowthRate', 'insuranceGrowthRate', 'maintenanceGrowthRate', 'inflationRate'].every((key) => typeof a[key] === 'number')) {
-      return deriveExpenseGrowthRate(a as unknown as Parameters<typeof deriveExpenseGrowthRate>[0]);
-    }
-  }
-  return DEFAULT_CAPITAL_COST_GROWTH_RATE;
-}
 
 function notice(reasonCode: string, id: string, title: string, body: string, actions: any[] = [], status: AskOperationResult['status'] = 'READY_WITH_LIMITATIONS'): AskOperationResult {
   return { status, reasonCode, blocks: [{ type: 'SUMMARY', id, title, body, tone: 'CAUTION', actions } as AskPresentationBlock], suggestions: [] };
@@ -128,23 +116,6 @@ export async function itemFundingGoalResult(userId: string, propertyId: string, 
   });
 
   const names = list(plan.items.map((item) => item.name));
-  if (!target && isItemCostMessage(message)) {
-    const costBlocks: AskPresentationBlock[] = [
-      {
-        type: 'SUMMARY', id: 'item-funding-summary', title: `A new ${names} is about ${dollars(plan.costAtTargetCents)}`,
-        body: `${plan.items.length === 1 ? `The range is ${dollars(plan.items[0].costMinAtTargetCents)}–${dollars(plan.items[0].costMaxAtTargetCents)}. ` : ''}${missingCost ? 'One item has no cost estimate yet, so its share is counted as $0. ' : ''}This is your capital timeline’s estimate for when your home record expects it (${humanDate(plan.planningDate)}), not today’s price. Ask “how much should I save for it” to turn it into a monthly figure.`,
-        tone: 'DEFAULT',
-        actions: [{ id: ITEM_FUNDING_ACTION_IDS.CAPITAL_PLAN, label: 'Show my full capital plan', interactionType: 'START_WORKFLOW' as const, message: 'Show my capital reserve plan.', operationId: 'CAPITAL_RESERVE_PLAN' as const }],
-      },
-      { type: 'TABLE', id: 'item-funding-items', title: plan.items.length > 1 ? 'Items included' : 'The item', description: 'The expected window is the Home Capital Timeline’s estimate from the item’s age and condition.', columns: [{ key: 'item', label: 'Item' }, { key: 'window', label: 'Expected window' }, { key: 'cost', label: 'Estimated cost' }], rows: plan.items.map((item) => ({ id: item.id, values: { item: item.name, window: `${humanDate(item.windowStart)}–${humanDate(item.windowEnd)}`, cost: `${dollars(item.costMinAtTargetCents)}–${dollars(item.costMaxAtTargetCents)}` } })), actions: [] },
-      { type: 'EVIDENCE', id: 'item-funding-evidence', title: 'Sources and freshness', items: [
-        { label: 'Home Capital Timeline', source: `${plan.items.length} item${plan.items.length === 1 ? '' : 's'}, ${analysis?.horizonYears ?? 10}-year horizon`, observedAt: analysis?.computedAt?.toISOString?.() ?? null },
-        ...(fromProfile ? [{ label: 'Home profile', source: 'Roof year on your home profile, with the capital timeline’s roof default for life and cost (no tracked roof item)', observedAt: null }] : []),
-      ] },
-      { type: 'BOUNDARY', id: 'item-funding-boundary', title: 'Planning figure—not a quote', body: 'Actual prices depend on materials, labor, permits and when you do the work.', severity: 'INFO' },
-    ] as AskPresentationBlock[];
-    return { status: missingCost ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: missingCost ? 'ITEM_FUNDING_COST_MISSING' : undefined, blocks: costBlocks, suggestions: [] } as AskOperationResult;
-  }
   const when = target ? target.label : `around ${humanDate(plan.planningDate)}`;
   const sentences: string[] = [];
   sentences.push(`To replace ${plan.items.length > 1 ? 'these' : 'your'} ${names} ${target ? when : `${when}, when your home record expects it`}, plan on about ${dollars(plan.costAtTargetCents)}${plan.items.length === 1 ? ` (range ${dollars(plan.items[0].costMinAtTargetCents)}–${dollars(plan.items[0].costMaxAtTargetCents)})` : ''}.`);

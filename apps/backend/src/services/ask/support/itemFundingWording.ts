@@ -46,8 +46,6 @@ const OTHER_INTENT = /\b(?:save money|savings opportunit\w+|rebates?|discounts?|
 export function isItemFundingGoalMessage(message: string): boolean {
   if (OTHER_INTENT.test(message)) return false;
   const dated = parseTargetDate(message) != null;
-  // "How much will a new roof cost in 5 years?" asks for the cost at a date, which is the first line of the funding answer.
-  if (dated && COST_WORDING.test(message) && namedFundingTerms(message).length > 0 && /\b(?:new|replac\w*)\b/i.test(message)) return true;
   if (!STRONG_SAVING_WORDING.test(message) && !(dated && WEAK_SAVING_WORDING.test(message))) return false;
   const named = namedFundingTerms(message).length > 0;
   const everything = wantsAllFundingItems(message);
@@ -59,15 +57,15 @@ export function isItemFundingGoalMessage(message: string): boolean {
 
 const WRITE_INTENT = /\b(?:change|update|edit|correct|fix|set|add|record|enter|rename)\b/i;
 // A verdict or a how-old question about the item is a different read.
-const OTHER_ITEM_QUESTION = /\b(?:repair or replace|should i|worth (?:repairing|replacing)|how old|how long|lifespan|life expectancy|condition)\b/i;
+const OTHER_ITEM_QUESTION = /\b(?:repair|repairs|repairing|or replace|should i|worth (?:repairing|replacing)|how old|how long|lifespan|life expectancy|condition|leak\w*|equity|afford|pay for|paying for|finance|financing|loan|mortgage|heloc|insurance|warranty)\b/i;
 
 /**
  * "How much does a new roof cost" / "cost of a new dishwasher": a named system or appliance and a cost word with a replacement cue, and no saving goal.
- * With a date or a saving goal `isItemFundingGoalMessage` takes it first; this is the cost-only mode of the same read.
+ * A saving goal goes to `isItemFundingGoalMessage` first. A date is allowed: the cost is then shown grown to that date (ITEM_REPLACEMENT_COST).
  */
 export function isItemCostMessage(message: string): boolean {
   if (OTHER_INTENT.test(message) || WRITE_INTENT.test(message) || OTHER_ITEM_QUESTION.test(message)) return false;
-  if (STRONG_SAVING_WORDING.test(message) || parseTargetDate(message) != null) return false;
+  if (STRONG_SAVING_WORDING.test(message)) return false;
   if (!COST_WORDING.test(message) || !/\b(?:new|replacement|replac\w*|install\w*)\b/i.test(message)) return false;
   return namedFundingTerms(message).length > 0;
 }

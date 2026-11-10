@@ -241,11 +241,12 @@ test('single-fact building blocks: an item\'s condition and its replacement cost
   const cases = [
     ["what's my roof's condition", 'INVENTORY_LOOKUP'],
     ['the condition of my dishwasher', 'INVENTORY_LOOKUP'],
-    ['how much does a new roof cost', 'CAPITAL_ITEM_FUNDING_GOAL'],
-    ['cost of a new dishwasher', 'CAPITAL_ITEM_FUNDING_GOAL'],
+    ['how much does a new roof cost', 'ITEM_REPLACEMENT_COST'],
+    ['cost of a new dishwasher', 'ITEM_REPLACEMENT_COST'],
     ['should I repair or replace my roof, what does a new one cost', 'REPLACEMENT_GUIDANCE'],
-    // with a date it is the cost line of the funding answer
-    ['how much will a new roof cost in 5 years', 'CAPITAL_ITEM_FUNDING_GOAL'],
+    // with a date it is the same read, grown to that date; a saving goal is the funding answer
+    ['how much will a new roof cost in 5 years', 'ITEM_REPLACEMENT_COST'],
+    ['how much should I save for a new roof in 5 years', 'CAPITAL_ITEM_FUNDING_GOAL'],
     // not an item
     ['how much does a new house cost', 'OWNERSHIP_COSTS'],
   ];
@@ -289,10 +290,10 @@ test('profile roof: window is the roof default life after the recorded year; a r
   assert.ok(past.windowEnd > past.windowStart);
 });
 
-test('wording: the cost-only mode', () => {
+test('wording: which messages are replacement-cost questions', () => {
   const { isItemCostMessage } = require('../../src/services/ask/support/itemFundingWording.ts');
-  for (const m of ['how much does a new roof cost', 'cost of a new dishwasher', 'what does a replacement water heater cost']) assert.equal(isItemCostMessage(m), true, m);
-  for (const m of ['how much does a new house cost', 'how much will a new roof cost in 5 years', 'how much should I save for a new roof', 'how old is my roof', 'update the replacement cost of my roof', 'should I replace my roof, what does it cost']) assert.equal(isItemCostMessage(m), false, m);
+  for (const m of ['how much does a new roof cost', 'cost of a new dishwasher', 'what does a replacement water heater cost', 'how much will a new roof cost in 5 years']) assert.equal(isItemCostMessage(m), true, m);
+  for (const m of ['how much does a new house cost', 'how much should I save for a new roof', 'how old is my roof', 'update the replacement cost of my roof', 'should I replace my roof, what does it cost']) assert.equal(isItemCostMessage(m), false, m);
 });
 
 test('no logged deposits is unknown, not a confirmed $0', () => {

@@ -580,3 +580,14 @@ Open:
 - Whether any allowlisted operation is actually side-effect-free is **not verified**: the scan found no direct database writes in handler files, but writes go through services and handler files are shared with commands (C15). FR-ELG-6 is the proof and has not been written.
 - Whether two-component composition lifts the compound corpus enough to justify Phases 3–6 is unmeasured; Phases 0 and 2 exist to measure it.
 - The lifecycle trace (§5.3) is code-traced only. It has not been exercised against a database, and the concurrent-create race (T3) is inferred from the absence of a `P2002` catch, not reproduced.
+
+---
+
+## 18. Implementation status
+
+Updated as each phase lands. Every entry is **built and tested without a database**; nothing has run against a real backend.
+
+| Phase | State | Evidence |
+|---|---|---|
+| 0 | Accepted for implementation with the recommended defaults for open decisions (D1–D4, D8–D10); the decisions are consolidated for the owner at the end of the build | FRD v0.8 |
+| 1 | **Done** (FRD 1.555 in `ASK_COZY_INLINE_WORKSPACE_FRD.md`): shared cost function `support/itemCost.ts`, new `STANDARD` operation `ITEM_REPLACEMENT_COST`, funding goal moved onto the shared function | `tests/ask/itemReplacementCost.test.js`, `itemFundingGoal.test.js`, both sweep ratchets |

@@ -18,8 +18,8 @@ const {
 } = require('../../src/services/ask/suggestedActions/operationSpecificContinuationCoverage.ts');
 
 // Reviewed 2026-11-02: the only operation added since the previous hash (commit a9c7f710) is COMMUNITY_UPDATES, now covered by recipes.
-// Reviewed 2026-11-08: the only operation added since is CAPITAL_ITEM_FUNDING_GOAL, covered by recipes (capital outlook, ownership costs).
-const REVIEWED_OPERATION_REGISTRY_HASH = '1ed7306c902b5debece97d196285e9d73d4fd4f6160000b617038f5359d7bc1a';
+// Reviewed 2026-11-09: the only operation added since is ITEM_REPLACEMENT_COST, covered by recipes (capital outlook, ownership costs).
+const REVIEWED_OPERATION_REGISTRY_HASH = 'dc5f5fe6c5ebcb03b34bbe2526eff6905a0f23ffb61b5bd0107e83f6ce8ee470';
 const registryIds = () => Object.keys(ASK_OPERATION_DEFINITIONS).sort();
 const registryHash = () => createHash('sha256').update(registryIds().join('\n')).digest('hex');
 

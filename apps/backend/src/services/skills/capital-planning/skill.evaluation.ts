@@ -45,6 +45,13 @@ export const CAPITAL_PLANNING_SKILL_EVALUATION = deepFreezeSkillPackage({
       }
     },
     {
+      "operationId": "ITEM_REPLACEMENT_COST",
+      "expectedAdapter": {
+        "id": "item-replacement-cost.read",
+        "version": "1.0"
+      }
+    },
+    {
       "operationId": "RESERVE_FUND_COMMAND",
       "expectedAdapter": {
         "id": "reserve-fund.command",
@@ -71,6 +78,11 @@ export const CAPITAL_PLANNING_SKILL_EVALUATION = deepFreezeSkillPackage({
     {
       "consumer": "ASK",
       "operationId": "CAPITAL_ITEM_FUNDING_GOAL",
+      "allowed": true
+    },
+    {
+      "consumer": "ASK",
+      "operationId": "ITEM_REPLACEMENT_COST",
       "allowed": true
     },
     {
@@ -154,6 +166,10 @@ export const CAPITAL_PLANNING_SKILL_EVALUATION = deepFreezeSkillPackage({
       "version": "1.0"
     },
     {
+      "id": "item-replacement-cost.read",
+      "version": "1.0"
+    },
+    {
       "id": "reserve-fund.command",
       "version": "1.0"
     }
@@ -190,6 +206,10 @@ export const CAPITAL_PLANNING_SKILL_EVALUATION = deepFreezeSkillPackage({
     },
     {
       "id": "capital-item-funding.goal",
+      "version": "1.0"
+    },
+    {
+      "id": "item-replacement-cost.read",
       "version": "1.0"
     },
     {
