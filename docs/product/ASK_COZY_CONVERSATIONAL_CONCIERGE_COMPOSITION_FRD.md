@@ -1,6 +1,6 @@
 # Ask Cozy — Conversational Concierge: Bounded Read Composition FRD
 
-**Status:** Draft v0.3 for owner review (D7 settled by a registry scan)
+**Status:** Draft v0.4 for owner review (second review applied; Phase 0 lifecycle trace is now a gate)
 **Date:** 2026-11-09
 **Owner decisions needed:** §15
 **Related:**
@@ -13,6 +13,7 @@
 
 **Revision history**
 - v0.1: first draft.
+- v0.4: runtime matrix corrected to the settled architecture (the roof composite uses `ITEM_REPLACEMENT_COST`, not the funding goal; the no-deposits case moves to the funding goal's own suite); FR-ELG-6 certifies the **real** handler and real domain-service path with recording adapters only at infrastructure boundaries; child-state mapping including `FAILED_RETRYABLE` (§5.2.1); execution-lifecycle trace made a Phase 0 gate with preliminary findings (§5.3); R-ATM-3 no longer allows the shared function alone; concurrent-dispatch authorization test uses synchronization hooks; certification-corpus claim narrowed to what the coverage document supports.
 - v0.3: registry scan done and D7 settled (§4.3); corrected the v0.2 claim that `CAPITAL_ITEM_FUNDING_GOAL` is `STANDARD` (it is `MATERIAL_DECISION`), so the roof prompt needs a new `STANDARD` atomic cost read (R-ATM-3, D2); added the corpus-reach finding (C14) and a per-operation purity test as the admission gate (FR-ELG-6).
 - v0.2: composition limited to an explicit registry of standard-materiality reads (§4.1); validated blocks are immutable and basis handling moves to a separate projection (§6.3, §6.8); full-message safety before decomposition (FR-DEC-0); parent/child idempotency, persistence, replay and reconciliation (§5.2); dependency-based clarification (§6.2); typed `coverage` field instead of a new status (D5 decided); two-component first version (D6 decided); evidence counts corrected; zero-wrong-execution floor kept; assembly-failure fallback is one envelope, not separate answers; provenance and freshness derivation rules (§6.9); runtime verification matrix (§12.4).
 
@@ -62,7 +63,7 @@ Ask Cozy does not become an unrestricted general-purpose chatbot, and a model ne
 | C2 | A two-part question is answered by one operation. `support/alsoAnswer.ts` finds the dropped part and offers a one-tap secondary "Also answer: …" button; tapping it asks that part as its own turn. No blocks are merged. | [Code-traced] |
 | C3 | An automatic second turn was built and **withdrawn** (FRD 1.554). Live use of the roof prompt gave two user bubbles and two cost figures on different bases ($8,000–$15,000 "in today's dollars" from `INVENTORY_LOOKUP`; $16,650–$31,219 grown to the 2044 window from `CAPITAL_ITEM_FUNDING_GOAL` cost-only). | Observed live by the owner |
 | C4 | Routing is hybrid: safety gate, direct patterns, local lexical/feature-hash retrieval with calibration, optional bounded model routing, clarification, remote fallback. | [Code-traced] |
-| C5 | Certification corpus (126 authored fixtures): 92 routed to the expected operation (73%), 0 wrong, 8 clarified with the right operation offered, 26 to fallback. These fixtures were written with the router, so the figure is likely optimistic for unseen phrasing. | [Executed] (coverage doc) |
+| C5 | Certification corpus (121 independent fixtures plus 5 regressions, 126 total; English only; written to avoid the operation index, per the coverage document): 92 routed to the expected operation (73%), 0 wrong, 8 clarified with the right operation offered, 26 to fallback. These are authored certification fixtures, not production traffic, and they do not establish accuracy on unseen messages. | [Executed] (coverage doc) |
 | C6 | Independent 690-prompt routing sweep: 53–59% correct operation. Different corpus from C5; neither is "the" accuracy. | [Executed] (earlier audit) |
 | C7 | Compound corpus (33 prompts, each listing the operations its answer needs). First run (audit §0): 15 full / 11 partial / 1 clarify / 4 wrong / 2 fallback. After the sale-upgrade routing fix (FRD 1.550) the baseline was re-recorded at **15 / 12 / 1 / 3 / 2** (`node scripts/ask-compound-sweep.js`, 2026-11-09). Use the re-recorded baseline as the reference. | [Executed] |
 | C8 | `askResultSynthesis` rewrites one operation's validated blocks into one sentence and rejects any number not in the payload. | [Code-traced] |
@@ -99,7 +100,7 @@ Ask Cozy does not become an unrestricted general-purpose chatbot, and a model ne
 | FR-ELG-3 | `MATERIAL_DECISION` operations are **never** composable in the first version, including refinance, sell/hold/rent, repair-or-replace, break-even, quote comparison, capital planning, property-tax appeal readiness and HVAC scenarios. Lifting this needs its own FRD and owner decision. |
 | FR-ELG-4 | A startup validation test fails the build if a `composableRead` operation violates FR-ELG-2, mirroring the existing registry validation. |
 | FR-ELG-5 | The initial allowlist is §4.3 and contains only operations the owner has approved by name. |
-| FR-ELG-6 | **Admission gate.** An operation joins the allowlist only with a per-operation runtime test that runs its handler against a recording fake `prisma` and fake services that **throw on any write**, and asserts the result has no confirmation, capture request, `WORKFLOW_PROGRESS` block or write action. The existing `correctionHandlersRuntime` test is the pattern. A static scan is not sufficient (C15). |
+| FR-ELG-6 | **Admission gate.** An operation joins the allowlist only with a per-operation runtime test that executes the **real handler and the real domain-service path**, replacing only **infrastructure boundaries** with recording adapters: the Prisma client, event publication, job queueing, outbound model and network calls, and cache or storage writers. The test **fails** on any Prisma write, published event, queued job, outbound model or network call, workflow, journey or thread creation, or other mutation; it **permits and records** reads; and it asserts the result contains no confirmation, capture request, proposal, write action or `WORKFLOW_PROGRESS` block. A fake that replaces a domain service does not count, because it hides the transitive behavior being certified. Where a service cannot be exercised this way, admission requires direct code-path evidence **and** a narrower operation-owned pure reader that the composable operation uses instead. The existing `correctionHandlersRuntime` test is a starting pattern only, since it stubs the writers. |
 
 > Consequence: the allowlist is narrow, and it does **not** include `CAPITAL_ITEM_FUNDING_GOAL` (`MATERIAL_DECISION`). The roof prompt composes only if its cost clause is answered by a `STANDARD` atomic read (R-ATM-3), not by the funding goal.
 
@@ -158,7 +159,7 @@ Single-clause messages follow today's path unchanged.
 | FR-EXE-1 | Each component executes **independently** through the existing execution path: access check, adapter, audience policy, per-operation trust validation. A component's failure does not abort the other. |
 | FR-EXE-2 | Access to the property is re-checked **per component** at execution time. A component whose access was lost between components returns a not-authorized section; the other component is unaffected and the composite is `coverage: PARTIAL`. |
 | FR-EXE-3 | Component execution is read-only. A component that returns a confirmation, capture request or write action is treated as a violation of FR-ELG-2 and its section is replaced by a limitation. |
-| FR-EXE-4 | The two components run concurrently when independent. Each has a timeout; a timed-out or cancelled component yields a limitation section, never a hang. The composite is `READY_WITH_LIMITATIONS` with `coverage: PARTIAL`. |
+| FR-EXE-4 | The two components are dispatched concurrently when independent. Each has a timeout; a timed-out or cancelled component yields a limitation section, never a hang (state mapping in §5.2.1). Authorization is checked **independently inside each component's own canonical service path**, so no ordering between components is assumed. |
 | FR-EXE-5 | No generative-model call occurs in decomposition, execution or assembly. Optional narration (§9) is separable and measured separately (addendum §29.2). |
 
 ### 5.2 Parent/child persistence, idempotency and recovery
@@ -168,12 +169,47 @@ Single-clause messages follow today's path unchanged.
 | FR-PER-1 | A composed turn is **one parent execution** in history, with one child execution per component (`parentExecutionId`). History shows one entry. |
 | FR-PER-2 | Each child's `clientRequestId` is deterministic: a stable hash of the parent's `clientRequestId` and a **stable component identity** (`operationId` plus the normalized slot set), never the array position alone. Because `(userId, clientRequestId)` is unique (C13), a retry of the parent computes the same child keys. |
 | FR-PER-3 | Child creation is **get-or-create**: a retried parent finds existing children by key and reuses them; it does not recreate or re-run a terminal child. |
-| FR-PER-4 | Assembly is **resumable**: if the process stopped after one child persisted, a retry runs only the missing child, then assembles. A child that is non-terminal when the parent retries is awaited or resumed under the existing execution lifecycle, not duplicated. |
-| FR-PER-5 | The parent reaches a terminal status **only after both children are terminal** (answered, limited, failed, timed out or cancelled). Until then the parent is non-terminal and shows progress. |
+| FR-PER-4 | Assembly is **resumable**: if the process stopped after one child persisted, a retry runs only the missing child, then assembles. **This requirement is not implementable until the Phase 0 lifecycle trace (§5.3) is complete**, because the current lifecycle retries by creating a *new* execution, not by resuming the old row. |
+| FR-PER-5 | The parent reaches a terminal status **only after both children have a terminal component outcome** under §5.2.1. A child in `FAILED_RETRYABLE` is **not** terminal: the parent stays non-terminal (or shows a retry affordance) until the child's retry policy is exhausted or it is explicitly converted to a terminal limited outcome. Parent replay never freezes a retryable child indefinitely as a limitation. |
 | FR-PER-6 | The assembled composite is persisted on the parent when assembled and is the durable answer. Reload **replays** it from the same child set; it does not recompute. |
 | FR-PER-7 | Refresh of a composed turn refreshes **each child** through the existing per-execution refresh and then reassembles the composite from the refreshed children, re-running §6.7. A refresh that would downgrade a child (existing downgrade rule) keeps that child's prior validated result and marks the section stale. |
 | FR-PER-8 | If a child is expired, deleted or has become inaccessible when the parent is reloaded, that section is replaced by an "unavailable" limitation and the composite becomes `coverage: PARTIAL` on next read. The remaining validated section is unchanged. The parent is never reported `COMPLETE` while a section is unavailable. |
 | FR-PER-9 | Duplicate delivery of the same parent request (double submit, network retry) yields one parent and the same two children. |
+| FR-PER-10 | A successful retry of a `FAILED_RETRYABLE` child updates the parent **deterministically and idempotently**: the parent's component pointer moves to the successful attempt, the composite is reassembled once, and a duplicate delivery of the same retry yields the same parent state. Child attempts carry a stable attempt number in their key (`…:attempt:N`), so a retry never collides with, or silently replaces, an earlier attempt. |
+
+#### 5.2.1 Child-state mapping
+
+Existing `AskExecutionStatus` values, as they contribute to the parent:
+
+| Child status | Terminal for the parent? | Component outcome |
+|---|---|---|
+| `ANSWERED`, `COMPLETED` | Yes | Answered section |
+| `READY_WITH_LIMITATIONS` | Yes | Limited section |
+| `FAILED_TERMINAL` | Yes | Limitation section with the child's reason code |
+| `CANCELLED` | Yes | "Not completed" limitation |
+| `UNAVAILABLE`, `BLOCKED`, `OUT_OF_SCOPE`, `NOT_APPLICABLE` | Yes | Limitation or not-answered entry by reason code |
+| `FAILED_RETRYABLE` | **No** until the retry policy is exhausted, then converted to a terminal limited outcome | Pending; shown as "retrying" or with a retry affordance |
+| `RUNNING`, `RECEIVED`, `ROUTING` | **No** | Pending |
+| `NEEDS_CLARIFICATION`, `NEEDS_CONTEXT`, `NEEDS_ENTITY`, `NEEDS_PROPERTY` | Handled by §6.2 (dependency-based clarification), not as a component failure | Clarification |
+| `NEEDS_CONFIRMATION`, `OUTCOME_UNKNOWN` | Never produced by an allowlisted read (FR-ELG-2/3); if observed, the component is a violation (FR-EXE-3) | Limitation plus an integrity metric |
+
+**Timeout.** A component that exceeds its timeout is recorded as `FAILED_RETRYABLE` with reason `COMPONENT_TIMEOUT`. Proposed policy (owner to confirm, D9): one automatic retry within the same turn, then conversion to a terminal limited outcome; a later manual retry follows the existing retry path.
+
+**Retry mechanics.** Today's `retryAskExecution` creates a new execution linked by `continuesExecutionId`, it does not resume the failed row. Child retry therefore creates a new child attempt and moves the parent's pointer to it (FR-PER-10); it does not mutate the failed attempt.
+
+### 5.3 Phase 0 lifecycle trace (required before Phase 2)
+
+FR-PER-2 to FR-PER-10 are implementable only after this trace is recorded. Each item needs a code reference and a verdict.
+
+| # | Question | Preliminary finding (code-traced, incomplete) |
+|---|---|---|
+| T1 | Which statuses can be resumed, and which are retried by new execution? | Retry is by **new execution** (`execution/askRetry.ts`, `askExecutionCanRetry`), linked by `continuesExecutionId`; no resume of the same row found |
+| T2 | Which function resumes a half-finished child, or is a new one needed? | None found; a new coordinator is likely required |
+| T3 | Concurrent ownership: two parent retries meet the same running child | A lease exists for **confirmed commands** (`askConfirm.ts`, `leaseExpiresAt`); none found for plain read executions. A lease or an atomic claim on the child key is probably needed |
+| T4 | Stale `RUNNING` after process death | `reclaimOrphanedRunningExecution` (`askSessions.ts`, 30 s grace) reclaims orphaned `RUNNING` **reads** without a confirmation receipt: this covers allowlisted components. Behavior of its outcome status for a child still to be traced |
+| T5 | History and pending-work queries hide component children but allow operational recovery | Not verified. `askOutcomeReport` filters `parentExecutionId: null`; history, search, pending-work and refresh queries unchecked |
+| T6 | Existing child precedent | Conversational capture creates children with `ask-extraction:{parentId}:{index}` (**position-based**) and `parentExecution: connect`; FR-PER-2's identity-based key is a deliberate departure and needs the same uniqueness guarantee |
+| T7 | Schema changes required? | Unknown; record yes/no, including any need for an attempt number or lease column |
 
 ---
 
@@ -301,7 +337,7 @@ Composition works only if small, trustworthy reads exist.
 | R-ATM-4 | **Reserve allocation for an item** (estimate, labeled). |
 | R-ATM-5 | **Funding gap** for an item and date (exists: `CAPITAL_ITEM_FUNDING_GOAL`). |
 
-Each new read is a registered operation with the full registry footprint (governance allowlist, semantic maps, audience policy, trust policy, coverage matrix, certification fixture) and, if composable, `composableRead: true` under FR-ELG-2. R-ATM-3 may instead be met by one shared cost function (D2).
+Each new read is a registered operation with the full registry footprint (governance allowlist, semantic maps, audience policy, trust policy, coverage matrix, certification fixture) and, if composable, `composableRead: true` under FR-ELG-2 and the FR-ELG-6 purity gate. `ITEM_REPLACEMENT_COST` is required, not optional: it exists because `CAPITAL_ITEM_FUNDING_GOAL` is `MATERIAL_DECISION` and cannot compose (D2).
 
 ---
 
@@ -379,6 +415,7 @@ A model's general knowledge about the home or homeowner is never a recovery path
 - **Decomposition:** clause split, two-clause cap, FR-DEC-3/4 all-clauses-composable rule, same-operation merge, FR-DEC-7 skip.
 - **Status and clarification:** every §6.2 row; clause order reversed gives the same result for the same intents; dependency cases; one clarification, never a questionnaire.
 - **Idempotency (unit level):** child key derivation is stable across array order and retries; get-or-create reuses; resumption runs only the missing child; parent terminal only when both children are terminal.
+- **Retryable failure:** a child in `FAILED_RETRYABLE` keeps the parent non-terminal; after exhaustion it converts to a terminal limited outcome; a retry that succeeds updates the parent once, idempotently, including on duplicate delivery; a timeout maps to `FAILED_RETRYABLE` with `COMPONENT_TIMEOUT`.
 - **Authority table §6.3.1:** dated and undated cost; two sections with different bases never render two unlabeled figures (the C3 regression as a test).
 - **Immutability:** a stored hash of each section's blocks equals the blocks after assembly and after projection; basis handling never edits a section.
 - **Contradiction:** same-basis disagreement degrades to limited.
@@ -399,14 +436,15 @@ The repository does not require a development database, but the owner's backend 
 
 | # | Scenario | Expected |
 |---|---|---|
-| 1 | Roof prompt, home with profile roof year and no tracked roof item | One response, one history entry, one cost basis stated |
-| 2 | Roof prompt, home with a tracked roof item | Same, authority = funding read |
-| 3 | Roof prompt, no reserve deposits logged | "Not enough logged deposits"; no $0 shown as fact |
+| 1 | Roof prompt, home with a profile roof year and no tracked roof item | One response, one history entry; authority for cost = `ITEM_REPLACEMENT_COST`, one basis stated |
+| 2 | Roof prompt, home with a tracked roof item | Same; authority = `ITEM_REPLACEMENT_COST`; the profile-roof read and `ITEM_REPLACEMENT_COST` give the same figure per basis |
+| 3 | Roof prompt where the cost estimate is incomplete: no capital timeline, an item with no cost estimate, or an unknown expected window | Cost section says what is missing; no guessed figure; `coverage` reflects it; age section unaffected |
 | 4 | Double submit of the same request | One parent, two children, no duplicates (FR-PER-9) |
-| 5 | Kill the process after one child persists, retry | Only the missing child runs; one assembled answer (FR-PER-4) |
+| 5 | Kill the process after one child persists, retry (after the Phase 0 trace defines the mechanism) | Only the missing child runs; one assembled answer (FR-PER-4) |
+| 5b | A child fails with `FAILED_RETRYABLE`, then a retry succeeds | Parent stays non-terminal while retryable; after the retry the parent reassembles once with the successful attempt; replay does not freeze the failure (FR-PER-5, FR-PER-10) |
 | 6 | Concurrent requests from two tabs | No unique-key violation surfaced; consistent single result |
 | 7 | One component fails or times out | `READY_WITH_LIMITATIONS`, `coverage: PARTIAL`; other section intact |
-| 8 | Property access removed between the two components | Not-authorized section; other section intact (FR-EXE-2) |
+| 8 | Property access revoked while one component is paused at a synchronization hook just **before its own authorization check**, after the other component has completed | The paused component returns not-authorized; the completed section is unchanged; deterministic, not timing-dependent (FR-EXE-2, FR-EXE-4) |
 | 9 | A child expires or is deleted, then the parent is reloaded | Unavailable section, `coverage: PARTIAL`, remaining section unchanged (FR-PER-8) |
 | 10 | Reload and open from history | Replayed from the same children; no recompute (FR-PER-6) |
 | 11 | Refresh a composed turn after underlying data changed | Each child refreshed, composite reassembled, downgrade rule respected (FR-PER-7) |
@@ -422,7 +460,7 @@ The repository does not require a development database, but the owner's backend 
 
 | Phase | Content | Gate |
 |---|---|---|
-| 0 | This FRD accepted; §15 decisions taken; compound corpus grown to ≥ 100 with held-out slice and required component sets | Owner sign-off |
+| 0 | This FRD accepted; §15 decisions taken; **§5.3 lifecycle trace recorded (T1–T7)**; compound corpus grown to ≥ 100 with held-out slice and required component sets | Owner sign-off |
 | 1 | Shared cost function and the new `ITEM_REPLACEMENT_COST` operation (fixes the C3 divergence even without composition) | Test: profile-roof read, funding read and `ITEM_REPLACEMENT_COST` give one figure per basis |
 | 2 | `composableRead` registry property and validation; FR-ELG-6 purity test for each allowlisted operation; composite contract §6 and validator; parent/child persistence §5.2; two components, deterministic splitting, the roof prompt first | §12.2 tests green; §12.4 matrix rows 1–16 recorded by the owner; compound corpus component-set correctness measured |
 | 3 | Slots §8 and elliptical follow-ups | Multi-turn corpus at target; no regression in sweeps |
@@ -474,6 +512,7 @@ Open:
 | D1 | Replacement cost without a date: today's dollars first, expected-window figure as a second labeled line? | Yes (FR-BAS-4). The current cost-only mode leads with the future-dollar figure. |
 | D3 | Calibration isolation: per operation, per family, or accept the global curve with the known-drift list? | Per family; keep the known-drift list until then. |
 | D4 | Slot turn window and whether `objective` is carried | 5 turns; carry `objective` only when the homeowner stated it. |
+| D9 | Component timeout and retry policy | One automatic retry within the turn, then a terminal limited outcome; timeout value set from measured component latency in Phase 2 |
 
 ---
 
@@ -501,4 +540,4 @@ Open:
 - The 126-fixture and 690-prompt figures are offline sweeps on authored corpora, not live traffic.
 - Whether any allowlisted operation is actually side-effect-free is **not verified**: the scan found no direct database writes in handler files, but writes go through services and handler files are shared with commands (C15). FR-ELG-6 is the proof and has not been written.
 - Whether two-component composition lifts the compound corpus enough to justify Phases 3–6 is unmeasured; Phases 0 and 2 exist to measure it.
-- The child-key and resumption design assumes the existing execution lifecycle can wait on or resume a non-terminal child; that has not been checked against the code and must be confirmed before Phase 2.
+- The child-key, resumption and retry design depends on the §5.3 lifecycle trace, which is only partly done (T1, T3, T4, T6 have preliminary findings; T2, T5, T7 are open). FR-PER-4 is an aspiration until it is complete.
