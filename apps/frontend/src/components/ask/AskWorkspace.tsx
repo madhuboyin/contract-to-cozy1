@@ -25,6 +25,7 @@ import { AskActionReturnContext, AskContextLink } from './blocks/context';
 import { BlockView } from './blocks/registry';
 import { useConversationView } from '@/features/ask/useConversationView';
 import { useResponseContextPanel } from './workspace/useResponseContextPanel';
+import { alsoAnswerFollowUp } from '@/features/ask/alsoAnswerFollowUp';
 import { useComposerKeys } from './workspace/useComposerKeys';
 import { useSessionLifecycle } from './workspace/useSessionLifecycle';
 import { useResultRefresh } from './workspace/useResultRefresh';
@@ -225,7 +226,12 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
   const { submit, keyDown, isComposingRef } = useComposerKeys({
     input,
-    ask: async (question) => { await ask(question); },
+    // A typed two-part question: the first part is answered, then the server's offered second part is asked as its own turn (a failed or unanswered first part offers nothing).
+    ask: async (question) => {
+      const first = await ask(question);
+      const followUp = alsoAnswerFollowUp(first);
+      if (followUp) await ask(followUp.message, undefined, { operationId: followUp.operationId });
+    },
   });
 
 
