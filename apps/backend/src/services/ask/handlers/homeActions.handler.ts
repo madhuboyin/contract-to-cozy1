@@ -430,7 +430,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
     const captureEvaluation = featureCaptureEvaluation ?? derivedCapture?.evaluation ?? null;
     // Activation "Review and correct" action: up to four starting facts, asked one per turn (support/activationContextCapture.ts).
     const activationCapture = !featureCaptureEvaluation && !derivedCapture && access.role !== HouseholdRole.VIEWER && isActivationContextAction(focusedAction)
-      ? await deriveActivationContextCapture(propertyId, (feature) => evaluateFeatureContext(propertyId, userId, feature), sessionId ? await dismissedActivationRequirements(sessionId) : undefined)
+      ? await deriveActivationContextCapture(propertyId, (feature) => evaluateFeatureContext(propertyId, userId, feature), sessionId ? await dismissedActivationRequirements(sessionId) : undefined, userId)
       : null;
     const captureFeature = featureCaptureEvaluation ? (focusedAction.propertyContextFeature ?? null) : activationCapture ? activationCapture.feature : derivedCapture?.feature ?? null;
     const featureCaptureRequirement = captureEvaluation?.requirements[0];

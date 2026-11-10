@@ -643,10 +643,16 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
       if (access.role === HouseholdRole.VIEWER) {
         throw Object.assign(new Error('A contributor or owner is required to add home details.'), { code: 'ASK_PERMISSION_REQUIRED' });
       }
+      const skip = input.answer && typeof input.answer === 'object' && !Array.isArray(input.answer) && (input.answer as { $skip?: unknown }).$skip === true;
       try {
-        capturedContextVersion = await saveActivationContextAnswer({
-          userId, propertyId: execution.propertyId, requirementId: input.requirementId, answer: input.answer, expectedContextVersion: input.expectedContextVersion,
-        });
+        if (skip) {
+          await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'CAPTURE_DISMISSED', metadataJson: asInputJson({ requirementId: input.requirementId, captureKey: input.captureKey }) } });
+          capturedContextVersion = input.expectedContextVersion;
+        } else {
+          capturedContextVersion = await saveActivationContextAnswer({
+            userId, propertyId: execution.propertyId, requirementId: input.requirementId, answer: input.answer, expectedContextVersion: input.expectedContextVersion,
+          });
+        }
       } catch (error) {
         if (error instanceof ActivationCaptureError) throw Object.assign(new Error(error.message), { code: error.code });
         throw error;

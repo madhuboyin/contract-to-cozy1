@@ -21,6 +21,7 @@ const FACT_KEY_FOR_GAP: Partial<Record<ActivationGapKey, string>> = { YEAR_BUILT
 export const isActivationContextAction = (action: { signal: string }): boolean => action.signal === ACTIVATION_CONTEXT_SIGNAL;
 
 interface ActivationState {
+  activeTriggerId: string | null;
   gaps: ActivationGapKey[];
   entityType: string | null;
   entityId: string | null;
@@ -35,9 +36,10 @@ function evidenceDetailPresent(json: unknown): boolean {
 export async function activationContextState(propertyId: string): Promise<ActivationState> {
   const [property, onboarding] = await Promise.all([
     prisma.property.findUnique({ where: { id: propertyId }, select: { yearBuilt: true, propertySize: true } }),
-    prisma.propertyOnboarding.findUnique({ where: { propertyId }, select: { triggerEntityType: true, triggerEntityId: true, activeTriggerDetail: true, triggerEvidenceJson: true } }),
+    prisma.propertyOnboarding.findUnique({ where: { propertyId }, select: { activeTriggerId: true, triggerEntityType: true, triggerEntityId: true, activeTriggerDetail: true, triggerEvidenceJson: true } }),
   ]);
   return {
+    activeTriggerId: onboarding?.activeTriggerId ?? null,
     gaps: activationMissingGaps({
       yearBuilt: property?.yearBuilt, propertySize: property?.propertySize,
       triggerEntityId: onboarding?.triggerEntityId, triggerEntityType: onboarding?.triggerEntityType,
@@ -51,8 +53,8 @@ export async function activationContextState(propertyId: string): Promise<Activa
 }
 
 /** Changes whenever the trigger's item, detail or evidence changes, so a form opened before another save cannot overwrite it. */
-export function activationContextVersion(state: Pick<ActivationState, 'entityType' | 'entityId' | 'detail' | 'evidenceCount'>): string {
-  return createHash('sha256').update(JSON.stringify([state.entityType, state.entityId, state.detail, state.evidenceCount])).digest('hex');
+export function activationContextVersion(state: Pick<ActivationState, 'activeTriggerId' | 'entityType' | 'entityId' | 'detail' | 'evidenceCount'>): string {
+  return createHash('sha256').update(JSON.stringify([state.activeTriggerId ?? null, state.entityType, state.entityId, state.detail, state.evidenceCount])).digest('hex');
 }
 
 const base = { classification: 'ENHANCEMENT_ACCURACY' as const, state: 'UNKNOWN' as const, allowNotSure: false, sensitivity: 'STANDARD' as const, destinationLabel: 'Saved to this home’s starting context', confirmationText: null };
@@ -68,12 +70,20 @@ async function itemRequest(propertyId: string, state: ActivationState, position:
   } as AskCaptureRequest;
 }
 
-function detailRequest(state: ActivationState, position: string): AskCaptureRequest {
+async function detailRequest(propertyId: string, userId: string, state: ActivationState, position: string): Promise<AskCaptureRequest> {
+  const records = userId ? await prisma.propertyRecord.findMany({
+    where: { propertyId, createdByUserId: userId, lifecycleStatus: { not: 'TRASHED' } },
+    orderBy: { updatedAt: 'desc' }, take: 40,
+    select: { id: true, title: true, recordType: true },
+  }) : [];
   return {
     ...base, requirementId: 'activation-trigger-details', captureKey: ACTIVATION_CONTEXT_CAPTURE_KEY, title: 'What happened',
-    question: 'In a sentence or two, what prompted this?',
-    helpText: `${position}For example, what you noticed, what you were quoted, or what you are deciding.`,
-    inputSchema: { type: 'LONG_TEXT', maxLength: 1000 },
+    question: 'What prompted this decision?',
+    helpText: `${position}Add a note, choose evidence already in Home Records, or upload a quote, invoice, photo, document, or email/PDF. Only include what changes the active decision.`,
+    inputSchema: { type: 'GROUP', fields: [
+      { key: 'detail', label: 'What happened', required: false, inputSchema: { type: 'LONG_TEXT', maxLength: 4000 } },
+      { key: 'recordIds', label: 'Evidence', required: false, inputSchema: { type: 'DOCUMENT_MULTI_SELECT', options: records.map((record) => ({ value: record.id, label: `${record.title} (${record.recordType.toLowerCase().replace(/_/g, ' ')})` })), maxItems: 10, allowUpload: true, uploadTarget: 'HOME_RECORDS' } },
+    ] } as unknown as AskCaptureRequest['inputSchema'],
     expectedContextVersion: activationContextVersion(state),
   } as AskCaptureRequest;
 }
@@ -108,6 +118,7 @@ export async function deriveActivationContextCapture(
   propertyId: string,
   evaluate: (feature: { featureKey: 'ASK_NEXT_ACTION'; operationKey: string }) => Promise<{ requirements: readonly any[]; contextVersion: string }>,
   dismissed: ReadonlySet<string> = new Set(),
+  userId = '',
 ): Promise<ActivationCapture | null> {
   const state = await activationContextState(propertyId);
   // Every askable question first, so "Question N of M" counts only what will actually be asked.
@@ -129,7 +140,7 @@ export async function deriveActivationContextCapture(
     } else if (gap === 'AFFECTED_ITEM') {
       if (!dismissed.has('activation-affected-item')) askable.push({ requirementId: 'activation-affected-item', build: async (position) => ({ request: await itemRequest(propertyId, state, position), feature: null }) });
     } else if (!dismissed.has('activation-trigger-details')) {
-      askable.push({ requirementId: 'activation-trigger-details', build: (position) => ({ request: detailRequest(state, position), feature: null }) });
+      askable.push({ requirementId: 'activation-trigger-details', build: async (position) => ({ request: await detailRequest(propertyId, userId, state, position), feature: null }) });
     }
   }
   if (!askable.length) return null;
@@ -157,12 +168,14 @@ export async function saveActivationContextAnswer(input: { userId: string; prope
       await prisma.propertyOnboarding.update({ where: { propertyId: input.propertyId }, data: { triggerEntityType: 'INVENTORY_ITEM', triggerEntityId: item.id } });
     }
   } else if (input.requirementId === 'activation-trigger-details') {
-    const text = typeof value === 'string' ? value.trim() : '';
-    if (!text || text.length > 1000) throw new ActivationCaptureError('Write a sentence or two, up to 1,000 characters.', 'ASK_CAPTURE_VALIDATION_ERROR');
-    await addTriggerEvidence(input.propertyId, input.userId, {
-      kind: 'FREE_TEXT', label: 'Homeowner context', detail: text, documentId: null,
-      observedAt: new Date().toISOString(), consentContext: 'Homeowner entered this in Ask for the active onboarding trigger.',
-    });
+    const answer = input.answer && typeof input.answer === 'object' && !Array.isArray(input.answer) ? input.answer as { detail?: unknown; recordIds?: unknown } : {};
+    const text = typeof answer.detail === 'string' ? answer.detail.trim() : '';
+    const recordIds = Array.isArray(answer.recordIds) ? [...new Set(answer.recordIds.filter((id): id is string => typeof id === 'string' && Boolean(id)))] : [];
+    if ((!text && recordIds.length === 0) || text.length > 4000 || recordIds.length > 10) throw new ActivationCaptureError('Add a note up to 4,000 characters or choose up to 10 Home Records.', 'ASK_CAPTURE_VALIDATION_ERROR');
+    const records = recordIds.length ? await prisma.propertyRecord.findMany({ where: { id: { in: recordIds }, propertyId: input.propertyId, createdByUserId: input.userId, lifecycleStatus: { not: 'TRASHED' } }, select: { id: true, title: true, recordType: true } }) : [];
+    if (records.length !== recordIds.length) throw new ActivationCaptureError('One or more evidence records are not available for this home.', 'ASK_CAPTURE_VALIDATION_ERROR');
+    if (text) await addTriggerEvidence(input.propertyId, input.userId, { kind: 'FREE_TEXT', label: 'Homeowner context', detail: text, documentId: null, observedAt: new Date().toISOString(), consentContext: 'Homeowner entered this in Ask for the active onboarding trigger.' });
+    for (const record of records) await addTriggerEvidence(input.propertyId, input.userId, { kind: 'DOCUMENT', label: record.title, detail: null, documentId: record.id, observedAt: new Date().toISOString(), consentContext: 'Homeowner selected or uploaded this Home Record in Ask for the active onboarding trigger.' });
   } else {
     throw new ActivationCaptureError('This question is no longer active.', 'ASK_CAPTURE_NOT_ACTIVE');
   }
