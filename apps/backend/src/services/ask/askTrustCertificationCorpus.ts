@@ -160,6 +160,8 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'CAPITAL_ITEM_FUNDING_GOAL', message: 'How much more must I set aside monthly to afford replacing the roof in four years?', category: 'PARAPHRASE' },
   // Item replacement cost (composition FRD Phase 1, 2026-11-09). Appended at the END: the fixtureId is positional.
   { operationId: 'ITEM_REPLACEMENT_COST', message: 'What would a new roof cost me?', category: 'PARAPHRASE' },
+  // Item reserve allocation (composition FRD Phase 4, 2026-11-10). Appended at the END: the fixtureId is positional.
+  { operationId: 'ITEM_RESERVE_ALLOCATION', message: 'How much of my reserve is already earmarked for the roof?', category: 'PARAPHRASE' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(
@@ -308,6 +310,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   CAPITAL_RESERVE_PLAN: 'The reserve outlook shows the largest future expense in the roof-replacement window.',
   CAPITAL_ITEM_FUNDING_GOAL: 'Replacing the roof in five years costs about $27,000; about $380 more a month would fund it.',
   ITEM_REPLACEMENT_COST: 'A new roof is about $12,000 in today\'s dollars and about $17,000 at its expected replacement window.',
+  ITEM_RESERVE_ALLOCATION: 'About $4,000 of your reserve is set aside for the roof, 20% of its $20,000 reserve target.',
   PROPERTY_TAX_APPEAL_READINESS: 'The property-tax assessment appeal is not ready because it still needs comparable-value evidence.',
   RENOVATION_PERMIT_READINESS: 'The remodel is blocked until the recorded permit approval is complete.',
   SELLER_PREP_CHECKLIST: 'Open seller-prep checklist items are listed by category with estimated cost ranges.',

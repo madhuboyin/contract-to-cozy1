@@ -7,4 +7,6 @@ module.exports = Object.freeze([
   // 123 (ITEM_REPLACEMENT_COST, 2026-11-09) has no evidence rows for the same reason as 122, and 030's strongest competitor is now that operation:
   // recording either refits the shared confidence curve.
   'ask-routing-independent-v2-123', 'ask-routing-independent-v2-030',
+  // 124 (ITEM_RESERVE_ALLOCATION, 2026-11-10) has no evidence rows for the same reason, and 100's strongest competitor is now that operation.
+  'ask-routing-independent-v2-124', 'ask-routing-independent-v2-100',
 ]);

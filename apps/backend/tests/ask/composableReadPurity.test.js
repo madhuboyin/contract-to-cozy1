@@ -6,8 +6,16 @@ require('ts-node/register');
 const { runReadPurity, seedOwnedProperty } = require('../helpers/readPurityHarness.js');
 const { COMPOSABLE_READ_OPERATION_IDS, ASK_OPERATION_DEFINITIONS, validateAskOperationRegistry } = require('../../src/services/ask/askOperationRegistry.ts');
 
+// An owned property plus a reserve fund with one active roof line, so the reserve read runs its real path with data, not only the empty-fund notice.
+const seedWithReserve = (model, method) => {
+  if (model === 'HomeReserveFund' && method === 'findUnique') return { id: 'f1', propertyId: 'p1', posture: 'MODERATE', currentBalanceCents: 500_000, lastRecalculatedAt: new Date('2026-11-01T00:00:00Z') };
+  if (model === 'HomeReserveFundLineItem' && method === 'findMany') return [{ id: 'l1', status: 'ACTIVE', targetCostCents: 2_000_000, allocatedBalanceCents: 400_000, timelineItem: { category: 'ROOF', inventoryItem: { name: 'Roof' } } }];
+  return seedOwnedProperty(model, method);
+};
+
 const MESSAGES = {
   ITEM_REPLACEMENT_COST: 'how much does a new roof cost',
+  ITEM_RESERVE_ALLOCATION: 'how much of my reserve is set aside for the roof',
   INVENTORY_LOOKUP: 'how old is my roof',
   WARRANTY_LOOKUP: 'what warranties do I have',
   MAINTENANCE_BUDGET_FORECAST: 'what is my yearly maintenance budget',
@@ -32,7 +40,7 @@ test('registry rules: a composable read is STANDARD, deterministic, routable, pr
 
 for (const [operationId, message] of Object.entries(MESSAGES)) {
   test(`purity: ${operationId} runs its real path with no writes, requests, confirmations, captures or workflow results`, async () => {
-    const run = await runReadPurity(operationId, message, { seed: seedOwnedProperty });
+    const run = await runReadPurity(operationId, message, { seed: seedWithReserve });
     assert.equal(run.error, null, run.error && run.error.message);
     assert.deepEqual(run.problems, []);
     assert.ok(run.result, 'the handler returned a result');

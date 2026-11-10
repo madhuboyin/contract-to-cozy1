@@ -69,3 +69,15 @@ export function isItemCostMessage(message: string): boolean {
   if (!COST_WORDING.test(message) || !/\b(?:new|replacement|replac\w*|install\w*)\b/i.test(message)) return false;
   return namedFundingTerms(message).length > 0;
 }
+
+// "How much of my reserve is set aside for the roof": what is already set aside for a named item, a fact the reserve fund holds. A question that asks how
+// much to save, or what is needed, is the funding goal instead.
+const ALLOCATION_WORDING = /\b(?:how much|what(?:'s| is| has been| have i)?)\b.{0,40}\b(?:set aside|allocated|earmarked|reserved|saved up|put (?:aside|toward|towards))\b/i;
+const WOULD_NEED = /\b(?:should|need(?:s|ed)? to|have to|must|would|will need|more|additional|per month|each month|monthly|afford)\b/i;
+
+export function isItemReserveAllocationMessage(message: string): boolean {
+  // "set aside" is the subject here, not a verb that sets something.
+  const withoutSetAside = message.replace(/\bset aside\b/gi, 'allocated');
+  if (OTHER_INTENT.test(message) || WRITE_INTENT.test(withoutSetAside) || WOULD_NEED.test(message) || parseTargetDate(message) != null) return false;
+  return ALLOCATION_WORDING.test(message) && namedFundingTerms(message).length > 0;
+}

@@ -112,6 +112,7 @@ const DEFINITIONS = [
   adapter('capital-reserve.plan', 'Capital Planning Intelligence', 'CAPITAL_RESERVE_PLAN'),
   adapter('capital-item-funding.goal', 'Capital Planning Intelligence and Reserve Fund (item funding goal)', 'CAPITAL_ITEM_FUNDING_GOAL'),
   adapter('item-replacement-cost.read', 'Capital Planning Intelligence (item replacement cost)', 'ITEM_REPLACEMENT_COST'),
+  adapter('item-reserve-allocation.read', 'Capital Planning Intelligence and Reserve Fund (item reserve allocation)', 'ITEM_RESERVE_ALLOCATION'),
   adapter('reserve-fund.command', 'Reserve Fund ledger and planning commands (homeReserveFundService)', 'RESERVE_FUND_COMMAND', 'MUTATION_PREPARATION'),
   adapter('home-event-radar.feed', 'Home Event Radar (radarQueryService)', 'HOME_EVENT_RADAR_FEED'),
   adapter('home-event-radar.state', 'Home Event Radar (radarInteractionService)', 'HOME_EVENT_RADAR_STATE', 'MUTATION_PREPARATION'),

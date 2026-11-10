@@ -1,4 +1,4 @@
-import { isItemCostMessage, isItemFundingGoalMessage } from './support/itemFundingWording';
+import { isItemCostMessage, isItemFundingGoalMessage, isItemReserveAllocationMessage } from './support/itemFundingWording';
 import { isNotificationSettingsCommandRequest, isNotificationSettingsOverviewRequest, isNotificationsOverviewRequest } from './support/notificationConversation';
 import { isHomeRecordExportRequest, isHomeRecordExportShareRequest, isHomeRecordExportStatusRequest } from './support/homeRecordExport';
 import type { AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionStatus, AskPresentationBlock, SuggestedNextAction, SuggestedNextActionsStatus } from '../../productFramework/ask/ask.contract';
@@ -312,6 +312,7 @@ export type AskOperationId =
   | 'CAPITAL_RESERVE_PLAN'
   | 'CAPITAL_ITEM_FUNDING_GOAL'
   | 'ITEM_REPLACEMENT_COST'
+  | 'ITEM_RESERVE_ALLOCATION'
   | 'PROPERTY_TAX_APPEAL_READINESS'
   | 'RENOVATION_PERMIT_READINESS'
   // Phase 7 (implementation plan §13; FRD §31 "Seller Prep — expose now,
@@ -672,7 +673,7 @@ const CAPABILITY_CONTINUITY_OPERATIONS = new Set<AskOperationId>([
 // runtime purity test in tests/ask/composableReadPurity.test.js (FR-ELG-6) before it appears here.
 // Not admitted yet: APPLIANCE_FAILURE_RISK (its real service path throws on an empty home, so it cannot pass the purity test until it has a data-backed fixture).
 export const COMPOSABLE_READ_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<AskOperationId>([
-  'ITEM_REPLACEMENT_COST', 'INVENTORY_LOOKUP', 'WARRANTY_LOOKUP', 'MAINTENANCE_BUDGET_FORECAST', 'DO_NOTHING_SIMULATION',
+  'ITEM_REPLACEMENT_COST', 'ITEM_RESERVE_ALLOCATION', 'INVENTORY_LOOKUP', 'WARRANTY_LOOKUP', 'MAINTENANCE_BUDGET_FORECAST', 'DO_NOTHING_SIMULATION',
   'HOME_UPGRADE_SCENARIOS', 'RECALL_REVIEW', 'HOME_TIMELINE_EVENTS',
 ]);
 
@@ -865,6 +866,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   CAPITAL_RESERVE_PLAN: definition('CAPITAL_RESERVE_PLAN', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'capital-reserve.plan', ['SUMMARY', 'PROGRESS', 'GROUPED_LIST', 'TABLE', 'TIMELINE', 'EVIDENCE', 'BOUNDARY']),
   CAPITAL_ITEM_FUNDING_GOAL: definition('CAPITAL_ITEM_FUNDING_GOAL', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'capital-item-funding.goal', ['SUMMARY', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   ITEM_REPLACEMENT_COST: definition('ITEM_REPLACEMENT_COST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'item-replacement-cost.read', ['SUMMARY', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
+  ITEM_RESERVE_ALLOCATION: definition('ITEM_RESERVE_ALLOCATION', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'item-reserve-allocation.read', ['SUMMARY', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   RESERVE_FUND_COMMAND: definition('RESERVE_FUND_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'reserve-fund.command', ['SUMMARY', 'WORKFLOW_PROGRESS']),
   PROPERTY_TAX_APPEAL_READINESS: definition('PROPERTY_TAX_APPEAL_READINESS', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'property-tax.appeal-readiness', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   RENOVATION_PERMIT_READINESS: definition('RENOVATION_PERMIT_READINESS', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'renovation-permit.readiness', ['SUMMARY', 'GROUPED_LIST', 'PROGRESS', 'EVIDENCE', 'COMPARISON', 'BOUNDARY']),
@@ -1789,6 +1791,10 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   // "If I replace my roof in 5 years, how much do I need and how much more should I save?" names an item and a saving goal. Ahead of the plan read (which
   // is whole-home) and of the repair-or-replace rule (which would answer a verdict and ignore the date and the saving).
+  // "How much of my reserve is set aside for the roof": what is already set aside, a STANDARD read; the how-much-to-save questions stay with the funding goal.
+  if (isItemReserveAllocationMessage(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('ITEM_RESERVE_ALLOCATION', 0.96);
+  }
   if (isItemFundingGoalMessage(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('CAPITAL_ITEM_FUNDING_GOAL', 0.97);
   }

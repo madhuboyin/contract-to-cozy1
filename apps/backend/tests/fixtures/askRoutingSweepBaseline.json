@@ -379,6 +379,12 @@
    "price of a new refrigerator",
    "what does a replacement water heater cost"
   ],
+  "ITEM_RESERVE_ALLOCATION": [
+   "how much have i put toward the furnace so far",
+   "how much have i set aside for my roof",
+   "how much of my reserve is set aside for the roof",
+   "what has been allocated to the water heater"
+  ],
   "MAINTENANCE_BUDGET_FORECAST": [
    "budget for home upkeep",
    "how much budget i need to allocate over the next 5 years for home maintainence",

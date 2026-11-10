@@ -82,6 +82,7 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   CAPITAL_RESERVE_PLAN: new Set(['capital-plan-boundary']),
   CAPITAL_ITEM_FUNDING_GOAL: new Set(['item-funding-boundary']),
   ITEM_REPLACEMENT_COST: new Set(['item-cost-boundary']),
+  ITEM_RESERVE_ALLOCATION: new Set(['item-reserve-boundary']),
   HOME_EVENT_RADAR_FEED: new Set(['home-event-radar-partial', 'radar-feed-boundary']),
   HOME_EVENT_RADAR_STATE: new Set(['radar-write-boundary']),
   HOME_EVENT_RADAR_MARK_DONE: new Set(['radar-write-boundary']),
