@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 require('ts-node/register');
 
-const { runComposedTurn, recordAttempt } = require('../../src/services/ask/composition/runComposedTurn.ts');
+const { runComposedTurn, recordAttempt, recoverComposedTurn, refreshComposedTurn, reserveAttempt } = require('../../src/services/ask/composition/runComposedTurn.ts');
 const { replayComposite, isStoredComposite } = require('../../src/services/ask/composition/replayGate.ts');
 const { childClientRequestId, componentKeyOf } = require('../../src/services/ask/composition/attempts.ts');
 
@@ -89,7 +89,7 @@ test('a composed turn: two component children, one parent, one assembled respons
   assert.ok(blocks.some((b) => b.id === 's2-item-cost-summary'));
   assert.ok(!JSON.stringify(blocks).includes('add-inventory-item'), 'a composite never offers a write');
   // version: 0 at creation, +1 per recorded attempt (2), +1 for the final write
-  assert.equal(parent.assemblyVersion, 3);
+  assert.equal(parent.assemblyVersion, 5, '0 + 2 reservations + 2 completions + 1 composite write');
   assert.equal(parent.resultJson.composite.attempts.length, 2);
   assert.equal(parent.resultJson.composite.coverage, 'COMPLETE');
   assert.equal(parent.resultJson.composite.validationIssues.length, 0);
@@ -195,7 +195,7 @@ test('FR-PER-13: when the compare-and-set on the claimed version is lost, the lo
   assert.equal(lost, 1);
   assert.equal(parent.status, 'ANSWERED');
   assert.equal(db.events.filter((e) => e.eventType === 'COMPOSED_TURN_STARTED').length, 1);
-  assert.equal(parent.assemblyVersion, 4, '0 + 2 attempts + 1 concurrent mutation + 1 winning composite write');
+  assert.equal(parent.assemblyVersion, 6, '0 + 2 reservations + 2 completions + 1 concurrent mutation + 1 winning composite write');
 });
 
 test('FR-PER-13: two simultaneous attempt completions both land in the attempt set', async () => {
@@ -288,4 +288,92 @@ test('§10: a part that cannot be answered is stated plainly with capability dis
   assert.ok(!response.blocks.some((b) => b.id === ASK_SCHEMA_FALLBACK_BLOCK_ID));
   // no general-knowledge answer is ever offered for the unanswered part
   assert.ok(!JSON.stringify(parent.resultJson.blocks).toLowerCase().includes('typically costs'));
+});
+
+// ---- review round: clarification, reservation, recovery, refresh, pending, retry margin -------------------------------------------------------------
+const keyOf = (c) => componentKeyOf(c.operationId, { clause: c.clause.trim().replace(/\s+/g, ' ').toLowerCase() });
+/** createChild that is idempotent on clientRequestId, like createAskExecution: the same id returns the same child. */
+function idempotentChildren(db, script = () => null) {
+  const inner = scriptedChildren(db, script);
+  const seen = new Map();
+  const createChild = async (userId, request, role, internal) => {
+    if (seen.has(request.clientRequestId)) return seen.get(request.clientRequestId);
+    const response = await inner.createChild(userId, request, role, internal);
+    seen.set(request.clientRequestId, response);
+    return response;
+  };
+  return { createChild, calls: inner.calls };
+}
+const resume = (db, createChild, fn, extra = {}) => fn({ db, userId: 'u1', parent: db.table.get('parent-1'), message: 'how old is my roof and what would a new one cost', sessionId: 's1', propertyId: 'p1', createChild, loadAuthorizationView: allowAll, executionTimeoutMs: 30_000, now: () => NOW, ...extra });
+
+test('an independent clarification keeps its own focused question beside the answered section', async () => {
+  const db = fakeDb([parentRow()]);
+  const parent = await run(db, scriptedChildren(db, (op) => (op === 'ITEM_REPLACEMENT_COST' ? { status: 'NEEDS_CLARIFICATION' } : null)).createChild);
+  const blocks = parent.resultJson.blocks;
+  assert.ok(blocks.some((b) => b.id === 's1-inventory-roof-profile'), 'the answered part is shown');
+  assert.ok(blocks.some((b) => b.id === 'x' && b.title === 'Needs a detail'), 'the clarification question is shown, not lost');
+  const note = blocks.find((b) => b.id === 'composite-not-answered');
+  assert.equal(note.title, 'One part needs a detail');
+  assert.deepEqual(note.actions, [], 'a clarification is not a failure: no capability-discovery action');
+});
+
+test('FR-PER-13: two overlapping reservations for one component get distinct numbers', async () => {
+  const db = fakeDb([parentRow({ assemblyVersion: 0, parametersJson: { composition: { attempts: [] } } })]);
+  const [a, b] = await Promise.all([1, 2].map(() => reserveAttempt(db, 'parent-1', 'K', 'REFRESH', (n) => `cid-${n}`, { now: NOW, executionTimeoutMs: 30_000 })));
+  assert.notEqual(a.number, b.number);
+  assert.deepEqual(db.table.get('parent-1').parametersJson.composition.attempts.map((x) => x.number).sort(), [1, 2]);
+});
+
+test('FR-PER-16: a retry is admitted against the parent’s current row and needs two timeouts of margin', async () => {
+  const soon = parentRow({ assemblyVersion: 0, parametersJson: { composition: { attempts: [] } }, expiresAt: new Date(NOW.getTime() + 45_000) });
+  const db = fakeDb([soon]);
+  assert.equal(await reserveAttempt(db, 'parent-1', 'K', 'RETRY', (n) => `c${n}`, { now: NOW, executionTimeoutMs: 30_000 }), null, '45s left is under two 30s timeouts');
+  assert.deepEqual(db.table.get('parent-1').parametersJson.composition.attempts, [], 'nothing was reserved');
+  assert.ok(await reserveAttempt(db, 'parent-1', 'K', 'INITIAL', (n) => `c${n}`, { now: NOW, executionTimeoutMs: 30_000 }), 'an initial attempt is never gated by the retry margin');
+});
+
+test('FR-PER-4: an interrupted composite is recovered on the same parent: the answered part is kept, only the reserved one runs, then it reassembles', async () => {
+  const [inv, cst] = clauses;
+  const db = fakeDb([parentRow({ status: 'RUNNING', assemblyVersion: 3, parametersJson: { composition: { clauses, attempts: [
+    { executionId: 'child-a', componentKey: keyOf(inv), number: 1, kind: 'INITIAL', status: 'ANSWERED' },
+    { executionId: `unstarted:${childClientRequestId('req-1', keyOf(cst), 1)}`, componentKey: keyOf(cst), number: 1, kind: 'INITIAL', status: 'RUNNING' },
+  ] } } })]);
+  db.table.set('child-a', { id: 'child-a', userId: 'u1', status: 'ANSWERED', resultJson: { blocks: ANSWERS.INVENTORY_LOOKUP.blocks }, parametersJson: { quantities: ANSWERS.INVENTORY_LOOKUP.quantities }, reasonCode: null });
+  const { createChild, calls } = idempotentChildren(db);
+  const parent = await resume(db, createChild, recoverComposedTurn);
+  assert.equal(calls.length, 1, 'only the missing component ran');
+  assert.equal(calls[0].operationId, 'ITEM_REPLACEMENT_COST');
+  assert.equal(calls[0].attempt, 1, 'the reserved attempt number is reused, so the child key is the same one');
+  assert.equal(parent.status, 'ANSWERED');
+  assert.equal(parent.resultJson.composite.attempts.length, 2, 'the authoritative attempt set was kept, not reset');
+  assert.ok(db.events.some((e) => e.eventType === 'COMPOSED_TURN_RECOVERED'));
+});
+
+test('recovery of a parent with no stored clauses is an invariant failure, never a guess', async () => {
+  const db = fakeDb([parentRow({ status: 'RUNNING', assemblyVersion: 1, parametersJson: { composition: { attempts: [] } } })]);
+  await assert.rejects(resume(db, idempotentChildren(db).createChild, recoverComposedTurn), /no stored clauses/);
+});
+
+test('refresh reruns every component as a REFRESH attempt and reassembles; a limited refresh never replaces a better stored answer', async () => {
+  const db = fakeDb([parentRow()]);
+  let refreshing = false;
+  const { createChild } = idempotentChildren(db, (op) => (refreshing && op === 'ITEM_REPLACEMENT_COST' ? { status: 'READY_WITH_LIMITATIONS' } : null));
+  await run(db, createChild);
+  refreshing = true;
+  const refreshed = await resume(db, createChild, refreshComposedTurn);
+  const attempts = refreshed.resultJson.composite.attempts;
+  assert.equal(attempts.filter((a) => a.kind === 'REFRESH').length, 2, 'every selected component was refreshed');
+  const cost = refreshed.resultJson.composite.sections.find((sec) => sec.operationId === 'ITEM_REPLACEMENT_COST');
+  assert.equal(cost.attempt, 1, 'the earlier ANSWERED attempt is preserved over a limited refresh');
+  const inventory = refreshed.resultJson.composite.sections.find((sec) => sec.operationId === 'INVENTORY_LOOKUP');
+  assert.equal(inventory.attempt, 2, 'a refresh that is as good supersedes');
+  assert.ok(db.events.some((e) => e.eventType === 'COMPOSED_TURN_REFRESHED'));
+});
+
+test('a still-running child leaves the parent non-terminal instead of becoming a limitation', async () => {
+  const db = fakeDb([parentRow()]);
+  const parent = await run(db, scriptedChildren(db, (op) => (op === 'ITEM_REPLACEMENT_COST' ? { status: 'RUNNING' } : null)).createChild);
+  assert.equal(parent.status, 'RUNNING');
+  assert.equal(parent.resultJson, null, 'nothing terminal was stored');
+  assert.ok(db.events.some((e) => e.eventType === 'COMPOSITE_PENDING'));
 });

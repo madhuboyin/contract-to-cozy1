@@ -8,7 +8,7 @@ import { logger } from '../../../lib/logger';
 import { recordAskCapabilityLifecycle } from '../askCapabilityLifecycle';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
-import { askTurnStageDurationSeconds, askTurnFailuresTotal, type AskTurnStage, askExecutionDurationSeconds, askExecutionsTotal, askInlineCapturesTotal, askRoutingDecisionsTotal, askModelRouterTotal, askUnansweredRecoveryTotal, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../../lib/metrics';
+import { askCompositionTotal, askTurnStageDurationSeconds, askTurnFailuresTotal, type AskTurnStage, askExecutionDurationSeconds, askExecutionsTotal, askInlineCapturesTotal, askRoutingDecisionsTotal, askModelRouterTotal, askUnansweredRecoveryTotal, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../../lib/metrics';
 import { type AskAccountRole } from '../askAccountEligibility';
 import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
 import { runConversationalCaptureForTurn } from '../conversationalUnderstanding/conversationalCapture';
@@ -37,7 +37,7 @@ import { suggestedNextActionSemanticKeyHash } from '../suggestedActions/suggeste
 import { recordSuggestedActionCompleted, recordSuggestedActionSelected } from '../suggestedActions/askSuggestedActionLifecycle.service';
 import { recordSuggestedActionOutcomeAnalytics, recordSuggestedActionSelectedAnalytics } from '../suggestedActions/suggestedActionAnalytics';
 import { decomposeForComposition } from '../composition/decompose';
-import { runComposedTurn } from '../composition/runComposedTurn';
+import { recoverComposedTurn, runComposedTurn } from '../composition/runComposedTurn';
 import { buildAuthorizationView } from '../composition/authorizationView';
 import { resolveSlotFollowUp } from '../composition/slotContext';
 import { extractSlots, sanitizeSlots } from '../composition/slots';
@@ -165,6 +165,22 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     // with no path forward. Reclaim it first so the retry actually observes
     // a terminal, retryable state instead.
     const current = await reclaimOrphanedRunningExecution(duplicate);
+    // Composition FRD FR-PER-4: an interrupted composed parent is recovered on the SAME row (attempt set kept, missing or retryable components created, then
+    // reassembled) instead of being returned as a dead end.
+    if (current.assemblyVersion != null && !current.parentExecutionId && current.status === 'FAILED_RETRYABLE' && current.reasonCode === 'ASK_EXECUTION_INTERRUPTED'
+      && current.propertyId && current.propertyId === executionPropertyId) {
+      const recoveredPropertyId = current.propertyId;
+      try {
+        const recovered = await recoverComposedTurn({
+          db: prisma as never, userId, accountRole, parent: current, message: current.message, sessionId: current.sessionId, propertyId: recoveredPropertyId,
+          createChild: createAskExecution, executionTimeoutMs: controls.executionTimeoutMs,
+          loadAuthorizationView: () => buildAuthorizationView(userId, recoveredPropertyId, controls),
+        });
+        return mapPersistedExecution(recovered, await propertySummary(recoveredPropertyId));
+      } catch (error) {
+        logger.warn({ error, executionId: current.id }, '[ask-composition] recovery failed; returning the interrupted parent');
+      }
+    }
     return mapPersistedExecution(
       current,
       await propertySummary(safetyFirstDecision.stage === 'SAFETY' ? null : current.propertyId),
@@ -265,6 +281,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     const decomposition = decomposeForComposition(input.message, { eligibleOperationIds: new Set(eligibleOperationIds) });
     if (decomposition.kind === 'NOT_COMPOSED') {
       declinedComposition = { reason: decomposition.reason, clauseCount: decomposition.clauseCount };
+      askCompositionTotal.inc({ outcome: `declined_${decomposition.reason.toLowerCase()}` });
       await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'COMPOSITION_DECLINED', metadataJson: asInputJson({ reason: decomposition.reason, clauses: decomposition.clauseCount }) } });
     } else if (decomposition.kind === 'COMPOSE') {
       const composedPropertyId = executionPropertyId;
@@ -279,6 +296,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
         // The composition itself failed (not a component): fall back to the ordinary single-operation path on this same row rather than failing the question.
         logger.warn({ error, executionId: execution.id }, '[ask-composition] composed turn failed; answering as a single operation');
         await prisma.askExecution.update({ where: { id: execution.id }, data: { assemblyVersion: null, parametersJson: Prisma.DbNull } }).catch(() => undefined);
+        askCompositionTotal.inc({ outcome: 'failed' });
         await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'COMPOSITION_FAILED', metadataJson: asInputJson({ reason: error instanceof Error ? error.name : 'unknown' }) } }).catch(() => undefined);
       }
       if (composed) return mapPersistedExecution(composed, await propertySummary(executionPropertyId));

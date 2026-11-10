@@ -542,6 +542,10 @@ export async function refreshAskExecutionDetailed(userId: string, executionId: s
   await ensurePropertyAccess(userId, execution.propertyId);
   const bindingExpiry = await expireIfSkillBindingChanged(execution);
   if (bindingExpiry) return { response: bindingExpiry, refreshed: false };
+  // Composition FRD FR-REF: a composed parent has no operation of its own; refresh reruns every selected component as a REFRESH attempt and reassembles.
+  // Imported lazily because createAskExecution (which imports this module) is what a refresh runs the components through.
+  const composite = await import('./refreshComposite');
+  if (composite.isStoredComposite(execution)) return { response: await composite.refreshStoredComposite(userId, execution), refreshed: true };
   if (!execution.operationId || !(execution.operationId in ASK_OPERATION_DEFINITIONS)) {
     const error = new Error('The bound operation version is no longer available.');
     (error as Error & { code?: string }).code = 'ASK_SKILL_VERSION_UNAVAILABLE';

@@ -44,9 +44,12 @@ const isSuccess = (attempt: Attempt): boolean => {
  */
 export function selectAttempt(attempts: readonly Attempt[]): Selection {
   const successful = attempts.filter(isSuccess);
-  const refresh = successful.filter((a) => a.kind === 'REFRESH').sort((a, b) => b.number - a.number)[0];
-  if (refresh) return { attempt: refresh, reason: 'EXPLICIT_REFRESH', pending: false };
   const lowest = successful.filter((a) => a.kind !== 'REFRESH').sort((a, b) => a.number - b.number)[0];
+  // FR-REF downgrade preservation: a refresh supersedes the earlier answer only when it is at least as good (ANSWERED over LIMITED); a worse refresh never
+  // replaces a better stored answer.
+  const rank = (a: Attempt) => (componentStateOf(a.status) === 'ANSWERED' ? 2 : 1);
+  const refresh = successful.filter((a) => a.kind === 'REFRESH' && (!lowest || rank(a) >= rank(lowest))).sort((a, b) => b.number - a.number)[0];
+  if (refresh) return { attempt: refresh, reason: 'EXPLICIT_REFRESH', pending: false };
   if (lowest) return { attempt: lowest, reason: 'LOWEST_SUCCESSFUL', pending: false };
   const terminal = attempts.filter((a) => isTerminalState(componentStateOf(a.status))).sort((a, b) => b.number - a.number)[0];
   if (terminal) return { attempt: terminal, reason: 'ONLY_TERMINAL_LIMITED', pending: false };
@@ -84,10 +87,11 @@ export type MutationResult = { applied: true; state: AssemblyState } | { applied
 export function applyAttemptMutation(state: AssemblyState, expectedVersion: number, attempt: Attempt): MutationResult {
   const current = requireVersion(state);
   if (current !== expectedVersion) return { applied: false, state, reason: 'STALE_VERSION' };
-  const existing = state.attempts.find((a) => a.executionId === attempt.executionId);
-  if (existing && existing.status === attempt.status && existing.number === attempt.number) return { applied: false, state, reason: 'DUPLICATE' };
+  // A reserved attempt (`unstarted:` id, recorded before its child runs) is replaced by its completed record: same component, same number.
+  const existing = state.attempts.find((a) => a.executionId === attempt.executionId || (a.componentKey === attempt.componentKey && a.number === attempt.number));
+  if (existing && existing.status === attempt.status && existing.number === attempt.number && existing.executionId === attempt.executionId) return { applied: false, state, reason: 'DUPLICATE' };
   if (current >= MAX_ASSEMBLY_VERSION) throw new AssemblyInvariantError('assembly version overflow');
-  const attempts = existing ? state.attempts.map((a) => (a.executionId === attempt.executionId ? attempt : a)) : [...state.attempts, attempt];
+  const attempts = existing ? state.attempts.map((a) => (a === existing ? attempt : a)) : [...state.attempts, attempt];
   return { applied: true, state: { version: current + 1, attempts } };
 }
 
@@ -99,12 +103,12 @@ export function claimStillValid(claimedVersion: number, state: AssemblyState): b
 // ---- retry near family expiration (FR-PER-16) ---------------------------------------------------------------------------------------------------------
 export type RetryDecision = { allowed: true } | { allowed: false; reason: 'FAMILY_EXPIRED' | 'INSUFFICIENT_TIME' };
 
-/** Retries are rejected, never extended: the family is expired or has less than one execution timeout left. */
+/** Retries are rejected, never extended: the family is expired or has less than two execution timeouts left (one to run, one as a retention safety margin). */
 export function retryAllowed(input: { parentExpiresAt: Date | null; now: Date; executionTimeoutMs: number }): RetryDecision {
   if (!input.parentExpiresAt) return { allowed: true };
   const remaining = input.parentExpiresAt.getTime() - input.now.getTime();
   if (remaining <= 0) return { allowed: false, reason: 'FAMILY_EXPIRED' };
-  if (remaining < input.executionTimeoutMs) return { allowed: false, reason: 'INSUFFICIENT_TIME' };
+  if (remaining < input.executionTimeoutMs * 2) return { allowed: false, reason: 'INSUFFICIENT_TIME' };
   return { allowed: true };
 }
 

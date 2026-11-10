@@ -67,6 +67,12 @@ export async function retryAskExecution(
     (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
     throw error;
   }
+  // Composition FRD FR-PER-15: a hidden component child is not something the homeowner retries on its own; membership is validated against the parent.
+  if (source.parentExecutionId) {
+    const error = new Error('Ask execution not found.');
+    (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
+    throw error;
+  }
   const ordinaryRetry = askExecutionCanRetry(source.status, source.reasonCode);
   const compatibilityRetry = !ordinaryRetry
     && hasRetryableCompatibilityFallback(source, await propertySummary(source.propertyId));
@@ -76,6 +82,10 @@ export async function retryAskExecution(
     throw error;
   }
 
+  if (source.assemblyVersion != null && source.status === 'FAILED_RETRYABLE' && source.propertyId) {
+    const composite = await import('./refreshComposite');
+    return composite.recoverStoredComposite(userId, source, accountRole);
+  }
   const retried = await createAskExecution(userId, buildAskRetryRequest(source, input), accountRole);
   const retriedRow = await prisma.askExecution.findUnique({ where: { id: retried.executionId }, select: { resultJson: true } });
   const resultJson = retriedRow?.resultJson && typeof retriedRow.resultJson === 'object' && !Array.isArray(retriedRow.resultJson)

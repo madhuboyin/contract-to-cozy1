@@ -6,6 +6,10 @@ import type { AskExecution } from '@prisma/client';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type AskPresentationBlock, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import type { AskAccountRole } from '../askAccountEligibility';
 import { parseTargetDate } from '../support/targetDate';
+import {
+  askCompositionContradictionsTotal, askCompositionDurationSeconds, askCompositionResultTotal, askCompositionTimeoutsTotal, askCompositionTotal,
+  askCompositionUnansweredTotal, askCompositionValidatorFailuresTotal,
+} from '../../../lib/metrics';
 import { quantitiesOf } from './quantities';
 import { extractSlots, sanitizeSlots } from './slots';
 import type { ComposedClause } from './decompose';
@@ -42,7 +46,8 @@ export interface ComposedTurnInput {
   message: string;
   sessionId: string;
   propertyId: string;
-  clauses: ComposedClause[];
+  /** Omitted on recovery and refresh: the clauses stored on the parent at start are used. */
+  clauses?: ComposedClause[];
   createChild: CreateChild;
   loadAuthorizationView: () => Promise<AuthorizationView>;
   executionTimeoutMs: number;
@@ -75,7 +80,7 @@ export async function recordAttempt(db: CompositionDb, parentId: string, attempt
     const base = row.parametersJson && typeof row.parametersJson === 'object' && !Array.isArray(row.parametersJson) ? row.parametersJson as Record<string, unknown> : {};
     const written = await db.askExecution.updateMany({
       where: { id: parentId, assemblyVersion: expected },
-      data: { assemblyVersion: mutation.state.version, parametersJson: json({ ...base, composition: { attempts: mutation.state.attempts } }) },
+      data: { assemblyVersion: mutation.state.version, parametersJson: json({ ...base, composition: { ...(base.composition && typeof base.composition === 'object' ? base.composition : {}), attempts: mutation.state.attempts } }) },
     });
     if (written.count === 1) return mutation.state;
   }
@@ -83,49 +88,126 @@ export async function recordAttempt(db: CompositionDb, parentId: string, attempt
 }
 
 interface ComponentRun { clause: ComposedClause; key: string }
+export type DriveMode = 'START' | 'RECOVER' | 'REFRESH';
+
+const storedClausesOf = (row: AskExecution): ComposedClause[] => {
+  const raw = row.parametersJson && typeof row.parametersJson === 'object' && !Array.isArray(row.parametersJson) ? (row.parametersJson as Record<string, unknown>).composition : null;
+  const clauses = raw && typeof raw === 'object' ? (raw as { clauses?: unknown }).clauses : null;
+  return Array.isArray(clauses) ? clauses as ComposedClause[] : [];
+};
+
+/**
+ * FR-PER-13: reserve the next attempt number AND record a pending attempt in one compare-and-set on the parent, before any child is created, so two
+ * overlapping retry/refresh requests can never allocate the same number or the same child clientRequestId. A retry or refresh is admitted here against the
+ * parent's CURRENT row (FR-PER-16: not near family expiration), not the in-memory copy. Returns null when the retry is not admitted.
+ */
+export async function reserveAttempt(
+  db: CompositionDb, parentId: string, componentKey: string, kind: AttemptKind, childId: (number: number) => string, opts: { now: Date; executionTimeoutMs: number },
+): Promise<{ number: number; executionId: string } | null> {
+  for (let tries = 0; tries < MAX_CAS_RETRIES; tries += 1) {
+    const row = await db.askExecution.findUnique({ where: { id: parentId } });
+    if (!row) throw new Error('composite parent not found');
+    if (kind !== 'INITIAL' && !retryAllowed({ parentExpiresAt: row.expiresAt, now: opts.now, executionTimeoutMs: opts.executionTimeoutMs }).allowed) return null;
+    const state: AssemblyState = { version: row.assemblyVersion ?? null, attempts: storedOf(row).attempts };
+    const expected = requireVersion(state);
+    const number = nextAttemptNumber(state.attempts, componentKey);
+    const executionId = `unstarted:${childId(number)}`;
+    const reserved: Attempt = { executionId, componentKey, number, kind, status: 'RUNNING' };
+    const base = row.parametersJson && typeof row.parametersJson === 'object' && !Array.isArray(row.parametersJson) ? row.parametersJson as Record<string, unknown> : {};
+    const composition = (base.composition && typeof base.composition === 'object' ? base.composition : {}) as Record<string, unknown>;
+    const written = await db.askExecution.updateMany({
+      where: { id: parentId, assemblyVersion: expected },
+      data: { assemblyVersion: expected + 1, parametersJson: json({ ...base, composition: { ...composition, attempts: [...state.attempts, reserved] } }) },
+    });
+    if (written.count === 1) return { number, executionId };
+  }
+  throw new AssemblyInvariantError('could not reserve an attempt: the assembly version kept moving');
+}
 
 export async function runComposedTurn(input: ComposedTurnInput): Promise<AskExecution> {
+  const { db, parent } = input;
+  const clauses = input.clauses ?? [];
+  // FR-PER-13: a composed parent starts at version 0. The clauses are stored so an interrupted turn can be recovered and a refresh can rerun every component.
+  await db.askExecution.update({ where: { id: parent.id }, data: { status: 'RUNNING', assemblyVersion: 0, parametersJson: json({ composition: { attempts: [], clauses }, slots: sanitizeSlots(extractSlots(input.message)) }) } });
+  await db.askExecutionEvent.create({ data: { executionId: parent.id, eventType: 'COMPOSED_TURN_STARTED', metadataJson: json({ components: clauses.map((c) => c.operationId) }) } });
+  askCompositionTotal.inc({ outcome: 'composed' });
+  return driveComposite({ ...input, clauses }, 'START');
+}
+
+/** FR-PER-4: continue an interrupted composite on the SAME parent: keep the authoritative attempt set, finish what is pending, create only what is missing, reassemble. */
+export async function recoverComposedTurn(input: Omit<ComposedTurnInput, 'clauses'>): Promise<AskExecution> {
+  const row = (await input.db.askExecution.findUnique({ where: { id: input.parent.id } })) ?? input.parent;
+  const clauses = storedClausesOf(row);
+  if (!clauses.length) throw new AssemblyInvariantError('a composite parent has no stored clauses to recover');
+  await input.db.askExecution.update({ where: { id: row.id }, data: { status: 'RUNNING', completedAt: null } });
+  await input.db.askExecutionEvent.create({ data: { executionId: row.id, eventType: 'COMPOSED_TURN_RECOVERED', metadataJson: json({ components: clauses.map((c) => c.operationId) }) } });
+  askCompositionTotal.inc({ outcome: 'recovered' });
+  return driveComposite({ ...input, parent: row, clauses }, 'RECOVER');
+}
+
+/** Refreshing a composite refreshes EVERY selected component as a REFRESH attempt and reassembles; a worse refresh never replaces a better stored answer. */
+export async function refreshComposedTurn(input: Omit<ComposedTurnInput, 'clauses'>): Promise<AskExecution> {
+  const row = (await input.db.askExecution.findUnique({ where: { id: input.parent.id } })) ?? input.parent;
+  const clauses = storedClausesOf(row);
+  if (!clauses.length) throw new AssemblyInvariantError('a composite parent has no stored clauses to refresh');
+  await input.db.askExecutionEvent.create({ data: { executionId: row.id, eventType: 'COMPOSED_TURN_REFRESHED', metadataJson: json({ components: clauses.map((c) => c.operationId) }) } });
+  askCompositionTotal.inc({ outcome: 'refreshed' });
+  return driveComposite({ ...input, parent: row, clauses }, 'REFRESH');
+}
+
+async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClause[] }, mode: DriveMode): Promise<AskExecution> {
   const { db, parent, clauses } = input;
   const now = input.now ?? (() => new Date());
-  // FR-PER-13: a composed parent starts at version 0.
-  await db.askExecution.update({ where: { id: parent.id }, data: { status: 'RUNNING', assemblyVersion: 0, parametersJson: json({ composition: { attempts: [] }, slots: sanitizeSlots(extractSlots(input.message)) }) } });
-  await db.askExecutionEvent.create({ data: { executionId: parent.id, eventType: 'COMPOSED_TURN_STARTED', metadataJson: json({ components: clauses.map((c) => c.operationId) }) } });
-
+  const startedAt = Date.now();
   const runs: ComponentRun[] = clauses.map((clause) => ({ clause, key: componentKeyOf(clause.operationId, { clause: normalizeClause(clause.clause) }) }));
 
-  const runAttempt = async (run: ComponentRun, kind: AttemptKind): Promise<Attempt> => {
-    const row = await db.askExecution.findUnique({ where: { id: parent.id } });
-    const number = nextAttemptNumber(storedOf(row!).attempts, run.key);
+  const callChild = async (run: ComponentRun, number: number): Promise<{ executionId: string; status: string }> => {
     const clientRequestId = childClientRequestId(parent.clientRequestId, run.key, number);
-    let executionId = `unstarted:${clientRequestId}`;
-    let status = 'FAILED_RETRYABLE';
     try {
       const response = await input.createChild(input.userId, {
         clientRequestId, sessionId: input.sessionId, message: run.clause.clause, propertyId: input.propertyId,
         launchContext: { surface: 'ASK_COMPOSED_COMPONENT', operationId: run.clause.operationId },
       } as CreateAskExecutionRequest, input.accountRole, { composition: { parentExecutionId: parent.id, expiresAt: parent.expiresAt } });
-      executionId = response.executionId;
-      status = response.status;
-    } catch { /* the child never persisted a result: a retryable failure, recorded below */ }
-    const attempt: Attempt = { executionId, componentKey: run.key, number, kind, status };
+      return { executionId: response.executionId, status: response.status };
+    } catch {
+      // The child never persisted a result: a retryable failure, recorded by the caller.
+      return { executionId: `unstarted:${clientRequestId}`, status: 'FAILED_RETRYABLE' };
+    }
+  };
+
+  const runAttempt = async (run: ComponentRun, kind: AttemptKind): Promise<Attempt | null> => {
+    const reserved = await reserveAttempt(db, parent.id, run.key, kind, (n) => childClientRequestId(parent.clientRequestId, run.key, n), { now: now(), executionTimeoutMs: input.executionTimeoutMs });
+    if (!reserved) return null;
+    const outcome = await callChild(run, reserved.number);
+    const attempt: Attempt = { executionId: outcome.executionId, componentKey: run.key, number: reserved.number, kind, status: outcome.status };
     await recordAttempt(db, parent.id, attempt);
     return attempt;
   };
 
-  // Both components are dispatched concurrently (FR-EXE-4); each child applies its own authorization in its own service path.
-  await Promise.all(runs.map((run) => runAttempt(run, 'INITIAL')));
+  const attemptsOf = async (run: ComponentRun) => storedOf((await db.askExecution.findUnique({ where: { id: parent.id } }))!).attempts.filter((a) => a.componentKey === run.key);
+  const latestOf = (attempts: Attempt[]) => [...attempts].sort((a, b) => b.number - a.number)[0];
 
-  // D9 (proposed): one automatic retry of a retryable child, rejected near family expiration (FR-PER-16). A rejected retry converts to a terminal outcome.
-  const exhausted = new Set<string>();
-  for (const run of runs) {
-    const row = await db.askExecution.findUnique({ where: { id: parent.id } });
-    const attempts = storedOf(row!).attempts.filter((a) => a.componentKey === run.key);
-    // A FAILED_RETRYABLE attempt is not terminal, so selectAttempt reports the component as pending; look at the latest attempt directly.
-    const latest = [...attempts].sort((a, b) => b.number - a.number)[0];
-    if (latest && latest.status === 'FAILED_RETRYABLE' && !selectAttempt(attempts).attempt) {
-      const decision = retryAllowed({ parentExpiresAt: parent.expiresAt, now: now(), executionTimeoutMs: input.executionTimeoutMs });
-      if (decision.allowed && attempts.length < 2) await runAttempt(run, 'RETRY');
-      exhausted.add(run.key);
+  // Both components are dispatched concurrently (FR-EXE-4); each child applies its own authorization in its own service path.
+  await Promise.all(runs.map(async (run) => {
+    const mine = await attemptsOf(run);
+    if (mode === 'REFRESH') { await runAttempt(run, 'REFRESH'); return; }
+    if (!mine.length) { await runAttempt(run, 'INITIAL'); return; }
+    // A reserved or still-running attempt is resumed by asking for the same deterministic child again: createAskExecution returns the existing child (and
+    // reclaims it if it was orphaned) rather than starting a second one.
+    const latest = latestOf(mine);
+    if (latest.status === 'RUNNING' || latest.status === 'RECEIVED' || latest.status === 'ROUTING') {
+      const outcome = await callChild(run, latest.number);
+      await recordAttempt(db, parent.id, { ...latest, executionId: outcome.executionId, status: outcome.status });
+    }
+  }));
+
+  // D9: one automatic retry of a retryable child, admitted against the parent's current row (FR-PER-16). A rejected retry converts to a terminal outcome.
+  if (mode !== 'REFRESH') {
+    for (const run of runs) {
+      const attempts = await attemptsOf(run);
+      const latest = latestOf(attempts);
+      // A FAILED_RETRYABLE attempt is not terminal, so selectAttempt reports the component as pending; look at the latest attempt directly.
+      if (latest && latest.status === 'FAILED_RETRYABLE' && !selectAttempt(attempts).attempt && attempts.length < 2) await runAttempt(run, 'RETRY');
     }
   }
 
@@ -145,10 +227,23 @@ export async function runComposedTurn(input: ComposedTurnInput): Promise<AskExec
   const completedAt = now();
   const claimedVersion = requireVersion({ version: finalRow.assemblyVersion ?? null, attempts });
 
+  // A component is still running (a live child another request owns): the parent stays non-terminal. It is never converted to a limitation; a later request
+  // for the same parent recovers it once the child completes or is reclaimed.
+  if (decision.kind === 'PENDING') {
+    await db.askExecutionEvent.create({ data: { executionId: parent.id, eventType: 'COMPOSITE_PENDING', metadataJson: json({ components: runs.length }) } }).catch(() => undefined);
+    return { row: finalRow, won: true };
+  }
+
   // FR-PER-13c/e: only the worker that wins the compare-and-set on the claimed version writes the composite; a loser reassembles against the new version.
   const persist = async (data: Record<string, unknown>): Promise<{ row: AskExecution; won: boolean }> => {
     const written = await db.askExecution.updateMany({ where: { id: parent.id, assemblyVersion: claimedVersion }, data: { ...data, assemblyVersion: claimedVersion + 1 } });
-    return { row: (await db.askExecution.findUnique({ where: { id: parent.id } }))!, won: written.count === 1 };
+    const won = written.count === 1;
+    if (won) {
+      askCompositionDurationSeconds.observe((Date.now() - startedAt) / 1000);
+      const reason = String(data.reasonCode ?? '');
+      askCompositionResultTotal.inc({ status: String(data.status ?? ''), coverage: reason === 'COMPOSITE_PARTIAL' || reason === 'COMPOSITE_NONE_ANSWERED' || reason === 'COMPOSITE_VALIDATION_FAILED' ? 'PARTIAL' : reason === 'ASK_COMPOSITE_NOT_AUTHORIZED' || reason === 'ASK_PROPERTY_NOT_FOUND' ? 'WITHHELD' : 'COMPLETE' });
+    }
+    return { row: (await db.askExecution.findUnique({ where: { id: parent.id } }))!, won };
   };
 
   const children = await db.askExecution.findMany({ where: { id: { in: selections.map((s) => s.selection.attempt?.executionId).filter((id): id is string => !!id && !id.startsWith('unstarted:')) } } });
@@ -171,17 +266,27 @@ export async function runComposedTurn(input: ComposedTurnInput): Promise<AskExec
     const row = childById.get(attempt.executionId);
     return [{ clause: run.clause.clause, operationId: run.clause.operationId, executionId: attempt.executionId, attempt: attempt.number, status: attempt.status, reasonCode: row?.reasonCode ?? undefined, blocks: blocksOf(row), quantities: quantitiesOf(row?.parametersJson) }];
   });
+  // An independent clarification keeps its own focused question beside the answered section; it is not reported as a generic failure.
+  const clarificationBlocks: AskPresentationBlock[] = [];
   const notAnswered = selections.flatMap(({ run, selection }) => {
     const attempt = selection.attempt;
     const state = attempt ? componentStateOf(attempt.status, true) : 'FAILED';
-    return state === 'ANSWERED' || state === 'LIMITED' ? [] : [{ clause: run.clause.clause, reasonCode: attempt?.status === 'FAILED_RETRYABLE' ? 'AskExecutionTimeoutError' : `COMPONENT_${attempt?.status ?? 'FAILED'}`, detail: 'This part could not be answered right now.' }];
+    if (state === 'ANSWERED' || state === 'LIMITED') return [];
+    if (state === 'CLARIFICATION') {
+      clarificationBlocks.push(...blocksOf(childById.get(attempt!.executionId)).slice(0, 1));
+      return [{ clause: run.clause.clause, reasonCode: 'NEEDS_CLARIFICATION', detail: 'I need one more detail for this part — see the question below.' }];
+    }
+    return [{ clause: run.clause.clause, reasonCode: attempt?.status === 'FAILED_RETRYABLE' ? 'AskExecutionTimeoutError' : `COMPONENT_${attempt?.status ?? 'FAILED'}`, detail: 'This part could not be answered right now.' }];
   });
+  for (const entry of notAnswered) askCompositionUnansweredTotal.inc({ reason: entry.reasonCode === 'AskExecutionTimeoutError' ? 'timeout' : entry.reasonCode.startsWith('COMPONENT_') ? 'component_failed' : 'needs_clarification' });
+  if (notAnswered.some((entry) => entry.reasonCode === 'AskExecutionTimeoutError')) askCompositionTimeoutsTotal.inc();
 
   if (!outcomes.length) {
-    return persist({ status: 'READY_WITH_LIMITATIONS', reasonCode: 'COMPOSITE_NONE_ANSWERED', completedAt, resultJson: json(compositeEnvelope(null, null, notAnswered, attempts)) });
+    return persist({ status: 'READY_WITH_LIMITATIONS', reasonCode: 'COMPOSITE_NONE_ANSWERED', completedAt, resultJson: json(compositeEnvelope(null, null, notAnswered, attempts, false, [], clarificationBlocks)) });
   }
 
   const composite = assembleComposite({ outcomes, dated: parseTargetDate(input.message) != null, notAnswered });
+  if ((composite.basis?.contradictions.length ?? 0) > 0) askCompositionContradictionsTotal.inc();
   // The final authorization gate (§6.10), before the composite becomes visible.
   const gate = applyAuthorizationGate(composite, await input.loadAuthorizationView());
   if (gate.kind === 'WITHHELD') {
@@ -191,11 +296,12 @@ export async function runComposedTurn(input: ComposedTurnInput): Promise<AskExec
   const issues = validateComposite(visible);
   if (issues.length) {
     // FR-TRU-3: one envelope on the same parent, the validated sections inside, no merged figure and no answer-first line.
+    askCompositionValidatorFailuresTotal.inc();
     const plain: CompositeResult = { ...visible, answerFirst: null, basis: null, status: 'READY_WITH_LIMITATIONS', coverage: 'PARTIAL' };
     return persist({ status: 'READY_WITH_LIMITATIONS', reasonCode: 'COMPOSITE_VALIDATION_FAILED', completedAt, resultJson: json(compositeEnvelope(plain, projectForDelivery(plain), [], attempts, false, issues)) });
   }
   const delivered = projectForDelivery(visible);
-  return persist({ status: visible.status, reasonCode: visible.coverage === 'PARTIAL' ? 'COMPOSITE_PARTIAL' : undefined, completedAt, resultJson: json(compositeEnvelope(visible, delivered, visible.notAnswered, attempts)) });
+  return persist({ status: visible.status, reasonCode: visible.coverage === 'PARTIAL' ? 'COMPOSITE_PARTIAL' : undefined, completedAt, resultJson: json(compositeEnvelope(visible, delivered, visible.notAnswered, attempts, false, [], clarificationBlocks)) });
   };
   let last: { row: AskExecution; won: boolean } | null = null;
   for (let round = 0; round < MAX_CAS_RETRIES; round += 1) {
@@ -210,7 +316,7 @@ const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString('en-
 /** The stored result of a composed parent: ordinary `blocks` (so every existing renderer works) plus the composite state that replay, refresh and the gate read. */
 export function compositeEnvelope(
   composite: CompositeResult | null, delivered: DeliveredComposite | null, notAnswered: ReadonlyArray<{ clause: string; reasonCode: string; detail: string }>,
-  attempts: Attempt[], withheld = false, validationIssues: string[] = [],
+  attempts: Attempt[], withheld = false, validationIssues: string[] = [], clarificationBlocks: AskPresentationBlock[] = [],
 ) {
   const blocks: AskPresentationBlock[] = [];
   if (withheld) {
@@ -223,13 +329,15 @@ export function compositeEnvelope(
     blocks.push({ type: 'SUMMARY', id: 'composite-combined-unavailable', title: 'The combined view is unavailable', body: 'Each part is shown below as it was answered, without a combined summary.', tone: 'CAUTION', actions: [] } as AskPresentationBlock);
   }
   for (const section of delivered?.sections ?? []) blocks.push(...section.blocks);
+  blocks.push(...clarificationBlocks);
   if (notAnswered.length) {
+    const onlyClarifying = notAnswered.every((n) => n.reasonCode === 'NEEDS_CLARIFICATION');
     // Composition FRD §10 step 4 and FR-ACT-4: when a part cannot be answered the response states the limitation plainly and exposes capability discovery.
     // Nothing is guessed from general knowledge, and no nearest operation is offered below the calibration floor.
     blocks.push({
-      type: 'SUMMARY', id: 'composite-not-answered', title: notAnswered.length === 1 ? 'One part could not be answered' : 'These parts could not be answered',
+      type: 'SUMMARY', id: 'composite-not-answered', title: onlyClarifying ? (notAnswered.length === 1 ? 'One part needs a detail' : 'These parts need a detail') : notAnswered.length === 1 ? 'One part could not be answered' : 'These parts could not be answered',
       body: notAnswered.map((n) => `“${n.clause}” — ${n.detail}`).join(' '), tone: 'CAUTION',
-      actions: [{ id: 'composite-explore-capabilities', label: 'See what Ask can do', interactionType: 'START_WORKFLOW', message: 'What can Ask help me with?', operationId: 'CAPABILITY_DISCOVERY', style: 'SECONDARY' }],
+      actions: onlyClarifying ? [] : [{ id: 'composite-explore-capabilities', label: 'See what Ask can do', interactionType: 'START_WORKFLOW', message: 'What can Ask help me with?', operationId: 'CAPABILITY_DISCOVERY', style: 'SECONDARY' }],
     } as AskPresentationBlock);
   }
   return {

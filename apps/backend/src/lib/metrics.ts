@@ -297,6 +297,47 @@ export const askUnansweredRecoveryTotal = new Counter({
   registers: [register],
 });
 
+// Composition FRD §13: the before/after evaluation and the Phase 7 decision read these. Bounded labels only (no message text, no entity ids).
+export const askCompositionTotal = new Counter({
+  name: 'ask_composition_total',
+  help: 'Composition decisions and lifecycle outcomes: composed, declined (by reason), failed, recovered, refreshed',
+  labelNames: ['outcome'] as const,
+  registers: [register],
+});
+export const askCompositionResultTotal = new Counter({
+  name: 'ask_composition_result_total',
+  help: 'Stored composite results by status and coverage',
+  labelNames: ['status', 'coverage'] as const,
+  registers: [register],
+});
+export const askCompositionValidatorFailuresTotal = new Counter({
+  name: 'ask_composition_validator_failures_total',
+  help: 'Composites that failed the composite validator and were stored without a combined summary',
+  registers: [register],
+});
+export const askCompositionContradictionsTotal = new Counter({
+  name: 'ask_composition_contradictions_total',
+  help: 'Composites whose components disagreed on one quantity',
+  registers: [register],
+});
+export const askCompositionUnansweredTotal = new Counter({
+  name: 'ask_composition_unanswered_total',
+  help: 'Components a composite could not answer, by bounded reason code',
+  labelNames: ['reason'] as const,
+  registers: [register],
+});
+export const askCompositionTimeoutsTotal = new Counter({
+  name: 'ask_composition_timeouts_total',
+  help: 'Components that ended retryable-failed after the one automatic retry (or with no retry allowed)',
+  registers: [register],
+});
+export const askCompositionDurationSeconds = new Histogram({
+  name: 'ask_composition_duration_seconds',
+  help: 'Wall time of a composed turn from parent start to stored composite',
+  buckets: [0.5, 1, 2, 5, 10, 20, 40],
+  registers: [register],
+});
+
 export const askAnswerTrustTotal = new Counter({
   name: 'ask_answer_trust_total',
   help: 'Final Ask answer trust outcomes by bounded operation, source state, and repair disposition',

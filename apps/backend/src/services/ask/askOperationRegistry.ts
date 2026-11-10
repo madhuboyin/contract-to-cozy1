@@ -1,4 +1,5 @@
 import { isItemCostMessage, isItemFundingGoalMessage, isItemReserveAllocationMessage } from './support/itemFundingWording';
+import { validateCoverageDeclarations } from './composition/quantities';
 import { isNotificationSettingsCommandRequest, isNotificationSettingsOverviewRequest, isNotificationsOverviewRequest } from './support/notificationConversation';
 import { isHomeRecordExportRequest, isHomeRecordExportShareRequest, isHomeRecordExportStatusRequest } from './support/homeRecordExport';
 import type { AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionStatus, AskPresentationBlock, SuggestedNextAction, SuggestedNextActionsStatus } from '../../productFramework/ask/ask.contract';
@@ -1101,6 +1102,8 @@ export function getAskOperationDefinition(operationId: AskOperationId): AskOpera
 export function validateAskOperationDefinitions(): string[] {
   const ids = new Set<string>();
   const issues: string[] = [];
+  // Composition FRD FR-ELG-7: a contractual coverage declaration that names an unknown quantity or the wrong authority fails startup.
+  issues.push(...validateCoverageDeclarations());
   for (const [key, entry] of Object.entries(ASK_OPERATION_DEFINITIONS)) {
     if (key !== entry.operationId) issues.push(`${key}: operationId mismatch`);
     if (ids.has(entry.operationId)) issues.push(`${key}: duplicate operationId`);
