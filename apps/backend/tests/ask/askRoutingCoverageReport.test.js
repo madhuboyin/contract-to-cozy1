@@ -105,7 +105,7 @@ test('calibration drift ratchet: the stored evidence differs from live scoring o
   // 2026-11-08: 122 (CAPITAL_ITEM_FUNDING_GOAL) has no rows, and 068's strongest competitor is now that operation. Recording either refits the shared
   // confidence curve, which moved 40 operations' sweep results at once (+20 hits, +15 misroutes, 51 fewer fallbacks), so it is left with the other known
   // fixtures for the same owner decision rather than bundled into an unrelated feature.
-  const KNOWN = new Set(['ask-routing-independent-v2-015', 'ask-routing-independent-v2-065', 'ask-routing-independent-v2-075', 'ask-routing-independent-v2-121', 'ask-routing-independent-v2-068', 'ask-routing-independent-v2-122']);
+  const KNOWN = new Set(require('../fixtures/askCalibrationKnownDrift.js'));
   const drift = calibrationDrift(ASK_ROUTING_CERTIFICATION_FIXTURES);
   assert.deepEqual(drift, report.calibrationDrift);
   const unexpected = drift.rows.filter((row) => !KNOWN.has(row.fixtureId));

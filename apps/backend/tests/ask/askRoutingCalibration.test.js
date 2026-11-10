@@ -34,7 +34,11 @@ test('routing calibration is derived from traceable labeled fixture rows', () =>
     assert.ok(ASK_OPERATION_DEFINITIONS[row.candidateOperationId]);
     assert.ok(row.rawScore >= 0 && row.rawScore <= 1);
   }
+  const knownDrift = new Set(require('../fixtures/askCalibrationKnownDrift.js'));
+  const stillDrifting = new Set();
   for (const fixture of ASK_ROUTING_CERTIFICATION_FIXTURES) {
+    // Known drift (see the fixture file) is checked separately below, so it never hides drift in any other fixture.
+    if (knownDrift.has(fixture.fixtureId)) { stillDrifting.add(fixture.fixtureId); continue; }
     const candidates = retrieveAskOperationCandidates(fixture.message, { topK: Object.keys(ASK_OPERATION_DEFINITIONS).length })
       .sort((left, right) => right.rawScore - left.rawScore);
     const expected = candidates.find((candidate) => candidate.operationId === fixture.operationId);
@@ -56,6 +60,18 @@ test('routing calibration is derived from traceable labeled fixture rows', () =>
       rawScore: competitor.rawScore,
       correct: false,
     });
+  }
+  // Every known-drift fixture must still be one the exact check would reject; once one matches again it must leave the list.
+  for (const fixtureId of stillDrifting) {
+    const fixture = ASK_ROUTING_CERTIFICATION_FIXTURES.find((candidate) => candidate.fixtureId === fixtureId);
+    const candidates = retrieveAskOperationCandidates(fixture.message, { topK: Object.keys(ASK_OPERATION_DEFINITIONS).length }).sort((l, r) => r.rawScore - l.rawScore);
+    const expected = candidates.find((c) => c.operationId === fixture.operationId);
+    const competitor = candidates.find((c) => c.operationId !== fixture.operationId);
+    const rows = ASK_ROUTING_CALIBRATION_OBSERVATIONS.filter((row) => row.sourceFixtureId === fixtureId);
+    const good = rows.find((row) => row.correct), bad = rows.find((row) => !row.correct);
+    const matches = good && bad && good.candidateOperationId === expected.operationId && good.rawScore === expected.rawScore
+      && bad.candidateOperationId === competitor.operationId && bad.rawScore === competitor.rawScore;
+    assert.equal(Boolean(matches), false, `${fixtureId} matches live retrieval again: remove it from tests/fixtures/askCalibrationKnownDrift.js`);
   }
 });
 

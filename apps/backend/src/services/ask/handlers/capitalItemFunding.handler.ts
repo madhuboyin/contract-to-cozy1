@@ -124,7 +124,7 @@ export async function itemFundingGoalResult(userId: string, propertyId: string, 
   const growthRate = growthRateOf(analysis);
   const plan = buildFundingPlan({
     now, items: fundingItems, posture, targetDate: target?.date ?? null, growthRate,
-    depositsPerMonthCents: deposits.perMonthCents, fundTargetTotalCents,
+    depositsPerMonthCents: deposits.depositCount > 0 ? deposits.perMonthCents : null, fundTargetTotalCents,
   });
 
   const names = list(plan.items.map((item) => item.name));
@@ -154,12 +154,14 @@ export async function itemFundingGoalResult(userId: string, propertyId: string, 
     sentences.push(`That is only about ${plan.months} month${plan.months === 1 ? '' : 's'} away, too soon to spread out. Plan for ${dollars(plan.stillToFundCents)} as a lump sum.`);
   } else {
     sentences.push(`Saving that over ${plan.months} months takes about ${dollars(plan.neededPerMonthCents!)} a month.`);
-    sentences.push(deposits.depositCount > 0
-      ? `Your logged reserve deposits average about ${dollars(deposits.perMonthCents)} a month over the last ${DEPOSIT_RATE_WINDOW_MONTHS} months, of which about ${dollars(plan.currentPerMonthCents)} goes toward this.`
-      : `No reserve deposits are logged in the last ${DEPOSIT_RATE_WINDOW_MONTHS} months, so I counted $0 a month toward it.`);
-    sentences.push(plan.additionalPerMonthCents! > 0
-      ? `Save about ${dollars(plan.additionalPerMonthCents!)} more a month.`
-      : 'You are already saving enough to get there.');
+    if (plan.currentPerMonthCents != null) {
+      sentences.push(`Based on your logged reserve deposits, I estimate about ${dollars(plan.currentPerMonthCents)} a month is going toward ${names}. Those deposits average ${dollars(deposits.perMonthCents)} a month over the last ${DEPOSIT_RATE_WINDOW_MONTHS} months, split by each item’s share of your reserve targets.`);
+      sentences.push(plan.additionalPerMonthCents! > 0
+        ? `Save about ${dollars(plan.additionalPerMonthCents!)} more a month.`
+        : 'You are already saving enough to get there.');
+    } else {
+      sentences.push(`I don’t have enough logged deposits to estimate what you currently save (none in the last ${DEPOSIT_RATE_WINDOW_MONTHS} months), so I can’t say how much more to add. In total you need about ${dollars(plan.neededPerMonthCents!)} a month.`);
+    }
   }
   // A monthly amount the homeowner says they can save: how long it takes at that rate, against the months to go.
   const stated = !plan.nearTerm && plan.stillToFundCents > 0 ? parseMonthlyBudget(message) : null;
@@ -181,8 +183,8 @@ export async function itemFundingGoalResult(userId: string, propertyId: string, 
     { id: 'months', values: { measure: 'Months to go', amount: String(plan.months), how: target ? 'From today to your date' : 'From today to the start of the expected window' } },
     ...(plan.nearTerm ? [] : [
       { id: 'needed', values: { measure: 'Needed per month', amount: dollars(plan.neededPerMonthCents!), how: 'Still to fund divided by months to go' } },
-      { id: 'current', values: { measure: 'Putting toward it now', amount: dollars(plan.currentPerMonthCents), how: `Average logged reserve deposit over ${DEPOSIT_RATE_WINDOW_MONTHS} months, by this item’s share of the reserve targets` } },
-      { id: 'additional', values: { measure: 'Additional per month', amount: dollars(plan.additionalPerMonthCents!), how: 'Needed minus putting toward it now' } },
+      { id: 'current', values: { measure: 'Estimated going toward it now', amount: plan.currentPerMonthCents == null ? 'Not enough logged deposits' : dollars(plan.currentPerMonthCents), how: `Average logged reserve deposit over ${DEPOSIT_RATE_WINDOW_MONTHS} months, by this item’s share of the reserve targets` } },
+      { id: 'additional', values: { measure: 'Additional per month', amount: plan.additionalPerMonthCents == null ? 'Unknown' : dollars(plan.additionalPerMonthCents), how: plan.additionalPerMonthCents == null ? 'Needs logged reserve deposits to estimate' : 'Needed minus the estimate above' } },
       ...(stated && statedMonths != null ? [{ id: 'stated', values: { measure: `Months to fund at ${stated.label}`, amount: String(statedMonths), how: 'Still to fund divided by the monthly amount you gave' } }] : []),
     ]),
   ];
@@ -199,7 +201,7 @@ export async function itemFundingGoalResult(userId: string, propertyId: string, 
   const blocks: AskPresentationBlock[] = [
     {
       type: 'SUMMARY', id: 'item-funding-summary',
-      title: plan.nearTerm ? `${names}: about ${dollars(plan.stillToFundCents)} needed soon` : needsMore ? `${names}: save about ${dollars(plan.additionalPerMonthCents!)} more a month` : `${names}: you are on track`,
+      title: plan.nearTerm ? `${names}: about ${dollars(plan.stillToFundCents)} needed soon` : needsMore ? `${names}: save about ${dollars(plan.additionalPerMonthCents!)} more a month` : plan.currentPerMonthCents == null ? `${names}: about ${dollars(plan.neededPerMonthCents!)} a month in total` : `${names}: you are on track`,
       body: sentences.join(' '), tone: needsMore || plan.nearTerm ? 'CAUTION' : 'DEFAULT',
       actions: [
         { id: ITEM_FUNDING_ACTION_IDS.CAPITAL_PLAN, label: 'Show my full capital plan', interactionType: 'START_WORKFLOW' as const, message: 'Show my capital reserve plan.', operationId: 'CAPITAL_RESERVE_PLAN' as const, style: 'SECONDARY' as const },

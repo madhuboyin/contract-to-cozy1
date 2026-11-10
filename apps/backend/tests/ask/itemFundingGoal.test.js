@@ -193,11 +193,15 @@ test('handler: the owner prompt gets cost, set-aside, monthly need and the addit
   for (const block of result.blocks) assert.match(block.id, /^item-funding-/);
 });
 
-test('handler: no deposits logged is said plainly and counted as zero', async () => {
+test('handler: no deposits logged is said plainly and treated as unknown, not zero', async () => {
   stub({ items: [roofItem], lines: [{ timelineItemId: 'ti-roof', status: 'ACTIVE', targetCostCents: 2_200_000, allocatedBalanceCents: 0 }] });
   const result = await itemFundingGoalResult('u1', 'p1', 'how much should I save for a new roof in 5 years', NOW);
   const summary = result.blocks.find((b) => b.id === 'item-funding-summary');
-  assert.match(summary.body, /No reserve deposits are logged/);
+  assert.match(summary.body, /don’t have enough logged deposits to estimate what you currently save/);
+  assert.match(summary.body, /In total you need about/);
+  assert.doesNotMatch(summary.body, /more a month|already saving enough/);
+  const steps = result.blocks.find((b) => b.id === 'item-funding-steps');
+  assert.equal(steps.rows.find((r) => r.id === 'additional').values.amount, 'Unknown');
   assert.match(summary.body, /Nothing in your reserve balance counts toward it/);
 });
 
@@ -289,4 +293,15 @@ test('wording: the cost-only mode', () => {
   const { isItemCostMessage } = require('../../src/services/ask/support/itemFundingWording.ts');
   for (const m of ['how much does a new roof cost', 'cost of a new dishwasher', 'what does a replacement water heater cost']) assert.equal(isItemCostMessage(m), true, m);
   for (const m of ['how much does a new house cost', 'how much will a new roof cost in 5 years', 'how much should I save for a new roof', 'how old is my roof', 'update the replacement cost of my roof', 'should I replace my roof, what does it cost']) assert.equal(isItemCostMessage(m), false, m);
+});
+
+test('no logged deposits is unknown, not a confirmed $0', () => {
+  const plan = buildFundingPlan({
+    now: NOW, posture: 'MODERATE', targetDate: new Date(2031, 10, 1), growthRate: 0.03,
+    items: [{ id: 'r', name: 'Roof', windowStart: new Date(2031, 10, 1), windowEnd: new Date(2031, 10, 1), costMinCents: 1_200_000, costMaxCents: 1_200_000, targetCents: 1_200_000, setAsideCents: 0 }],
+    depositsPerMonthCents: null, fundTargetTotalCents: 1_200_000,
+  });
+  assert.ok(plan.neededPerMonthCents > 0);
+  assert.equal(plan.currentPerMonthCents, null);
+  assert.equal(plan.additionalPerMonthCents, null);
 });

@@ -68,7 +68,8 @@ export interface FundingPlan {
   stillToFundCents: number;
   /** Monthly saving needed to reach `stillToFundCents` by the planning date. Null when the date is too near for monthly saving to matter. */
   neededPerMonthCents: number | null;
-  currentPerMonthCents: number;
+  /** The item's estimated share of the logged deposit rate. Null when no deposits are logged: that is unknown, not a confirmed $0. */
+  currentPerMonthCents: number | null;
   additionalPerMonthCents: number | null;
   nearTerm: boolean;
   growthRate: number;
@@ -87,7 +88,8 @@ export function buildFundingPlan(input: {
   targetDate: Date | null;
   growthRate: number;
   /** Average monthly DEPOSIT over the ledger window, for the whole fund. */
-  depositsPerMonthCents: number;
+  /** The fund-wide logged deposit rate, or null when no deposits are logged (unknown, not zero). */
+  depositsPerMonthCents: number | null;
   /** Sum of every active reserve target, to split the deposit rate by cost share. */
   fundTargetTotalCents: number;
 }): FundingPlan {
@@ -127,8 +129,8 @@ export function buildFundingPlan(input: {
   const itemTargetShare = input.fundTargetTotalCents > 0
     ? Math.min(1, input.items.reduce((sum, item) => sum + (item.targetCents ?? 0), 0) / input.fundTargetTotalCents)
     : 0;
-  const currentPerMonthCents = Math.round(input.depositsPerMonthCents * itemTargetShare);
-  const additionalPerMonthCents = neededPerMonthCents == null ? null : Math.max(0, neededPerMonthCents - currentPerMonthCents);
+  const currentPerMonthCents = input.depositsPerMonthCents == null ? null : Math.round(input.depositsPerMonthCents * itemTargetShare);
+  const additionalPerMonthCents = neededPerMonthCents == null || currentPerMonthCents == null ? null : Math.max(0, neededPerMonthCents - currentPerMonthCents);
 
   return {
     planningDate, planningDateFromHomeowner: input.targetDate != null, months, items,
