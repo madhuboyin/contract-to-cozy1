@@ -17,7 +17,7 @@ import { classifyLaunchedOutcome, recordHandoffOutcome, resolveHandoffAttributio
 import { propertyScopeForAskRouting, resolveAskRoutingCascade, type AskRoutingDecision } from '../askRoutingCascade';
 import { refineAskRoutingWithModel } from '../askModelRouter';
 import { offerDidYouMean, isAskUnansweredFallbackResult } from '../support/didYouMean';
-import { clarificationLabelFor } from '../support/clarificationLabels';
+import { clarificationLabelFor, UPGRADE_OBJECTIVE_REASON, upgradeObjectiveLabelFor } from '../support/clarificationLabels';
 import { geminiService } from '../../gemini.service';
 import { resolveAskFollowUpMessage, shouldForceAskOperation } from '../askFollowUpContext';
 import { getSkillDefinition, getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../../skills/skillRegistry';
@@ -48,6 +48,23 @@ function routingClarificationResult(
   reasonCode: 'ASK_ROUTING_AMBIGUOUS' | 'ASK_SKILL_AMBIGUOUS' = 'ASK_ROUTING_AMBIGUOUS',
 ): AskOperationResult {
   const candidates = decision.candidates.slice(0, 3);
+  // "Which upgrades are worth doing" without a goal: ask what the upgrades are for, with one option per goal.
+  if (decision.candidates.some((candidate) => candidate.reasonCodes?.includes(UPGRADE_OBJECTIVE_REASON))) {
+    const expires = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    const options = candidates.map((candidate) => ({ operationId: candidate.operationId, label: upgradeObjectiveLabelFor(candidate.operationId, decision.language) }));
+    return {
+      status: 'NEEDS_CLARIFICATION',
+      reasonCode,
+      blocks: [{
+        type: 'SUMMARY', id: 'routing-clarification', title: 'Worth doing for what?',
+        body: 'Which upgrades are worth doing depends on the goal: resale value, comfort or energy savings, or maintenance risk. Pick the one you care about and I’ll use your home record for it.',
+        tone: 'DEFAULT', actions: [],
+      }],
+      clarification: { version: 1, question: 'Worth doing for resale value, comfort or energy savings, or maintenance risk?', options, allowFreeText: true, expiresAt: expires },
+      parameters: { clarification: { version: 1, candidateOperationIds: candidates.map((candidate) => candidate.operationId), expiresAt: expires } },
+      suggestions: [],
+    };
+  }
   const languagePack = (operationId: AskOperationId) => (
     getAskOperationDefinition(operationId).semantic.languagePacks[decision.language]
   );

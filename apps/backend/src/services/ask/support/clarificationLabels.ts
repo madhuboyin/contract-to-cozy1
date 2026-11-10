@@ -17,3 +17,16 @@ export function clarificationLabelFor(operationId: AskOperationId, language: Ask
   const definition = getAskOperationDefinition(operationId);
   return definition.semantic.languagePacks[language]?.supportedJobs[0] ?? definition.semantic.supportedJobs[0];
 }
+
+export const UPGRADE_OBJECTIVE_REASON = 'UPGRADE_OBJECTIVE_UNKNOWN';
+
+// When the homeowner asks which upgrades are worth doing without saying why, each option names the goal it serves. Facts only: each is what the operation answers.
+const UPGRADE_OBJECTIVE_LABELS: Readonly<Partial<Record<AskOperationId, string>>> = Object.freeze({
+  SELLER_PREP_CHECKLIST: 'Resale value: what to fix or improve before selling (seller-prep checklist)',
+  HOME_UPGRADE_SCENARIOS: 'Comfort or energy savings: my saved upgrade options and what they would cost and save',
+  APPLIANCE_FAILURE_RISK: 'Maintenance risk: which appliances and systems are old enough to be likely to fail',
+});
+
+export function upgradeObjectiveLabelFor(operationId: AskOperationId, language: AskLanguageCode = ASK_DEFAULT_LANGUAGE): string {
+  return UPGRADE_OBJECTIVE_LABELS[operationId] ?? clarificationLabelFor(operationId, language);
+}

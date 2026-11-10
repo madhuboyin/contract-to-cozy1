@@ -12,6 +12,9 @@ import { ASK_DEFAULT_LANGUAGE, requireCertifiedAskLanguage, type AskLanguageCode
 import type { AskConfidenceBand } from './askTrust.contract';
 import { resolveAskEntityState, type AskEntityResolutionResult } from './askEntityResolution';
 
+// "Which upgrades are worth doing" says nothing about what they are for. Worth depends on the goal, so the homeowner picks one rather than Ask guessing.
+const UPGRADE_OBJECTIVE_PATTERN = /\b(?:which|what)\b.{0,12}\b(?:upgrades?|improvements?|renovations?|projects?)\b.{0,30}\b(?:worth (?:doing|it|making)|best to (?:do|make))\b|\b(?:upgrades?|improvements?|renovations?)\b.{0,12}\bworth (?:doing|it|making)\b/i;
+const UPGRADE_OBJECTIVE_OPERATIONS: readonly AskOperationId[] = ['SELLER_PREP_CHECKLIST', 'HOME_UPGRADE_SCENARIOS', 'APPLIANCE_FAILURE_RISK'];
 const HOME_VALUE_GROWTH_PATTERN = /\b(?:increase|raise|boost|grow|improve|add to|maximi[sz]e)\b.{0,25}\b(?:home|house|property)\b.{0,12}\bvalue\b|\b(?:increase|raise|boost|grow|improve|maximi[sz]e)\b.{0,12}\bvalue\b.{0,12}\b(?:home|house|property)\b|\b(?:home|house|property)\s+value\b.{0,20}\b(?:increase|go up|rise|grow|improve)\b|\b(?:improvements?|upgrades?|renovations?|projects?)\b.{0,25}\b(?:add|increase|raise|boost)\b.{0,15}\bvalue\b|\bhow much\b.{0,12}\bvalue\b.{0,15}\b(?:does|do|will|would|can)\b.{0,40}\b(?:add|increase|bring)\b|\b(?:does|do|will|would|can)\b.{0,12}\b(?:a |an |the |new )?(?:new )?(?:roof|kitchen|bath(?:room)?s?|remodel\w*|renovat\w*|deck|pool|flooring|paint\w*|landscap\w*|windows?|garage|basement|addition|solar|fence|patio|hvac|furnace)\b.{0,25}\b(?:add|increase|raise|boost)\b.{0,12}\b(?:any |some )?(?:value|resale)\b/i;
 
 // Small talk about the person, not the home ("how is my day going", "how are you", "thanks"). Short whole-message phrases only. The local classifier read
@@ -92,6 +95,17 @@ export function resolveAskRoutingCascade(rawMessage: string, options: {
       return {
         language, operation: direct, stage: 'CLARIFICATION', requiresClarification: true, entityResolution: null,
         candidates: valueCandidates.map((operationId) => ({ operationId, language, confidence: 0.6, reasonCodes: ['HOME_VALUE_GROWTH_AMBIGUOUS'] })),
+      };
+    }
+  }
+
+  if (UPGRADE_OBJECTIVE_PATTERN.test(message)) {
+    const eligibleForUpgrades = options.eligibleOperationIds ? new Set(options.eligibleOperationIds) : null;
+    const upgradeCandidates = UPGRADE_OBJECTIVE_OPERATIONS.filter((operationId) => !eligibleForUpgrades || eligibleForUpgrades.has(operationId));
+    if (upgradeCandidates.length > 1) {
+      return {
+        language, operation: direct, stage: 'CLARIFICATION', requiresClarification: true, entityResolution: null,
+        candidates: upgradeCandidates.map((operationId) => ({ operationId, language, confidence: 0.6, reasonCodes: ['UPGRADE_OBJECTIVE_UNKNOWN'] })),
       };
     }
   }

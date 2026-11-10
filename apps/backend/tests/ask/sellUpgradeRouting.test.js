@@ -16,3 +16,15 @@ test('upgrade-value questions about a sale go to seller prep; hold/rent and plai
   ];
   for (const [message, expected] of cases) assert.equal(resolveAskRoutingCascade(message).operation.operationId, expected, message);
 });
+
+test('"which upgrades are worth doing" with no goal asks what they are for, one option per goal', () => {
+  for (const message of ['which upgrades are worth doing', 'What improvements are worth doing?', 'which renovations are worth it']) {
+    const decision = resolveAskRoutingCascade(message);
+    assert.equal(decision.stage, 'CLARIFICATION', message);
+    assert.equal(decision.requiresClarification, true, message);
+    assert.deepEqual(decision.candidates.map((c) => c.operationId), ['SELLER_PREP_CHECKLIST', 'HOME_UPGRADE_SCENARIOS', 'APPLIANCE_FAILURE_RISK'], message);
+    assert.deepEqual(decision.candidates[0].reasonCodes, ['UPGRADE_OBJECTIVE_UNKNOWN']);
+  }
+  // a stated goal never asks
+  assert.equal(resolveAskRoutingCascade('which upgrades are worth doing before I sell').operation.operationId, 'SELLER_PREP_CHECKLIST');
+});
