@@ -273,3 +273,19 @@ test('the stored composite is a valid Ask response: it maps to ordinary blocks, 
   assert.equal(response.blocks[0].id, 'composite-answer-first');
   assert.ok(response.blocks.length >= 4);
 });
+
+test('§10: a part that cannot be answered is stated plainly with capability discovery, and the notice is a valid Ask response', async () => {
+  const { mapPersistedExecution, ASK_SCHEMA_FALLBACK_BLOCK_ID } = require('../../src/services/ask/askHandlerSupport.ts');
+  const { resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');
+  const db = fakeDb([parentRow({ createdAt: NOW, updatedAt: NOW, message: 'x', operationId: null, operationVersion: null, intentFamily: null, contextVersion: null, completedAt: NOW, errorCode: null, launchContextJson: null, skillId: null, skillVersion: null, continuesExecutionId: null })]);
+  const parent = await run(db, scriptedChildren(db, (op) => (op === 'ITEM_REPLACEMENT_COST' ? { status: 'FAILED_TERMINAL' } : null)).createChild);
+  const notice = parent.resultJson.blocks.find((b) => b.id === 'composite-not-answered');
+  assert.match(notice.body, /could not be answered right now/);
+  const action = notice.actions[0];
+  assert.equal(action.operationId, 'CAPABILITY_DISCOVERY');
+  assert.equal(resolveAskOperation(action.message).operationId, 'CAPABILITY_DISCOVERY', 'the action asks something the router maps to capability discovery');
+  const response = mapPersistedExecution(parent, { id: 'p1', label: 'Home' });
+  assert.ok(!response.blocks.some((b) => b.id === ASK_SCHEMA_FALLBACK_BLOCK_ID));
+  // no general-knowledge answer is ever offered for the unanswered part
+  assert.ok(!JSON.stringify(parent.resultJson.blocks).toLowerCase().includes('typically costs'));
+});

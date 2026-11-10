@@ -309,3 +309,27 @@ test('FR-PER-16: a retry is rejected when the family is expired or has less than
   const parent = new Date('2026-12-01T00:00:00Z');
   assert.equal(A.childExpiresAt(parent).getTime(), parent.getTime());
 });
+
+// ---------------------------------------------------------------- narration (§9)
+test('FR-NAR-2/3: a candidate sentence is accepted only if every figure and name is already in the section payloads; otherwise the template is used', () => {
+  const composite = C.assembleComposite({ outcomes: roofOutcomes(), dated: false });
+  const template = composite.answerFirst;
+  assert.ok(template);
+  // a faithful rewording passes
+  assert.equal(C.guardedNarration('Your roof is about 7 years old, and a new Roof is about $11,500 in today’s dollars.', composite.sections), 'Your roof is about 7 years old, and a new Roof is about $11,500 in today’s dollars.');
+  // an invented figure falls back to the template
+  assert.equal(C.guardedNarration('Your roof is about 7 years old and a new one is about $99,999.', composite.sections), template);
+  // an invented year, an invented name, an empty or oversized candidate all fall back
+  assert.equal(C.guardedNarration('Your roof was installed in 2012.', composite.sections), template);
+  assert.equal(C.guardedNarration('Your roof is about 7 years old, as Acme Roofing noted.', composite.sections), template);
+  assert.equal(C.guardedNarration('', composite.sections), template);
+  assert.equal(C.guardedNarration(null, composite.sections), template);
+  assert.equal(C.guardedNarration('Your roof is about 7 years old. ' + 'x'.repeat(500), composite.sections), template);
+});
+
+test('FR-NAR-4: narration supplements the blocks and never replaces them', () => {
+  const composite = C.assembleComposite({ outcomes: roofOutcomes(), dated: false });
+  const delivered = C.projectForDelivery(composite);
+  assert.ok(delivered.sections.every((s) => s.blocks.length > 0), 'every section keeps its typed blocks beside the answer-first line');
+  assert.ok(delivered.sections.flatMap((s) => s.blocks).some((b) => b.type === 'EVIDENCE'));
+});

@@ -192,6 +192,25 @@ export function buildAnswerFirst(sections: readonly CompositeSection[]): string 
   return numbersIn(line).every((n) => haystack.includes(asDigits(n))) ? line : null;
 }
 
+/**
+ * FR-NAR-2/3: a candidate answer-first sentence (for example one a model wrote) is accepted only if every number, every capitalized name and every year in
+ * it already appears in the section payloads; otherwise the deterministic template is used. A model never introduces a figure, date or name of its own.
+ * No model call is made anywhere in the composition path today; this guard is what a future narrator must pass.
+ */
+export function guardedNarration(candidate: string | null | undefined, sections: readonly CompositeSection[]): string | null {
+  const template = buildAnswerFirst(sections);
+  if (!candidate || !candidate.trim()) return template;
+  const text = candidate.trim();
+  const haystack = payloadText(sections);
+  const digits = asDigits(haystack);
+  if (!numbersIn(text).every((n) => digits.includes(asDigits(n)))) return template;
+  // Names: every capitalized word that does not begin a sentence must appear in the payload (case-insensitive).
+  const lower = haystack.toLowerCase();
+  const names = [...text.matchAll(/(?<![.!?]\s)(?<!^)\b([A-Z][a-z]{2,})\b/g)].map((m) => m[1]);
+  if (names.some((name) => !lower.includes(name.toLowerCase()))) return template;
+  return text.length <= 400 ? text : template;
+}
+
 export interface AssembleInput { outcomes: readonly ComponentOutcome[]; dated: boolean; notAnswered?: readonly NotAnswered[] }
 
 /** Assembles the composite from terminal, answered or limited component outcomes. The caller decides status first (decideStatus); this builds the result. */

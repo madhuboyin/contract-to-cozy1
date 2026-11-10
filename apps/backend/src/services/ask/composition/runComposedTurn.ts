@@ -224,7 +224,13 @@ export function compositeEnvelope(
   }
   for (const section of delivered?.sections ?? []) blocks.push(...section.blocks);
   if (notAnswered.length) {
-    blocks.push({ type: 'SUMMARY', id: 'composite-not-answered', title: notAnswered.length === 1 ? 'One part could not be answered' : 'These parts could not be answered', body: notAnswered.map((n) => `“${n.clause}” — ${n.detail}`).join(' '), tone: 'CAUTION', actions: [] } as AskPresentationBlock);
+    // Composition FRD §10 step 4 and FR-ACT-4: when a part cannot be answered the response states the limitation plainly and exposes capability discovery.
+    // Nothing is guessed from general knowledge, and no nearest operation is offered below the calibration floor.
+    blocks.push({
+      type: 'SUMMARY', id: 'composite-not-answered', title: notAnswered.length === 1 ? 'One part could not be answered' : 'These parts could not be answered',
+      body: notAnswered.map((n) => `“${n.clause}” — ${n.detail}`).join(' '), tone: 'CAUTION',
+      actions: [{ id: 'composite-explore-capabilities', label: 'See what Ask can do', interactionType: 'START_WORKFLOW', message: 'What can Ask help me with?', operationId: 'CAPABILITY_DISCOVERY', style: 'SECONDARY' }],
+    } as AskPresentationBlock);
   }
   return {
     schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks, captureRequests: [], confirmation: null, clarification: null, suggestions: [] as string[],
