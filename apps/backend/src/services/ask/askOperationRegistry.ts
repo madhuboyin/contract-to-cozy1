@@ -1235,6 +1235,11 @@ const sellerPrepChecklistPattern = /\b(?:seller prep|sale readiness|selling read
 // stays a checklist READ) and checked BEFORE it in the cascade below, since
 // "waive the seller prep item for the roof" would otherwise also match
 // sellerPrepChecklistPattern's own bare "seller prep" alternative.
+// "Which upgrades are worth doing before I sell / if I sell in 5 years": the seller-prep checklist (what to fix or improve for a sale), not the
+// sell-hold-rent analysis the word "sell" alone would send it to. A hold or rent word keeps the analysis.
+const sellUpgradeValuePattern = /\b(?:upgrades?|improvements?|renovations?|remodel\w*|projects?|fixes)\b.{0,60}\b(?:worth|before|add(?:s|ed)? (?:the most )?value|increase|pay(?:s)? off)\b|\b(?:worth|before)\b.{0,40}\b(?:upgrad\w*|improv\w*|renovat\w*|remodel\w*)\b/i;
+const sellWordPattern = /\b(?:sell|selling|sale|list(?:ing)? (?:my|the|our))\b/i;
+const holdOrRentWordPattern = /\b(?:hold|holding|rent(?:ing)?|landlord|keep)\b/i;
 const sellerPrepItemDecisionPattern = /\b(?:waive|pursue|reopen|unpursue)\b.{0,60}\b(?:seller[- ]prep|sale readiness|checklist)\b.{0,20}\bitem\b|\b(?:seller[- ]prep|sale readiness|checklist)\b.{0,20}\bitem\b.{0,60}\b(?:waive|pursue|reopen|unpursue)\b/i;
 const majorEventPattern = /\b(?:help|guide|prepare|plan(?:ning)?|checklist|what should i do|what do i need)\b.{0,70}\b(?:moving|move in|move out|selling my home|home sale|(?:major|big) renovation|remodeling|insurance claim|storm damage|new baby|aging in place)\b/i;
 // Recorded warranties (the Warranties page): what the Home Record says about them, including "what does my HVAC warranty cover?"
@@ -1800,6 +1805,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (sellerPrepChecklistPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('SELLER_PREP_CHECKLIST', 0.97);
+  }
+  if (sellUpgradeValuePattern.test(message) && sellWordPattern.test(message) && !holdOrRentWordPattern.test(message) && !itemAttributeWriteIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('SELLER_PREP_CHECKLIST', 0.95);
   }
   if (majorEventPattern.test(message)) {
     return resolved('MAJOR_EVENT_ENTRY', 0.96);
