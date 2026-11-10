@@ -39,6 +39,10 @@ import { recordSuggestedActionOutcomeAnalytics, recordSuggestedActionSelectedAna
 import { decomposeForComposition } from '../composition/decompose';
 import { runComposedTurn } from '../composition/runComposedTurn';
 import { buildAuthorizationView } from '../composition/authorizationView';
+import { resolveSlotFollowUp } from '../composition/slotContext';
+import { extractSlots, sanitizeSlots } from '../composition/slots';
+import { homeHasItem } from '../composition/homeItems';
+import { resolvePropertyAccess } from '../../propertyAccess.service';
 import { resolveSuggestedActionSelection, type SuggestedActionResolution, type SuggestedActionRejectionReason } from '../suggestedActions/suggestedNextActionSelection';
 
 function stableSkillRoutingReasonCode(outcome: SkillRoutingOutcome): string | null {
@@ -340,7 +344,20 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
   // resolve correctly. The homeowner-visible/persisted question stays the
   // original input.message.
   const followUp = await resolveAskFollowUpMessage({ sessionId: session.id, propertyId: executionPropertyId, message: input.message, declaredSourceExecutionId: input.launchContext?.sourceExecutionId ?? null });
-  const routingMessage = followUp.effectiveMessage;
+  // Composition FRD §8: an elliptical follow-up ("what about the water heater?", "make it 10 years", "what would it cost?") resolves against the session's
+  // carried slots, after revalidation. It applies only when the existing follow-up rewriting left the message alone and the turn is an ordinary typed one.
+  let slotFollowUp: Awaited<ReturnType<typeof resolveSlotFollowUp>> = null;
+  if (followUp.effectiveMessage === input.message && executionPropertyId && !input.launchContext?.operationId && !input.suggestedActionSelection && !internal.composition) {
+    const slotPropertyId = executionPropertyId;
+    slotFollowUp = await resolveSlotFollowUp({
+      db: prisma as never, userId, sessionId: session.id, propertyId: slotPropertyId, message: input.message,
+      revalidation: { propertyAccessible: async () => Boolean(await resolvePropertyAccess(userId, slotPropertyId)), itemExists: (item) => homeHasItem(slotPropertyId, item) },
+    });
+    if (slotFollowUp?.kind === 'DECLINED') {
+      await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'SLOT_RESOLUTION_DECLINED', metadataJson: asInputJson({ reason: slotFollowUp.reason }) } });
+    }
+  }
+  const routingMessage = slotFollowUp?.kind === 'RESOLVED' ? slotFollowUp.message : followUp.effectiveMessage;
 
   const skillRoutingStartedAt = process.hrtime.bigint();
   let routingDecision = safetyFirstDecision.stage === 'SAFETY'
@@ -652,7 +669,8 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
         status: result.status,
         reasonCode: result.reasonCode,
         contextVersion: result.contextVersion,
-        parametersJson: result.parameters ? asInputJson(result.parameters) : undefined,
+        // Slots (composition FRD §8): typed values only, on the session's own execution, so the next elliptical follow-up can resolve against them.
+        parametersJson: (() => { const slots = sanitizeSlots({ ...extractSlots(input.message), ...(slotFollowUp?.kind === 'RESOLVED' ? slotFollowUp.slots : {}) }); return result.parameters || Object.keys(slots).length ? asInputJson({ ...(result.parameters ?? {}), ...(Object.keys(slots).length ? { slots } : {}) }) : undefined; })(),
         // RES-003/MAINT-003: only a bare filter refinement (not entity/
         // pagination/specialist/monitor continuations, which are legitimate
         // separate answers) is marked so the frontend can update the prior

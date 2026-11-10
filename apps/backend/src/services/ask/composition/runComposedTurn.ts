@@ -7,6 +7,7 @@ import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type AskPresent
 import type { AskAccountRole } from '../askAccountEligibility';
 import { parseTargetDate } from '../support/targetDate';
 import { quantitiesOf } from './quantities';
+import { extractSlots, sanitizeSlots } from './slots';
 import type { ComposedClause } from './decompose';
 import {
   applyAttemptMutation, childClientRequestId, componentKeyOf, nextAttemptNumber, requireVersion, retryAllowed, selectAttempt, AssemblyInvariantError,
@@ -87,7 +88,7 @@ export async function runComposedTurn(input: ComposedTurnInput): Promise<AskExec
   const { db, parent, clauses } = input;
   const now = input.now ?? (() => new Date());
   // FR-PER-13: a composed parent starts at version 0.
-  await db.askExecution.update({ where: { id: parent.id }, data: { status: 'RUNNING', assemblyVersion: 0, parametersJson: json({ composition: { attempts: [] } }) } });
+  await db.askExecution.update({ where: { id: parent.id }, data: { status: 'RUNNING', assemblyVersion: 0, parametersJson: json({ composition: { attempts: [] }, slots: sanitizeSlots(extractSlots(input.message)) }) } });
   await db.askExecutionEvent.create({ data: { executionId: parent.id, eventType: 'COMPOSED_TURN_STARTED', metadataJson: json({ components: clauses.map((c) => c.operationId) }) } });
 
   const runs: ComponentRun[] = clauses.map((clause) => ({ clause, key: componentKeyOf(clause.operationId, { clause: normalizeClause(clause.clause) }) }));
