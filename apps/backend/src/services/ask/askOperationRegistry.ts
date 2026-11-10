@@ -1806,7 +1806,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (sellerPrepChecklistPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('SELLER_PREP_CHECKLIST', 0.97);
   }
-  if (sellUpgradeValuePattern.test(message) && sellWordPattern.test(message) && !holdOrRentWordPattern.test(message) && !itemAttributeWriteIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+  if (sellUpgradeValuePattern.test(message) && sellWordPattern.test(message) && !holdOrRentWordPattern.test(message) && !itemAttributeWriteIntentPattern.test(message.replace(/\badd(?:s|ed)? (?:the )?(?:most |more )?value\b/gi, '')) && !explicitCapabilityPattern.test(message)) {
     return resolved('SELLER_PREP_CHECKLIST', 0.95);
   }
   if (majorEventPattern.test(message)) {

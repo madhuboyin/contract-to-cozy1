@@ -8,6 +8,7 @@ test('upgrade-value questions about a sale go to seller prep; hold/rent and plai
     ['If I sell in 5 years which upgrades are worth doing', 'SELLER_PREP_CHECKLIST'],
     ['which upgrades are worth doing before I sell', 'SELLER_PREP_CHECKLIST'],
     ['what upgrades should I do before selling my house', 'SELLER_PREP_CHECKLIST'],
+    ['if I sell in 5 years what improvements add the most value', 'SELLER_PREP_CHECKLIST'],
     ['If I sell in 5 years should I hold or rent', 'SELL_HOLD_RENT_ANALYSIS'],
     ['should I sell my house or rent it out', 'SELL_HOLD_RENT_ANALYSIS'],
   ];
