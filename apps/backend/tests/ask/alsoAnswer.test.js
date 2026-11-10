@@ -15,7 +15,7 @@ test('a question is split at its joining words, and a single question stays whol
 test('the second part is offered as a different read operation, never the one already answering', () => {
   // "a new one" borrows the item named in the first part, so the part can be routed on its own.
   const roof = findAlsoAnswerOffer('How old is my roof, what condition is it in, and what would a new one cost?', 'INVENTORY_LOOKUP');
-  assert.equal(roof.operationId, 'REPLACEMENT_GUIDANCE');
+  assert.equal(roof.operationId, 'CAPITAL_ITEM_FUNDING_GOAL');
   assert.equal(roof.clause, 'What would a new roof cost?');
   // The whole message routed to its second part, so the dropped part is the first one.
   const recall = findAlsoAnswerOffer('Are there any recalls on my appliances and are those items still under warranty?', 'WARRANTY_LOOKUP');
@@ -83,7 +83,7 @@ test('whole-home money, failure-risk and replacement-cost follow-up shapes (seco
   }
   // "a replacement" borrows the first part's item and drops the trailing "if it is not".
   const water = findAlsoAnswerOffer('Is my water heater covered by warranty, and how much would a replacement cost if it is not?', 'WARRANTY_LOOKUP');
-  assert.equal(water.operationId, 'REPLACEMENT_GUIDANCE');
+  assert.equal(water.operationId, 'CAPITAL_ITEM_FUNDING_GOAL');
   assert.equal(water.clause, 'How much would a replacement water heater cost?');
   // Never on the answered operation itself, and never on a single question.
   assert.equal(findAlsoAnswerOffer('Which warranties expire this year and which of those items are old enough to fail?', 'APPLIANCE_FAILURE_RISK').operationId, 'WARRANTY_LOOKUP', 'the dropped part is the other one');

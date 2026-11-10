@@ -1,4 +1,4 @@
-import { isItemFundingGoalMessage } from './support/itemFundingWording';
+import { isItemCostMessage, isItemFundingGoalMessage } from './support/itemFundingWording';
 import { isNotificationSettingsCommandRequest, isNotificationSettingsOverviewRequest, isNotificationsOverviewRequest } from './support/notificationConversation';
 import { isHomeRecordExportRequest, isHomeRecordExportShareRequest, isHomeRecordExportStatusRequest } from './support/homeRecordExport';
 import type { AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionStatus, AskPresentationBlock, SuggestedNextAction, SuggestedNextActionsStatus } from '../../productFramework/ask/ask.contract';
@@ -1757,6 +1757,10 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   // is whole-home) and of the repair-or-replace rule (which would answer a verdict and ignore the date and the saving).
   if (isItemFundingGoalMessage(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('CAPITAL_ITEM_FUNDING_GOAL', 0.97);
+  }
+  // "How much does a new roof cost": the cost-only mode of the same read, from the capital timeline's estimate for the recorded item.
+  if (isItemCostMessage(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('CAPITAL_ITEM_FUNDING_GOAL', 0.95);
   }
   if (capitalReservePattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('CAPITAL_RESERVE_PLAN', 0.97);

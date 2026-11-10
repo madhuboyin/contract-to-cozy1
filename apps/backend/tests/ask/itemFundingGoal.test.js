@@ -237,8 +237,9 @@ test('single-fact building blocks: an item\'s condition and its replacement cost
   const cases = [
     ["what's my roof's condition", 'INVENTORY_LOOKUP'],
     ['the condition of my dishwasher', 'INVENTORY_LOOKUP'],
-    ['how much does a new roof cost', 'REPLACEMENT_GUIDANCE'],
-    ['cost of a new dishwasher', 'REPLACEMENT_GUIDANCE'],
+    ['how much does a new roof cost', 'CAPITAL_ITEM_FUNDING_GOAL'],
+    ['cost of a new dishwasher', 'CAPITAL_ITEM_FUNDING_GOAL'],
+    ['should I repair or replace my roof, what does a new one cost', 'REPLACEMENT_GUIDANCE'],
     // with a date it is the cost line of the funding answer
     ['how much will a new roof cost in 5 years', 'CAPITAL_ITEM_FUNDING_GOAL'],
     // not an item
@@ -282,4 +283,10 @@ test('profile roof: window is the roof default life after the recorded year; a r
   const past = profileRoofTimelineItem({ roofReplacementYear: 1995, now: NOW, growthRate: 0.035, roofDefault });
   assert.equal(past.windowStart.getFullYear(), 2026);
   assert.ok(past.windowEnd > past.windowStart);
+});
+
+test('wording: the cost-only mode', () => {
+  const { isItemCostMessage } = require('../../src/services/ask/support/itemFundingWording.ts');
+  for (const m of ['how much does a new roof cost', 'cost of a new dishwasher', 'what does a replacement water heater cost']) assert.equal(isItemCostMessage(m), true, m);
+  for (const m of ['how much does a new house cost', 'how much will a new roof cost in 5 years', 'how much should I save for a new roof', 'how old is my roof', 'update the replacement cost of my roof', 'should I replace my roof, what does it cost']) assert.equal(isItemCostMessage(m), false, m);
 });

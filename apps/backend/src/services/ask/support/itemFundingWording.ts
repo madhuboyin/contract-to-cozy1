@@ -56,3 +56,18 @@ export function isItemFundingGoalMessage(message: string): boolean {
   if (!named && !dated) return false;
   return REPLACE_WORDING.test(message) || dated;
 }
+
+const WRITE_INTENT = /\b(?:change|update|edit|correct|fix|set|add|record|enter|rename)\b/i;
+// A verdict or a how-old question about the item is a different read.
+const OTHER_ITEM_QUESTION = /\b(?:repair or replace|should i|worth (?:repairing|replacing)|how old|how long|lifespan|life expectancy|condition)\b/i;
+
+/**
+ * "How much does a new roof cost" / "cost of a new dishwasher": a named system or appliance and a cost word with a replacement cue, and no saving goal.
+ * With a date or a saving goal `isItemFundingGoalMessage` takes it first; this is the cost-only mode of the same read.
+ */
+export function isItemCostMessage(message: string): boolean {
+  if (OTHER_INTENT.test(message) || WRITE_INTENT.test(message) || OTHER_ITEM_QUESTION.test(message)) return false;
+  if (STRONG_SAVING_WORDING.test(message) || parseTargetDate(message) != null) return false;
+  if (!COST_WORDING.test(message) || !/\b(?:new|replacement|replac\w*|install\w*)\b/i.test(message)) return false;
+  return namedFundingTerms(message).length > 0;
+}
