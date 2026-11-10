@@ -32,13 +32,13 @@ export function splitQuestionClauses(message: string): string[] {
 }
 
 /** "my roof" from "How old is my roof"; null when the first part names no owned thing. */
-function subjectOf(firstClause: string): string | null {
+export function subjectOf(firstClause: string): string | null {
   const match = /\b(my|our)\s+([a-z][a-z -]{2,28}?)(?=\s+(?:is|are|was|were|needs?|has|have|covered|leaks?|and|in|to|for|from)\b|$)/i.exec(firstClause);
   return match ? `${match[1].toLowerCase()} ${match[2].trim()}` : null;
 }
 
 /** A later part usually leans on the first ("what condition is it in"); the first part's subject replaces the pronoun so the part can be routed on its own. */
-function standalone(clause: string, subject: string | null): string {
+export function standalone(clause: string, subject: string | null): string {
   if (!subject) return clause;
   const noun = subject.replace(/^(?:my|our)\s+/, '');
   // "a new one" -> "a new roof"; "is it" -> "is my roof".

@@ -246,7 +246,13 @@ async function profileRoofAnswer(propertyId: string, message: string, recordVers
   const profile = await prisma.property.findUnique({ where: { id: propertyId }, select: { roofReplacementYear: true, roofType: true } });
   if (!profile?.roofReplacementYear) return null;
   const summary = profileRoofSummary({ roofReplacementYear: profile.roofReplacementYear, roofType: profile.roofType ? String(profile.roofType) : null, now: new Date(), roofDefault: capitalCategoryDefault('ROOF'), repairNote: false });
-  return { status: 'ANSWERED', reasonCode: 'INVENTORY_ROOF_FROM_PROFILE', contextVersion: recordVersion, blocks: [{ type: 'SUMMARY', id: 'inventory-roof-profile', ...summary, actions: [] }], suggestions: [] };
+  // The roof's replacement cost as this answer states it (today's dollars, the timeline's roof default), declared so a composed answer keeps one basis.
+  const roofDefault = capitalCategoryDefault('ROOF');
+  return {
+    status: 'ANSWERED', reasonCode: 'INVENTORY_ROOF_FROM_PROFILE', contextVersion: recordVersion,
+    blocks: [{ type: 'SUMMARY', id: 'inventory-roof-profile', ...summary, actions: [] }], suggestions: [],
+    parameters: { quantities: [{ key: 'item.replacementCost', itemKey: 'ROOF', basis: 'TODAY', minCents: roofDefault.costMinCents, maxCents: roofDefault.costMaxCents }] },
+  };
 }
 
 export async function inventoryLookupResult(

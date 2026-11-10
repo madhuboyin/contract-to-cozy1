@@ -461,6 +461,11 @@ export interface AskOperationDefinition extends AskOperationResolution {
   adapterKey: string;
   allowedBlockTypes: AskPresentationBlock['type'][];
   evalSuite: string;
+  /**
+   * Composition FRD §4.1: true only for an operation on the explicit COMPOSABLE_READ_OPERATION_IDS allowlist (read-only, STANDARD, no workflow, capture or
+   * confirmation). Never inferred from `family`; MATERIAL_DECISION operations are never composable (FR-ELG-3).
+   */
+  composableRead: boolean;
   semantic: AskOperationSemanticContract;
 }
 
@@ -663,6 +668,14 @@ const CAPABILITY_CONTINUITY_OPERATIONS = new Set<AskOperationId>([
   'REFINANCE_RATE_MONITOR', 'SELL_HOLD_RENT_ANALYSIS',
 ]);
 
+// Composition FRD §4.3 (D7): the operations that may run as a component of a composed answer. Approved by name; each must also pass the per-operation
+// runtime purity test in tests/ask/composableReadPurity.test.js (FR-ELG-6) before it appears here.
+// Not admitted yet: APPLIANCE_FAILURE_RISK (its real service path throws on an empty home, so it cannot pass the purity test until it has a data-backed fixture).
+export const COMPOSABLE_READ_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<AskOperationId>([
+  'ITEM_REPLACEMENT_COST', 'INVENTORY_LOOKUP', 'WARRANTY_LOOKUP', 'MAINTENANCE_BUDGET_FORECAST', 'DO_NOTHING_SIMULATION',
+  'HOME_UPGRADE_SCENARIOS', 'RECALL_REVIEW', 'HOME_TIMELINE_EVENTS',
+]);
+
 const definition = (
   operationId: AskOperationId,
   family: AskIntentFamily,
@@ -688,6 +701,7 @@ const definition = (
       ? [...new Set([...allowedBlockTypes, 'CAPABILITY_LIST' as const])]
       : allowedBlockTypes,
     evalSuite: `ask-${operationId.toLowerCase().replace(/_/g, '-')}-golden`,
+    composableRead: COMPOSABLE_READ_OPERATION_IDS.has(operationId),
   } satisfies Omit<AskOperationDefinition, 'semantic'>;
   return { ...base, semantic: createAskOperationSemanticContract(base) };
 };
@@ -1094,6 +1108,19 @@ export function validateAskOperationDefinitions(): string[] {
     if (entry.requiresProperty && entry.propertyRoleFloor == null) issues.push(`${key}: property operation has no authorization floor`);
     if (entry.safetyClass.endsWith('_BOUNDARY') && !entry.allowedBlockTypes.includes('BOUNDARY')) issues.push(`${key}: boundary operation lacks boundary result`);
     issues.push(...validateAskSemanticContract(entry.semantic).map((issue) => `${key}: ${issue}`));
+    // Composition FRD FR-ELG-2/3/4: a composable read is STANDARD, deterministic, routable, property-scoped, a read family, and emits no workflow,
+    // capture or confirmation block. A MATERIAL_DECISION operation is never composable. The flag always equals membership of the allowlist.
+    if (entry.composableRead !== COMPOSABLE_READ_OPERATION_IDS.has(entry.operationId)) issues.push(`${key}: composableRead does not match the allowlist`);
+    if (entry.composableRead) {
+      if (entry.safetyClass !== 'STANDARD') issues.push(`${key}: a composable read must be STANDARD, never ${entry.safetyClass}`);
+      if (entry.executionMode !== 'DETERMINISTIC') issues.push(`${key}: a composable read must be deterministic`);
+      if (!entry.messageRoutable) issues.push(`${key}: a composable read must be message-routable`);
+      if (!entry.requiresProperty) issues.push(`${key}: a composable read must be property-scoped`);
+      if (entry.family !== 'RECORD_QUERY' && entry.family !== 'STATUS_SUMMARY') issues.push(`${key}: a composable read must be a RECORD_QUERY or STATUS_SUMMARY, not ${entry.family}`);
+      for (const blocked of ['WORKFLOW_PROGRESS', 'CONFIRMATION', 'CAPTURE'] as const) {
+        if ((entry.allowedBlockTypes as string[]).includes(blocked)) issues.push(`${key}: a composable read must not allow ${blocked} blocks`);
+      }
+    }
   }
   issues.push(...validateAskOperationSemanticPackages(Object.keys(ASK_OPERATION_DEFINITIONS) as AskOperationId[]));
   return issues;

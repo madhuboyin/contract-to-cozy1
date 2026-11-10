@@ -15,6 +15,7 @@ import { namedFundingTerms, selectFundingItems } from '../support/itemFundingWor
 import { parseTargetDate } from '../support/targetDate';
 import { growthRateOf } from '../support/capitalTimelineCost';
 import { itemCostBases } from '../support/itemCost';
+import type { Quantity } from '../composition/quantities';
 
 const homeCapitalTimelineService = new HomeCapitalTimelineService();
 
@@ -57,8 +58,11 @@ export async function itemReplacementCostResult(userId: string, propertyId: stri
     const stored = { min: item.estimatedCostMinCents ?? item.estimatedCostMaxCents ?? 0, max: item.estimatedCostMaxCents ?? item.estimatedCostMinCents ?? 0 };
     const windowStart = new Date(item.windowStart);
     const windowEnd = new Date(item.windowEnd);
-    const bases = itemCostBases({ storedMinCents: stored.min, storedMaxCents: stored.max, windowStart, windowEnd, growthRate, now, targetDate: target?.date ?? null });
-    return { id: String(item.id), name: String(item.inventoryItem?.name ?? words(item.category)), windowStart, windowEnd, bases, missing: stored.min === 0 && stored.max === 0, fromProfile: item.fromProfile === true };
+    const computed = itemCostBases({ storedMinCents: stored.min, storedMaxCents: stored.max, windowStart, windowEnd, growthRate, now, targetDate: target?.date ?? null });
+    // A roof read from the home profile states today's cost as the timeline's roof default itself, exactly as the profile-roof answer does, so the two never differ.
+    const roofDefault = capitalCategoryDefault('ROOF');
+    const bases = item.fromProfile === true ? { ...computed, today: { minCents: roofDefault.costMinCents, maxCents: roofDefault.costMaxCents } } : computed;
+    return { id: String(item.id), itemKey: String(item.category ?? 'ITEM'), name: String(item.inventoryItem?.name ?? words(item.category)), windowStart, windowEnd, bases, missing: stored.min === 0 && stored.max === 0, fromProfile: item.fromProfile === true };
   });
   const names = list(rows.map((row) => row.name));
   const missingCost = rows.some((row) => row.missing);
@@ -98,7 +102,14 @@ export async function itemReplacementCostResult(userId: string, propertyId: stri
     },
     { type: 'BOUNDARY', id: 'item-cost-boundary', title: 'Planning figure—not a quote', body: 'Actual prices depend on materials, labor, permits and when you do the work.', severity: 'INFO' },
   ] as AskPresentationBlock[];
+  // Typed declarations of what this answer states, so a composed answer can keep one basis per quantity (composition FRD §6.3).
+  const quantities: Quantity[] = rows.filter((row) => !row.missing).flatMap((row) => [
+    { key: 'item.replacementCost' as const, itemKey: row.itemKey, basis: 'TODAY' as const, minCents: row.bases.today.minCents, maxCents: row.bases.today.maxCents },
+    { key: 'item.replacementCost' as const, itemKey: row.itemKey, basis: 'WINDOW' as const, minCents: row.bases.window.minCents, maxCents: row.bases.window.maxCents },
+    ...(row.bases.target && target ? [{ key: 'item.replacementCost' as const, itemKey: row.itemKey, basis: 'TARGET' as const, minCents: row.bases.target.minCents, maxCents: row.bases.target.maxCents, targetLabel: target.label }] : []),
+  ]);
   return {
+    parameters: { quantities },
     status: missingCost || stale || fromProfile ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
     reasonCode: missingCost ? 'ITEM_COST_MISSING' : stale ? 'ITEM_COST_TIMELINE_STALE' : fromProfile ? 'ITEM_COST_FROM_PROFILE' : undefined,
     blocks, suggestions: [],

@@ -109,3 +109,22 @@ test('handler: no timeline, an item not on it, a missing estimate and a stale ti
   assert.equal(stale.reasonCode, 'ITEM_COST_TIMELINE_STALE');
   assert.match(stale.blocks.find((b) => b.id === 'item-cost-summary').body, /out of date/);
 });
+
+test('handler: the profile roof declares today\'s cost as exactly the roof default, the same figure the profile-roof answer states', async () => {
+  const { capitalCategoryDefault } = require('../../src/services/homeCapitalTimeline.service.ts');
+  stub({ items: [], roofYear: 2019 });
+  const result = await itemReplacementCostResult('u1', 'p1', 'how much does a new roof cost', NOW);
+  const today = result.parameters.quantities.find((q) => q.basis === 'TODAY');
+  const roofDefault = capitalCategoryDefault('ROOF');
+  assert.equal(today.minCents, roofDefault.costMinCents);
+  assert.equal(today.maxCents, roofDefault.costMaxCents);
+  assert.ok(result.parameters.quantities.some((q) => q.basis === 'WINDOW'));
+});
+
+test('handler: a dated question also declares the figure grown to that date', async () => {
+  stub({ items: [roofItem] });
+  const result = await itemReplacementCostResult('u1', 'p1', 'how much will a new roof cost in 5 years', NOW);
+  const target = result.parameters.quantities.find((q) => q.basis === 'TARGET');
+  assert.ok(target);
+  assert.equal(target.targetLabel, 'in 5 years');
+});
