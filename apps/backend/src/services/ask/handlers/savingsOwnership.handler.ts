@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { parseTargetDate } from '../support/targetDate';
 import { HouseholdRole } from '@prisma/client';
 import { type AskCaptureRequest, type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
@@ -635,9 +636,18 @@ async function ownershipChangesResult(userId: string, propertyId: string, lens: 
   return withOwnershipCollections({ status: changes.comparable ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: changes.comparable ? undefined : 'OWNERSHIP_COST_HISTORY_LIMITED', blocks, suggestions: [] });
 }
 
+/** The forecast offers 1, 3, 5 and 10 years. A named horizon ("3-year", "in 2 years", "by 2031") takes the shortest offered horizon that covers it; none named or beyond 10 years keeps 5. */
+export function ownershipForecastHorizonYears(message: string, now: Date = new Date()): number {
+  const offered = [1, 3, 5, 10];
+  const literal = Number(message.match(/\b(1|3|5|10)[ -]year\b/i)?.[1]);
+  if (offered.includes(literal)) return literal;
+  const target = parseTargetDate(message, now);
+  if (!target) return 5;
+  return offered.find((years) => years * 12 >= target.months) ?? 5;
+}
+
 async function ownershipForecastResult(userId: string, propertyId: string, lens: OwnershipCostCurrentLens, message: string): Promise<AskOperationResult> {
-  const requested = Number(message.match(/\b(1|3|5|10)[ -]year\b/i)?.[1] ?? 5);
-  const horizonYears = [1, 3, 5, 10].includes(requested) ? requested : 5;
+  const horizonYears = ownershipForecastHorizonYears(message);
   const [forecast, scenarios, access] = await Promise.all([
     ownershipCostForecastService.getForecast(propertyId, userId, lens, horizonYears),
     ownershipCostForecastService.listScenarios(propertyId, userId),
