@@ -51,7 +51,7 @@
     },
     "src/services/ask/execution/createAskExecution.ts": {
       "category": "EXECUTION_LIFECYCLE",
-      "sites": 4,
+      "sites": 5,
       "finalizer": "WIRED",
       "note": "routing clarification calls the finalizer; the main result comes from executeOperation; failure branch persists no chip (retry button); stale-selection recovery is the typed unavailable result, no chip"
     },

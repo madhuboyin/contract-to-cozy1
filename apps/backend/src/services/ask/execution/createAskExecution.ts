@@ -42,6 +42,7 @@ import { buildAuthorizationView } from '../composition/authorizationView';
 import { resolveSlotFollowUp } from '../composition/slotContext';
 import { extractSlots, sanitizeSlots } from '../composition/slots';
 import { homeHasItem } from '../composition/homeItems';
+import { declinedCompositionNote, slotRevalidationQuestion } from '../composition/notices';
 import { resolvePropertyAccess } from '../../propertyAccess.service';
 import { resolveSuggestedActionSelection, type SuggestedActionResolution, type SuggestedActionRejectionReason } from '../suggestedActions/suggestedNextActionSelection';
 
@@ -259,9 +260,11 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
   // Composition FRD Phase 2b: a typed two-part question whose parts are both composable reads is answered as ONE response made of two component turns. Only an
   // ordinary typed question qualifies (no declared operation, no selected suggestion, not itself a component); every other turn is unchanged. A message the
   // decomposer does not compose (one part, a safety phrase, a part that is not a composable read) takes the single-operation path below.
+  let declinedComposition: { reason: string; clauseCount: number } | null = null;
   if (!internal.composition && executionPropertyId && !input.launchContext?.operationId && !input.suggestedActionSelection) {
     const decomposition = decomposeForComposition(input.message, { eligibleOperationIds: new Set(eligibleOperationIds) });
     if (decomposition.kind === 'NOT_COMPOSED') {
+      declinedComposition = { reason: decomposition.reason, clauseCount: decomposition.clauseCount };
       await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'COMPOSITION_DECLINED', metadataJson: asInputJson({ reason: decomposition.reason, clauses: decomposition.clauseCount }) } });
     } else if (decomposition.kind === 'COMPOSE') {
       const composedPropertyId = executionPropertyId;
@@ -355,6 +358,18 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     });
     if (slotFollowUp?.kind === 'DECLINED') {
       await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'SLOT_RESOLUTION_DECLINED', metadataJson: asInputJson({ reason: slotFollowUp.reason }) } });
+      // FR-SLT-3: a carried item that is gone (or a home that is no longer available) gets one focused question, never a silent default.
+      if (slotFollowUp.reason !== 'NEEDS_SLOT') {
+        const question = slotRevalidationQuestion(slotFollowUp.reason);
+        const asked = await prisma.askExecution.update({
+          where: { id: execution.id },
+          data: {
+            status: 'ANSWERED', reasonCode: question.reasonCode, completedAt: new Date(),
+            resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: [question.block], captureRequests: [], confirmation: null, clarification: null, suggestions: [], suggestedNextActionsGoverned: false, suggestedNextActions: [], skillHandoff: null, continuesExecutionId: null, originalResponse: null }),
+          },
+        });
+        return mapPersistedExecution(asked, await propertySummary(executionPropertyId));
+      }
     }
   }
   const routingMessage = slotFollowUp?.kind === 'RESOLVED' ? slotFollowUp.message : followUp.effectiveMessage;
@@ -662,6 +677,10 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     markStage('TRUST_VALIDATION', operation.operationId);
     if (validation) recordAskAnswerTrustMetrics(operation.operationId, validation);
     assertSkillResultBlocksAllowed(operation.operationId, result, skillTelemetryTrace);
+    // Composition FRD FR-DEC-4: a message the decomposer declined is answered by the single best operation, and the response says which part was not answered.
+    if (declinedComposition && !routingDecision.requiresClarification && result.status !== 'NEEDS_CLARIFICATION') {
+      result = { ...result, blocks: [...result.blocks, declinedCompositionNote(declinedComposition.reason, declinedComposition.clauseCount)] };
+    }
     const completedAt = terminalStatus(result.status) ? new Date() : undefined;
     const saved = await prisma.askExecution.update({
       where: { id: execution.id },
