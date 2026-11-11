@@ -71,6 +71,17 @@ async function approvedGeneralGuidance(message: string): Promise<GeneralGuidance
   return entry ? { kind: 'CURATED_CATALOG', entry } : null;
 }
 
+export interface ApprovedGeneralGuidanceText { id: string; title: string; text: string; source: string }
+
+/** The approved general guidance (published Knowledge Hub article, else the code-owned catalog) that matches a question, as plain text, or null. */
+export async function findApprovedGeneralGuidanceText(message: string): Promise<ApprovedGeneralGuidanceText | null> {
+  const found = await approvedGeneralGuidance(message);
+  if (!found) return null;
+  return found.kind === 'PUBLISHED_ARTICLE'
+    ? { id: found.article.slug, title: found.article.title, text: (found.article.excerpt?.trim() || found.article.subtitle!.trim()), source: 'ContractToCozy Knowledge Hub' }
+    : { id: found.entry.id, title: found.entry.title, text: found.entry.guidance, source: 'ContractToCozy curated guidance v1' };
+}
+
 export async function answerGroundedAsk(input: {
   userId: string;
   sessionId: string;

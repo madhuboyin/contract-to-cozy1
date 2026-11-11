@@ -18,6 +18,8 @@ import { classifyLaunchedOutcome, recordHandoffOutcome, resolveHandoffAttributio
 import { propertyScopeForAskRouting, resolveAskRoutingCascade, type AskRoutingDecision } from '../askRoutingCascade';
 import { refineAskRoutingWithModel } from '../askModelRouter';
 import { offerDidYouMean, isAskUnansweredFallbackResult } from '../support/didYouMean';
+import { withGeneralGuidanceCard } from '../support/generalGuidanceCard';
+import { findApprovedGeneralGuidanceText } from '../../groundedAsk.service';
 import { clarificationLabelFor, UPGRADE_OBJECTIVE_REASON, upgradeObjectiveLabelFor } from '../support/clarificationLabels';
 import { geminiService } from '../../gemini.service';
 import { resolveAskFollowUpMessage, shouldForceAskOperation } from '../askFollowUpContext';
@@ -690,6 +692,9 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
           result: didYouMean, executionId: execution.id, userId, sessionId: session.id, propertyId: executionPropertyId ?? null,
           operationId: null, message: routingMessage,
         });
+      } else if (executionPropertyId) {
+        // Decision 4: no grounded answer and no useful "Did you mean?" - add badged, approved general guidance (not from the home record) when it applies.
+        result = withGeneralGuidanceCard(operation.operationId, result, await findApprovedGeneralGuidanceText(routingMessage).catch(() => null));
       }
     }
     markStage('TRUST_VALIDATION', operation.operationId);
