@@ -143,12 +143,13 @@ test('replay: a record deleted or made private after assembly is redacted from t
   const stored = { composite: { ...JSON.parse(JSON.stringify(composite)), attempts: [], validationIssues: [] }, blocks: [] };
   assert.deepEqual(stored.composite.sections.map((s) => s.sources.length), [1, 1], 'sources are stored with each section, ids only');
   assert.ok(!JSON.stringify(stored.composite.sections.map((s) => s.sources)).includes('7 years'), 'no record content in the references');
-  const redacted = await replayComposite(stored, view({ INVENTORY_LOOKUP: 'REDACT_SECTION' }));
+  const row = { resultJson: stored };
+  const redacted = await replayComposite(row, view({ INVENTORY_LOOKUP: 'REDACT_SECTION' }));
   assert.equal(redacted.kind, 'DELIVER');
   assert.ok(!JSON.stringify(redacted.delivered.blocks).includes('7 years old'));
   assert.ok(JSON.stringify(redacted.delivered.blocks).includes('11,500'));
-  assert.deepEqual(await replayComposite(stored, view({ INVENTORY_LOOKUP: 'WITHHOLD_COMPOSITE' })), { kind: 'WITHHELD' });
-  assert.deepEqual(await replayComposite(stored, view({})), { kind: 'UNCHANGED' });
+  assert.deepEqual(await replayComposite(row, view({ INVENTORY_LOOKUP: 'WITHHOLD_COMPOSITE' })), { kind: 'WITHHELD' });
+  assert.equal((await replayComposite(row, view({}))).kind, 'DELIVER', 'with nothing changed the full projection is delivered');
 });
 
 // ---- capped aggregates: every contributing record is declared, not only the rows shown ----

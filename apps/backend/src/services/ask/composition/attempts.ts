@@ -1,7 +1,7 @@
 // Composition FRD §5.2 and FR-PER-2/10/13/15/16: child keys, attempts, deterministic selection, assembly-version compare-and-set, and the retry-near-expiry
 // rule. Pure: the persistence layer calls these and never re-implements them.
 import { createHash } from 'node:crypto';
-import { componentStateOf, isTerminalState } from './compositeResult';
+import { componentStateOf } from './compositeResult';
 
 export type AttemptKind = 'INITIAL' | 'RETRY' | 'REFRESH';
 
@@ -57,7 +57,9 @@ export function selectAttempt(attempts: readonly Attempt[]): Selection {
   // A refresh that is as good as the best supersedes the original; a strictly better original or retry (rank wins above) is kept.
   if (refresh) return { attempt: refresh, reason: 'EXPLICIT_REFRESH', pending: false };
   if (lowest) return { attempt: lowest, reason: 'LOWEST_SUCCESSFUL', pending: false };
-  const terminal = attempts.filter((a) => isTerminalState(componentStateOf(a.status))).sort((a, b) => b.number - a.number)[0];
+  // ONLY_TERMINAL_LIMITED is for a terminal attempt that ended without an answer (FAILED). A clarification is handled separately (§6.2) and a violation is never
+  // a selectable answer: both stay unselected, and the latest attempt is kept as evidence by the caller.
+  const terminal = attempts.filter((a) => componentStateOf(a.status) === 'FAILED').sort((a, b) => b.number - a.number)[0];
   if (terminal) return { attempt: terminal, reason: 'ONLY_TERMINAL_LIMITED', pending: false };
   return { attempt: null, reason: null, pending: attempts.length > 0 };
 }

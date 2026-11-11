@@ -36,11 +36,12 @@ export async function getAskSession(userId: string, sessionId: string): Promise<
 }
 
 /** Null when the whole composite must be withheld (property access lost or nothing still authorized); otherwise the row with its projection recomputed. */
-export async function gateComposedExecution<T extends { propertyId: string | null; resultJson: unknown }>(userId: string, execution: T): Promise<T | null> {
-  if (!execution.propertyId || !isStoredComposite(execution.resultJson)) return execution;
-  const outcome = await replayComposite(execution.resultJson, await buildAuthorizationView(userId, execution.propertyId));
+export async function gateComposedExecution<T extends { propertyId: string | null; resultJson: unknown; parametersJson?: unknown; status?: unknown; reasonCode?: unknown }>(userId: string, execution: T): Promise<T | null> {
+  if (!execution.propertyId || !isStoredComposite(execution)) return execution;
+  const outcome = await replayComposite(execution, await buildAuthorizationView(userId, execution.propertyId));
   if (outcome.kind === 'WITHHELD') return null;
-  return outcome.kind === 'DELIVER' ? { ...execution, resultJson: outcome.delivered } : execution;
+  // The row's status follows the projection: a section restored after a partial assembly reads as the answer it now is, and the reverse.
+  return outcome.kind === 'DELIVER' ? { ...execution, resultJson: outcome.delivered, status: outcome.status, reasonCode: outcome.reasonCode } : execution;
 }
 
 export async function getRecentAskSessions(userId: string, propertyId: string | null, cursorValue?: string, searchQuery?: string, view: 'RECENT' | 'ARCHIVED' = 'RECENT'): Promise<AskRecentSessionPage> {

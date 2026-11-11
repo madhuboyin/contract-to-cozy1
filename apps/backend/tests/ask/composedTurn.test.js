@@ -219,22 +219,47 @@ test('FR-PER-13: a composite parent with a null version is an invariant failure'
 // ---- replay (FR-PER-6, §6.10) ----
 async function storedComposite() {
   const db = fakeDb([parentRow()]);
-  const parent = await run(db, scriptedChildren(db).createChild);
-  return parent.resultJson;
+  return run(db, scriptedChildren(db).createChild);
 }
 
-test('FR-PER-6: replay applies the CURRENT authorization first; the stored domain answer is not recomputed', async () => {
+test('FR-PER-6: replay applies the CURRENT authorization to the complete composite; the stored domain answer is not recomputed', async () => {
   const stored = await storedComposite();
   assert.equal(isStoredComposite(stored), true);
   assert.deepEqual(await replayComposite(stored, { propertyAccess: false, authorizeSources: async () => 'AUTHORIZED', isOperationAuthorized: () => true }), { kind: 'WITHHELD' });
-  assert.deepEqual(await replayComposite(stored, { propertyAccess: true, authorizeSources: async () => 'AUTHORIZED', isOperationAuthorized: () => true }), { kind: 'UNCHANGED' });
+  const same = await replayComposite(stored, { propertyAccess: true, authorizeSources: async () => 'AUTHORIZED', isOperationAuthorized: () => true });
+  assert.equal(same.kind, 'DELIVER');
+  assert.equal(same.status, 'ANSWERED');
+  assert.deepEqual(same.delivered.blocks, stored.resultJson.blocks, 'unchanged authorization delivers the same projection');
   const redacted = await replayComposite(stored, { propertyAccess: true, authorizeSources: async () => 'AUTHORIZED', isOperationAuthorized: (op) => op !== 'ITEM_REPLACEMENT_COST' });
   assert.equal(redacted.kind, 'DELIVER');
+  assert.equal(redacted.status, 'READY_WITH_LIMITATIONS');
   assert.ok(!JSON.stringify(redacted.delivered.blocks).includes('11,500'), 'a redacted section is gone from the delivered projection');
   assert.ok(redacted.delivered.blocks.some((b) => b.id === 's1-inventory-roof-profile'));
   assert.equal(redacted.delivered.composite.coverage, 'PARTIAL');
-  assert.equal(stored.composite.sections.length, 2, 'the stored composite is unchanged');
-  assert.deepEqual(await replayComposite({ blocks: [] }, { propertyAccess: false, authorizeSources: async () => 'AUTHORIZED', isOperationAuthorized: () => false }), { kind: 'UNCHANGED' });
+  assert.equal(stored.parametersJson.composition.assembled.composite.sections.length, 2, 'the complete composite is unchanged in the parent');
+  assert.deepEqual(await replayComposite({ resultJson: { blocks: [] } }, { propertyAccess: false, authorizeSources: async () => 'AUTHORIZED', isOperationAuthorized: () => false }), { kind: 'UNCHANGED' });
+});
+
+test('FR-PER-6: a section hidden at first assembly reappears when its authorization is restored; so does a fully withheld composite', async () => {
+  const hideCost = { propertyAccess: true, authorizeSources: async () => 'AUTHORIZED', isOperationAuthorized: (op) => op !== 'ITEM_REPLACEMENT_COST' };
+  const db = fakeDb([parentRow()]);
+  const partial = await run(db, scriptedChildren(db).createChild, { loadAuthorizationView: async () => hideCost });
+  assert.ok(!JSON.stringify(partial.resultJson.blocks).includes('11,500'), 'hidden at assembly');
+  assert.equal(partial.parametersJson.composition.assembled.composite.sections.length, 2, 'but the durable composite keeps both sections');
+  const restored = await replayComposite(partial, { propertyAccess: true, authorizeSources: async () => 'AUTHORIZED', isOperationAuthorized: () => true });
+  assert.equal(restored.kind, 'DELIVER');
+  assert.equal(restored.status, 'ANSWERED');
+  assert.ok(JSON.stringify(restored.delivered.blocks).includes('11,500'), 'the section is back');
+  assert.equal(restored.delivered.composite.coverage, 'COMPLETE');
+  // Fully withheld at assembly (access lost): the stored result has no sections, yet later reads still run the composite gate.
+  const dbW = fakeDb([parentRow()]);
+  const withheld = await run(dbW, scriptedChildren(dbW).createChild, { loadAuthorizationView: async () => ({ propertyAccess: false, authorizeSources: async () => 'AUTHORIZED', isOperationAuthorized: () => true }) });
+  assert.equal(withheld.status, 'UNAVAILABLE');
+  assert.equal(isStoredComposite(withheld), true, 'a withheld composite is still a stored composite, so it is never read around the gate');
+  assert.deepEqual(await replayComposite(withheld, { propertyAccess: false, authorizeSources: async () => 'AUTHORIZED', isOperationAuthorized: () => true }), { kind: 'WITHHELD' });
+  const back = await replayComposite(withheld, { propertyAccess: true, authorizeSources: async () => 'AUTHORIZED', isOperationAuthorized: () => true });
+  assert.equal(back.kind, 'DELIVER');
+  assert.ok(JSON.stringify(back.delivered.blocks).includes('11,500'));
 });
 
 // ---- retention (FR-PER-14) ----
@@ -482,7 +507,8 @@ test('FR-PER-15(f): the parent stores selection for every component; a component
   const dbC = fakeDb([parentRow()]);
   const clarifying = await run(dbC, scriptedChildren(dbC, (op) => (op === 'ITEM_REPLACEMENT_COST' ? { status: 'NEEDS_CLARIFICATION' } : null)).createChild);
   const c = internalSelection(clarifying).find((e) => e.operationId === 'ITEM_REPLACEMENT_COST');
-  assert.deepEqual([c.selectionReason, c.state], ['ONLY_TERMINAL_LIMITED', 'CLARIFICATION']);
+  assert.deepEqual([c.selectedAttemptId, c.selectionReason, c.state], [null, null, 'CLARIFICATION'], 'a clarification is never selected as a terminal-limited attempt');
+  assert.equal(c.latestAttemptStatus, 'NEEDS_CLARIFICATION', 'its attempt is kept as evidence');
   const dbN = fakeDb([parentRow()]);
   const none = await run(dbN, scriptedChildren(dbN, () => ({ status: 'FAILED_TERMINAL' })).createChild);
   assert.ok(internalSelection(none).every((e) => e.selectionReason === 'ONLY_TERMINAL_LIMITED' && e.state === 'FAILED'));
@@ -504,7 +530,7 @@ test('FR-PER-6: the delivered envelope carries no attempt or selection evidence 
   const dbFull = fakeDb([parentRow()]);
   const full = await run(dbFull, scriptedChildren(dbFull).createChild);
   assert.equal(full.resultJson.selection.length, 2);
-  const replay = await replayComposite(full.resultJson, redactInventory);
+  const replay = await replayComposite(full, redactInventory);
   assert.equal(replay.kind, 'DELIVER');
   const replayed = JSON.stringify(replay.delivered);
   assert.ok(!replayed.includes('INVENTORY_LOOKUP') && !replayed.includes('how old is my roof'));

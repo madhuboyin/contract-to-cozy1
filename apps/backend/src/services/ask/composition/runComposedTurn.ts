@@ -267,7 +267,9 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   const selectionMap = selections.map(({ run, selected, selectedReason, latest }) => ({
     componentKey: run.key, operationId: run.clause.operationId,
     selectedAttemptId: selected?.executionId ?? null, selectedAttemptNumber: selected?.number ?? null, selectionReason: selected ? selectedReason : null,
-    state: selected ? componentStateOf(selected.status, true) : 'PENDING',
+    // A component with no selectable attempt reports the state of its latest attempt WITHOUT the retries-exhausted conversion: still running or retryable-failed is
+    // PENDING, a clarification is CLARIFICATION, and none at all is PENDING.
+    state: componentStateOf((selected ?? latest)?.status ?? 'RUNNING'),
     latestAttemptId: latest?.executionId ?? null, latestAttemptNumber: latest?.number ?? null, latestAttemptStatus: latest?.status ?? null,
   }));
   // The envelope delivered to the homeowner: attempt and selection evidence of components whose section was redacted (or withheld) is left out; it stays in
@@ -287,13 +289,17 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
     return { row: finalRow, won: true };
   }
 
+  let assembledState: { composite: CompositeResult; clarificationBlocks: AskPresentationBlock[] } | null = null;
+
   // FR-PER-13c/e: only the worker that wins the compare-and-set on the claimed version writes the composite; a loser reassembles against the new version.
   const persist = async (data: Record<string, unknown>): Promise<{ row: AskExecution; won: boolean }> => {
+    // FR-PER-6: the COMPLETE assembled composite (every section the components produced, before the authorization gate) is the durable domain answer and lives
+    // in the parent's internal state. The gate only ever shapes what is delivered, so an authorization that is restored later restores the section too.
     const internal = finalRow.parametersJson && typeof finalRow.parametersJson === 'object' && !Array.isArray(finalRow.parametersJson) ? finalRow.parametersJson as Record<string, unknown> : {};
     const internalComposition = (internal.composition && typeof internal.composition === 'object' ? internal.composition : {}) as Record<string, unknown>;
     const written = await db.askExecution.updateMany({
       where: { id: parent.id, assemblyVersion: claimedVersion },
-      data: { ...data, parametersJson: json({ ...internal, composition: { ...internalComposition, selection: selectionMap } }), assemblyVersion: claimedVersion + 1 },
+      data: { ...data, parametersJson: json({ ...internal, composition: { ...internalComposition, selection: selectionMap, ...(assembledState ? { assembled: assembledState } : {}) } }), assemblyVersion: claimedVersion + 1 },
     });
     const won = written.count === 1;
     if (won) {
@@ -344,6 +350,7 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   }
 
   const composite = assembleComposite({ outcomes, dated: parseTargetDate(input.message) != null, notAnswered });
+  assembledState = { composite, clarificationBlocks };
   if ((composite.basis?.contradictions.length ?? 0) > 0) askCompositionContradictionsTotal.inc();
   // The final authorization gate (§6.10), before the composite becomes visible.
   const gate = await applyAuthorizationGate(composite, await input.loadAuthorizationView());
