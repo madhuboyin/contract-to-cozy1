@@ -4,7 +4,7 @@
 import { prisma } from '../../../lib/prisma';
 import { createHash } from 'node:crypto';
 import { type AskCaptureRequest } from '../../../productFramework/ask/ask.contract';
-import { ACTIVATION_CONTEXT_SIGNAL, activationMissingGaps, type ActivationGapKey } from '../../activationContextGaps';
+import { ACTIVATION_CONTEXT_SIGNAL, activationMissingGaps, hasActionableActivationContext, type ActivationGapKey } from '../../activationContextGaps';
 import { addTriggerEvidence } from '../../entryContext.service';
 
 export const ACTIVATION_CONTEXT_CAPTURE_KEY = 'ACTIVATION_CONTEXT_INPUTS';
@@ -32,15 +32,24 @@ function evidenceDetailPresent(json: unknown): boolean {
 
 export async function activationContextState(propertyId: string): Promise<ActivationState> {
   const onboarding = await prisma.propertyOnboarding.findUnique({ where: { propertyId }, select: { activeTriggerId: true, activeTriggerLabel: true, triggerEntityType: true, triggerEntityId: true, triggerScopeConfirmedAt: true, activeTriggerDetail: true, triggerEvidenceJson: true } });
+  const evidenceHasDetail = evidenceDetailPresent(onboarding?.triggerEvidenceJson);
+  const actionable = hasActionableActivationContext({
+    triggerLabel: onboarding?.activeTriggerLabel,
+    triggerEntityId: onboarding?.triggerEntityId,
+    triggerEntityType: onboarding?.triggerEntityType,
+    triggerScopeConfirmedAt: onboarding?.triggerScopeConfirmedAt,
+    triggerDetail: onboarding?.activeTriggerDetail,
+    evidenceDetailPresent: evidenceHasDetail,
+  });
   return {
     activeTriggerId: onboarding?.activeTriggerId ?? null,
     activeTriggerLabel: onboarding?.activeTriggerLabel ?? null,
     triggerScopeConfirmedAt: onboarding?.triggerScopeConfirmedAt ?? null,
-    gaps: activationMissingGaps({
+    gaps: actionable ? activationMissingGaps({
       triggerEntityId: onboarding?.triggerEntityId, triggerEntityType: onboarding?.triggerEntityType,
       triggerScopeConfirmedAt: onboarding?.triggerScopeConfirmedAt,
-      triggerDetail: onboarding?.activeTriggerDetail, evidenceDetailPresent: evidenceDetailPresent(onboarding?.triggerEvidenceJson),
-    }),
+      triggerDetail: onboarding?.activeTriggerDetail, evidenceDetailPresent: evidenceHasDetail,
+    }) : [],
     entityType: onboarding?.triggerEntityType ?? null,
     entityId: onboarding?.triggerEntityId ?? null,
     detail: onboarding?.activeTriggerDetail ?? null,

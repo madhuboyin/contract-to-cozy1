@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { ACTIVATION_GAP_LABELS, activationMissingGaps } from './activationContextGaps';
+import { ACTIVATION_GAP_LABELS, activationMissingGaps, hasActionableActivationContext } from './activationContextGaps';
 import { z } from 'zod';
 import { Prisma, type OnboardingOwnershipState, type PropertyOnboarding } from '@prisma/client';
 import { prisma } from '../lib/prisma';
@@ -577,6 +577,8 @@ function appendActivationHandoff(href: string, triggerId: string, triggerType: s
 export type ActivationFirstValue = {
   entryContext: HomeownerEntryContext;
   action: HomeAction;
+  /** False when a generic onboarding category has no facts that identify a real task. */
+  eligibleForHomeActions: boolean;
   baseline: {
     supportedFacts: Array<{ label: string; value: string; source: string }>;
     unknownFacts: string[];
@@ -640,6 +642,14 @@ export async function getActivationFirstValue(
   const actionId = `activation:${onboarding.activeTriggerId}`;
   const storedEvidence = parseStoredTriggerEvidence(onboarding.triggerEvidenceJson);
   const evidenceDetailPresent = storedEvidence.some((item) => Boolean(item.detail));
+  const eligibleForHomeActions = hasActionableActivationContext({
+    triggerLabel: entryContext.activeTrigger.label,
+    triggerEntityId: entryContext.activeTrigger.entityId,
+    triggerEntityType: entryContext.activeTrigger.entityType,
+    triggerScopeConfirmedAt: onboarding.triggerScopeConfirmedAt,
+    triggerDetail: entryContext.activeTrigger.detail,
+    evidenceDetailPresent,
+  });
   const missing = activationMissingGaps({
     triggerEntityId: entryContext.activeTrigger.entityId,
     triggerEntityType: entryContext.activeTrigger.entityType,
@@ -865,6 +875,7 @@ export async function getActivationFirstValue(
       firstValue: { ...entryContext.firstValue, deliveredAt: onboarding.firstValueAt?.toISOString() ?? now.toISOString() },
     },
     action,
+    eligibleForHomeActions,
     baseline: { supportedFacts, unknownFacts: missing, confidence: confidenceLabel },
     plan: {
       NOW: action.priority === 'NOW' ? [action] : [],

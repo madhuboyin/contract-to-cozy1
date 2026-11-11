@@ -1452,8 +1452,10 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
 
   if (entryContext && !entryContext.firstValue.firstActionResolvedAt) {
     const activation = await getActivationFirstValue(propertyId, userId);
-    rawCandidates.push(activation.action);
-    for (const bucket of Object.values(activation.plan)) rawCandidates.push(...bucket);
+    if (activation.eligibleForHomeActions) {
+      rawCandidates.push(activation.action);
+      for (const bucket of Object.values(activation.plan)) rawCandidates.push(...bucket);
+    }
   }
 
   const presentedCandidates = rawCandidates.map(ensureHomeActionPresentation);

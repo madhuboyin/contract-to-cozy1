@@ -22,6 +22,21 @@ export interface ActivationGapInput {
   evidenceDetailPresent: boolean;
 }
 
+export interface ActivationActionabilityInput extends ActivationGapInput {
+  triggerLabel: string | null | undefined;
+}
+
+/** A generic onboarding category is not a homeowner task until one fact identifies the situation. */
+export function hasActionableActivationContext(input: ActivationActionabilityInput): boolean {
+  if (input.triggerLabel?.trim().toLowerCase() !== 'something needs repair') return true;
+  return Boolean(
+    input.triggerScopeConfirmedAt
+    || input.triggerEntityId
+    || input.triggerDetail?.trim()
+    || input.evidenceDetailPresent,
+  );
+}
+
 export function activationMissingGaps(input: ActivationGapInput): ActivationGapKey[] {
   const gaps: ActivationGapKey[] = [];
   if (!input.triggerScopeConfirmedAt || (!input.triggerEntityId && input.triggerEntityType !== 'PROPERTY')) gaps.push('AFFECTED_ITEM');

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-const { activationMissingGaps, ACTIVATION_GAP_LABELS, activationContextActionCopy, ACTIVATION_CONTEXT_SIGNAL, ACTIVATION_CONTEXT_TITLE_PATTERN } = require('../../src/services/activationContextGaps.ts');
+const { activationMissingGaps, hasActionableActivationContext, ACTIVATION_GAP_LABELS, activationContextActionCopy, ACTIVATION_CONTEXT_SIGNAL, ACTIVATION_CONTEXT_TITLE_PATTERN } = require('../../src/services/activationContextGaps.ts');
 const { prisma } = require('../../src/lib/prisma.ts');
 const entryContextService = require('../../src/services/entryContext.service.ts');
 const {
@@ -24,6 +24,12 @@ test('activation asks only decision-relevant gaps and does not mistake default p
   assert.deepEqual(activationMissingGaps({ ...all, triggerScopeConfirmedAt: new Date(), evidenceDetailPresent: true }), [], 'an explicitly confirmed whole-home scope and evidence detail resolve both gaps');
   assert.deepEqual(activationMissingGaps({ ...all, triggerEntityType: 'INVENTORY_ITEM', triggerEntityId: 'item-1', triggerScopeConfirmedAt: new Date(), triggerDetail: 'x' }), []);
   assert.deepEqual(activationMissingGaps({ ...all, triggerEntityType: 'INVENTORY_ITEM', triggerScopeConfirmedAt: new Date() }), ['AFFECTED_ITEM', 'TRIGGER_DETAILS'], 'a type with no id is still unlinked');
+});
+
+test('a context-free generic repair category is not promoted into a homeowner task', () => {
+  assert.equal(hasActionableActivationContext({ ...all, triggerLabel: 'Something needs repair' }), false);
+  assert.equal(hasActionableActivationContext({ ...all, triggerLabel: 'Something needs repair', triggerDetail: 'Water is pooling under the heater.' }), true);
+  assert.equal(hasActionableActivationContext({ ...all, triggerLabel: 'Replace the water heater' }), true, 'a specific trigger remains actionable');
 });
 
 test('the action and its quoted title are recognised', () => {
@@ -51,7 +57,7 @@ function stubPrisma() {
     property: prisma.property.findUnique, onboarding: prisma.propertyOnboarding.findUnique, onboardingUpdate: prisma.propertyOnboarding.update,
     items: prisma.inventoryItem.findMany, item: prisma.inventoryItem.findFirst, records: prisma.propertyRecord.findMany, evidence: entryContextService.addTriggerEvidence,
   };
-  state = { activeTriggerId: 'trigger-1', activeTriggerLabel: 'Something needs repair', scopeConfirmedAt: null, entityType: 'PROPERTY', entityId: null, detail: null, evidence: [], updates: [], evidenceCalls: [], items: [{ id: 'item-1', name: 'Water heater' }, { id: 'item-2', name: 'Roof' }], records: [{ id: 'record-1', title: 'Contractor quote', recordType: 'QUOTE' }] };
+  state = { activeTriggerId: 'trigger-1', activeTriggerLabel: 'Replace the water heater', scopeConfirmedAt: null, entityType: 'PROPERTY', entityId: null, detail: null, evidence: [], updates: [], evidenceCalls: [], items: [{ id: 'item-1', name: 'Water heater' }, { id: 'item-2', name: 'Roof' }], records: [{ id: 'record-1', title: 'Contractor quote', recordType: 'QUOTE' }] };
   prisma.property.findUnique = async () => ({});
   prisma.propertyOnboarding.findUnique = async () => ({ activeTriggerId: state.activeTriggerId, activeTriggerLabel: state.activeTriggerLabel, triggerEntityType: state.entityType, triggerEntityId: state.entityId, triggerScopeConfirmedAt: state.scopeConfirmedAt, activeTriggerDetail: state.detail, triggerEvidenceJson: state.evidence });
   prisma.propertyOnboarding.update = async ({ data }) => { state.updates.push(data); state.entityType = data.triggerEntityType ?? state.entityType; state.entityId = 'triggerEntityId' in data ? data.triggerEntityId : state.entityId; state.scopeConfirmedAt = data.triggerScopeConfirmedAt ?? state.scopeConfirmedAt; return {}; };
@@ -71,7 +77,7 @@ test('cards identify the affected item before asking what happened', async () =>
     let card = await deriveActivationContextCapture('p1', evaluateAll);
     assert.equal(card.feature, null);
     assert.equal(card.request.requirementId, 'activation-affected-item');
-    assert.equal(card.request.question, 'What needs repair?');
+    assert.equal(card.request.question, 'Which item or part of the home is this about?');
     assert.equal(card.request.captureKey, ACTIVATION_CONTEXT_CAPTURE_KEY);
     assert.deepEqual(card.request.inputSchema.options.map((option) => option.label), ['Water heater', 'Roof', 'The home as a whole']);
     assert.match(card.request.helpText, /^Question 1 of 2\./);
@@ -89,6 +95,16 @@ test('cards identify the affected item before asking what happened', async () =>
     assert.doesNotMatch(card.request.helpText, /Question/, 'a single remaining question is not numbered');
     state.detail = 'The water heater is leaking.';
     assert.equal(await deriveActivationContextCapture('p1', evaluateAll), null, 'nothing missing: no card');
+  } finally { restore(); }
+});
+
+test('Ask does not render a capture for a context-free generic repair category', async () => {
+  const restore = stubPrisma();
+  try {
+    state.activeTriggerLabel = 'Something needs repair';
+    assert.equal(await deriveActivationContextCapture('p1', evaluateAll), null);
+    state.detail = 'Water is pooling under the water heater.';
+    assert.notEqual(await deriveActivationContextCapture('p1', evaluateAll), null, 'real context restores the normal capture flow');
   } finally { restore(); }
 });
 
