@@ -5,6 +5,7 @@
 import type { AskExecution } from '@prisma/client';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type AskPresentationBlock, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import type { AskAccountRole } from '../askAccountEligibility';
+import type { AskOperationResult } from '../askOperationRegistry';
 import { parseTargetDate } from '../support/targetDate';
 import {
   askCompositionContradictionsTotal, askCompositionDurationSeconds, askCompositionResultTotal, askCompositionTimeoutsTotal, askCompositionTotal,
@@ -51,6 +52,8 @@ export interface ComposedTurnInput {
   clauses?: ComposedClause[];
   createChild: CreateChild;
   loadAuthorizationView: () => Promise<AuthorizationView>;
+  /** Runs the assembled parent through the same governed Suggested Next Action pipeline as an ordinary settled answer. */
+  finalizeResult?: (result: AskOperationResult) => Promise<AskOperationResult>;
   executionTimeoutMs: number;
   /** A manual retry's clientRequestId; bound to each reservation it makes (FR-PER-10). */
   requestKey?: string;
@@ -279,6 +282,27 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
     const evidence = deliverableEvidence(attempts, selectionMap, options.redacted ?? []);
     return compositeEnvelope(composite, delivered, unanswered, evidence.attempts, options.withheld ?? false, options.issues ?? [], options.clarification ?? [], evidence.selection);
   };
+  const finalizedEnvelope = async (
+    status: AskOperationResult['status'],
+    reasonCode: string | undefined,
+    envelope: ReturnType<typeof compositeEnvelope>,
+  ) => {
+    if (!input.finalizeResult) return envelope;
+    const finalized = await input.finalizeResult({
+      status,
+      ...(reasonCode ? { reasonCode } : {}),
+      blocks: envelope.blocks,
+      suggestions: envelope.suggestions,
+    });
+    return {
+      ...envelope,
+      blocks: finalized.blocks,
+      suggestions: finalized.suggestions,
+      suggestedNextActionsGoverned: finalized.suggestedNextActionsGoverned === true,
+      ...(finalized.suggestedNextActionsStatus ? { suggestedNextActionsStatus: finalized.suggestedNextActionsStatus } : {}),
+      suggestedNextActions: finalized.suggestedNextActions ?? [],
+    };
+  };
   const completedAt = now();
   const claimedVersion = requireVersion({ version: finalRow.assemblyVersion ?? null, attempts });
 
@@ -346,7 +370,9 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   if (notAnswered.some((entry) => entry.reasonCode === 'AskExecutionTimeoutError')) askCompositionTimeoutsTotal.inc();
 
   if (!outcomes.length) {
-    return persist({ status: 'READY_WITH_LIMITATIONS', reasonCode: 'COMPOSITE_NONE_ANSWERED', completedAt, resultJson: json(envelopeFor(null, null, notAnswered, { clarification: clarificationBlocks })) });
+    const reasonCode = 'COMPOSITE_NONE_ANSWERED';
+    const resultJson = await finalizedEnvelope('READY_WITH_LIMITATIONS', reasonCode, envelopeFor(null, null, notAnswered, { clarification: clarificationBlocks }));
+    return persist({ status: 'READY_WITH_LIMITATIONS', reasonCode, completedAt, resultJson: json(resultJson) });
   }
 
   const composite = assembleComposite({ outcomes, dated: parseTargetDate(input.message) != null, notAnswered });
@@ -355,7 +381,9 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   // The final authorization gate (§6.10), before the composite becomes visible.
   const gate = await applyAuthorizationGate(composite, await input.loadAuthorizationView());
   if (gate.kind === 'WITHHELD') {
-    return persist({ status: 'UNAVAILABLE', reasonCode: gate.reason === 'PROPERTY_ACCESS_LOST' ? 'ASK_PROPERTY_NOT_FOUND' : 'ASK_COMPOSITE_NOT_AUTHORIZED', completedAt, resultJson: json(envelopeFor(null, null, [], { withheld: true, redacted: composite.sections })) });
+    const reasonCode = gate.reason === 'PROPERTY_ACCESS_LOST' ? 'ASK_PROPERTY_NOT_FOUND' : 'ASK_COMPOSITE_NOT_AUTHORIZED';
+    const resultJson = await finalizedEnvelope('UNAVAILABLE', reasonCode, envelopeFor(null, null, [], { withheld: true, redacted: composite.sections }));
+    return persist({ status: 'UNAVAILABLE', reasonCode, completedAt, resultJson: json(resultJson) });
   }
   const visible = gate.composite;
   const issues = validateComposite(visible);
@@ -363,10 +391,14 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
     // FR-TRU-3: one envelope on the same parent, the validated sections inside, no merged figure and no answer-first line.
     askCompositionValidatorFailuresTotal.inc();
     const plain: CompositeResult = { ...visible, answerFirst: null, basis: null, status: 'READY_WITH_LIMITATIONS', coverage: 'PARTIAL' };
-    return persist({ status: 'READY_WITH_LIMITATIONS', reasonCode: 'COMPOSITE_VALIDATION_FAILED', completedAt, resultJson: json(envelopeFor(plain, projectForDelivery(plain), [], { issues, redacted: redactedOf(composite, visible) })) });
+    const reasonCode = 'COMPOSITE_VALIDATION_FAILED';
+    const resultJson = await finalizedEnvelope('READY_WITH_LIMITATIONS', reasonCode, envelopeFor(plain, projectForDelivery(plain), [], { issues, redacted: redactedOf(composite, visible) }));
+    return persist({ status: 'READY_WITH_LIMITATIONS', reasonCode, completedAt, resultJson: json(resultJson) });
   }
   const delivered = projectForDelivery(visible);
-  return persist({ status: visible.status, reasonCode: visible.coverage === 'PARTIAL' ? 'COMPOSITE_PARTIAL' : undefined, completedAt, resultJson: json(envelopeFor(visible, delivered, visible.notAnswered, { clarification: clarificationBlocks, redacted: redactedOf(composite, visible) })) });
+  const reasonCode = visible.coverage === 'PARTIAL' ? 'COMPOSITE_PARTIAL' : undefined;
+  const resultJson = await finalizedEnvelope(visible.status, reasonCode, envelopeFor(visible, delivered, visible.notAnswered, { clarification: clarificationBlocks, redacted: redactedOf(composite, visible) }));
+  return persist({ status: visible.status, reasonCode, completedAt, resultJson: json(resultJson) });
   };
   let last: { row: AskExecution; won: boolean } | null = null;
   for (let round = 0; round < MAX_CAS_RETRIES; round += 1) {
@@ -412,7 +444,10 @@ export function compositeEnvelope(
   }
   if (composite?.answerFirst) {
     const basisText = (composite.basis?.lines ?? []).map((line) => `${line.itemKey.charAt(0)}${line.itemKey.slice(1).toLowerCase()} replacement ${line.basisLabel}: ${line.minCents === line.maxCents ? money(line.minCents) : `${money(line.minCents)}–${money(line.maxCents)}`}.`).join(' ');
-    blocks.push({ type: 'SUMMARY', id: 'composite-answer-first', title: composite.answerFirst, body: [basisText, ...(composite.basis?.notes ?? []), ...(composite.basis?.contradictions ?? [])].filter(Boolean).join(' ') || 'Both parts of your question are answered below.', tone: composite.status === 'ANSWERED' ? 'DEFAULT' : 'CAUTION', actions: [] } as AskPresentationBlock);
+    const fallback = composite.status === 'ANSWERED'
+      ? 'Both parts of your question are answered below.'
+      : 'Both parts are addressed below, including the limits of what is recorded for this home.';
+    blocks.push({ type: 'SUMMARY', id: 'composite-answer-first', title: composite.answerFirst, body: [basisText, ...(composite.basis?.notes ?? []), ...(composite.basis?.contradictions ?? [])].filter(Boolean).join(' ') || fallback, tone: composite.status === 'ANSWERED' ? 'DEFAULT' : 'CAUTION', actions: [] } as AskPresentationBlock);
   } else if (validationIssues.length) {
     blocks.push({ type: 'SUMMARY', id: 'composite-combined-unavailable', title: 'The combined view is unavailable', body: 'Each part is shown below as it was answered, without a combined summary.', tone: 'CAUTION', actions: [] } as AskPresentationBlock);
   }

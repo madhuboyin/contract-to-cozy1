@@ -293,6 +293,10 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
         db: prisma as never, userId, accountRole, parent: execution, message: input.message, sessionId: session.id, propertyId: composedPropertyId,
         clauses: decomposition.clauses, createChild: createAskExecution, executionTimeoutMs: controls.executionTimeoutMs,
         loadAuthorizationView: () => buildAuthorizationView(userId, composedPropertyId, controls),
+        finalizeResult: (result) => finalizeSuggestedNextActions({
+          result, executionId: execution.id, userId, sessionId: session.id, propertyId: composedPropertyId,
+          operationId: null, message: input.message,
+        }),
       });
       } catch (error) {
         // The composition itself failed (not a component): fall back to the ordinary single-operation path on this same row rather than failing the question.

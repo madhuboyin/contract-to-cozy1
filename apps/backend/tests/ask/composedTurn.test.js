@@ -5,6 +5,7 @@ require('ts-node/register');
 const { runComposedTurn, recordAttempt, recoverComposedTurn, refreshComposedTurn, reserveAttempt, retryExhaustedComposedTurn, exhaustedComponentKeys, hasRetryRequest } = require('../../src/services/ask/composition/runComposedTurn.ts');
 const { replayComposite, isStoredComposite } = require('../../src/services/ask/composition/replayGate.ts');
 const { childClientRequestId, componentKeyOf } = require('../../src/services/ask/composition/attempts.ts');
+const { assembleComposite, projectForDelivery } = require('../../src/services/ask/composition/compositeResult.ts');
 
 // ---- an in-memory stand-in for the slice of the Prisma client the runner uses ----
 function fakeDb(rows = []) {
@@ -297,6 +298,42 @@ test('the stored composite is a valid Ask response: it maps to ordinary blocks, 
   assert.deepEqual(response.childExecutions, [], 'component children are not delivered as separate transcript items');
   assert.equal(response.blocks[0].id, 'composite-answer-first');
   assert.ok(response.blocks.length >= 4);
+});
+
+test('a settled composite persists the governed Suggested Next Actions returned for the parent execution', async () => {
+  const db = fakeDb([parentRow()]);
+  const parent = await run(db, scriptedChildren(db).createChild, {
+    finalizeResult: async (result) => ({
+      ...result,
+      suggestedNextActionsGoverned: true,
+      suggestedNextActionsStatus: { state: 'READY', shownCount: 1, expectedCount: 4, reasonCodes: [] },
+      suggestedNextActions: [{ id: 'parent-next-1', label: 'Review the capital outlook' }],
+    }),
+  });
+  assert.equal(parent.resultJson.suggestedNextActionsGoverned, true);
+  assert.deepEqual(parent.resultJson.suggestedNextActionsStatus, { state: 'READY', shownCount: 1, expectedCount: 4, reasonCodes: [] });
+  assert.deepEqual(parent.resultJson.suggestedNextActions, [{ id: 'parent-next-1', label: 'Review the capital outlook' }]);
+});
+
+test('a limited composite does not claim that both parts were answered', () => {
+  const limited = assembleComposite({
+    outcomes: Object.entries(ANSWERS).map(([operationId, entry], index) => ({
+      clause: clauses[index].clause,
+      operationId,
+      executionId: `limited-${index}`,
+      attempt: 1,
+      status: 'READY_WITH_LIMITATIONS',
+      blocks: entry.blocks,
+      quantities: [],
+      sources: entry.sources,
+      componentKey: `limited-${index}`,
+      selectionReason: 'ONLY_TERMINAL_LIMITED',
+    })),
+    dated: false,
+  });
+  const envelope = require('../../src/services/ask/composition/runComposedTurn.ts').compositeEnvelope(limited, projectForDelivery(limited), [], []);
+  assert.match(envelope.blocks[0].body, /limits of what is recorded/);
+  assert.doesNotMatch(envelope.blocks[0].body, /answered below/);
 });
 
 test('§10: a part that cannot be answered is stated plainly with capability discovery, and the notice is a valid Ask response', async () => {
