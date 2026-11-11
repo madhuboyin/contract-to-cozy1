@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-const { activationMissingGaps, ACTIVATION_GAP_LABELS, ACTIVATION_CONTEXT_SIGNAL, ACTIVATION_CONTEXT_TITLE_PATTERN } = require('../../src/services/activationContextGaps.ts');
+const { activationMissingGaps, ACTIVATION_GAP_LABELS, activationContextActionCopy, ACTIVATION_CONTEXT_SIGNAL, ACTIVATION_CONTEXT_TITLE_PATTERN } = require('../../src/services/activationContextGaps.ts');
 const { prisma } = require('../../src/lib/prisma.ts');
 const entryContextService = require('../../src/services/entryContext.service.ts');
 const {
@@ -31,6 +31,13 @@ test('the action and its quoted title are recognised', () => {
   assert.equal(isActivationContextAction({ signal: ACTIVATION_CONTEXT_SIGNAL }), true);
   assert.equal(isActivationContextAction({ signal: 'Systems Factor' }), false);
   assert.equal(ACTIVATION_CONTEXT_TITLE_PATTERN.test('Review and correct: Trigger details. Skip anything that does not change the active decision.'), true);
+  assert.equal(ACTIVATION_CONTEXT_TITLE_PATTERN.test('Tell Cozy what prompted this plan: Replace the water heater'), true);
+  assert.deepEqual(activationContextActionCopy('Replace the water heater'), {
+    title: 'Tell Cozy what prompted this plan: Replace the water heater',
+    whyItMatters: 'A little more context about “Replace the water heater” will help Cozy tailor the next steps for this home.',
+    expectedOutcome: 'Get next steps that fit what is happening in your home.',
+    timingRationale: 'Add this when convenient, or sooner if the situation changes.',
+  });
   assert.equal(isActivationContextActionTitle('What should I do next for “Review and correct: Year built, Property size. Skip anything that does not change the active decision.”?'), true);
   assert.equal(isActivationContextActionTitle('What should I do next for “Add your home type and roof type”?'), false);
 });
@@ -44,9 +51,9 @@ function stubPrisma() {
     property: prisma.property.findUnique, onboarding: prisma.propertyOnboarding.findUnique, onboardingUpdate: prisma.propertyOnboarding.update,
     items: prisma.inventoryItem.findMany, item: prisma.inventoryItem.findFirst, records: prisma.propertyRecord.findMany, evidence: entryContextService.addTriggerEvidence,
   };
-  state = { activeTriggerId: 'trigger-1', yearBuilt: null, propertySize: null, entityType: null, entityId: null, detail: null, evidence: [], updates: [], evidenceCalls: [], items: [{ id: 'item-1', name: 'Water heater' }, { id: 'item-2', name: 'Roof' }], records: [{ id: 'record-1', title: 'Contractor quote', recordType: 'QUOTE' }] };
+  state = { activeTriggerId: 'trigger-1', activeTriggerLabel: 'Replace the water heater', yearBuilt: null, propertySize: null, entityType: null, entityId: null, detail: null, evidence: [], updates: [], evidenceCalls: [], items: [{ id: 'item-1', name: 'Water heater' }, { id: 'item-2', name: 'Roof' }], records: [{ id: 'record-1', title: 'Contractor quote', recordType: 'QUOTE' }] };
   prisma.property.findUnique = async () => ({ yearBuilt: state.yearBuilt, propertySize: state.propertySize });
-  prisma.propertyOnboarding.findUnique = async () => ({ activeTriggerId: state.activeTriggerId, triggerEntityType: state.entityType, triggerEntityId: state.entityId, activeTriggerDetail: state.detail, triggerEvidenceJson: state.evidence });
+  prisma.propertyOnboarding.findUnique = async () => ({ activeTriggerId: state.activeTriggerId, activeTriggerLabel: state.activeTriggerLabel, triggerEntityType: state.entityType, triggerEntityId: state.entityId, activeTriggerDetail: state.detail, triggerEvidenceJson: state.evidence });
   prisma.propertyOnboarding.update = async ({ data }) => { state.updates.push(data); state.entityType = data.triggerEntityType ?? state.entityType; state.entityId = 'triggerEntityId' in data ? data.triggerEntityId : state.entityId; return {}; };
   prisma.inventoryItem.findMany = async () => state.items;
   prisma.inventoryItem.findFirst = async ({ where }) => state.items.find((item) => item.id === where.id) ?? null;
@@ -78,9 +85,10 @@ test('cards come in order: year built, size, affected item, details; each says w
     card = await deriveActivationContextCapture('p1', evaluateAll);
     assert.equal(card.request.requirementId, 'activation-trigger-details');
     assert.equal(card.request.inputSchema.type, 'GROUP');
-    assert.deepEqual(card.request.inputSchema.fields.map((field) => field.key), ['evidenceKind', 'detail', 'recordIds']);
-    assert.deepEqual(card.request.inputSchema.fields[0].inputSchema.options.map((option) => option.value), ['FREE_TEXT', 'CONVERSATION', 'DOCUMENT', 'QUOTE', 'INVOICE', 'PHOTO', 'EMAIL_PDF']);
-    assert.equal(card.request.inputSchema.fields[1].inputSchema.maxLength, 4000);
+    assert.equal(card.request.question, 'What made you start thinking about “Replace the water heater”?');
+    assert.deepEqual(card.request.inputSchema.fields.map((field) => field.key), ['detail', 'evidenceKind', 'recordIds']);
+    assert.deepEqual(card.request.inputSchema.fields[1].inputSchema.options.map((option) => option.value), ['FREE_TEXT', 'CONVERSATION', 'DOCUMENT', 'QUOTE', 'INVOICE', 'PHOTO', 'EMAIL_PDF']);
+    assert.equal(card.request.inputSchema.fields[0].inputSchema.maxLength, 4000);
     assert.equal(card.request.inputSchema.fields[2].inputSchema.allowUpload, true);
     assert.equal(card.request.inputSchema.fields[2].inputSchema.uploadLabel, 'Add evidence');
     assert.doesNotMatch(card.request.helpText, /Question/, 'a single remaining question is not numbered');
@@ -122,14 +130,16 @@ test('saving trigger details writes free-text evidence through the same service 
     assert.equal(state.evidenceCalls.length, 1);
     assert.equal(state.evidenceCalls[0].kind, 'FREE_TEXT');
     assert.equal(state.evidenceCalls[0].detail, 'The water heater is leaking.', 'trimmed');
+    await saveActivationContextAnswer({ userId: 'u1', propertyId: 'p1', requirementId: 'activation-trigger-details', answer: { detail: 'The pilot light keeps going out.' }, expectedContextVersion: version() });
+    assert.equal(state.evidenceCalls[1].kind, 'FREE_TEXT', 'a simple note does not force the homeowner to classify its evidence type');
     await saveActivationContextAnswer({ userId: 'u1', propertyId: 'p1', requirementId: 'activation-trigger-details', answer: { evidenceKind: 'QUOTE', recordIds: ['record-1'] }, expectedContextVersion: version() });
-    assert.equal(state.evidenceCalls[1].documentId, 'record-1', 'a selected or uploaded Home Record uses the canonical trigger-evidence writer');
-    assert.equal(state.evidenceCalls[1].kind, 'QUOTE', 'Ask preserves the Desktop evidence kind');
+    assert.equal(state.evidenceCalls[2].documentId, 'record-1', 'a selected or uploaded Home Record uses the canonical trigger-evidence writer');
+    assert.equal(state.evidenceCalls[2].kind, 'QUOTE', 'Ask preserves the Desktop evidence kind');
     await assert.rejects(saveActivationContextAnswer({ userId: 'u1', propertyId: 'p1', requirementId: 'activation-trigger-details', answer: { evidenceKind: 'FREE_TEXT', detail: 'again' }, expectedContextVersion: stale }), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
     await assert.rejects(saveActivationContextAnswer({ userId: 'u1', propertyId: 'p1', requirementId: 'activation-trigger-details', answer: { evidenceKind: 'FREE_TEXT', detail: '   ' }, expectedContextVersion: version() }), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
     await assert.rejects(saveActivationContextAnswer({ userId: 'u1', propertyId: 'p1', requirementId: 'activation-trigger-details', answer: { evidenceKind: 'FREE_TEXT', recordIds: ['record-1'] }, expectedContextVersion: version() }), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
     await assert.rejects(saveActivationContextAnswer({ userId: 'u1', propertyId: 'p1', requirementId: 'something-else', answer: { value: 'x' }, expectedContextVersion: version() }), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
-    assert.equal(state.evidenceCalls.length, 2);
+    assert.equal(state.evidenceCalls.length, 3);
   } finally { restore(); }
   assert.equal(isActivationContextRequirement('activation-affected-item'), true);
   assert.equal(isActivationContextRequirement('anything'), false);
@@ -170,8 +180,8 @@ test('freshness is bound to the exact active trigger, and inline capture removes
 
   const action = {
     id: 'activation-context:trigger-1', lineageId: 'trigger-1', source: { kind: 'SYSTEM' }, priority: 'PLAN', state: 'OPEN', signal: ACTIVATION_CONTEXT_SIGNAL,
-    whyItMatters: 'The current action still has one explicit unknown.', recommendedAction: 'Review and correct: Trigger details. Skip anything that does not change the active decision.', expectedOutcome: 'Improve future guidance confidence.',
-    presentation: { variant: 'GENERIC_ACTION', summary: 'Improve future guidance confidence.', keyFacts: [], factGroups: [] }, primaryCta: { kind: 'CORRECT_FACT', label: 'View details', href: '/dashboard/properties/p1/onboarding' },
+    whyItMatters: 'A little more context will help Cozy tailor the next steps.', recommendedAction: 'Tell Cozy what prompted this plan: Replace the water heater', expectedOutcome: 'Get next steps that fit what is happening in your home.',
+    presentation: { variant: 'GENERIC_ACTION', summary: 'Add a little more context to tailor the next steps.', keyFacts: [], factGroups: [] }, primaryCta: { kind: 'CORRECT_FACT', label: 'Add context', href: '/dashboard/properties/p1/onboarding' },
     governance: { safetyTier: 'LOW_CONSEQUENCE' }, timing: { dueAt: null, rationale: 'Within 12 months' }, confidence: { label: 'HIGH' }, evidence: [], recommendationResponse: { status: 'AVAILABLE' }, ranking: { explanation: 'x' }, feedbackControls: ['DISMISS'],
   };
   const capture = { requirementId: 'activation-trigger-details', captureKey: ACTIVATION_CONTEXT_CAPTURE_KEY };
@@ -179,6 +189,7 @@ test('freshness is bound to the exact active trigger, and inline capture removes
   const guidance = result.blocks.find((block) => block.id === 'focused-home-action-guidance');
   assert.deepEqual(result.captureRequests, [capture]);
   assert.deepEqual(guidance.actions, [], 'the inline capture replaces View details rather than rendering both');
+  assert.deepEqual(guidance.sections[0].items[0].meta, ['Within 12 months'], 'implementation confidence is not exposed as a homeowner task');
 });
 
 test('wiring: the focused handler derives the card, and the submit path saves the two own cards before the generic Property Context write', () => {
@@ -189,6 +200,9 @@ test('wiring: the focused handler derives the card, and the submit path saves th
   assert.match(handler, /!focusedAction && \(isHealthGapActionTitle\(message\) \|\| isActivationContextActionTitle\(message\)\)/);
   const capture = readFileSync(resolve(__dirname, '../../src/services/ask/execution/askCapture.ts'), 'utf8');
   assert.match(capture, /input\.captureKey === ACTIVATION_CONTEXT_CAPTURE_KEY && isActivationContextRequirement\(input\.requirementId\)/);
+  const captureCard = readFileSync(resolve(__dirname, '../../../frontend/src/components/ask/workspace/CaptureCards.tsx'), 'utf8');
+  assert.match(captureCard, /Attach supporting evidence/);
+  assert.match(captureCard, /compactActivationContext \? 'Save context'/);
 });
 
 // Owner ruling 2026-11-09: skipping is for the Ask session only. The card's dismiss button records CAPTURE_DISMISSED on the execution; the next

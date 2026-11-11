@@ -24,6 +24,7 @@ export const isActivationContextAction = (action: { signal: string }): boolean =
 
 interface ActivationState {
   activeTriggerId: string | null;
+  activeTriggerLabel: string | null;
   gaps: ActivationGapKey[];
   entityType: string | null;
   entityId: string | null;
@@ -38,10 +39,11 @@ function evidenceDetailPresent(json: unknown): boolean {
 export async function activationContextState(propertyId: string): Promise<ActivationState> {
   const [property, onboarding] = await Promise.all([
     prisma.property.findUnique({ where: { id: propertyId }, select: { yearBuilt: true, propertySize: true } }),
-    prisma.propertyOnboarding.findUnique({ where: { propertyId }, select: { activeTriggerId: true, triggerEntityType: true, triggerEntityId: true, activeTriggerDetail: true, triggerEvidenceJson: true } }),
+    prisma.propertyOnboarding.findUnique({ where: { propertyId }, select: { activeTriggerId: true, activeTriggerLabel: true, triggerEntityType: true, triggerEntityId: true, activeTriggerDetail: true, triggerEvidenceJson: true } }),
   ]);
   return {
     activeTriggerId: onboarding?.activeTriggerId ?? null,
+    activeTriggerLabel: onboarding?.activeTriggerLabel ?? null,
     gaps: activationMissingGaps({
       yearBuilt: property?.yearBuilt, propertySize: property?.propertySize,
       triggerEntityId: onboarding?.triggerEntityId, triggerEntityType: onboarding?.triggerEntityType,
@@ -59,7 +61,7 @@ export function activationContextVersion(state: Pick<ActivationState, 'activeTri
   return createHash('sha256').update(JSON.stringify([state.activeTriggerId ?? null, state.entityType, state.entityId, state.detail, state.evidenceCount])).digest('hex');
 }
 
-const base = { classification: 'ENHANCEMENT_ACCURACY' as const, state: 'UNKNOWN' as const, allowNotSure: false, sensitivity: 'STANDARD' as const, destinationLabel: 'Saved to this home’s starting context', confirmationText: null };
+const base = { classification: 'ENHANCEMENT_ACCURACY' as const, state: 'UNKNOWN' as const, allowNotSure: false, sensitivity: 'STANDARD' as const, destinationLabel: 'Saved with this home plan', confirmationText: null };
 
 async function itemRequest(propertyId: string, state: ActivationState, position: string): Promise<AskCaptureRequest> {
   const items = await prisma.inventoryItem.findMany({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, take: MAX_ITEM_OPTIONS, select: { id: true, name: true } });
@@ -79,26 +81,26 @@ async function detailRequest(propertyId: string, userId: string, state: Activati
     select: { id: true, title: true, recordType: true },
   }) : [];
   return {
-    ...base, requirementId: 'activation-trigger-details', captureKey: ACTIVATION_CONTEXT_CAPTURE_KEY, title: 'What happened',
-    question: 'What prompted this decision?',
-    helpText: `${position}Add a note, choose evidence already in Home Records, or upload a quote, invoice, photo, document, or email/PDF. Only include what changes the active decision.`,
+    ...base, requirementId: 'activation-trigger-details', captureKey: ACTIVATION_CONTEXT_CAPTURE_KEY, title: 'Add context to this plan',
+    question: state.activeTriggerLabel ? `What made you start thinking about “${state.activeTriggerLabel}”?` : 'What made you start thinking about this plan?',
+    helpText: `${position}A short note is enough. You can also attach supporting evidence if it would be useful.`,
     inputSchema: { type: 'GROUP', fields: [
-      { key: 'evidenceKind', label: 'Evidence type', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [
+      { key: 'detail', label: 'What happened?', required: false, helpText: 'For example: “The water heater started leaking yesterday.”', inputSchema: { type: 'LONG_TEXT', maxLength: 4000 } },
+      { key: 'evidenceKind', label: 'Type of supporting evidence', required: false, inputSchema: { type: 'SINGLE_SELECT', options: [
         { label: 'Free text', value: 'FREE_TEXT' }, { label: 'Conversation note', value: 'CONVERSATION' },
         { label: 'Document', value: 'DOCUMENT' }, { label: 'Contractor quote', value: 'QUOTE' },
         { label: 'Invoice', value: 'INVOICE' }, { label: 'Photo', value: 'PHOTO' }, { label: 'Email or PDF', value: 'EMAIL_PDF' },
       ] } },
-      { key: 'detail', label: 'What happened', required: false, inputSchema: { type: 'LONG_TEXT', maxLength: 4000 } },
-      { key: 'recordIds', label: 'Evidence', required: false, inputSchema: {
+      { key: 'recordIds', label: 'Supporting evidence', required: false, inputSchema: {
         type: 'DOCUMENT_MULTI_SELECT', options: records.map((record) => ({ value: record.id, label: `${record.title} (${record.recordType.toLowerCase().replace(/_/g, ' ')})` })),
         maxItems: 10, allowUpload: true, uploadLabel: 'Add evidence', uploadTarget: 'HOME_RECORDS',
         uploadRecord: {
-          description: 'Evidence for the active home decision',
-          notice: 'Adding evidence saves the file to this home’s shared Home Records and links it to the active decision.',
+          description: 'Supporting evidence for this home plan',
+          notice: 'Adding evidence saves the file to this home’s shared Home Records and links it to this plan.',
           recordTypeFrom: { fieldKey: 'evidenceKind', byValue: { DOCUMENT: 'OTHER', QUOTE: 'OTHER', INVOICE: 'INVOICE', PHOTO: 'PHOTO', EMAIL_PDF: 'OTHER' } },
         },
       } },
-    ], groups: [{ id: 'evidence', title: 'Evidence', description: 'Add only what changes the active decision.', fieldKeys: ['evidenceKind', 'detail', 'recordIds'] }] } as unknown as AskCaptureRequest['inputSchema'],
+    ], groups: [{ id: 'context', title: 'Your context', fieldKeys: ['detail', 'evidenceKind', 'recordIds'] }] } as unknown as AskCaptureRequest['inputSchema'],
     currentAnswer: {},
     expectedContextVersion: activationContextVersion(state),
   } as AskCaptureRequest;
@@ -185,14 +187,15 @@ export async function saveActivationContextAnswer(input: { userId: string; prope
     }
   } else if (input.requirementId === 'activation-trigger-details') {
     const answer = input.answer && typeof input.answer === 'object' && !Array.isArray(input.answer) ? input.answer as { evidenceKind?: unknown; detail?: unknown; recordIds?: unknown } : {};
-    const evidenceKind = typeof answer.evidenceKind === 'string' && (ACTIVATION_EVIDENCE_KINDS as readonly string[]).includes(answer.evidenceKind)
+    const selectedEvidenceKind = typeof answer.evidenceKind === 'string' && (ACTIVATION_EVIDENCE_KINDS as readonly string[]).includes(answer.evidenceKind)
       ? answer.evidenceKind as ActivationEvidenceKind
       : null;
     const text = typeof answer.detail === 'string' ? answer.detail.trim() : '';
     const recordIds = Array.isArray(answer.recordIds) ? [...new Set(answer.recordIds.filter((id): id is string => typeof id === 'string' && Boolean(id)))] : [];
+    const evidenceKind = selectedEvidenceKind ?? (text && recordIds.length === 0 ? 'FREE_TEXT' : null);
     const fileBacked = evidenceKind != null && !['FREE_TEXT', 'CONVERSATION'].includes(evidenceKind);
     if (!evidenceKind || (!text && recordIds.length === 0) || text.length > 4000 || recordIds.length > 10 || (fileBacked && recordIds.length === 0) || (!fileBacked && recordIds.length > 0)) {
-      throw new ActivationCaptureError('Choose the evidence type, then add the matching note or Home Record.', 'ASK_CAPTURE_VALIDATION_ERROR');
+      throw new ActivationCaptureError('Add a short note, or choose a supporting-evidence type and attach a matching Home Record.', 'ASK_CAPTURE_VALIDATION_ERROR');
     }
     const records = recordIds.length ? await prisma.propertyRecord.findMany({ where: { id: { in: recordIds }, propertyId: input.propertyId, createdByUserId: input.userId, lifecycleStatus: { not: 'TRASHED' } }, select: { id: true, title: true, recordType: true } }) : [];
     if (records.length !== recordIds.length) throw new ActivationCaptureError('One or more evidence records are not available for this home.', 'ASK_CAPTURE_VALIDATION_ERROR');

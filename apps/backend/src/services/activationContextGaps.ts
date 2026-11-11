@@ -33,5 +33,15 @@ export function activationMissingGaps(input: ActivationGapInput): ActivationGapK
   return gaps;
 }
 
-/** The title the Home Action headline is built from; used to recognise the action once it has left the feed. */
-export const ACTIVATION_CONTEXT_TITLE_PATTERN = /^Review and correct: .+\. Skip anything that does not change the active decision\.?$/;
+/** Homeowner-facing copy shared by the activation-context producer and its focused Ask answer. */
+export function activationContextActionCopy(triggerLabel: string) {
+  return {
+    title: `Tell Cozy what prompted this plan: ${triggerLabel}`,
+    whyItMatters: `A little more context about “${triggerLabel}” will help Cozy tailor the next steps for this home.`,
+    expectedOutcome: 'Get next steps that fit what is happening in your home.',
+    timingRationale: 'Add this when convenient, or sooner if the situation changes.',
+  } as const;
+}
+
+/** Recognises both the current title and already-persisted legacy titles once the action has left the feed. */
+export const ACTIVATION_CONTEXT_TITLE_PATTERN = /^(?:Tell Cozy what prompted this plan: .+|Review and correct: .+\. Skip anything that does not change the active decision\.?)$/;

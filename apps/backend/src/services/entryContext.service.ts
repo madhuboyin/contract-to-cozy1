@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { ACTIVATION_CONTEXT_SIGNAL, ACTIVATION_GAP_LABELS, activationMissingGaps } from './activationContextGaps';
+import { ACTIVATION_CONTEXT_SIGNAL, ACTIVATION_GAP_LABELS, activationContextActionCopy, activationMissingGaps } from './activationContextGaps';
 import { z } from 'zod';
 import { Prisma, type OnboardingOwnershipState, type PropertyOnboarding } from '@prisma/client';
 import { prisma } from '../lib/prisma';
@@ -779,6 +779,7 @@ export async function getActivationFirstValue(
     })),
   ].filter((value): value is { label: string; value: string; source: string } => Boolean(value));
 
+  const contextCopy = activationContextActionCopy(entryContext.activeTrigger.label);
   const contextAction = missing.length > 0 ? adaptHomeActionSource('SYSTEM', {
     id: `activation-context:${onboarding.activeTriggerId}`,
     propertyId,
@@ -789,14 +790,14 @@ export async function getActivationFirstValue(
     state: 'OPEN',
     priority: 'PLAN',
     signal: ACTIVATION_CONTEXT_SIGNAL,
-    whyItMatters: `The current action still has ${missing.length} explicit unknown${missing.length === 1 ? '' : 's'}.`,
-    recommendedAction: `Review and correct: ${missing.join(', ')}. Skip anything that does not change the active decision.`,
-    expectedOutcome: 'Improve future guidance confidence without creating an unnecessary setup burden.',
+    whyItMatters: contextCopy.whyItMatters,
+    recommendedAction: contextCopy.title,
+    expectedOutcome: contextCopy.expectedOutcome,
     timing: {
       dueAt: null,
       windowStart: now.toISOString(),
       windowEnd: new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-      rationale: 'Complete within the next 12 months, or sooner if one of these facts changes the active decision.',
+      rationale: contextCopy.timingRationale,
     },
     evidence: action.evidence,
     assumptions: [],
@@ -823,7 +824,7 @@ export async function getActivationFirstValue(
     },
     primaryCta: {
       kind: 'CORRECT_FACT',
-      label: 'Review missing context',
+      label: 'Add context',
       href: `/dashboard/properties/${propertyId}/onboarding`,
     },
     secondaryCtas: [],

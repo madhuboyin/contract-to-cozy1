@@ -6,6 +6,7 @@ import { resolveHealthFactorChecklist, urgencyLabel, type HealthFactorChecklistP
 import { buildPolicyConflictSection } from './policyConflictPresentation';
 import type { ConflictedInsurancePolicyTerm } from '../coverageConflict.service';
 import { isAppliancesInsight } from './healthGapCapture';
+import { ACTIVATION_CONTEXT_SIGNAL } from '../activationContextGaps';
 import { COMPLETION_EVIDENCE_POLICY } from '../intelligence/completionEvidencePolicy.registry';
 import { WORK_ITEM_ENTITY_TYPE, WORK_ITEM_MESSAGES, workItemChangeable } from './support/homeWorkItemCommand';
 import { legalUserWorkItemTransitions } from '../../modules/homeOperations/domain/userGovernance';
@@ -607,7 +608,7 @@ export function buildFocusedHomeActionGuidance(
       id: action.id,
       title: recommendedAction,
       description: action.expectedOutcome,
-      meta: [timing, `${action.confidence.label.toLowerCase()} confidence`],
+      meta: action.signal === ACTIVATION_CONTEXT_SIGNAL ? [timing] : [timing, `${action.confidence.label.toLowerCase()} confidence`],
       status: action.state,
       href: null,
     }];
