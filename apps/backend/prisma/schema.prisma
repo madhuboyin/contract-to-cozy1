@@ -7328,6 +7328,7 @@ model PropertyOnboarding {
   activeTriggerDetail    String?
   triggerEntityType      OnboardingTriggerEntityType?
   triggerEntityId        String?
+  triggerScopeConfirmedAt DateTime?
   triggerSource          OnboardingTriggerSource?
   triggerEvidenceJson    Json?
   triggerIdentifiedAt    DateTime?

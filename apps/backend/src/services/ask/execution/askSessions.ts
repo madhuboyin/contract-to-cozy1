@@ -30,7 +30,7 @@ export async function reconcileActivationCaptureForSessionRead<T extends { sessi
   const parameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
     ? execution.parametersJson as Record<string, unknown>
     : {};
-  if (typeof parameters.focusedHomeActionId !== 'string' || !parameters.focusedHomeActionId.startsWith('activation-context:')) return execution;
+  if (typeof parameters.focusedHomeActionId !== 'string' || !/^activation(?::|\-context:)/.test(parameters.focusedHomeActionId)) return execution;
   const stored = execution.resultJson && typeof execution.resultJson === 'object' && !Array.isArray(execution.resultJson)
     ? execution.resultJson as Record<string, unknown>
     : null;

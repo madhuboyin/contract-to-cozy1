@@ -8,6 +8,7 @@ import { AlertTriangle, CheckCircle2, ChevronRight, ClipboardCheck } from 'lucid
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
+import { AskWorkspace } from '@/components/ask/AskWorkspace';
 import { SourceChip } from '@/components/trust';
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
@@ -170,9 +171,10 @@ export function isMissingInformationAction(action: any): boolean {
 
 export function canCaptureResolutionInline(action: any, cta = action?.primaryCta): boolean {
   return Boolean(
-    action?.propertyContextFeature?.featureKey &&
-      action?.propertyContextFeature?.operationKey &&
-      normalizeUpper(cta?.kind) === 'CORRECT_FACT',
+    normalizeUpper(cta?.kind) === 'CORRECT_FACT' && (
+      (action?.propertyContextFeature?.featureKey && action?.propertyContextFeature?.operationKey) ||
+      String(action?.id ?? '').startsWith('activation:')
+    ),
   );
 }
 
@@ -684,6 +686,23 @@ export default function ResolutionCenterClient() {
                 />
               </div>
             </>
+          ) : captureCase && selectedPropertyId && String(captureCase.action.id).startsWith('activation:') ? (
+            <div className="flex min-h-0 flex-1 flex-col pt-12">
+              <AskWorkspace
+                mode="panel"
+                onClose={() => { setCaptureCase(null); void refetch(); }}
+                initialPropertyId={selectedPropertyId}
+                initialQuestion={`Help me add the missing details for “${captureCase.action.signal}”.`}
+                launchSurface="resolution_center"
+                launchCapabilityId="home-operations"
+                launchRecord={{
+                  operationId: 'HOME_ACTIONS',
+                  entityType: 'HOME_ACTION',
+                  entityId: captureCase.action.id,
+                  actionId: captureCase.action.id,
+                }}
+              />
+            </div>
           ) : null}
         </SheetContent>
       </Sheet>

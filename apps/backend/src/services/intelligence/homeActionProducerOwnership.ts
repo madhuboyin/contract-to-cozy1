@@ -638,14 +638,14 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
       { sourceKind: 'GUIDANCE', workItemSourceType: 'GUIDANCE' },
     ],
     supportedCommands: ['COMPLETE', 'DEFER', 'SNOOZE', 'DISMISS', 'NOT_RELEVANT', 'CORRECT_FACT'],
-    commandOwner: 'recordFirstActionResolution (services/entryContext.service.ts), routed by ACTIVATION_ID_PREFIX in executeHomeActionCommand — applies only to the "activation:" id family. The "activation-context:" family this producer also emits (see notes) falls through to the generic default and has no COMPLETE control, so it never reaches this owner.',
+    commandOwner: 'recordFirstActionResolution (services/entryContext.service.ts), routed by ACTIVATION_ID_PREFIX in executeHomeActionCommand for the canonical "activation:" action family.',
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
     decisionLineagePolicy: {
       kind: 'VARIES_BY_INSTANCE',
       rationale: 'Resolves to whatever the pointed-at domain record\'s own governance is (Incident/Warranty/InsurancePolicy/etc. via sourceAdapterForTrigger), so tier varies. This producer\'s job is driving first engagement, not itself computing a fresh material recommendation -- resolved per-action by resolveActionDecisionLineagePolicy like every other dynamic producer, so a genuinely material first-value trigger still fails closed rather than being silently exempted.',
     },
-    notes: 'Activation/first-value producer. source.kind is resolved dynamically per trigger type by sourceAdapterForTrigger (entryContext.service.ts) — can be MAINTENANCE, COVERAGE, INCIDENT, PROJECT, SYSTEM, or GUIDANCE. This is the other id-prefix carve-out executeHomeActionCommand checks explicitly (see ACTIVATION_ID_PREFIX above), now declared here instead of being an undeclared exception. isKindLevelCompletionException is still meaningful here even though sourceKind is null: whichever dynamic kind is resolved at runtime, none of them declare a kind-level completion adapter, so the exception always applies. This producer also emits a second, separate id family — "activation-context:${triggerId}" — for the missing-facts follow-up action. That family is NOT covered by idPrefixes above and intentionally has no COMPLETE control: recordFirstActionResolution is scoped to the single "activation:" trigger action and would misrecord firstActionResolvedAt if invoked for it. It self-resolves by dropping out of the feed once its `missing` list is empty. supportedCommands above is the "activation:" family only; the "activation-context:" family supports DEFER/DISMISS/NOT_RELEVANT/CORRECT_FACT.',
+    notes: 'Activation/first-value producer. source.kind is resolved dynamically per trigger type by sourceAdapterForTrigger (entryContext.service.ts) — can be MAINTENANCE, COVERAGE, INCIDENT, PROJECT, SYSTEM, or GUIDANCE. Missing trigger scope/detail is expressed as requirements on this canonical action and captured through the shared activation workflow; it is not emitted as a second ranked Home Action.',
   },
   {
     producerId: 'appendAcceptedOperationalWork',

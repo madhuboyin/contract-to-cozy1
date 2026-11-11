@@ -1,30 +1,24 @@
-// Ask support: the activation "Review and correct: …" Home Action (entryContext.service.ts) lists up to four facts it still lacks. Ask asks for each one
-// inline, one per turn, in the order below, and re-derives the same focused card after every save, so the homeowner never leaves the conversation:
-//   year built, property size   the Property Context facts every other data-gap card uses (saved by the existing per-fact capture);
-//   affected item or record     one of the home's inventory items, or "the home as a whole" (saved on the onboarding trigger);
-//   trigger details             a short free-text note (saved as the trigger's evidence, the same write the first-value page makes).
-// The rule for "what is missing" is activationMissingGaps, shared with the producer.
+// The canonical activation Home Action asks only the context needed to continue its own decision: first the affected item (or an explicit whole-home
+// choice), then symptoms/safety detail with optional evidence. The same focused capture is used by Ask and the Resolution Center's embedded Ask panel.
 
 import { prisma } from '../../../lib/prisma';
 import { createHash } from 'node:crypto';
 import { type AskCaptureRequest } from '../../../productFramework/ask/ask.contract';
 import { ACTIVATION_CONTEXT_SIGNAL, activationMissingGaps, type ActivationGapKey } from '../../activationContextGaps';
 import { addTriggerEvidence } from '../../entryContext.service';
-import { healthGapCaptureFeature } from '../healthGapCapture';
-import { askCaptureRequest } from './capture';
 
 export const ACTIVATION_CONTEXT_CAPTURE_KEY = 'ACTIVATION_CONTEXT_INPUTS';
 export const ACTIVATION_WHOLE_HOME_VALUE = 'PROPERTY';
 export const ACTIVATION_EVIDENCE_KINDS = ['FREE_TEXT', 'CONVERSATION', 'DOCUMENT', 'QUOTE', 'INVOICE', 'PHOTO', 'EMAIL_PDF'] as const;
 export type ActivationEvidenceKind = typeof ACTIVATION_EVIDENCE_KINDS[number];
 const MAX_ITEM_OPTIONS = 40;
-const FACT_KEY_FOR_GAP: Partial<Record<ActivationGapKey, string>> = { YEAR_BUILT: 'core.yearBuilt', PROPERTY_SIZE: 'core.propertySizeSqFt' };
 
-export const isActivationContextAction = (action: { signal: string }): boolean => action.signal === ACTIVATION_CONTEXT_SIGNAL;
+export const isActivationContextAction = (action: { id: string; signal: string }): boolean => action.id.startsWith('activation:') || action.signal === ACTIVATION_CONTEXT_SIGNAL;
 
 interface ActivationState {
   activeTriggerId: string | null;
   activeTriggerLabel: string | null;
+  triggerScopeConfirmedAt: Date | null;
   gaps: ActivationGapKey[];
   entityType: string | null;
   entityId: string | null;
@@ -37,16 +31,14 @@ function evidenceDetailPresent(json: unknown): boolean {
 }
 
 export async function activationContextState(propertyId: string): Promise<ActivationState> {
-  const [property, onboarding] = await Promise.all([
-    prisma.property.findUnique({ where: { id: propertyId }, select: { yearBuilt: true, propertySize: true } }),
-    prisma.propertyOnboarding.findUnique({ where: { propertyId }, select: { activeTriggerId: true, activeTriggerLabel: true, triggerEntityType: true, triggerEntityId: true, activeTriggerDetail: true, triggerEvidenceJson: true } }),
-  ]);
+  const onboarding = await prisma.propertyOnboarding.findUnique({ where: { propertyId }, select: { activeTriggerId: true, activeTriggerLabel: true, triggerEntityType: true, triggerEntityId: true, triggerScopeConfirmedAt: true, activeTriggerDetail: true, triggerEvidenceJson: true } });
   return {
     activeTriggerId: onboarding?.activeTriggerId ?? null,
     activeTriggerLabel: onboarding?.activeTriggerLabel ?? null,
+    triggerScopeConfirmedAt: onboarding?.triggerScopeConfirmedAt ?? null,
     gaps: activationMissingGaps({
-      yearBuilt: property?.yearBuilt, propertySize: property?.propertySize,
       triggerEntityId: onboarding?.triggerEntityId, triggerEntityType: onboarding?.triggerEntityType,
+      triggerScopeConfirmedAt: onboarding?.triggerScopeConfirmedAt,
       triggerDetail: onboarding?.activeTriggerDetail, evidenceDetailPresent: evidenceDetailPresent(onboarding?.triggerEvidenceJson),
     }),
     entityType: onboarding?.triggerEntityType ?? null,
@@ -57,8 +49,8 @@ export async function activationContextState(propertyId: string): Promise<Activa
 }
 
 /** Changes whenever the trigger's item, detail or evidence changes, so a form opened before another save cannot overwrite it. */
-export function activationContextVersion(state: Pick<ActivationState, 'activeTriggerId' | 'entityType' | 'entityId' | 'detail' | 'evidenceCount'>): string {
-  return createHash('sha256').update(JSON.stringify([state.activeTriggerId ?? null, state.entityType, state.entityId, state.detail, state.evidenceCount])).digest('hex');
+export function activationContextVersion(state: Pick<ActivationState, 'activeTriggerId' | 'entityType' | 'entityId' | 'detail' | 'evidenceCount'> & { triggerScopeConfirmedAt?: Date | string | null }): string {
+  return createHash('sha256').update(JSON.stringify([state.activeTriggerId ?? null, state.entityType, state.entityId, state.triggerScopeConfirmedAt, state.detail, state.evidenceCount])).digest('hex');
 }
 
 const base = { classification: 'ENHANCEMENT_ACCURACY' as const, state: 'UNKNOWN' as const, allowNotSure: false, sensitivity: 'STANDARD' as const, destinationLabel: 'Saved with this home plan', confirmationText: null };
@@ -66,26 +58,32 @@ const base = { classification: 'ENHANCEMENT_ACCURACY' as const, state: 'UNKNOWN'
 async function itemRequest(propertyId: string, state: ActivationState, position: string): Promise<AskCaptureRequest> {
   const items = await prisma.inventoryItem.findMany({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, take: MAX_ITEM_OPTIONS, select: { id: true, name: true } });
   return {
-    ...base, requirementId: 'activation-affected-item', captureKey: ACTIVATION_CONTEXT_CAPTURE_KEY, title: 'Affected item',
-    question: 'Which item or record is this about?',
-    helpText: `${position}Pick the item this started with, or the whole home if it is not one item.`,
+    ...base, requirementId: 'activation-affected-item', captureKey: ACTIVATION_CONTEXT_CAPTURE_KEY, title: 'Identify what needs attention',
+    question: state.activeTriggerLabel === 'Something needs repair' ? 'What needs repair?' : 'Which item or part of the home is this about?',
+    helpText: `${position}Choose a recorded item, or select the whole home only when the issue is not tied to one item.`,
     inputSchema: { type: 'SINGLE_SELECT', options: [...items.map((item) => ({ label: item.name, value: item.id })), { label: 'The home as a whole', value: ACTIVATION_WHOLE_HOME_VALUE }] },
     expectedContextVersion: activationContextVersion(state),
   } as AskCaptureRequest;
 }
 
 async function detailRequest(propertyId: string, userId: string, state: ActivationState, position: string): Promise<AskCaptureRequest> {
-  const records = userId ? await prisma.propertyRecord.findMany({
-    where: { propertyId, createdByUserId: userId, lifecycleStatus: { not: 'TRASHED' } },
-    orderBy: { updatedAt: 'desc' }, take: 40,
-    select: { id: true, title: true, recordType: true },
-  }) : [];
+  const [records, affectedItem] = await Promise.all([
+    userId ? prisma.propertyRecord.findMany({
+      where: { propertyId, createdByUserId: userId, lifecycleStatus: { not: 'TRASHED' } },
+      orderBy: { updatedAt: 'desc' }, take: 40,
+      select: { id: true, title: true, recordType: true },
+    }) : Promise.resolve([]),
+    state.entityType === 'INVENTORY_ITEM' && state.entityId
+      ? prisma.inventoryItem.findFirst({ where: { id: state.entityId, propertyId }, select: { name: true } })
+      : Promise.resolve(null),
+  ]);
+  const subject = affectedItem?.name ?? (state.entityType === 'PROPERTY' && state.triggerScopeConfirmedAt ? 'the home' : null);
   return {
-    ...base, requirementId: 'activation-trigger-details', captureKey: ACTIVATION_CONTEXT_CAPTURE_KEY, title: 'Add context to this plan',
-    question: state.activeTriggerLabel ? `What made you start thinking about “${state.activeTriggerLabel}”?` : 'What made you start thinking about this plan?',
-    helpText: `${position}A short note is enough. You can also attach supporting evidence if it would be useful.`,
+    ...base, requirementId: 'activation-trigger-details', captureKey: ACTIVATION_CONTEXT_CAPTURE_KEY, title: 'Describe the problem',
+    question: subject ? `What is happening with ${subject}?` : 'What is happening?',
+    helpText: `${position}Describe the symptoms, when they started, and any active leak, gas smell, smoke, sparks, or immediate damage. A short note is enough.`,
     inputSchema: { type: 'GROUP', fields: [
-      { key: 'detail', label: 'What happened?', required: false, helpText: 'For example: “The water heater started leaking yesterday.”', inputSchema: { type: 'LONG_TEXT', maxLength: 4000 } },
+      { key: 'detail', label: 'Symptoms and safety concerns', required: false, helpText: 'For example: “The water heater started leaking yesterday. There is no gas smell or smoke.”', inputSchema: { type: 'LONG_TEXT', maxLength: 4000 } },
       { key: 'evidenceKind', label: 'Type of supporting evidence', required: false, inputSchema: { type: 'SINGLE_SELECT', options: [
         { label: 'Free text', value: 'FREE_TEXT' }, { label: 'Conversation note', value: 'CONVERSATION' },
         { label: 'Document', value: 'DOCUMENT' }, { label: 'Contractor quote', value: 'QUOTE' },
@@ -108,7 +106,7 @@ async function detailRequest(propertyId: string, userId: string, state: Activati
 
 export interface ActivationCapture {
   request: AskCaptureRequest;
-  /** Set for the two Property Context facts; absent for the item and detail cards, which this module saves itself. */
+  /** Activation-owned cards save through this module, not Property Context. */
   feature: { featureKey: 'ASK_NEXT_ACTION'; operationKey: string } | null;
 }
 
@@ -134,7 +132,7 @@ export async function dismissedActivationRequirements(sessionId: string): Promis
  */
 export async function deriveActivationContextCapture(
   propertyId: string,
-  evaluate: (feature: { featureKey: 'ASK_NEXT_ACTION'; operationKey: string }) => Promise<{ requirements: readonly any[]; contextVersion: string }>,
+  _evaluate: (feature: { featureKey: 'ASK_NEXT_ACTION'; operationKey: string }) => Promise<{ requirements: readonly any[]; contextVersion: string }>,
   dismissed: ReadonlySet<string> = new Set(),
   userId = '',
 ): Promise<ActivationCapture | null> {
@@ -142,20 +140,7 @@ export async function deriveActivationContextCapture(
   // Every askable question first, so "Question N of M" counts only what will actually be asked.
   const askable: Array<{ requirementId: string; build: (position: string) => Promise<ActivationCapture> | ActivationCapture }> = [];
   for (const gap of state.gaps) {
-    const factKey = FACT_KEY_FOR_GAP[gap];
-    if (factKey) {
-      const feature = healthGapCaptureFeature(factKey);
-      const evaluation = await evaluate(feature);
-      const requirement = evaluation.requirements[0];
-      if (!requirement || dismissed.has(requirement.requirementId)) continue;
-      askable.push({
-        requirementId: requirement.requirementId,
-        build: (position) => {
-          const request = askCaptureRequest(requirement, evaluation.contextVersion, 'Saved to this home’s Property Context', null);
-          return { request: { ...request, allowNotSure: false, helpText: `${position}${request.helpText ?? ''}`.trim() || null }, feature };
-        },
-      });
-    } else if (gap === 'AFFECTED_ITEM') {
+    if (gap === 'AFFECTED_ITEM') {
       if (!dismissed.has('activation-affected-item')) askable.push({ requirementId: 'activation-affected-item', build: async (position) => ({ request: await itemRequest(propertyId, state, position), feature: null }) });
     } else if (!dismissed.has('activation-trigger-details')) {
       askable.push({ requirementId: 'activation-trigger-details', build: async (position) => ({ request: await detailRequest(propertyId, userId, state, position), feature: null }) });
@@ -179,11 +164,11 @@ export async function saveActivationContextAnswer(input: { userId: string; prope
   if (input.requirementId === 'activation-affected-item') {
     if (typeof value !== 'string' || !value) throw new ActivationCaptureError('Choose an item, or the home as a whole.', 'ASK_CAPTURE_VALIDATION_ERROR');
     if (value === ACTIVATION_WHOLE_HOME_VALUE) {
-      await prisma.propertyOnboarding.update({ where: { propertyId: input.propertyId }, data: { triggerEntityType: 'PROPERTY', triggerEntityId: null } });
+      await prisma.propertyOnboarding.update({ where: { propertyId: input.propertyId }, data: { triggerEntityType: 'PROPERTY', triggerEntityId: null, triggerScopeConfirmedAt: new Date() } });
     } else {
       const item = await prisma.inventoryItem.findFirst({ where: { id: value, propertyId: input.propertyId }, select: { id: true } });
       if (!item) throw new ActivationCaptureError('That item is not in this home’s inventory.', 'ASK_CAPTURE_VALIDATION_ERROR');
-      await prisma.propertyOnboarding.update({ where: { propertyId: input.propertyId }, data: { triggerEntityType: 'INVENTORY_ITEM', triggerEntityId: item.id } });
+      await prisma.propertyOnboarding.update({ where: { propertyId: input.propertyId }, data: { triggerEntityType: 'INVENTORY_ITEM', triggerEntityId: item.id, triggerScopeConfirmedAt: new Date() } });
     }
   } else if (input.requirementId === 'activation-trigger-details') {
     const answer = input.answer && typeof input.answer === 'object' && !Array.isArray(input.answer) ? input.answer as { evidenceKind?: unknown; detail?: unknown; recordIds?: unknown } : {};

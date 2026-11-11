@@ -30,7 +30,7 @@ The onboarding path now begins with the homeowner's active situation instead of 
 - Persisted up to 20 evidence references with the active trigger and incorporated them into confidence, supported facts, and canonical `HomeAction` evidence.
 - Selected the canonical maintenance, coverage, incident, project, system, or guidance adapter from trigger context and carried stable trigger identifiers into the destination workflow.
 - Added a dashboard-wide activation handoff banner so specialized destinations load the active action, evidence count, and confidence with a route back to evidence intake.
-- Expanded the 12-month response with a bounded context-completion action only when explicit unknowns remain; unsupported plan buckets remain visibly empty.
+- Missing trigger scope and problem detail are requirements on the canonical `activation:<triggerId>` action. The former ranked `activation-context:<triggerId>` companion was retired so Home, Resolution Center, and Ask present one action and one completion owner. Correction opens the shared Ask capture inline in Resolution Center, identifies the affected item before asking symptoms and immediate safety concerns, and never redirects to the generic property setup checklist.
 - Removed `HomeownerSegment`, its profile field, signup choice, API payloads, frontend hooks, and direct backend/frontend eligibility checks. Purchase and ownership behavior now use property entry context.
 - Added explicit useful/new, useful-reminder, and not-useful first-value feedback.
 - Added an MFA/capability-protected Phase 1 pilot report and admin scorecard for minimum setup, useful/new recommendation identification, and 30-day action resolution, including exact denominators and targets.

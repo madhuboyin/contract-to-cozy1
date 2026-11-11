@@ -160,7 +160,7 @@ test('Prisma stores orthogonal Phase 1 context without a migration artifact', ()
   const schema = fs.readFileSync(path.resolve(__dirname, '../../prisma/schema.prisma'), 'utf8');
   for (const field of [
     'entryPath', 'ownershipState', 'propertyOrigin', 'activeTriggerId', 'activeTriggerType',
-    'triggerEntityType', 'triggerEvidenceJson', 'firstValueType', 'firstValueAt', 'firstActionResolvedAt',
+    'triggerEntityType', 'triggerScopeConfirmedAt', 'triggerEvidenceJson', 'firstValueType', 'firstValueAt', 'firstActionResolvedAt',
     'firstValueFeedback', 'firstValueFeedbackAt',
   ]) {
     assert.ok(schema.includes(field));

@@ -142,6 +142,20 @@ describe('Resolution Center canonical projection', () => {
     expect(canCaptureResolutionInline(toResolutionAction(canonicalAction()))).toBe(false);
   });
 
+  it('opens canonical activation correction in the shared Ask workspace', () => {
+    const activation = toResolutionAction(canonicalAction({
+      id: 'activation:trigger-1',
+      primaryCta: { kind: 'REVIEW', label: 'Continue with this action', href: '/dashboard/resolution-center' },
+      secondaryCtas: [{ kind: 'CORRECT_FACT', label: 'Correct or add context', href: '/dashboard/ask' }],
+      confidence: { score: 0.6, label: 'MEDIUM', missing: ['Specific affected item or record', 'Trigger details'] },
+    }));
+    const [item] = composeResolutionCases([activation]);
+    const { primary } = resolutionCaseCtas(item);
+
+    expect(primary.kind).toBe('CORRECT_FACT');
+    expect(canCaptureResolutionInline(item.action, primary)).toBe(true);
+  });
+
   it('promotes an information card correction CTA over its planning CTA', () => {
     const action = canonicalAction({
       confidence: { score: 0.6, label: 'MEDIUM', missing: ['Installation year'] },

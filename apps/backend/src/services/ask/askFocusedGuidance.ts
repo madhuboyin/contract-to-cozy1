@@ -608,7 +608,7 @@ export function buildFocusedHomeActionGuidance(
       id: action.id,
       title: recommendedAction,
       description: action.expectedOutcome,
-      meta: action.signal === ACTIVATION_CONTEXT_SIGNAL ? [timing] : [timing, `${action.confidence.label.toLowerCase()} confidence`],
+      meta: action.id.startsWith('activation:') || action.signal === ACTIVATION_CONTEXT_SIGNAL ? [timing] : [timing, `${action.confidence.label.toLowerCase()} confidence`],
       status: action.state,
       href: null,
     }];

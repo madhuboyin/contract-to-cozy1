@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { ACTIVATION_CONTEXT_SIGNAL, ACTIVATION_GAP_LABELS, activationContextActionCopy, activationMissingGaps } from './activationContextGaps';
+import { ACTIVATION_GAP_LABELS, activationMissingGaps } from './activationContextGaps';
 import { z } from 'zod';
 import { Prisma, type OnboardingOwnershipState, type PropertyOnboarding } from '@prisma/client';
 import { prisma } from '../lib/prisma';
@@ -331,6 +331,7 @@ export async function captureEntryContext(
       activeTriggerDetail: input.activeTrigger.detail ?? null,
       triggerEntityType: input.activeTrigger.entityType,
       triggerEntityId: input.activeTrigger.entityId ?? null,
+      triggerScopeConfirmedAt: input.activeTrigger.entityId ? now : null,
       triggerSource: input.activeTrigger.source,
       triggerEvidenceJson: [] as Prisma.InputJsonValue,
       triggerIdentifiedAt: now,
@@ -640,10 +641,9 @@ export async function getActivationFirstValue(
   const storedEvidence = parseStoredTriggerEvidence(onboarding.triggerEvidenceJson);
   const evidenceDetailPresent = storedEvidence.some((item) => Boolean(item.detail));
   const missing = activationMissingGaps({
-    yearBuilt: property.yearBuilt,
-    propertySize: property.propertySize,
     triggerEntityId: entryContext.activeTrigger.entityId,
     triggerEntityType: entryContext.activeTrigger.entityType,
+    triggerScopeConfirmedAt: onboarding.triggerScopeConfirmedAt,
     triggerDetail: entryContext.activeTrigger.detail,
     evidenceDetailPresent,
   }).map((gap) => ACTIVATION_GAP_LABELS[gap]);
@@ -733,7 +733,7 @@ export async function getActivationFirstValue(
     secondaryCtas: [{
       kind: 'CORRECT_FACT',
       label: 'Correct or add context',
-      href: `/dashboard/properties/${propertyId}/onboarding`,
+      href: `/dashboard/ask?propertyId=${encodeURIComponent(propertyId)}&question=${encodeURIComponent(`Help me add the missing details for “${entryContext.activeTrigger.label}”.`)}&launchOperationId=HOME_ACTIONS&launchEntityType=HOME_ACTION&launchEntityId=${encodeURIComponent(actionId)}&launchActionId=${encodeURIComponent(actionId)}&from=resolution-center&backTo=${encodeURIComponent(`/dashboard/resolution-center?propertyId=${propertyId}`)}`,
     }],
     feedbackControls: ['COMPLETE', 'DEFER', 'SNOOZE', 'DISMISS', 'NOT_RELEVANT', 'CORRECT_FACT'],
     relatedJourneyId: null,
@@ -778,66 +778,6 @@ export async function getActivationFirstValue(
       source: item.documentId ? 'Homeowner document' : 'Homeowner input',
     })),
   ].filter((value): value is { label: string; value: string; source: string } => Boolean(value));
-
-  const contextCopy = activationContextActionCopy(entryContext.activeTrigger.label);
-  const contextAction = missing.length > 0 ? adaptHomeActionSource('SYSTEM', {
-    id: `activation-context:${onboarding.activeTriggerId}`,
-    propertyId,
-    lineageId: onboarding.activeTriggerId,
-    sourceEntityId: onboarding.id,
-    sourceVersion: 'phase1-v2',
-    job: 'STAY_AHEAD',
-    state: 'OPEN',
-    priority: 'PLAN',
-    signal: ACTIVATION_CONTEXT_SIGNAL,
-    whyItMatters: contextCopy.whyItMatters,
-    recommendedAction: contextCopy.title,
-    expectedOutcome: contextCopy.expectedOutcome,
-    timing: {
-      dueAt: null,
-      windowStart: now.toISOString(),
-      windowEnd: new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-      rationale: contextCopy.timingRationale,
-    },
-    evidence: action.evidence,
-    assumptions: [],
-    options: [],
-    tradeoffs: [],
-    confidence: { score: 1, label: 'HIGH', missing: [] },
-    governance: {
-      safetyTier: 'LOW_CONSEQUENCE',
-      professionalBoundary: null,
-      jurisdictionCheck: { status: 'NOT_REQUIRED', jurisdiction: null, checkedAt: null, source: null },
-      conservativeFallback: null,
-      emergencyEscalation: null,
-      commercialDisclosure: {
-        involvesCommercialAction: false,
-        relationshipType: 'NONE',
-        compensationMayOccur: false,
-        rankingInfluenced: false,
-        summary: 'This context action contains no provider, product, financing, or purchase ranking.',
-        selectionCriteria: [],
-        nonCommercialAlternatives: [],
-      },
-      reviewedBy: [],
-      policyVersion: 'phase1-v2',
-    },
-    primaryCta: {
-      kind: 'CORRECT_FACT',
-      label: 'Add context',
-      href: `/dashboard/properties/${propertyId}/onboarding`,
-    },
-    secondaryCtas: [],
-    // No COMPLETE control: this action has no completion adapter (it is
-    // routed by the "activation-context:" id, not the "activation:" prefix
-    // recordFirstActionResolution owns) and self-resolves by dropping out of
-    // the feed once `missing` is empty. See homeActionProducerOwnership.ts's
-    // getActivationFirstValue entry.
-    feedbackControls: ['DEFER', 'DISMISS', 'NOT_RELEVANT', 'CORRECT_FACT'],
-    relatedJourneyId: null,
-    createdAt: now.toISOString(),
-    lastEvaluatedAt: now.toISOString(),
-  }) : null;
 
   const buyer = buyerPlan ? (() => {
     const activePhases = new Set(['EXPLORING', 'OFFER_CONTRACT', 'DUE_DILIGENCE', 'CLOSING_PREP']);
@@ -929,7 +869,7 @@ export async function getActivationFirstValue(
     plan: {
       NOW: action.priority === 'NOW' ? [action] : [],
       SOON: action.priority === 'SOON' ? [action] : [],
-      PLAN: contextAction ? [contextAction] : [],
+      PLAN: [],
       CONSIDER: [],
     },
     buyer,

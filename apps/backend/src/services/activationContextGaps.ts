@@ -4,20 +4,18 @@
 
 export const ACTIVATION_CONTEXT_SIGNAL = 'Complete only the home facts that improve this decision';
 
-export type ActivationGapKey = 'YEAR_BUILT' | 'PROPERTY_SIZE' | 'AFFECTED_ITEM' | 'TRIGGER_DETAILS';
+export type ActivationGapKey = 'AFFECTED_ITEM' | 'TRIGGER_DETAILS';
 
 export const ACTIVATION_GAP_LABELS: Readonly<Record<ActivationGapKey, string>> = {
-  YEAR_BUILT: 'Year built',
-  PROPERTY_SIZE: 'Property size',
   AFFECTED_ITEM: 'Specific affected item or record',
   TRIGGER_DETAILS: 'Trigger details',
 };
 
 export interface ActivationGapInput {
-  yearBuilt: number | null | undefined;
-  propertySize: number | null | undefined;
   triggerEntityId: string | null | undefined;
   triggerEntityType: string | null | undefined;
+  /** Distinguishes an explicit whole-home choice from onboarding's default PROPERTY scope. */
+  triggerScopeConfirmedAt: Date | string | null | undefined;
   /** The trigger's own free-text detail. */
   triggerDetail: string | null | undefined;
   /** True when any stored evidence item carries a detail. */
@@ -26,9 +24,7 @@ export interface ActivationGapInput {
 
 export function activationMissingGaps(input: ActivationGapInput): ActivationGapKey[] {
   const gaps: ActivationGapKey[] = [];
-  if (!input.yearBuilt) gaps.push('YEAR_BUILT');
-  if (!input.propertySize) gaps.push('PROPERTY_SIZE');
-  if (!input.triggerEntityId && input.triggerEntityType !== 'PROPERTY') gaps.push('AFFECTED_ITEM');
+  if (!input.triggerScopeConfirmedAt || (!input.triggerEntityId && input.triggerEntityType !== 'PROPERTY')) gaps.push('AFFECTED_ITEM');
   if (!input.triggerDetail && !input.evidenceDetailPresent) gaps.push('TRIGGER_DETAILS');
   return gaps;
 }
