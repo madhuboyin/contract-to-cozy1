@@ -256,18 +256,27 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
     const mine = attempts.filter((a) => a.componentKey === run.key);
     const selection = selectAttempt(mine);
     const latest = [...mine].sort((a, b) => b.number - a.number)[0] ?? null;
-    return { run, selection: { ...selection, attempt: selection.attempt ?? latest } };
+    return { run, selected: selection.attempt, selectedReason: selection.reason, latest, selection: { ...selection, attempt: selection.attempt ?? latest } };
   });
   const states = selections.map(({ selection }) => (selection.attempt ? componentStateOf(selection.attempt.status, true) : 'FAILED' as const));
   const decision = decideStatus(states);
-  // FR-PER-15(f): the selected attempt id, number and reason for EVERY component, including the ones that ended failed, clarifying, terminal-limited or still
-  // pending (an explicit reason, never an absence), stored with the winning assembly so a partial composite is auditable without rebuilding selection.
-  const selectionMap = selections.map(({ run, selection }) => ({
+  // FR-PER-15(f): for EVERY component, the selected attempt and selection reason when a genuinely selectable attempt exists (LOWEST_SUCCESSFUL,
+  // EXPLICIT_REFRESH or ONLY_TERMINAL_LIMITED), and otherwise state PENDING with both left null. The latest attempt is kept separately as audit evidence, so a
+  // component with only retryable-failed attempts is never recorded as "selected". Kept in the parent's internal state; the delivered envelope carries only
+  // the components the caller may see (see `deliverableEvidence`).
+  const selectionMap = selections.map(({ run, selected, selectedReason, latest }) => ({
     componentKey: run.key, operationId: run.clause.operationId,
-    executionId: selection.attempt?.executionId ?? null, number: selection.attempt?.number ?? null, status: selection.attempt?.status ?? null,
-    reason: selection.reason ?? (selection.attempt ? 'LATEST_NO_SUCCESS' : 'NO_ATTEMPT'),
+    selectedAttemptId: selected?.executionId ?? null, selectedAttemptNumber: selected?.number ?? null, selectionReason: selected ? selectedReason : null,
+    state: selected ? componentStateOf(selected.status, true) : 'PENDING',
+    latestAttemptId: latest?.executionId ?? null, latestAttemptNumber: latest?.number ?? null, latestAttemptStatus: latest?.status ?? null,
   }));
-  const withSelection = (...args: Parameters<typeof compositeEnvelope> extends [...infer Head, unknown?] ? Head : never) => compositeEnvelope(...(args as Parameters<typeof compositeEnvelope> extends [...infer Head, unknown?] ? Head : never), selectionMap);
+  // The envelope delivered to the homeowner: attempt and selection evidence of components whose section was redacted (or withheld) is left out; it stays in
+  // the parent's internal state.
+  const envelopeFor = (composite: CompositeResult | null, delivered: DeliveredComposite | null, unanswered: ReadonlyArray<{ clause: string; reasonCode: string; detail: string }>,
+    options: { withheld?: boolean; issues?: string[]; clarification?: AskPresentationBlock[]; redacted?: ReadonlyArray<{ componentKey: string | null; executionId: string }> } = {}) => {
+    const evidence = deliverableEvidence(attempts, selectionMap, options.redacted ?? []);
+    return compositeEnvelope(composite, delivered, unanswered, evidence.attempts, options.withheld ?? false, options.issues ?? [], options.clarification ?? [], evidence.selection);
+  };
   const completedAt = now();
   const claimedVersion = requireVersion({ version: finalRow.assemblyVersion ?? null, attempts });
 
@@ -280,7 +289,12 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
 
   // FR-PER-13c/e: only the worker that wins the compare-and-set on the claimed version writes the composite; a loser reassembles against the new version.
   const persist = async (data: Record<string, unknown>): Promise<{ row: AskExecution; won: boolean }> => {
-    const written = await db.askExecution.updateMany({ where: { id: parent.id, assemblyVersion: claimedVersion }, data: { ...data, assemblyVersion: claimedVersion + 1 } });
+    const internal = finalRow.parametersJson && typeof finalRow.parametersJson === 'object' && !Array.isArray(finalRow.parametersJson) ? finalRow.parametersJson as Record<string, unknown> : {};
+    const internalComposition = (internal.composition && typeof internal.composition === 'object' ? internal.composition : {}) as Record<string, unknown>;
+    const written = await db.askExecution.updateMany({
+      where: { id: parent.id, assemblyVersion: claimedVersion },
+      data: { ...data, parametersJson: json({ ...internal, composition: { ...internalComposition, selection: selectionMap } }), assemblyVersion: claimedVersion + 1 },
+    });
     const won = written.count === 1;
     if (won) {
       askCompositionDurationSeconds.observe((Date.now() - startedAt) / 1000);
@@ -300,7 +314,7 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   if (decision.kind === 'CLARIFY_ALONE') {
     // The clarification is asked alone, under the parent: nothing else is shown and nothing is partially answered.
     const source = childById.get(selections[decision.clauseIndex].selection.attempt?.executionId ?? '');
-    return persist({ status: source?.status ?? 'NEEDS_CLARIFICATION', reasonCode: source?.reasonCode ?? 'ASK_ROUTING_AMBIGUOUS', resultJson: source?.resultJson && typeof source.resultJson === 'object' && !Array.isArray(source.resultJson) ? { ...(source.resultJson as Record<string, unknown>), selection: selectionMap } : source?.resultJson ?? undefined, completedAt: null });
+    return persist({ status: source?.status ?? 'NEEDS_CLARIFICATION', reasonCode: source?.reasonCode ?? 'ASK_ROUTING_AMBIGUOUS', resultJson: source?.resultJson && typeof source.resultJson === 'object' && !Array.isArray(source.resultJson) ? { ...(source.resultJson as Record<string, unknown>), selection: deliverableEvidence(attempts, selectionMap, []).selection } : source?.resultJson ?? undefined, completedAt: null });
   }
 
   const outcomes: ComponentOutcome[] = selections.flatMap(({ run, selection }) => {
@@ -326,7 +340,7 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   if (notAnswered.some((entry) => entry.reasonCode === 'AskExecutionTimeoutError')) askCompositionTimeoutsTotal.inc();
 
   if (!outcomes.length) {
-    return persist({ status: 'READY_WITH_LIMITATIONS', reasonCode: 'COMPOSITE_NONE_ANSWERED', completedAt, resultJson: json(withSelection(null, null, notAnswered, attempts, false, [], clarificationBlocks)) });
+    return persist({ status: 'READY_WITH_LIMITATIONS', reasonCode: 'COMPOSITE_NONE_ANSWERED', completedAt, resultJson: json(envelopeFor(null, null, notAnswered, { clarification: clarificationBlocks })) });
   }
 
   const composite = assembleComposite({ outcomes, dated: parseTargetDate(input.message) != null, notAnswered });
@@ -334,7 +348,7 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   // The final authorization gate (§6.10), before the composite becomes visible.
   const gate = await applyAuthorizationGate(composite, await input.loadAuthorizationView());
   if (gate.kind === 'WITHHELD') {
-    return persist({ status: 'UNAVAILABLE', reasonCode: gate.reason === 'PROPERTY_ACCESS_LOST' ? 'ASK_PROPERTY_NOT_FOUND' : 'ASK_COMPOSITE_NOT_AUTHORIZED', completedAt, resultJson: json(withSelection(null, null, [], attempts, true)) });
+    return persist({ status: 'UNAVAILABLE', reasonCode: gate.reason === 'PROPERTY_ACCESS_LOST' ? 'ASK_PROPERTY_NOT_FOUND' : 'ASK_COMPOSITE_NOT_AUTHORIZED', completedAt, resultJson: json(envelopeFor(null, null, [], { withheld: true, redacted: composite.sections })) });
   }
   const visible = gate.composite;
   const issues = validateComposite(visible);
@@ -342,10 +356,10 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
     // FR-TRU-3: one envelope on the same parent, the validated sections inside, no merged figure and no answer-first line.
     askCompositionValidatorFailuresTotal.inc();
     const plain: CompositeResult = { ...visible, answerFirst: null, basis: null, status: 'READY_WITH_LIMITATIONS', coverage: 'PARTIAL' };
-    return persist({ status: 'READY_WITH_LIMITATIONS', reasonCode: 'COMPOSITE_VALIDATION_FAILED', completedAt, resultJson: json(withSelection(plain, projectForDelivery(plain), [], attempts, false, issues)) });
+    return persist({ status: 'READY_WITH_LIMITATIONS', reasonCode: 'COMPOSITE_VALIDATION_FAILED', completedAt, resultJson: json(envelopeFor(plain, projectForDelivery(plain), [], { issues, redacted: redactedOf(composite, visible) })) });
   }
   const delivered = projectForDelivery(visible);
-  return persist({ status: visible.status, reasonCode: visible.coverage === 'PARTIAL' ? 'COMPOSITE_PARTIAL' : undefined, completedAt, resultJson: json(withSelection(visible, delivered, visible.notAnswered, attempts, false, [], clarificationBlocks)) });
+  return persist({ status: visible.status, reasonCode: visible.coverage === 'PARTIAL' ? 'COMPOSITE_PARTIAL' : undefined, completedAt, resultJson: json(envelopeFor(visible, delivered, visible.notAnswered, { clarification: clarificationBlocks, redacted: redactedOf(composite, visible) })) });
   };
   let last: { row: AskExecution; won: boolean } | null = null;
   for (let round = 0; round < MAX_CAS_RETRIES; round += 1) {
@@ -353,6 +367,21 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
     if (last.won) return last.row;
   }
   return last!.row;
+}
+
+/** Sections the gate removed from what the caller may see. */
+const redactedOf = (before: CompositeResult, after: CompositeResult) => before.sections.filter((section) => !after.sections.includes(section));
+
+/**
+ * FR-PER-6: the delivered envelope carries only the authorized projection. Attempt and selection evidence of a redacted component (its operation, component key
+ * with the clause text, child execution ids, status and retry metadata) is left out; the complete evidence stays in the parent's internal state.
+ */
+export function deliverableEvidence<A extends { componentKey: string; executionId: string }, S extends { componentKey: string }>(
+  attempts: readonly A[], selection: readonly S[], redacted: ReadonlyArray<{ componentKey: string | null; executionId: string }>,
+): { attempts: A[]; selection: S[] } {
+  const keys = new Set(redacted.map((section) => section.componentKey).filter((key): key is string => !!key));
+  const ids = new Set(redacted.map((section) => section.executionId));
+  return { attempts: attempts.filter((a) => !keys.has(a.componentKey) && !ids.has(a.executionId)), selection: selection.filter((entry) => !keys.has(entry.componentKey)) };
 }
 
 /** The component's declared source references, described by its OWN operation from the result it stored; null (undeclared) fails closed at the gate. */

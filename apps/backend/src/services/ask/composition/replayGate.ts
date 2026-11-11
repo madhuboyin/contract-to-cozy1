@@ -1,7 +1,7 @@
 // Composition FRD FR-PER-6 and §6.10: the replay order for a stored composite. The stored validated blocks are the durable DOMAIN answer and are never
 // recomputed; what is recomputed on every read is the delivery projection, after the current authorization is applied. Pure: the view is injected.
 import { applyAuthorizationGate, projectForDelivery, validateComposite, type AuthorizationView, type CompositeResult } from './compositeResult';
-import { compositeEnvelope } from './runComposedTurn';
+import { compositeEnvelope, deliverableEvidence } from './runComposedTurn';
 import type { Attempt } from './attempts';
 
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -22,10 +22,13 @@ export async function replayComposite(resultJson: unknown, view: AuthorizationVi
   const visible = gate.composite;
   const issues = validateComposite(visible);
   const attempts = stored.attempts ?? [];
-  const selection = Array.isArray((resultJson as Record<string, unknown>).selection) ? (resultJson as Record<string, unknown>).selection as unknown[] : [];
+  // The delivered projection drops the attempt and selection evidence of every section this replay redacts (FR-PER-6); the stored parent keeps it all.
+  const redactedSections = (stored.sections ?? []).filter((section) => !visible.sections.includes(section));
+  const storedSelection = Array.isArray((resultJson as Record<string, unknown>).selection) ? (resultJson as Record<string, unknown>).selection as Array<{ componentKey: string }> : [];
+  const evidence = deliverableEvidence(attempts, storedSelection, redactedSections);
   if (issues.length) {
     const plain: CompositeResult = { ...visible, answerFirst: null, basis: null, status: 'READY_WITH_LIMITATIONS', coverage: 'PARTIAL' };
-    return { kind: 'DELIVER', delivered: { ...compositeEnvelope(plain, projectForDelivery(plain), [], attempts, false, issues, [], selection) } };
+    return { kind: 'DELIVER', delivered: { ...compositeEnvelope(plain, projectForDelivery(plain), [], evidence.attempts, false, issues, [], evidence.selection) } };
   }
-  return { kind: 'DELIVER', delivered: { ...compositeEnvelope(visible, projectForDelivery(visible), visible.notAnswered, attempts, false, [], [], selection) } };
+  return { kind: 'DELIVER', delivered: { ...compositeEnvelope(visible, projectForDelivery(visible), visible.notAnswered, evidence.attempts, false, [], [], evidence.selection) } };
 }

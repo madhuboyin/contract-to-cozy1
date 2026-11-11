@@ -465,21 +465,54 @@ test('FR-PER-10: the same manual retry delivered twice (concurrently, then again
   await assert.rejects(resume(db, createChild, retryExhaustedComposedTurn, { requestKey: 'retry-req-2' }), /no exhausted component/);
 });
 
-test('FR-PER-15(f): the parent stores the selected attempt and reason for every component, including failed, clarifying and pending ones', async () => {
+const internalSelection = (row) => row.parametersJson.composition.selection;
+
+test('FR-PER-15(f): the parent stores selection for every component; a component with no selectable attempt is PENDING with a null selection and its latest attempt kept as evidence', async () => {
   const dbF = fakeDb([parentRow()]);
   const failed = await run(dbF, scriptedChildren(dbF, (op) => (op === 'ITEM_REPLACEMENT_COST' ? { throws: true } : null)).createChild);
-  const f = failed.resultJson.selection;
+  const f = internalSelection(failed);
   assert.equal(f.length, 2, 'one entry per component, answered or not');
-  assert.equal(f.find((e) => e.operationId === 'INVENTORY_LOOKUP').reason, 'LOWEST_SUCCESSFUL');
+  const answered = f.find((e) => e.operationId === 'INVENTORY_LOOKUP');
+  assert.deepEqual([answered.selectionReason, answered.state, answered.selectedAttemptNumber], ['LOWEST_SUCCESSFUL', 'ANSWERED', 1]);
   const lost = f.find((e) => e.operationId === 'ITEM_REPLACEMENT_COST');
-  assert.deepEqual([lost.reason, lost.status, lost.number], ['LATEST_NO_SUCCESS', 'FAILED_RETRYABLE', 2], 'the failed component keeps its latest attempt and an explicit reason');
+  assert.equal(lost.selectedAttemptId, null, 'a retryable-failed component has no selected attempt');
+  assert.equal(lost.selectionReason, null, 'and no selection reason outside the FRD contract');
+  assert.equal(lost.state, 'PENDING');
+  assert.deepEqual([lost.latestAttemptStatus, lost.latestAttemptNumber], ['FAILED_RETRYABLE', 2], 'the latest attempt is kept separately as audit evidence');
   const dbC = fakeDb([parentRow()]);
   const clarifying = await run(dbC, scriptedChildren(dbC, (op) => (op === 'ITEM_REPLACEMENT_COST' ? { status: 'NEEDS_CLARIFICATION' } : null)).createChild);
-  assert.equal(clarifying.resultJson.selection.find((e) => e.operationId === 'ITEM_REPLACEMENT_COST').status, 'NEEDS_CLARIFICATION');
+  const c = internalSelection(clarifying).find((e) => e.operationId === 'ITEM_REPLACEMENT_COST');
+  assert.deepEqual([c.selectionReason, c.state], ['ONLY_TERMINAL_LIMITED', 'CLARIFICATION']);
   const dbN = fakeDb([parentRow()]);
   const none = await run(dbN, scriptedChildren(dbN, () => ({ status: 'FAILED_TERMINAL' })).createChild);
-  assert.equal(none.resultJson.selection.length, 2, 'a composite with nothing answered still records its selections');
-  assert.ok(none.resultJson.selection.every((e) => e.reason === 'ONLY_TERMINAL_LIMITED'));
-  const stored = await replayComposite(await storedComposite(), { propertyAccess: true, isOperationAuthorized: (op) => op !== 'INVENTORY_LOOKUP', authorizeSources: async () => 'AUTHORIZED' });
-  assert.equal(stored.delivered.selection.length, 2, 'the selection map survives a redacted replay');
+  assert.ok(internalSelection(none).every((e) => e.selectionReason === 'ONLY_TERMINAL_LIMITED' && e.state === 'FAILED'));
+  for (const row of [failed, clarifying, none]) for (const e of internalSelection(row)) assert.ok(['LOWEST_SUCCESSFUL', 'EXPLICIT_REFRESH', 'ONLY_TERMINAL_LIMITED', null].includes(e.selectionReason), `only FRD reasons: ${e.selectionReason}`);
+});
+
+test('FR-PER-6: the delivered envelope carries no attempt or selection evidence for a redacted component, at assembly and on replay; the parent keeps all of it', async () => {
+  const redactInventory = { propertyAccess: true, isOperationAuthorized: (op) => op !== 'INVENTORY_LOOKUP', authorizeSources: async () => 'AUTHORIZED' };
+  const db = fakeDb([parentRow()]);
+  const parent = await run(db, scriptedChildren(db).createChild, { loadAuthorizationView: async () => redactInventory });
+  const delivered = JSON.stringify(parent.resultJson);
+  assert.ok(!delivered.includes('INVENTORY_LOOKUP'), 'no operation id of the redacted component in what is delivered');
+  assert.ok(!delivered.includes('how old is my roof'), 'no component key or normalized clause text of the redacted component');
+  assert.ok(!parent.resultJson.composite.attempts.some((a) => a.componentKey.startsWith('INVENTORY_LOOKUP')));
+  assert.ok(!parent.resultJson.selection.some((e) => e.operationId === 'INVENTORY_LOOKUP'));
+  assert.equal(internalSelection(parent).length, 2, 'the stored parent keeps the complete selection');
+  assert.equal(parent.parametersJson.composition.attempts.filter((a) => a.componentKey.startsWith('INVENTORY_LOOKUP')).length, 1, 'and the complete attempt set');
+  // On replay: a fully delivered composite, then a later redaction.
+  const dbFull = fakeDb([parentRow()]);
+  const full = await run(dbFull, scriptedChildren(dbFull).createChild);
+  assert.equal(full.resultJson.selection.length, 2);
+  const replay = await replayComposite(full.resultJson, redactInventory);
+  assert.equal(replay.kind, 'DELIVER');
+  const replayed = JSON.stringify(replay.delivered);
+  assert.ok(!replayed.includes('INVENTORY_LOOKUP') && !replayed.includes('how old is my roof'));
+  assert.equal(replay.delivered.selection.length, 1);
+  assert.equal(replay.delivered.composite.attempts.length, 1);
+  // A fully withheld composite delivers no evidence at all.
+  const dbW = fakeDb([parentRow()]);
+  const withheld = await run(dbW, scriptedChildren(dbW).createChild, { loadAuthorizationView: async () => ({ propertyAccess: false, isOperationAuthorized: () => true, authorizeSources: async () => 'AUTHORIZED' }) });
+  assert.deepEqual(withheld.resultJson.composite.attempts, []);
+  assert.deepEqual(withheld.resultJson.selection, []);
 });
