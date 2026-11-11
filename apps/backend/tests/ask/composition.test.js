@@ -373,3 +373,11 @@ test('FR-DEC: "is water heater under warranty, what would be the replacement cos
     assert.match(out.clauses[1].clause, /replacement water heater/i);
   }
 });
+
+test('the inventory contract accepts the profile-roof answer ("how old is my roof"), and only the handler\'s own single summary', () => {
+  const { matchesInventoryAnswerContract } = require('../../src/services/ask/askInventoryIntent.ts');
+  const roof = { status: 'ANSWERED', reasonCode: 'INVENTORY_ROOF_FROM_PROFILE', suggestions: [], blocks: [{ type: 'SUMMARY', id: 'inventory-roof-profile', title: 'Your roof is about 7 years old', body: 'x', tone: 'DEFAULT', actions: [] }] };
+  assert.equal(matchesInventoryAnswerContract('how old is my roof', roof), true);
+  assert.equal(matchesInventoryAnswerContract('how old is my roof', { ...roof, reasonCode: 'OTHER' }), false);
+  assert.equal(matchesInventoryAnswerContract('how old is my roof', { ...roof, blocks: [...roof.blocks, { ...roof.blocks[0], id: 'extra' }] }), false);
+});

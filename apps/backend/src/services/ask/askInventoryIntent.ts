@@ -65,6 +65,12 @@ export function matchesInventoryAnswerContract(question: string, result: AskOper
   ));
   if (empty) return true;
 
+  // The roof is recorded on the home profile, not as an item: its answer is one profile summary the handler itself produced.
+  if (result.reasonCode === 'INVENTORY_ROOF_FROM_PROFILE'
+    && result.blocks.length === 1
+    && result.blocks[0].type === 'SUMMARY'
+    && result.blocks[0].id === 'inventory-roof-profile') return true;
+
   if (isIncompleteInventoryRequest(question)) {
     return matchesIncompleteInventoryAnswerContract(result);
   }
