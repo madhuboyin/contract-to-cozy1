@@ -37,8 +37,11 @@ export function splitQuestionClauses(message: string): string[] {
 
 /** "my roof" from "How old is my roof"; null when the first part names no owned thing. */
 export function subjectOf(firstClause: string): string | null {
-  const match = /\b(my|our)\s+([a-z][a-z -]{2,28}?)(?=\s+(?:is|are|was|were|needs?|has|have|covered|leaks?|and|in|to|for|from)\b|$)/i.exec(firstClause);
-  return match ? `${match[1].toLowerCase()} ${match[2].trim()}` : null;
+  const match = /\b(my|our)\s+([a-z][a-z -]{2,28}?)(?=\s+(?:is|are|was|were|needs?|has|have|covered|under|leaks?|and|in|to|for|from)\b|$)/i.exec(firstClause);
+  if (match) return `${match[1].toLowerCase()} ${match[2].trim()}`;
+  // "is water heater under warranty": no possessive, but the item is the noun between the verb and the coverage word.
+  const bare = /^(?:is|are|does|do)\s+(?:the\s+)?([a-z][a-z -]{2,28}?)\s+(?:still\s+)?(?:under warranty|covered|have (?:a )?warranty|has (?:a )?warranty)\b/i.exec(firstClause);
+  return bare ? `my ${bare[1].trim().toLowerCase()}` : null;
 }
 
 /** A later part usually leans on the first ("what condition is it in"); the first part's subject replaces the pronoun so the part can be routed on its own. */
@@ -47,7 +50,9 @@ export function standalone(clause: string, subject: string | null): string {
   const noun = subject.replace(/^(?:my|our)\s+/, '');
   // "a new one" -> "a new roof"; "is it" -> "is my roof".
   // "how much would a replacement cost if it is not" -> "how much would a replacement water heater cost".
-  const trimmed = clause.replace(/\s+if (?:it|that|they) (?:is|are) not$/i, '');
+  const trimmed = clause.replace(/\s+if (?:it|that|they) (?:is|are) not$|\s+if not$/i, '');
+  // "what would be the replacement cost" -> "how much would a replacement water heater cost".
+  if (/^what (?:would|will) (?:be )?the (?:replacement )?cost$|^what (?:would|will) be the replacement cost$/i.test(trimmed)) return `how much would a replacement ${noun} cost`;
   if (/^how much would (?:a|the) replacement cost$/i.test(trimmed)) return `how much would a replacement ${noun} cost`;
   return /\b(?:new|replacement|another)\s+one\b/i.test(clause)
     ? clause.replace(/\b(new|replacement|another)\s+one\b/i, `$1 ${noun}`)

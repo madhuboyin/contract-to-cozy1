@@ -101,3 +101,12 @@ test('capital planning no longer emits legacy raw repair-or-replace follow-ups',
   assert.doesNotMatch(source, /Should I repair or replace/);
   assert.doesNotMatch(source, /Should I repair or replace my oldest system\?/);
 });
+
+test('the typed capital plan contract accepts every block id the plan handler emits (fund overview, controls, ledger, retired, reconciliation, bundle, adjustments)', () => {
+  const { matchesCapitalPlanAnswerContract } = require('../../src/services/ask/askCapitalPlanIntent.ts');
+  const block = (id) => (id === 'capital-reserve-summary'
+    ? { type: 'SUMMARY', id, title: 'x', body: 'y', tone: 'DEFAULT', actions: [] }
+    : { type: 'GROUPED_LIST', id, title: 'x', filters: [], sections: [], actions: [] });
+  const ids = ['capital-reserve-summary', 'reserve-fund-overview', 'capital-timeline-table', 'capital-bundle-opportunity', 'reserve-planning-controls', 'capital-timeline-adjustments', 'reserve-allocations', 'reserve-retired-items', 'reserve-contribution-ledger', 'reserve-reconciliation-suggestions', 'capital-plan-evidence', 'capital-plan-boundary'];
+  assert.equal(matchesCapitalPlanAnswerContract({ status: 'ANSWERED', blocks: ids.map(block) }), true);
+});

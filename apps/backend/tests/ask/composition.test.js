@@ -361,3 +361,15 @@ test('§6.3 / FR-AUT-3: a dated composite keeps its dated basis after a section 
   const expected = Q.projectBasis(surviving, true);
   assert.deepEqual(out.composite.basis, expected.lines.length || expected.notes.length ? expected : null, 'projected with the original dated mode, not today’s-dollar authority');
 });
+
+test('FR-DEC: "is water heater under warranty, what would be the replacement cost if not" composes warranty + replacement cost, with or without "my"', () => {
+  for (const message of [
+    'is water heater under warranty, what would be the replacement cost if not',
+    'is my water heater under warranty, what would be the replacement cost if not',
+  ]) {
+    const out = decomposeForComposition(message);
+    assert.equal(out.kind, 'COMPOSE', message);
+    assert.deepEqual(out.clauses.map((c) => c.operationId), ['WARRANTY_LOOKUP', 'ITEM_REPLACEMENT_COST']);
+    assert.match(out.clauses[1].clause, /replacement water heater/i);
+  }
+});
