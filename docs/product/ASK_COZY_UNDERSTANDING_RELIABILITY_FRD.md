@@ -6,7 +6,7 @@
 **Governing documents (read before changing this one):**
 - `AI_HOME_CONCIERGE_ASK_TRUST_ARCHITECTURE_ADDENDUM_FRD.md` — §7 (non-goals), §15 (confidence: five separate dimensions; raw model scores are **not** calibrated probabilities; thresholds by effect, materiality, ambiguity margin, language, routing path and entity requirement), the metrics table (**incorrect high-confidence operation selection < 1%**) and §29.2 (cost policy) govern this document. §7 lists "guarantee correct interpretation of every possible utterance" as a Version 1 non-goal. **This FRD does not reverse that**: it sets a *measured target* (§4), never a guarantee, and §13 D1 asks the owner to confirm that reading.
 - `ASK_COZY_CONVERSATIONAL_CONCIERGE_COMPOSITION_FRD.md` — FR-DEC-0 to FR-DEC-7 bind: deterministic per-clause resolution, no classifier per clause, composition only of certified composable reads, and refusal if any clause is a write, a material decision, a clarification or a fallback. **This FRD does not change any of that.** A model's reading of a second clause is advisory only (FR-UND-11).
-- `AGENTS.md` (working assumptions, lines 27 and 36) — states there are no real users and bars pilot cohorts, staged rollouts and manual release certification unless the owner explicitly requires them. This FRD therefore makes **no** cohort or staged-release gate (FR-EVAL-7); §13 D9 records the tension with the owner's concern about losing customers.
+- `AGENTS.md` (working assumptions, lines 27 and 36) — states there are no real users and bars pilot cohorts, staged rollouts and manual release certification unless the owner explicitly requires them. The owner has confirmed (2026-11-11) that there are no real users, so this FRD makes **no** cohort, staged-release or production gate (FR-EVAL-7, §13 D9).
 - `docs/architecture/ASK_COZY_ROUTING_COVERAGE_AND_CALIBRATION.md` — earlier routing measurements.
 - `ASK_COZY_INLINE_WORKSPACE_FRD.md` — revision 1.574 records the four fixes that motivated this document.
 - `docs/architecture/AUDIT_METHODOLOGY.md` — applied in §15.
@@ -17,7 +17,7 @@
 
 ## 1. Purpose
 
-A homeowner can ask anything about their home, in any words. The product does not control the text. Today a small change in wording — a typo, a polite opener, "vs" for "or", a trailing "?" — moves a prompt from a correct answer to a dead end. This FRD specifies what must change so that at least **90% of real homeowner prompts end in a useful result** (§4), and so that the remaining prompts fail in a way that keeps the customer.
+A homeowner can ask anything about their home, in any words. The product does not control the text. Today a small change in wording — a typo, a polite opener, "vs" for "or", a trailing "?" — moves a prompt from a correct answer to a dead end. This FRD specifies what must change so that at least **90% of real homeowner prompts end in a useful result** (§4), and so that the remaining prompts still leave the user with a useful next step.
 
 It specifies **requirements** (§6–§12) separately from **design options** (§14), per `AUDIT_METHODOLOGY.md` §8.
 
@@ -78,7 +78,7 @@ Where the broken prompts went (counts of breaks): "can you tell me" — 32 to a 
 
 ### 2.7 What is not known
 
-Production failure rate; model-router accuracy; model latency and cost at production volume; whether each of the 30 message-routable write operations can execute without a confirmation step (not traced — see FR-WRT-1); whether synthetic prompts predict real ones. §12 turns each into a measured requirement.
+The failure rate on real homeowner wording (there is no production traffic to measure); model-router accuracy; model latency and cost at expected volume; whether each of the 30 message-routable write operations can execute without a confirmation step (not traced — see FR-WRT-1); whether synthetic prompts predict real ones. §12 turns each into a measured requirement.
 
 ## 3. Root causes
 
@@ -98,7 +98,7 @@ Production failure rate; model-router accuracy; model latency and cost at produc
 2. A prompt's result must not depend on spelling, politeness, punctuation or word order that does not change its meaning.
 3. A correctly routed prompt is never withheld because of how the answer is worded.
 4. When Ask cannot answer, the user always gets a specific next step.
-5. Quality is measured **before** users meet a change, not after they have been lost.
+5. Quality is measured offline **before** a change ships, so fixes do not depend on someone hitting a failure first.
 
 ### 4.2 Non-goals
 - Guaranteeing correct interpretation of every utterance (governing FRD §7). The target is measured, and §13 D1 asks the owner to confirm this reading.
@@ -193,7 +193,7 @@ The model never writes an answer, receives data held in the home record or the o
 
 Closing the trust-chain gap: a model saying "HIGH" is not evidence that the route is right.
 
-- **FR-CAL-1** Routing confidence is a **server-side** value derived from labelled evaluation results (and, later, adjudicated production corrections), computed per **routing path** (deterministic, local classifier, model), operation **effect**, **materiality**, **language**, entity-resolution requirement, and **ambiguity margin** (governing §15.2).
+- **FR-CAL-1** Routing confidence is a **server-side** value derived from labelled evaluation results (and any adjudicated corrections from real use, if it ever exists), computed per **routing path** (deterministic, local classifier, model), operation **effect**, **materiality**, **language**, entity-resolution requirement, and **ambiguity margin** (governing §15.2).
 - **FR-CAL-2** The provider's self-reported category is stored as a feature and never used as a probability. The fixed mapping of `HIGH` to 0.9 in today's router is replaced.
 - **FR-CAL-3** Routing, entity/slot, context freshness and canonical-result confidence stay **separate** (governing §15.1) and are all consulted by the decision policy and the answer gate; they are never collapsed into one number.
 - **FR-CAL-4** Execute and clarify thresholds are configured **per effect and materiality**, with a minimum ambiguity margin between the top two operations.
@@ -235,7 +235,7 @@ The model receives the homeowner's words, so "no home data" is not a claim this 
 
 ## 10. Requirements — evaluation programme (FR-EVAL)
 
-The programme exists so quality is known **before** release. Every set records its provenance. All gates are offline and block nothing in production (AGENTS.md).
+The programme exists so quality is known **before** release. Every set records its provenance. All gates are offline; there is no production gate (AGENTS.md).
 
 - **FR-EVAL-1 Synthetic set.** For each routable operation (derived from the registry, FR-EVAL-9), at least 50 prompts generated by a model across: register, length, indirectness, typos, persona, item named or not, and two-part questions. A separate pass produces **out-of-scope** prompts so declining is tested. The generator model and prompt are recorded and differ from the router's. A human reviews a random 10% for label correctness. Sampling is **stratified by effect and materiality**, with a floor per write and per high-materiality operation, and a separate **traffic-weighted** aggregate.
 - **FR-EVAL-2 Independent human set.** At least **1,000** prompts, written by people who did not work on Ask and have not seen the operation list, stratified as above, with at least 10 sealed prompts for every write and high-materiality operation. A gate passes only if the Wilson upper bound meets the threshold; with n = 1,000 and no failures the bound is about 0.4%, with 2% failures it is about 3%, so the set can support the ≤ 2% ceiling in aggregate but **cannot** prove per-operation safety. Per-operation safety rests on the synthetic set, the deterministic tests and calibration, and each operation reports its failure count and interval.
@@ -275,13 +275,13 @@ As of 2026-11-11 **[Executed]** 30 operations are routable by message and are wr
 - **FR-GUI-2** Every suggestion is a prompt that is in the evaluation sets and passes the release gates.
 
 ### 11.3 Capability coverage (FR-CAP)
-- **FR-CAP-1** Report the product-coverage KPI (§4.4) and the share of production declines (FR-REC-6) for which no operation exists, grouped by topic.
+- **FR-CAP-1** Report the product-coverage KPI (§4.4) and the share of recorded declines (FR-REC-6) for which no operation exists, grouped by topic.
 - **FR-CAP-2** New operations are prioritised by that share. Each new operation ships with its answer-block constant and variant manifest (FR-GATE-1, FR-GATE-2), at least 50 synthetic prompts, and its perturbation results.
 
 ### 11.4 Observability as a safety net (FR-OBS)
-Observability is **not** the plan and **blocks nothing**; it catches what the evaluation missed.
+Observability is **not** the plan, **blocks nothing**, and is optional until real traffic exists; it catches what the evaluation missed.
 - **FR-OBS-1** Record, per turn: routing stage, chosen operation, calibrated confidence bands, whether the gate withheld the answer, the recovery type, normalisation telemetry (FR-NRM-9) and any user signal. Prompt text is stored only as D3b allows.
-- **FR-OBS-2 Proxy versus adjudicated.** Production reports label every figure either **observed proxy** (thumbs-down, rephrase within the next turns, abandoned clarification, decline reason, gate withhold) or **adjudicated correctness** (a reviewed label). The absence of a negative signal is **never** counted as a correct route. Correctness metrics come only from a **reviewed-label sampling workflow**: a random sample is drawn, labelled under FR-EVAL-2a, and reported with its denominator and interval; labels arrive late and the report states how many turns remain unlabelled.
+- **FR-OBS-2 Proxy versus adjudicated.** Usage reports label every figure either **observed proxy** (thumbs-down, rephrase within the next turns, abandoned clarification, decline reason, gate withhold) or **adjudicated correctness** (a reviewed label). The absence of a negative signal is **never** counted as a correct route. Correctness metrics come only from a **reviewed-label sampling workflow**: a random sample is drawn, labelled under FR-EVAL-2a, and reported with its denominator and interval; labels arrive late and the report states how many turns remain unlabelled.
 - **FR-OBS-3** A thumbs-down or decline can be added to the tuning sets after review; it never goes into the sealed set.
 
 ## 12. Phasing and exit criteria
@@ -310,7 +310,7 @@ Order is by dependency, not by calendar. Sizes are relative (S/M/L); no schedule
 | D6 | Per-turn cost budget, the routing latency budget and timeout, and the cache TTL (FR-UND-8) | Owner to set; measured in Phase 2 |
 | D7 | Whether unsupported questions may be captured (FR-REC-6) and shown to the owner | Yes, reason code only, no prompt text unless D3b allows |
 | D8 | Who writes the independent human set and runs the scenario review | Owner to name |
-| D9 | Reconcile `AGENTS.md` (no real users; no pilot cohorts or staged rollouts unless the owner explicitly requires them) with the owner's concern about losing customers. Earlier sessions also found real production data and live callers | Default: no cohort, no staged release; offline evaluation only (FR-EVAL-7). Add a cohort only on an explicit owner instruction |
+| D9 | ~~Reconcile `AGENTS.md` with concern about losing customers~~ **Resolved 2026-11-11 by the owner: there are no real users.** `AGENTS.md` governs: no pilot cohort, staged release, canary or manual release certification, and no production gate | Closed. FR-EVAL-7 stays an offline scenario review; observability stays optional |
 | D10 | Whether the composition FRD should later admit model clause routing | Out of scope; keep model hints advisory (FR-UND-11) |
 
 ## 14. Design options (not requirements)
@@ -347,7 +347,7 @@ Order is by dependency, not by calendar. Sizes are relative (S/M/L); no schedule
 - Privacy: FR-PRV-5 payload-capture tests.
 - Calibration: reliability report per stratum before any model path is enabled.
 - Regression: the five prompts in §2.1 and their variants remain in the tuning set.
-- Not run until each phase ships: real-model accuracy and calibration, production latency and cost, the independent scenario review.
+- Not run until each phase ships: real-model accuracy and calibration, latency and cost at real volume, the independent scenario review.
 
 ## 17. Adversarial pass (per `AUDIT_METHODOLOGY.md` §7)
 
@@ -381,7 +381,7 @@ Each finding was checked against the governing text before being accepted. Verif
 | P1 Write behaviour inconsistent | Accepted | FR-WRT-2 decision table; no model-selected write executes; preview only; recheck at preview and confirm |
 | P1 Normalisation has no false-correction gate | Accepted | FR-NRM-4, 6–9; negative corpus; false-correction gates; raw-first safety; English-only; telemetry |
 | P1 Evaluation statistically weak | Accepted | FR-EVAL-1, 2, 2a, 4, 10: stratification, 1,000-prompt human set, intervals, adjudication, leakage rule, versioned sealed sets, three runs. Per-operation safety is explicitly **not** claimed from the human set |
-| P1 Cohort conflicts with repository constraints | Accepted, with a flagged tension | FR-EVAL-7 replaced by offline scenario review; no staged release; D9 records that earlier sessions found real production data and the owner has said losing customers is the concern |
+| P1 Cohort conflicts with repository constraints | Accepted | FR-EVAL-7 replaced by offline scenario review; no staged release. The owner confirmed on 2026-11-11 that there are no real users (D9 closed) |
 | P2 Production metrics not computable | Accepted | FR-OBS-2: proxy vs adjudicated, reviewed-label sampling, late labels, unlabelled turns reported |
 | P2 Latency contradictory and narrow | Accepted | §4.4 time-to-useful-result by route and by outcome, cache hits separate, timeout ≤ budget; numbers deferred to D6 |
 | P2 Fixed operation counts go stale | Accepted | Counts are dated evidence in §2; gates derive the manifest (FR-EVAL-9) |
