@@ -1,4 +1,5 @@
 import { HouseholdRole } from '@prisma/client';
+import { sourceRef, withSources } from '../composition/sourceAuthorization';
 import { prisma } from '../../../lib/prisma';
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
@@ -215,7 +216,7 @@ const truncate = (text: string, max: number) => (text.length > max ? `${text.sli
  * said. `ownedIds` are the warranties the requester's own homeowner profile added (the only ones the existing correction command
  * accepts); a viewer or a non-owner gets no correction actions and never sees a control that would fail.
  */
-export function warrantiesFromRecords(input: {
+function warrantiesFromRecordsInner(input: {
   message: string; propertyId: string; records: readonly WarrantyRecord[]; canWrite: boolean; ownedIds: ReadonlySet<string>; conflictedIds?: ReadonlySet<string>; now?: Date;
   /** The source result's view state, when a declared filter chip continues it (W-2). */
   priorViewState?: AskViewState | null;
@@ -382,6 +383,14 @@ async function warrantiesResult(userId: string, propertyId: string, message: str
   const result = warrantiesFromRecords({ message, propertyId, records: rows, canWrite, ownedIds, conflictedIds, priorViewState });
   const reminder = await warrantyListReminderCandidates({ records: rows, shownIds: shownWarrantyIds(result), propertyId, canWrite, conflictedIds });
   return reminder.length ? { ...result, suggestedNextActionCandidates: reminder } : result;
+}
+
+/**
+ * FR-AUT-1: every recorded warranty contributes to a warranty answer (the counts, the status split and the filter chips reflect all of them, not only the
+ * capped rows shown), so all of their ids are declared as sources. More than the contract's bound fails closed.
+ */
+export function warrantiesFromRecords(input: Parameters<typeof warrantiesFromRecordsInner>[0]): AskOperationResult {
+  return withSources(warrantiesFromRecordsInner(input), input.records.map((record) => sourceRef('Warranty', record.id)));
 }
 
 // Presentation Quality 4: a warranty question asked about one recorded item (launched from its repair-or-replace answer with the

@@ -209,7 +209,7 @@ async function homeUpgradeScenariosResult(propertyId: string, canChange: boolean
   // Archived options are listed only to a contributor or owner, for the Restore and Delete actions.
   const archived = canChange ? (await service.listScenarios(twin.id, { includeArchived: true })).filter((scenario) => scenario.isArchived) : [];
   // FR-AUT-1: the twin and the saved options listed.
-  return withSources(homeUpgradeScenariosFromView(active, propertyId, new Date(), { canChange, archived }), [sourceRef('HomeDigitalTwin', twin.id), ...[...active, ...archived].slice(0, 40).map((scenario) => sourceRef('HomeTwinScenario', String(scenario.id)))]);
+  return withSources(homeUpgradeScenariosFromView(active, propertyId, new Date(), { canChange, archived }), [sourceRef('HomeDigitalTwin', twin.id), ...[...active, ...archived].map((scenario) => sourceRef('HomeTwinScenario', String(scenario.id)))]);
 }
 
 registerCapabilityHandler('home-digital-twin.scenarios', async (envelope, deps) => {

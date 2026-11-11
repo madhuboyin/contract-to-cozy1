@@ -25,6 +25,9 @@ export interface ComponentOutcome {
   quantities: Quantity[];
   /** The record references that materially support this component (its operation's `describeSources`); null or absent means undeclared, which fails closed. */
   sources?: CompositeSourceReference[] | null;
+  /** FR-PER-15(f): which component this is and why this attempt was selected, persisted with the winning assembly. */
+  componentKey?: string;
+  selectionReason?: string | null;
 }
 
 export interface CompositeSection {
@@ -42,11 +45,16 @@ export interface CompositeSection {
   quantities: Quantity[];
   /** FR-AUT-1: opaque source references (never content), revalidated at assembly, replay and refresh. Null means the operation could not describe its sources. */
   sources: CompositeSourceReference[] | null;
+  /** FR-PER-15(f): the component identity and the selection reason (LOWEST_SUCCESSFUL, EXPLICIT_REFRESH or ONLY_TERMINAL_LIMITED) of the selected attempt `executionId`. */
+  componentKey: string | null;
+  selectionReason: string | null;
 }
 
 export interface ActionRef { id: string; sectionIndex: number; operationId?: string; primary: boolean }
 
 export interface CompositeResult {
+  /** True when the homeowner named a date: the basis is projected at that date, and must be projected the same way after any redaction. */
+  dated?: boolean;
   status: CompositeStatus;
   coverage: Coverage;
   answerFirst: string | null;
@@ -222,7 +230,7 @@ export interface AssembleInput { outcomes: readonly ComponentOutcome[]; dated: b
 export function assembleComposite(input: AssembleInput): CompositeResult {
   const sections: CompositeSection[] = input.outcomes.map((o) => ({
     clause: o.clause, operationId: o.operationId, executionId: o.executionId, attempt: o.attempt, status: o.status, reasonCode: o.reasonCode,
-    blocks: o.blocks, blocksHash: hashBlocks(o.blocks), provenance: provenanceOf(o.blocks), quantities: o.quantities, sources: o.sources ?? null,
+    blocks: o.blocks, blocksHash: hashBlocks(o.blocks), provenance: provenanceOf(o.blocks), quantities: o.quantities, sources: o.sources ?? null, componentKey: o.componentKey ?? null, selectionReason: o.selectionReason ?? null,
   }));
   const states = input.outcomes.map((o) => componentStateOf(o.status));
   const notAnswered = [...(input.notAnswered ?? [])];
@@ -233,7 +241,7 @@ export function assembleComposite(input: AssembleInput): CompositeResult {
   const coverage: Coverage = notAnswered.length ? 'PARTIAL' : base.coverage;
   const status: CompositeStatus = contradicted || notAnswered.length ? 'READY_WITH_LIMITATIONS' : base.status;
   const { freshestAt, stalestAt } = freshnessOf(sections.flatMap((s) => s.provenance));
-  return { status, coverage, answerFirst: buildAnswerFirst(sections), sections, basis: basis.lines.length || basis.notes.length || basis.contradictions.length ? basis : null, notAnswered, freshestAt, stalestAt };
+  return { dated: input.dated, status, coverage, answerFirst: buildAnswerFirst(sections), sections, basis: basis.lines.length || basis.notes.length || basis.contradictions.length ? basis : null, notAnswered, freshestAt, stalestAt };
 }
 
 // ---- the composition validator (§6.7) -----------------------------------------------------------------------------------------------------------------
@@ -295,7 +303,7 @@ export async function applyAuthorizationGate(composite: CompositeResult, view: A
   const redacted = composite.sections.filter((_, index) => verdicts[index] !== 'AUTHORIZED').map((s) => s.operationId);
   if (!surviving.length) return { kind: 'WITHHELD', reason: 'NO_SECTION_AUTHORIZED' };
   if (!redacted.length) return { kind: 'DELIVER', composite, redacted };
-  const basis = projectBasis(surviving.map((s) => ({ operationId: s.operationId, quantities: s.quantities })), false);
+  const basis = projectBasis(surviving.map((s) => ({ operationId: s.operationId, quantities: s.quantities })), composite.dated === true);
   const { freshestAt, stalestAt } = freshnessOf(surviving.flatMap((s) => s.provenance));
   return {
     kind: 'DELIVER', redacted,

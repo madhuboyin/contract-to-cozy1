@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 require('ts-node/register');
 
-const { runComposedTurn, recordAttempt, recoverComposedTurn, refreshComposedTurn, reserveAttempt } = require('../../src/services/ask/composition/runComposedTurn.ts');
+const { runComposedTurn, recordAttempt, recoverComposedTurn, refreshComposedTurn, reserveAttempt, retryExhaustedComposedTurn, exhaustedComponentKeys } = require('../../src/services/ask/composition/runComposedTurn.ts');
 const { replayComposite, isStoredComposite } = require('../../src/services/ask/composition/replayGate.ts');
 const { childClientRequestId, componentKeyOf } = require('../../src/services/ask/composition/attempts.ts');
 
@@ -399,4 +399,46 @@ test('FR-AUT-1: the operation’s own verdict on a source record redacts only it
   assert.ok(!JSON.stringify(parent.resultJson.blocks).includes('7 years old'));
   assert.ok(JSON.stringify(parent.resultJson.blocks).includes('11,500'));
   assert.deepEqual(parent.resultJson.composite.sections[0].sources, [{ sourceType: 'HomeCapitalTimelineItem', sourceId: 'tl-1' }]);
+});
+
+// ---- review round 3 ----
+test('FR-PER-15(f): each section stores its component key and why its attempt was selected', async () => {
+  const db = fakeDb([parentRow()]);
+  const parent = await run(db, scriptedChildren(db).createChild);
+  assert.deepEqual(parent.resultJson.composite.sections.map((sec) => sec.selectionReason), ['LOWEST_SUCCESSFUL', 'LOWEST_SUCCESSFUL']);
+  assert.ok(parent.resultJson.composite.sections.every((sec) => typeof sec.componentKey === 'string' && sec.componentKey.includes('|')));
+  assert.ok(parent.resultJson.composite.sections.every((sec) => sec.executionId && sec.attempt === 1), 'the selected attempt id and number are stored');
+});
+
+test('FR-PER-16: after the automatic retry is exhausted, a manual retry reruns only that component on the same parent and reassembles', async () => {
+  const db = fakeDb([parentRow()]);
+  let failing = true;
+  const { createChild, calls } = idempotentChildren(db, (op) => (op === 'ITEM_REPLACEMENT_COST' && failing ? { throws: true } : null));
+  const partial = await run(db, createChild);
+  assert.equal(partial.reasonCode, 'COMPOSITE_PARTIAL');
+  assert.equal(partial.status, 'READY_WITH_LIMITATIONS');
+  assert.equal(exhaustedComponentKeys(db.table.get('parent-1')).length, 1, 'the exhausted component is detected on a limited, partial parent');
+  failing = false;
+  const before = calls.length;
+  const retried = await resume(db, createChild, retryExhaustedComposedTurn);
+  assert.equal(calls.length - before, 1, 'only the exhausted component ran');
+  assert.equal(retried.status, 'ANSWERED');
+  assert.equal(retried.resultJson.composite.coverage, 'COMPLETE');
+  const costAttempts = retried.resultJson.composite.attempts.filter((a) => a.componentKey.startsWith('ITEM_REPLACEMENT_COST'));
+  assert.deepEqual(costAttempts.map((a) => [a.number, a.kind]), [[1, 'INITIAL'], [2, 'RETRY'], [3, 'RETRY']]);
+  assert.equal(retried.resultJson.composite.sections.find((sec) => sec.operationId === 'ITEM_REPLACEMENT_COST').attempt, 3);
+  assert.equal(exhaustedComponentKeys(db.table.get('parent-1')).length, 0);
+  assert.ok(db.events.some((e) => e.eventType === 'COMPOSED_TURN_RETRIED'));
+});
+
+test('FR-PER-16: a manual retry near family expiration is refused ("ask again"), reserving nothing', async () => {
+  const db = fakeDb([parentRow()]);
+  const { createChild } = idempotentChildren(db, (op) => (op === 'ITEM_REPLACEMENT_COST' ? { throws: true } : null));
+  await run(db, createChild);
+  const row = db.table.get('parent-1');
+  const attemptsBefore = row.parametersJson.composition.attempts.length;
+  row.expiresAt = new Date(NOW.getTime() + 45_000);
+  assert.equal(await resume(db, createChild, retryExhaustedComposedTurn), 'TOO_NEAR_EXPIRATION');
+  assert.equal(db.table.get('parent-1').parametersJson.composition.attempts.length, attemptsBefore);
+  await assert.rejects(resume(fakeDb([parentRow({ assemblyVersion: 0, parametersJson: { composition: { attempts: [], clauses } } })]), createChild, retryExhaustedComposedTurn), /no exhausted component/);
 });

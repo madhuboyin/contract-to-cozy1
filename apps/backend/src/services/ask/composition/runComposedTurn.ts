@@ -89,7 +89,7 @@ export async function recordAttempt(db: CompositionDb, parentId: string, attempt
 }
 
 interface ComponentRun { clause: ComposedClause; key: string }
-export type DriveMode = 'START' | 'RECOVER' | 'REFRESH';
+export type DriveMode = 'START' | 'RECOVER' | 'REFRESH' | 'RETRY_EXHAUSTED';
 
 const storedClausesOf = (row: AskExecution): ComposedClause[] => {
   const raw = row.parametersJson && typeof row.parametersJson === 'object' && !Array.isArray(row.parametersJson) ? (row.parametersJson as Record<string, unknown>).composition : null;
@@ -146,6 +146,29 @@ export async function recoverComposedTurn(input: Omit<ComposedTurnInput, 'clause
   return driveComposite({ ...input, parent: row, clauses }, 'RECOVER');
 }
 
+/** Components of a stored composite that ended retryable-failed after the automatic retry (no successful or terminal attempt is selected for them). */
+export function exhaustedComponentKeys(row: AskExecution): string[] {
+  const clauses = storedClausesOf(row);
+  const attempts = storedOf(row).attempts;
+  return clauses.map((clause) => componentKeyOf(clause.operationId, { clause: normalizeClause(clause.clause) })).filter((key) => {
+    const mine = attempts.filter((a) => a.componentKey === key);
+    const latest = [...mine].sort((a, b) => b.number - a.number)[0];
+    return !!latest && latest.status === 'FAILED_RETRYABLE' && !selectAttempt(mine).attempt;
+  });
+}
+
+/** A manual retry after the automatic retry was exhausted: reserve a new RETRY attempt for each exhausted component only, then reassemble the same parent. */
+export async function retryExhaustedComposedTurn(input: Omit<ComposedTurnInput, 'clauses'>): Promise<AskExecution | 'TOO_NEAR_EXPIRATION'> {
+  const row = (await input.db.askExecution.findUnique({ where: { id: input.parent.id } })) ?? input.parent;
+  const clauses = storedClausesOf(row);
+  if (!clauses.length || !exhaustedComponentKeys(row).length) throw new AssemblyInvariantError('no exhausted component to retry');
+  const decision = retryAllowed({ parentExpiresAt: row.expiresAt, now: (input.now ?? (() => new Date()))(), executionTimeoutMs: input.executionTimeoutMs });
+  if (!decision.allowed) return 'TOO_NEAR_EXPIRATION';
+  await input.db.askExecutionEvent.create({ data: { executionId: row.id, eventType: 'COMPOSED_TURN_RETRIED', metadataJson: json({ components: exhaustedComponentKeys(row).length }) } });
+  askCompositionTotal.inc({ outcome: 'retried' });
+  return driveComposite({ ...input, parent: row, clauses }, 'RETRY_EXHAUSTED');
+}
+
 /** Refreshing a composite refreshes EVERY selected component as a REFRESH attempt and reassembles; a worse refresh never replaces a better stored answer. */
 export async function refreshComposedTurn(input: Omit<ComposedTurnInput, 'clauses'>): Promise<AskExecution> {
   const row = (await input.db.askExecution.findUnique({ where: { id: input.parent.id } })) ?? input.parent;
@@ -192,6 +215,7 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   await Promise.all(runs.map(async (run) => {
     const mine = await attemptsOf(run);
     if (mode === 'REFRESH') { await runAttempt(run, 'REFRESH'); return; }
+    if (mode === 'RETRY_EXHAUSTED') { if (exhaustedComponentKeys(await db.askExecution.findUnique({ where: { id: parent.id } }) as AskExecution).includes(run.key)) await runAttempt(run, 'RETRY'); return; }
     if (!mine.length) { await runAttempt(run, 'INITIAL'); return; }
     // A reserved or still-running attempt is resumed by asking for the same deterministic child again: createAskExecution returns the existing child (and
     // reclaims it if it was orphaned) rather than starting a second one.
@@ -203,7 +227,7 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   }));
 
   // D9: one automatic retry of a retryable child, admitted against the parent's current row (FR-PER-16). A rejected retry converts to a terminal outcome.
-  if (mode !== 'REFRESH') {
+  if (mode === 'START' || mode === 'RECOVER') {
     for (const run of runs) {
       const attempts = await attemptsOf(run);
       const latest = latestOf(attempts);
@@ -265,7 +289,7 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
     const state = attempt ? componentStateOf(attempt.status, true) : 'FAILED';
     if (!attempt || (state !== 'ANSWERED' && state !== 'LIMITED')) return [];
     const row = childById.get(attempt.executionId);
-    return [{ clause: run.clause.clause, operationId: run.clause.operationId, executionId: attempt.executionId, attempt: attempt.number, status: attempt.status, reasonCode: row?.reasonCode ?? undefined, blocks: blocksOf(row), quantities: quantitiesOf(row?.parametersJson), sources: sourcesOf(run.clause.operationId, row) }];
+    return [{ clause: run.clause.clause, operationId: run.clause.operationId, executionId: attempt.executionId, attempt: attempt.number, status: attempt.status, reasonCode: row?.reasonCode ?? undefined, blocks: blocksOf(row), quantities: quantitiesOf(row?.parametersJson), sources: sourcesOf(run.clause.operationId, row), componentKey: run.key, selectionReason: selection.reason }];
   });
   // An independent clarification keeps its own focused question beside the answered section; it is not reported as a generic failure.
   const clarificationBlocks: AskPresentationBlock[] = [];

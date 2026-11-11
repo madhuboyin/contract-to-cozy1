@@ -153,7 +153,7 @@ test('another domain\'s view state is never continued, and a named-item question
   assert.equal(result.parameters.viewState.revision, 1);
   install([warranty('w', { inventoryItem: { name: 'Water heater' } }), warranty('x')]);
   const named = await run('Do I have a warranty for my water heater?');
-  assert.equal(named.parameters, undefined);
+  assert.equal(named.parameters?.viewState, undefined, 'a named-item question carries no view state (it does declare its sources)');
   assert.deepEqual(list(named).filters, []);
 });
 

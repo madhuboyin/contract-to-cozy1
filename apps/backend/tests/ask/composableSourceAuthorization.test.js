@@ -150,3 +150,17 @@ test('replay: a record deleted or made private after assembly is redacted from t
   assert.deepEqual(await replayComposite(stored, view({ INVENTORY_LOOKUP: 'WITHHOLD_COMPOSITE' })), { kind: 'WITHHELD' });
   assert.deepEqual(await replayComposite(stored, view({})), { kind: 'UNCHANGED' });
 });
+
+// ---- capped aggregates: every contributing record is declared, not only the rows shown ----
+test('FR-AUT-1: a warranty answer declares every recorded warranty, not only the rows it shows; over the bound fails closed', () => {
+  const { warrantiesFromRecords } = require('../../src/services/ask/handlers/warranties.handler.ts');
+  const NOW = new Date('2026-11-10T12:00:00Z');
+  const make = (n) => Array.from({ length: n }, (_, i) => ({ id: `w${i}`, propertyId: 'p1', providerName: `P${i}`, category: 'APPLIANCE', coverageDetails: 'x', startDate: new Date('2025-01-01'), expiryDate: new Date('2027-01-01'), updatedAt: NOW, inventoryItem: null, documents: [] }));
+  const ask = (records, message) => warrantiesFromRecords({ message, propertyId: 'p1', records, canWrite: false, ownedIds: new Set(), now: NOW });
+  // A filter that matches only some (here: none) still states counts and chips built from every recorded warranty.
+  const filtered = ask(make(30), 'which of my warranties have expired');
+  assert.ok(listedItems(filtered.blocks).filter((item) => item.entityType === 'WARRANTY').length < 30, 'the filtered answer shows fewer rows than records');
+  assert.equal(AUTH.WARRANTY_LOOKUP.describeSources(filtered).length, 30, 'yet every recorded warranty is a declared source');
+  assert.equal(AUTH.WARRANTY_LOOKUP.describeSources(ask(make(50), 'What warranties do I have?')).length, 50);
+  assert.equal(AUTH.WARRANTY_LOOKUP.describeSources(ask(make(51), 'What warranties do I have?')), null, 'over the bound fails closed rather than truncating silently');
+});

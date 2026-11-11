@@ -333,3 +333,25 @@ test('FR-NAR-4: narration supplements the blocks and never replaces them', () =>
   assert.ok(delivered.sections.every((s) => s.blocks.length > 0), 'every section keeps its typed blocks beside the answer-first line');
   assert.ok(delivered.sections.flatMap((s) => s.blocks).some((b) => b.type === 'EVIDENCE'));
 });
+
+// ---- review round 3: monotonic selection across generations, dated basis after redaction ----
+test('FR-PER-15: a later limited refresh never replaces an earlier answered refresh (three generations)', () => {
+  const key = 'ITEM_REPLACEMENT_COST|item=roof';
+  const gens = [at('a', 1, 'INITIAL', 'READY_WITH_LIMITATIONS', key), at('b', 2, 'REFRESH', 'ANSWERED', key), at('c', 3, 'REFRESH', 'READY_WITH_LIMITATIONS', key)];
+  for (const order of [gens, [...gens].reverse(), [gens[1], gens[2], gens[0]]]) {
+    const picked = A.selectAttempt(order);
+    assert.equal(picked.attempt.executionId, 'b', 'the answered refresh stays selected');
+    assert.equal(picked.reason, 'EXPLICIT_REFRESH');
+  }
+  assert.equal(A.selectAttempt([at('a', 1, 'INITIAL', 'ANSWERED', key), at('b', 2, 'REFRESH', 'READY_WITH_LIMITATIONS', key)]).attempt.executionId, 'a', 'a limited refresh keeps the answered original');
+  assert.equal(A.selectAttempt([at('a', 1, 'INITIAL', 'READY_WITH_LIMITATIONS', key), at('b', 2, 'REFRESH', 'READY_WITH_LIMITATIONS', key)]).attempt.executionId, 'b', 'equal quality: the refresh supersedes');
+});
+
+test('§6.3 / FR-AUT-3: a dated composite keeps its dated basis after a section is redacted', async () => {
+  const dated = C.assembleComposite({ outcomes: roofOutcomes(), dated: true });
+  assert.equal(dated.dated, true);
+  const out = await C.applyAuthorizationGate(dated, { propertyAccess: true, isOperationAuthorized: (op) => op !== 'INVENTORY_LOOKUP', authorizeSources: async () => 'AUTHORIZED' });
+  const surviving = dated.sections.filter((sec) => sec.operationId !== 'INVENTORY_LOOKUP').map((sec) => ({ operationId: sec.operationId, quantities: sec.quantities }));
+  const expected = Q.projectBasis(surviving, true);
+  assert.deepEqual(out.composite.basis, expected.lines.length || expected.notes.length ? expected : null, 'projected with the original dated mode, not today’s-dollar authority');
+});

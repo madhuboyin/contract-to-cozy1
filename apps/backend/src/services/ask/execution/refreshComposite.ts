@@ -2,7 +2,7 @@
 import { prisma } from '../../../lib/prisma';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
 import { buildAuthorizationView } from '../composition/authorizationView';
-import { recoverComposedTurn, refreshComposedTurn } from '../composition/runComposedTurn';
+import { exhaustedComponentKeys, recoverComposedTurn, refreshComposedTurn, retryExhaustedComposedTurn } from '../composition/runComposedTurn';
 import { createAskExecution } from './createAskExecution';
 import { mapPersistedExecution, propertySummary } from '../askHandlerSupport';
 import type { AskExecution } from '@prisma/client';
@@ -32,4 +32,19 @@ export async function recoverStoredComposite(userId: string, execution: AskExecu
     loadAuthorizationView: () => buildAuthorizationView(userId, propertyId, controls),
   });
   return mapPersistedExecution(recovered, await propertySummary(propertyId));
+}
+
+/** True when a stored composite has a selected component that exhausted its automatic retry: the homeowner may retry it manually (FR-PER-16). */
+export const hasExhaustedComponent = (execution: AskExecution): boolean => isStoredComposite(execution) && exhaustedComponentKeys(execution).length > 0;
+
+/** Manual retry of exhausted components on the SAME parent. Returns null when the family is too near expiration: the caller says "ask again". */
+export async function retryStoredCompositeComponents(userId: string, execution: AskExecution, accountRole?: AskAccountRole): Promise<AskExecutionResponse | null> {
+  const controls = readAskOperationalControls();
+  const propertyId = execution.propertyId!;
+  const retried = await retryExhaustedComposedTurn({
+    db: prisma as never, userId, accountRole, parent: execution, message: execution.message, sessionId: execution.sessionId, propertyId,
+    createChild: createAskExecution, executionTimeoutMs: controls.executionTimeoutMs,
+    loadAuthorizationView: () => buildAuthorizationView(userId, propertyId, controls),
+  });
+  return retried === 'TOO_NEAR_EXPIRATION' ? null : mapPersistedExecution(retried, await propertySummary(propertyId));
 }

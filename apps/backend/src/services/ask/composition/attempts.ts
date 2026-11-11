@@ -44,11 +44,15 @@ const isSuccess = (attempt: Attempt): boolean => {
  */
 export function selectAttempt(attempts: readonly Attempt[]): Selection {
   const successful = attempts.filter(isSuccess);
-  const lowest = successful.filter((a) => a.kind !== 'REFRESH').sort((a, b) => a.number - b.number)[0];
-  // FR-REF downgrade preservation: a refresh supersedes the earlier answer only when it is at least as good (ANSWERED over LIMITED); a worse refresh never
-  // replaces a better stored answer.
+  // Quality is monotonic across EVERY kind and generation: an attempt is a candidate only if no earlier-or-later successful attempt is better, so a later
+  // limited refresh can never replace an earlier answered one. Attempt number only breaks ties: among equals the highest-numbered REFRESH supersedes
+  // (an explicit supersession), otherwise the lowest-numbered INITIAL or RETRY stays.
   const rank = (a: Attempt) => (componentStateOf(a.status) === 'ANSWERED' ? 2 : 1);
-  const refresh = successful.filter((a) => a.kind === 'REFRESH' && (!lowest || rank(a) >= rank(lowest))).sort((a, b) => b.number - a.number)[0];
+  const best = successful.reduce((max, a) => Math.max(max, rank(a)), 0);
+  const top = successful.filter((a) => rank(a) === best);
+  const refresh = top.filter((a) => a.kind === 'REFRESH').sort((a, b) => b.number - a.number)[0];
+  const lowest = top.filter((a) => a.kind !== 'REFRESH').sort((a, b) => a.number - b.number)[0];
+  // A refresh that is as good as the best supersedes the original; a strictly better original or retry (rank wins above) is kept.
   if (refresh) return { attempt: refresh, reason: 'EXPLICIT_REFRESH', pending: false };
   if (lowest) return { attempt: lowest, reason: 'LOWEST_SUCCESSFUL', pending: false };
   const terminal = attempts.filter((a) => isTerminalState(componentStateOf(a.status))).sort((a, b) => b.number - a.number)[0];

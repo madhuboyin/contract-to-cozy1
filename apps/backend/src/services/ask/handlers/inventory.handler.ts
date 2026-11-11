@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { listedItems, sourceRef, withSources } from '../composition/sourceAuthorization';
 import { isItemDocumentsMessage, itemDocumentsResult } from './inventoryDocumentCommands.handler';
 import { inventoryDeleteResult, isInventoryDeleteMessage } from './inventoryDeleteCommands.handler';
 import { INVENTORY_DELETE_MESSAGE } from '../support/inventoryDeleteCommand';
@@ -255,6 +256,11 @@ async function profileRoofAnswer(propertyId: string, message: string, recordVers
   };
 }
 
+/**
+ * FR-AUT-1: every inventory item on the home contributes to an inventory answer (counts, filter chips and "this home has N items" reflect all of them, not only
+ * the capped rows shown), so all of their ids are declared as sources, plus any history events listed. A home with no items keeps the derived path (the
+ * profile-roof answer rests on the property profile). More than the contract's bound fails closed.
+ */
 export async function inventoryLookupResult(
   userId: string,
   propertyId: string,
@@ -262,8 +268,24 @@ export async function inventoryLookupResult(
   priorViewState?: AskViewState | null,
   targetItemId?: string | null,
 ): Promise<AskOperationResult> {
+  const capture: { itemIds: string[] } = { itemIds: [] };
+  const result = await inventoryLookupCore(userId, propertyId, message, priorViewState, targetItemId, capture);
+  if (!capture.itemIds.length) return result;
+  const events = listedItems(result.blocks).filter((item) => item.entityType === 'HOME_EVENT').map((item) => sourceRef('HomeEvent', item.id));
+  return withSources(result, [...capture.itemIds.map((id) => sourceRef('InventoryItem', id)), ...events]);
+}
+
+async function inventoryLookupCore(
+  userId: string,
+  propertyId: string,
+  message: string,
+  priorViewState: AskViewState | null | undefined,
+  targetItemId: string | null | undefined,
+  capture: { itemIds: string[] },
+): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const allItems = await inventoryService.listItems(propertyId, {});
+  capture.itemIds = allItems.map((item) => item.id);
   const recordVersion = createHash('sha256').update(JSON.stringify(allItems.map((item) => ({ id: item.id, updatedAt: item.updatedAt })))).digest('hex');
   if (!allItems.length) {
     const roofOnProfile = await profileRoofAnswer(propertyId, message, recordVersion);

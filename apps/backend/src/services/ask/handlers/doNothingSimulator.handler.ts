@@ -237,7 +237,7 @@ async function doNothingSimulationResult(propertyId: string, userId: string, can
     const latest = await service.getLatestRun(propertyId, userId);
     const run = latest.exists ? latest.run : null;
     // FR-AUT-1: the latest run and the saved scenarios that support this answer.
-    return withSources(doNothingSimulationFromView({ run, scenarios }, propertyId, canChange), [...(run?.id ? [sourceRef('DoNothingSimulationRun', String(run.id))] : []), ...scenarios.slice(0, DO_NOTHING_SECTION_ITEM_LIMIT).map((scenario) => sourceRef('DoNothingScenario', String(scenario.id)))]);
+    return withSources(doNothingSimulationFromView({ run, scenarios }, propertyId, canChange), [...(run?.id ? [sourceRef('DoNothingSimulationRun', String(run.id))] : []), ...scenarios.map((scenario) => sourceRef('DoNothingScenario', String(scenario.id)))]);
   } catch (error) {
     if ((error as { code?: string })?.code === 'COVERAGE_CONFLICT_REVIEW_REQUIRED') return withSources(doNothingSimulationFromView('COVERAGE_CONFLICT', propertyId), []);
     if (error instanceof Error && error.message === 'Property not found or access denied.') return withSources(doNothingSimulationFromView('PRIMARY_OWNER_ONLY', propertyId), []);

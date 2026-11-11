@@ -73,6 +73,19 @@ export async function retryAskExecution(
     (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
     throw error;
   }
+  // Composition FRD FR-PER-16: a composed parent is retried on the SAME parent. An interrupted one is recovered; one whose selected component exhausted its
+  // automatic retry (the parent is a limited, partial answer, not FAILED_RETRYABLE) gets a new RETRY attempt for that component, then reassembles.
+  if (source.assemblyVersion != null && source.propertyId) {
+    const composite = await import('./refreshComposite');
+    if (source.status === 'FAILED_RETRYABLE') return composite.recoverStoredComposite(userId, source, accountRole);
+    if (composite.hasExhaustedComponent(source)) {
+      const retried = await composite.retryStoredCompositeComponents(userId, source, accountRole);
+      if (retried) return retried;
+      const error = new Error('This answer is too close to expiring to retry. Ask the question again.');
+      (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_RETRYABLE';
+      throw error;
+    }
+  }
   const ordinaryRetry = askExecutionCanRetry(source.status, source.reasonCode);
   const compatibilityRetry = !ordinaryRetry
     && hasRetryableCompatibilityFallback(source, await propertySummary(source.propertyId));
@@ -82,10 +95,6 @@ export async function retryAskExecution(
     throw error;
   }
 
-  if (source.assemblyVersion != null && source.status === 'FAILED_RETRYABLE' && source.propertyId) {
-    const composite = await import('./refreshComposite');
-    return composite.recoverStoredComposite(userId, source, accountRole);
-  }
   const retried = await createAskExecution(userId, buildAskRetryRequest(source, input), accountRole);
   const retriedRow = await prisma.askExecution.findUnique({ where: { id: retried.executionId }, select: { resultJson: true } });
   const resultJson = retriedRow?.resultJson && typeof retriedRow.resultJson === 'object' && !Array.isArray(retriedRow.resultJson)
