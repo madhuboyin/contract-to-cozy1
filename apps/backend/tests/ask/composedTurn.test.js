@@ -39,8 +39,8 @@ const clauses = [
 const cost = (basis, min, max) => ({ key: 'item.replacementCost', itemKey: 'ROOF', basis, minCents: min, maxCents: max });
 const summary = (id, title, actions = []) => ({ type: 'SUMMARY', id, title, body: title, tone: 'DEFAULT', actions });
 const ANSWERS = {
-  INVENTORY_LOOKUP: { status: 'ANSWERED', blocks: [summary('inventory-roof-profile', 'Your roof is about 7 years old', [{ id: 'add-inventory-item', label: 'Add an item', interactionType: 'START_WORKFLOW', message: 'Add an item', operationId: 'INVENTORY_ITEM_CREATE' }])], quantities: [cost('TODAY', 800_000, 1_500_000)] },
-  ITEM_REPLACEMENT_COST: { status: 'ANSWERED', blocks: [summary('item-cost-summary', 'A new Roof is about $11,500 in today’s dollars'), { type: 'TABLE', id: 'item-cost-items', title: 'The item', columns: [{ key: 'today', label: 'Today’s dollars' }], rows: [{ id: 'r', values: { today: '$8,000–$15,000' } }], actions: [] }], quantities: [cost('TODAY', 800_000, 1_500_000), cost('WINDOW', 1_660_000, 3_120_000)] },
+  INVENTORY_LOOKUP: { status: 'ANSWERED', blocks: [summary('inventory-roof-profile', 'Your roof is about 7 years old', [{ id: 'add-inventory-item', label: 'Add an item', interactionType: 'START_WORKFLOW', message: 'Add an item', operationId: 'INVENTORY_ITEM_CREATE' }])], quantities: [cost('TODAY', 800_000, 1_500_000)], sources: [{ sourceType: 'InventoryItem', sourceId: 'inv-1' }] },
+  ITEM_REPLACEMENT_COST: { status: 'ANSWERED', blocks: [summary('item-cost-summary', 'A new Roof is about $11,500 in today’s dollars'), { type: 'TABLE', id: 'item-cost-items', title: 'The item', columns: [{ key: 'today', label: 'Today’s dollars' }], rows: [{ id: 'r', values: { today: '$8,000–$15,000' } }], actions: [] }], quantities: [cost('TODAY', 800_000, 1_500_000), cost('WINDOW', 1_660_000, 3_120_000)], sources: [{ sourceType: 'HomeCapitalTimelineItem', sourceId: 'tl-1' }] },
 };
 
 /** A scripted createChild: `script(operationId, attemptNumber)` returns { status, throws? } overriding the default answer. */
@@ -57,13 +57,13 @@ function scriptedChildren(db, script = () => null) {
     const status = override.status ?? base.status;
     const id = `child-${++n}`;
     db.table.set(id, { id, userId, clientRequestId: request.clientRequestId, status, parentExecutionId: internal.composition.parentExecutionId, parentRole: 'COMPONENT', reasonCode: override.reasonCode ?? null,
-      resultJson: { blocks: status === 'ANSWERED' || status === 'READY_WITH_LIMITATIONS' ? base.blocks : [{ type: 'SUMMARY', id: 'x', title: 'Needs a detail', body: '', tone: 'DEFAULT', actions: [] }] }, parametersJson: status === 'ANSWERED' ? { quantities: base.quantities } : null, expiresAt: internal.composition.expiresAt });
+      resultJson: { blocks: status === 'ANSWERED' || status === 'READY_WITH_LIMITATIONS' ? base.blocks : [{ type: 'SUMMARY', id: 'x', title: 'Needs a detail', body: '', tone: 'DEFAULT', actions: [] }] }, parametersJson: status === 'ANSWERED' || status === 'READY_WITH_LIMITATIONS' ? { ...(status === 'ANSWERED' ? { quantities: base.quantities } : {}), sources: base.sources } : null, expiresAt: internal.composition.expiresAt });
     return { executionId: id, status };
   };
   return { createChild, calls };
 }
 
-const allowAll = async () => ({ propertyAccess: true, isOperationAuthorized: () => true });
+const allowAll = async () => ({ propertyAccess: true, authorizeSources: async () => 'AUTHORIZED', isOperationAuthorized: () => true });
 const run = (db, createChild, extra = {}) => runComposedTurn({ db, userId: 'u1', parent: db.table.get('parent-1'), message: 'how old is my roof and what would a new one cost', sessionId: 's1', propertyId: 'p1', clauses, createChild, loadAuthorizationView: allowAll, executionTimeoutMs: 30_000, now: () => NOW, ...extra });
 
 test('a composed turn: two component children, one parent, one assembled response with one basis, no write offers', async () => {
@@ -167,7 +167,7 @@ test('§6.2: an independent clarification gives a partial answer; both unresolve
 test('FR-AUT-2: property access lost before the composite becomes visible withholds everything', async () => {
   const db = fakeDb([parentRow()]);
   const { createChild } = scriptedChildren(db);
-  const parent = await run(db, createChild, { loadAuthorizationView: async () => ({ propertyAccess: false, isOperationAuthorized: () => true }) });
+  const parent = await run(db, createChild, { loadAuthorizationView: async () => ({ propertyAccess: false, authorizeSources: async () => 'AUTHORIZED', isOperationAuthorized: () => true }) });
   assert.equal(parent.status, 'UNAVAILABLE');
   assert.equal(parent.reasonCode, 'ASK_PROPERTY_NOT_FOUND');
   assert.ok(!JSON.stringify(parent.resultJson).includes('7 years old'), 'no section data is stored in the visible result');
@@ -177,7 +177,7 @@ test('FR-AUT-2: property access lost before the composite becomes visible withho
 test('FR-AUT-3: a role that no longer reaches one operation redacts only that section', async () => {
   const db = fakeDb([parentRow()]);
   const { createChild } = scriptedChildren(db);
-  const parent = await run(db, createChild, { loadAuthorizationView: async () => ({ propertyAccess: true, isOperationAuthorized: (op) => op !== 'ITEM_REPLACEMENT_COST' }) });
+  const parent = await run(db, createChild, { loadAuthorizationView: async () => ({ propertyAccess: true, authorizeSources: async () => 'AUTHORIZED', isOperationAuthorized: (op) => op !== 'ITEM_REPLACEMENT_COST' }) });
   assert.equal(parent.resultJson.composite.coverage, 'PARTIAL');
   assert.ok(parent.resultJson.blocks.some((b) => b.id === 's1-inventory-roof-profile'));
   assert.ok(!JSON.stringify(parent.resultJson.blocks).includes('11,500'));
@@ -226,15 +226,15 @@ async function storedComposite() {
 test('FR-PER-6: replay applies the CURRENT authorization first; the stored domain answer is not recomputed', async () => {
   const stored = await storedComposite();
   assert.equal(isStoredComposite(stored), true);
-  assert.deepEqual(replayComposite(stored, { propertyAccess: false, isOperationAuthorized: () => true }), { kind: 'WITHHELD' });
-  assert.deepEqual(replayComposite(stored, { propertyAccess: true, isOperationAuthorized: () => true }), { kind: 'UNCHANGED' });
-  const redacted = replayComposite(stored, { propertyAccess: true, isOperationAuthorized: (op) => op !== 'ITEM_REPLACEMENT_COST' });
+  assert.deepEqual(await replayComposite(stored, { propertyAccess: false, authorizeSources: async () => 'AUTHORIZED', isOperationAuthorized: () => true }), { kind: 'WITHHELD' });
+  assert.deepEqual(await replayComposite(stored, { propertyAccess: true, authorizeSources: async () => 'AUTHORIZED', isOperationAuthorized: () => true }), { kind: 'UNCHANGED' });
+  const redacted = await replayComposite(stored, { propertyAccess: true, authorizeSources: async () => 'AUTHORIZED', isOperationAuthorized: (op) => op !== 'ITEM_REPLACEMENT_COST' });
   assert.equal(redacted.kind, 'DELIVER');
   assert.ok(!JSON.stringify(redacted.delivered.blocks).includes('11,500'), 'a redacted section is gone from the delivered projection');
   assert.ok(redacted.delivered.blocks.some((b) => b.id === 's1-inventory-roof-profile'));
   assert.equal(redacted.delivered.composite.coverage, 'PARTIAL');
   assert.equal(stored.composite.sections.length, 2, 'the stored composite is unchanged');
-  assert.deepEqual(replayComposite({ blocks: [] }, { propertyAccess: false, isOperationAuthorized: () => false }), { kind: 'UNCHANGED' });
+  assert.deepEqual(await replayComposite({ blocks: [] }, { propertyAccess: false, authorizeSources: async () => 'AUTHORIZED', isOperationAuthorized: () => false }), { kind: 'UNCHANGED' });
 });
 
 // ---- retention (FR-PER-14) ----
@@ -376,4 +376,27 @@ test('a still-running child leaves the parent non-terminal instead of becoming a
   assert.equal(parent.status, 'RUNNING');
   assert.equal(parent.resultJson, null, 'nothing terminal was stored');
   assert.ok(db.events.some((e) => e.eventType === 'COMPOSITE_PENDING'));
+});
+
+// ---- FR-AUT-1 through the real runner ----
+test('FR-AUT-1: a component whose operation left its sources undeclared is redacted at assembly, never delivered', async () => {
+  const db = fakeDb([parentRow()]);
+  const { createChild } = scriptedChildren(db);
+  const wrapped = async (...args) => {
+    const response = await createChild(...args);
+    if (args[1].launchContext.operationId === 'ITEM_REPLACEMENT_COST') { const row = db.table.get(response.executionId); row.parametersJson = { quantities: ANSWERS.ITEM_REPLACEMENT_COST.quantities }; }
+    return response;
+  };
+  const parent = await run(db, wrapped);
+  assert.equal(parent.resultJson.composite.coverage, 'PARTIAL');
+  assert.ok(!JSON.stringify(parent.resultJson.blocks).includes('11,500'), 'the undeclared section is not delivered');
+  assert.ok(parent.resultJson.blocks.some((b) => b.id === 's1-inventory-roof-profile'));
+});
+
+test('FR-AUT-1: the operation’s own verdict on a source record redacts only its section, with the sources stored as ids', async () => {
+  const db = fakeDb([parentRow()]);
+  const parent = await run(db, scriptedChildren(db).createChild, { loadAuthorizationView: async () => ({ propertyAccess: true, isOperationAuthorized: () => true, authorizeSources: async (op) => (op === 'INVENTORY_LOOKUP' ? 'REDACT_SECTION' : 'AUTHORIZED') }) });
+  assert.ok(!JSON.stringify(parent.resultJson.blocks).includes('7 years old'));
+  assert.ok(JSON.stringify(parent.resultJson.blocks).includes('11,500'));
+  assert.deepEqual(parent.resultJson.composite.sections[0].sources, [{ sourceType: 'HomeCapitalTimelineItem', sourceId: 'tl-1' }]);
 });

@@ -1,5 +1,6 @@
 // Composition FRD §6: the composite result contract and the pure rules around it (status and coverage, one basis, actions, contradictions, provenance,
 // immutability, the composition validator and the final authorization gate). No database and no execution: every rule is tested without either.
+import type { CompositeSourceReference, SourceVerdict } from './sourceAuthorization';
 import { createHash } from 'node:crypto';
 import type { AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { getAskOperationDefinition, type AskOperationId } from '../askOperationRegistry';
@@ -22,6 +23,8 @@ export interface ComponentOutcome {
   reasonCode?: string;
   blocks: AskPresentationBlock[];
   quantities: Quantity[];
+  /** The record references that materially support this component (its operation's `describeSources`); null or absent means undeclared, which fails closed. */
+  sources?: CompositeSourceReference[] | null;
 }
 
 export interface CompositeSection {
@@ -37,6 +40,8 @@ export interface CompositeSection {
   blocksHash: string;
   provenance: Provenance[];
   quantities: Quantity[];
+  /** FR-AUT-1: opaque source references (never content), revalidated at assembly, replay and refresh. Null means the operation could not describe its sources. */
+  sources: CompositeSourceReference[] | null;
 }
 
 export interface ActionRef { id: string; sectionIndex: number; operationId?: string; primary: boolean }
@@ -217,7 +222,7 @@ export interface AssembleInput { outcomes: readonly ComponentOutcome[]; dated: b
 export function assembleComposite(input: AssembleInput): CompositeResult {
   const sections: CompositeSection[] = input.outcomes.map((o) => ({
     clause: o.clause, operationId: o.operationId, executionId: o.executionId, attempt: o.attempt, status: o.status, reasonCode: o.reasonCode,
-    blocks: o.blocks, blocksHash: hashBlocks(o.blocks), provenance: provenanceOf(o.blocks), quantities: o.quantities,
+    blocks: o.blocks, blocksHash: hashBlocks(o.blocks), provenance: provenanceOf(o.blocks), quantities: o.quantities, sources: o.sources ?? null,
   }));
   const states = input.outcomes.map((o) => componentStateOf(o.status));
   const notAnswered = [...(input.notAnswered ?? [])];
@@ -265,9 +270,11 @@ export interface AuthorizationView {
   propertyAccess: boolean;
   /** Current eligibility of each selected operation under the user's present role and the operation's own audience rules. */
   isOperationAuthorized: (operationId: AskOperationId) => boolean;
+  /** FR-AUT-1: the operation's own current verdict on the records that support a section. */
+  authorizeSources: (operationId: AskOperationId, sources: readonly CompositeSourceReference[]) => Promise<SourceVerdict>;
 }
 export type GateOutcome =
-  | { kind: 'WITHHELD'; reason: 'PROPERTY_ACCESS_LOST' | 'NO_SECTION_AUTHORIZED' }
+  | { kind: 'WITHHELD'; reason: 'PROPERTY_ACCESS_LOST' | 'NO_SECTION_AUTHORIZED' | 'SOURCE_WITHHELD' }
   | { kind: 'DELIVER'; composite: CompositeResult; redacted: AskOperationId[] };
 
 /**
@@ -275,10 +282,17 @@ export type GateOutcome =
  * (removed from the deliverable), and the answer-first line and basis are recomputed from the sections that survive. Authorization loss always overrides
  * stale-result preservation; redaction happens in this projection and never edits validated blocks.
  */
-export function applyAuthorizationGate(composite: CompositeResult, view: AuthorizationView): GateOutcome {
+export async function applyAuthorizationGate(composite: CompositeResult, view: AuthorizationView): Promise<GateOutcome> {
   if (!view.propertyAccess) return { kind: 'WITHHELD', reason: 'PROPERTY_ACCESS_LOST' };
-  const surviving = composite.sections.filter((s) => view.isOperationAuthorized(s.operationId));
-  const redacted = composite.sections.filter((s) => !view.isOperationAuthorized(s.operationId)).map((s) => s.operationId);
+  // Per section: operation eligibility, then the operation's own verdict on its source records. A section with no declared sources fails closed.
+  const verdicts: SourceVerdict[] = await Promise.all(composite.sections.map(async (section): Promise<SourceVerdict> => {
+    if (!view.isOperationAuthorized(section.operationId)) return 'REDACT_SECTION';
+    if (section.sources == null) return 'REDACT_SECTION';
+    return view.authorizeSources(section.operationId, section.sources);
+  }));
+  if (verdicts.includes('WITHHOLD_COMPOSITE')) return { kind: 'WITHHELD', reason: 'SOURCE_WITHHELD' };
+  const surviving = composite.sections.filter((_, index) => verdicts[index] === 'AUTHORIZED');
+  const redacted = composite.sections.filter((_, index) => verdicts[index] !== 'AUTHORIZED').map((s) => s.operationId);
   if (!surviving.length) return { kind: 'WITHHELD', reason: 'NO_SECTION_AUTHORIZED' };
   if (!redacted.length) return { kind: 'DELIVER', composite, redacted };
   const basis = projectBasis(surviving.map((s) => ({ operationId: s.operationId, quantities: s.quantities })), false);

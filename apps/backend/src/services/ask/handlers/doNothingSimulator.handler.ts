@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition phase 1, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { sourceRef, withSources } from '../composition/sourceAuthorization';
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
@@ -234,10 +235,12 @@ async function doNothingSimulationResult(propertyId: string, userId: string, can
   try {
     const { scenarios } = await service.listScenarios(propertyId, userId);
     const latest = await service.getLatestRun(propertyId, userId);
-    return doNothingSimulationFromView({ run: latest.exists ? latest.run : null, scenarios }, propertyId, canChange);
+    const run = latest.exists ? latest.run : null;
+    // FR-AUT-1: the latest run and the saved scenarios that support this answer.
+    return withSources(doNothingSimulationFromView({ run, scenarios }, propertyId, canChange), [...(run?.id ? [sourceRef('DoNothingSimulationRun', String(run.id))] : []), ...scenarios.slice(0, DO_NOTHING_SECTION_ITEM_LIMIT).map((scenario) => sourceRef('DoNothingScenario', String(scenario.id)))]);
   } catch (error) {
-    if ((error as { code?: string })?.code === 'COVERAGE_CONFLICT_REVIEW_REQUIRED') return doNothingSimulationFromView('COVERAGE_CONFLICT', propertyId);
-    if (error instanceof Error && error.message === 'Property not found or access denied.') return doNothingSimulationFromView('PRIMARY_OWNER_ONLY', propertyId);
+    if ((error as { code?: string })?.code === 'COVERAGE_CONFLICT_REVIEW_REQUIRED') return withSources(doNothingSimulationFromView('COVERAGE_CONFLICT', propertyId), []);
+    if (error instanceof Error && error.message === 'Property not found or access denied.') return withSources(doNothingSimulationFromView('PRIMARY_OWNER_ONLY', propertyId), []);
     throw error;
   }
 }

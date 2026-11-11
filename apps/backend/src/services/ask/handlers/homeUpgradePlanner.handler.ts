@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition phase 1, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { sourceRef, withSources } from '../composition/sourceAuthorization';
 import { prisma } from '../../../lib/prisma';
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
@@ -202,12 +203,13 @@ export function homeUpgradeScenariosFromView(
 async function homeUpgradeScenariosResult(propertyId: string, canChange: boolean): Promise<AskOperationResult> {
   // The scenarios route's controller looks the twin up the same way; Ask never creates one (that is the page's init).
   const twin = await prisma.homeDigitalTwin.findUnique({ where: { propertyId }, select: { id: true } });
-  if (!twin) return homeUpgradeScenariosFromView(null, propertyId);
+  if (!twin) return withSources(homeUpgradeScenariosFromView(null, propertyId), []);
   const service = new HomeDigitalTwinScenarioService();
   const active = await service.listScenarios(twin.id, {});
   // Archived options are listed only to a contributor or owner, for the Restore and Delete actions.
   const archived = canChange ? (await service.listScenarios(twin.id, { includeArchived: true })).filter((scenario) => scenario.isArchived) : [];
-  return homeUpgradeScenariosFromView(active, propertyId, new Date(), { canChange, archived });
+  // FR-AUT-1: the twin and the saved options listed.
+  return withSources(homeUpgradeScenariosFromView(active, propertyId, new Date(), { canChange, archived }), [sourceRef('HomeDigitalTwin', twin.id), ...[...active, ...archived].slice(0, 40).map((scenario) => sourceRef('HomeTwinScenario', String(scenario.id)))]);
 }
 
 registerCapabilityHandler('home-digital-twin.scenarios', async (envelope, deps) => {

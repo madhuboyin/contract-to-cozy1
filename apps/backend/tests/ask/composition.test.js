@@ -129,7 +129,7 @@ test('§6.2: clarification depends on dependency, not position: the same intents
 const block = (type, id, extra = {}) => ({ type, id, ...extra });
 const summary = (id, title, actions = []) => block('SUMMARY', id, { title, body: title, tone: 'DEFAULT', actions });
 const evidence = (id, items) => block('EVIDENCE', id, { title: 'Sources', items });
-const outcome = (operationId, blocks, extra = {}) => ({ clause: `${operationId}?`, operationId, executionId: `e-${operationId}`, attempt: 1, status: 'ANSWERED', blocks, quantities: [], ...extra });
+const outcome = (operationId, blocks, extra = {}) => ({ clause: `${operationId}?`, operationId, executionId: `e-${operationId}`, attempt: 1, status: 'ANSWERED', blocks, quantities: [], sources: [], ...extra });
 
 const roofOutcomes = () => [
   outcome('INVENTORY_LOOKUP', [
@@ -206,14 +206,14 @@ test('§6.9: unknown timestamps stay unknown; freshness is over known timestamps
 });
 
 // ---------------------------------------------------------------- the final authorization gate (§6.10)
-test('FR-AUT-2: loss of property access withholds the whole composite', () => {
+test('FR-AUT-2: loss of property access withholds the whole composite', async () => {
   const composite = C.assembleComposite({ outcomes: roofOutcomes(), dated: false });
-  assert.deepEqual(C.applyAuthorizationGate(composite, { propertyAccess: false, isOperationAuthorized: () => true }), { kind: 'WITHHELD', reason: 'PROPERTY_ACCESS_LOST' });
+  assert.deepEqual(await C.applyAuthorizationGate(composite, { propertyAccess: false, authorizeSources: async () => 'AUTHORIZED', isOperationAuthorized: () => true }), { kind: 'WITHHELD', reason: 'PROPERTY_ACCESS_LOST' });
 });
 
-test('FR-AUT-3/4/5: a role or eligibility change redacts only the affected section and recomputes the answer-first line and basis', () => {
+test('FR-AUT-3/4/5: a role or eligibility change redacts only the affected section and recomputes the answer-first line and basis', async () => {
   const composite = C.assembleComposite({ outcomes: roofOutcomes(), dated: false });
-  const out = C.applyAuthorizationGate(composite, { propertyAccess: true, isOperationAuthorized: (op) => op !== 'ITEM_REPLACEMENT_COST' });
+  const out = await C.applyAuthorizationGate(composite, { propertyAccess: true, authorizeSources: async () => 'AUTHORIZED', isOperationAuthorized: (op) => op !== 'ITEM_REPLACEMENT_COST' });
   assert.equal(out.kind, 'DELIVER');
   assert.deepEqual(out.redacted, ['ITEM_REPLACEMENT_COST']);
   assert.equal(out.composite.sections.length, 1);
@@ -221,9 +221,9 @@ test('FR-AUT-3/4/5: a role or eligibility change redacts only the affected secti
   assert.doesNotMatch(out.composite.answerFirst, /\$11,500/, 'the redacted section\'s figure is gone');
   assert.equal(out.composite.notAnswered[0].reasonCode, 'NOT_AUTHORIZED');
   assert.equal(composite.sections.length, 2, 'the stored composite is unchanged');
-  const none = C.applyAuthorizationGate(composite, { propertyAccess: true, isOperationAuthorized: () => false });
+  const none = await C.applyAuthorizationGate(composite, { propertyAccess: true, authorizeSources: async () => 'AUTHORIZED', isOperationAuthorized: () => false });
   assert.deepEqual(none, { kind: 'WITHHELD', reason: 'NO_SECTION_AUTHORIZED' });
-  const all = C.applyAuthorizationGate(composite, { propertyAccess: true, isOperationAuthorized: () => true });
+  const all = await C.applyAuthorizationGate(composite, { propertyAccess: true, authorizeSources: async () => 'AUTHORIZED', isOperationAuthorized: () => true });
   assert.equal(all.composite, composite);
 });
 

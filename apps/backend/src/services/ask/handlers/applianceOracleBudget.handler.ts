@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition phase 1, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { sourceRef, withSources } from '../composition/sourceAuthorization';
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
@@ -249,9 +250,10 @@ export function maintenanceBudgetFromView(forecast: BudgetForecastView | 'PRIMAR
 
 async function maintenanceBudgetResult(propertyId: string, userId: string): Promise<AskOperationResult> {
   try {
-    return maintenanceBudgetFromView(await budgetForecasterService.generateBudgetForecast(propertyId, userId, { includeRecommendations: false }), propertyId);
+    // FR-AUT-1: the forecast is computed from the property's own facts, so the property is its source.
+    return withSources(maintenanceBudgetFromView(await budgetForecasterService.generateBudgetForecast(propertyId, userId, { includeRecommendations: false }), propertyId), [sourceRef('Property', propertyId)]);
   } catch (error) {
-    if (error instanceof Error && error.message === 'Property not found') return maintenanceBudgetFromView('PRIMARY_OWNER_ONLY', propertyId);
+    if (error instanceof Error && error.message === 'Property not found') return withSources(maintenanceBudgetFromView('PRIMARY_OWNER_ONLY', propertyId), []);
     throw error;
   }
 }

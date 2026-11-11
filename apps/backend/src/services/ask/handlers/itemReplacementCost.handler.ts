@@ -2,6 +2,7 @@
 // Timeline analysis (or the roof recorded on the home profile) and states the cost through the one shared cost function in support/itemCost.ts: in today's
 // dollars, at the item's expected replacement window, and grown to a date the homeowner names. It never recomputes the timeline, so it has no side effects;
 // a missing or stale timeline is said plainly. The funding goal (a material decision) uses the same function, so the two never disagree.
+import { sourceRef } from '../composition/sourceAuthorization';
 import { prisma } from '../../../lib/prisma';
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
@@ -25,7 +26,7 @@ const range = (r: { minCents: number; maxCents: number }) => (r.minCents === r.m
 const list = (names: string[]) => (names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`);
 
 function notice(reasonCode: string, id: string, title: string, body: string): AskOperationResult {
-  return { status: 'READY_WITH_LIMITATIONS', reasonCode, blocks: [{ type: 'SUMMARY', id, title, body, tone: 'CAUTION', actions: [] } as AskPresentationBlock], suggestions: [] };
+  return { status: 'READY_WITH_LIMITATIONS', reasonCode, parameters: { sources: [] }, blocks: [{ type: 'SUMMARY', id, title, body, tone: 'CAUTION', actions: [] } as AskPresentationBlock], suggestions: [] };
 }
 
 export async function itemReplacementCostResult(userId: string, propertyId: string, message: string, now: Date = new Date()): Promise<AskOperationResult> {
@@ -109,7 +110,8 @@ export async function itemReplacementCostResult(userId: string, propertyId: stri
     ...(row.bases.target && target ? [{ key: 'item.replacementCost' as const, itemKey: row.itemKey, basis: 'TARGET' as const, minCents: row.bases.target.minCents, maxCents: row.bases.target.maxCents, targetLabel: target.label }] : []),
   ]);
   return {
-    parameters: { quantities },
+    // FR-AUT-1: the timeline items (or the home profile, for a profile-only roof) that support this answer, so a composed copy can be reauthorized.
+    parameters: { quantities, sources: rows.map((row) => (row.fromProfile ? sourceRef('Property', propertyId) : sourceRef('HomeCapitalTimelineItem', row.id))) },
     status: missingCost || stale || fromProfile ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
     reasonCode: missingCost ? 'ITEM_COST_MISSING' : stale ? 'ITEM_COST_TIMELINE_STALE' : fromProfile ? 'ITEM_COST_FROM_PROFILE' : undefined,
     blocks, suggestions: [],

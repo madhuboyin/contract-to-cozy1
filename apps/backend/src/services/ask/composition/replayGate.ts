@@ -13,10 +13,10 @@ export function isStoredComposite(resultJson: unknown): boolean {
 export type ReplayOutcome = { kind: 'UNCHANGED' } | { kind: 'WITHHELD' } | { kind: 'DELIVER'; delivered: Record<string, unknown> };
 
 /** Steps 2–5 of FR-PER-6 (step 1, session and property authorization, is the caller's): reauthorize each section, redact, recompute the projection only. */
-export function replayComposite(resultJson: unknown, view: AuthorizationView): ReplayOutcome {
+export async function replayComposite(resultJson: unknown, view: AuthorizationView): Promise<ReplayOutcome> {
   if (!isStoredComposite(resultJson)) return { kind: 'UNCHANGED' };
   const stored = (resultJson as Record<string, unknown>).composite as CompositeResult & { attempts?: Attempt[] };
-  const gate = applyAuthorizationGate(stored, view);
+  const gate = await applyAuthorizationGate(stored, view);
   if (gate.kind === 'WITHHELD') return { kind: 'WITHHELD' };
   if (!gate.redacted.length && (stored as unknown as { validationIssues?: string[] }).validationIssues?.length === 0) return { kind: 'UNCHANGED' };
   const visible = gate.composite;

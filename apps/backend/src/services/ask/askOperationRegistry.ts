@@ -1,5 +1,6 @@
 import { isItemCostMessage, isItemFundingGoalMessage, isItemReserveAllocationMessage } from './support/itemFundingWording';
 import { validateCoverageDeclarations } from './composition/quantities';
+import { COMPOSABLE_SOURCE_AUTHORIZATION } from './composition/sourceAuthorization';
 import { isNotificationSettingsCommandRequest, isNotificationSettingsOverviewRequest, isNotificationsOverviewRequest } from './support/notificationConversation';
 import { isHomeRecordExportRequest, isHomeRecordExportShareRequest, isHomeRecordExportStatusRequest } from './support/homeRecordExport';
 import type { AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionStatus, AskPresentationBlock, SuggestedNextAction, SuggestedNextActionsStatus } from '../../productFramework/ask/ask.contract';
@@ -1116,6 +1117,10 @@ export function validateAskOperationDefinitions(): string[] {
     // Composition FRD FR-ELG-2/3/4: a composable read is STANDARD, deterministic, routable, property-scoped, a read family, and emits no workflow,
     // capture or confirmation block. A MATERIAL_DECISION operation is never composable. The flag always equals membership of the allowlist.
     if (entry.composableRead !== COMPOSABLE_READ_OPERATION_IDS.has(entry.operationId)) issues.push(`${key}: composableRead does not match the allowlist`);
+    // FR-AUT-1: no operation is composable without an owned source-authorization contract; a contract for a non-composable operation is dead weight.
+    const sourceContract = COMPOSABLE_SOURCE_AUTHORIZATION[entry.operationId];
+    if (entry.composableRead && (typeof sourceContract?.describeSources !== 'function' || typeof sourceContract?.authorizeSources !== 'function')) issues.push(`${key}: composable read has no source describe/authorize contract (FR-AUT-1)`);
+    if (!entry.composableRead && sourceContract) issues.push(`${key}: has a source-authorization contract but is not on the composable allowlist`);
     if (entry.composableRead) {
       if (entry.safetyClass !== 'STANDARD') issues.push(`${key}: a composable read must be STANDARD, never ${entry.safetyClass}`);
       if (entry.executionMode !== 'DETERMINISTIC') issues.push(`${key}: a composable read must be deterministic`);

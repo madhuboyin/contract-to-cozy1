@@ -11,6 +11,7 @@ import {
   askCompositionUnansweredTotal, askCompositionValidatorFailuresTotal,
 } from '../../../lib/metrics';
 import { quantitiesOf } from './quantities';
+import { COMPOSABLE_SOURCE_AUTHORIZATION, type CompositeSourceReference } from './sourceAuthorization';
 import { extractSlots, sanitizeSlots } from './slots';
 import type { ComposedClause } from './decompose';
 import {
@@ -264,7 +265,7 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
     const state = attempt ? componentStateOf(attempt.status, true) : 'FAILED';
     if (!attempt || (state !== 'ANSWERED' && state !== 'LIMITED')) return [];
     const row = childById.get(attempt.executionId);
-    return [{ clause: run.clause.clause, operationId: run.clause.operationId, executionId: attempt.executionId, attempt: attempt.number, status: attempt.status, reasonCode: row?.reasonCode ?? undefined, blocks: blocksOf(row), quantities: quantitiesOf(row?.parametersJson) }];
+    return [{ clause: run.clause.clause, operationId: run.clause.operationId, executionId: attempt.executionId, attempt: attempt.number, status: attempt.status, reasonCode: row?.reasonCode ?? undefined, blocks: blocksOf(row), quantities: quantitiesOf(row?.parametersJson), sources: sourcesOf(run.clause.operationId, row) }];
   });
   // An independent clarification keeps its own focused question beside the answered section; it is not reported as a generic failure.
   const clarificationBlocks: AskPresentationBlock[] = [];
@@ -288,7 +289,7 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   const composite = assembleComposite({ outcomes, dated: parseTargetDate(input.message) != null, notAnswered });
   if ((composite.basis?.contradictions.length ?? 0) > 0) askCompositionContradictionsTotal.inc();
   // The final authorization gate (§6.10), before the composite becomes visible.
-  const gate = applyAuthorizationGate(composite, await input.loadAuthorizationView());
+  const gate = await applyAuthorizationGate(composite, await input.loadAuthorizationView());
   if (gate.kind === 'WITHHELD') {
     return persist({ status: 'UNAVAILABLE', reasonCode: gate.reason === 'PROPERTY_ACCESS_LOST' ? 'ASK_PROPERTY_NOT_FOUND' : 'ASK_COMPOSITE_NOT_AUTHORIZED', completedAt, resultJson: json(compositeEnvelope(null, null, [], attempts, true)) });
   }
@@ -310,6 +311,14 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   }
   return last!.row;
 }
+
+/** The component's declared source references, described by its OWN operation from the result it stored; null (undeclared) fails closed at the gate. */
+const sourcesOf = (operationId: string, row?: AskExecution): CompositeSourceReference[] | null => {
+  const contract = COMPOSABLE_SOURCE_AUTHORIZATION[operationId];
+  if (!contract || !row) return null;
+  const result = row.resultJson && typeof row.resultJson === 'object' && !Array.isArray(row.resultJson) ? row.resultJson as Record<string, unknown> : null;
+  return contract.describeSources({ reasonCode: row.reasonCode, parameters: row.parametersJson, blocks: Array.isArray(result?.blocks) ? result!.blocks as unknown[] : [] });
+};
 
 const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString('en-US')}`;
 

@@ -2,6 +2,7 @@
 // and its active line items directly (never `getOrCreateFund`, which creates a row), so it has no side effects. The reserve balance is one number the
 // homeowner maintains; each item's share is the reserve fund's own split by cost, so the figure is labeled an estimate. The funding goal (a material
 // decision) answers how much MORE to save; this answers only what is already set aside.
+import { sourceRef } from '../composition/sourceAuthorization';
 import { prisma } from '../../../lib/prisma';
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
@@ -14,8 +15,8 @@ const words = (value: unknown) => String(value).toLowerCase().replace(/_/g, ' ')
 const dollars = (cents: number) => money(Math.round(cents / 100));
 const list = (names: string[]) => (names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`);
 
-function notice(reasonCode: string, id: string, title: string, body: string): AskOperationResult {
-  return { status: 'READY_WITH_LIMITATIONS', reasonCode, blocks: [{ type: 'SUMMARY', id, title, body, tone: 'CAUTION', actions: [] } as AskPresentationBlock], suggestions: [] };
+function notice(reasonCode: string, id: string, title: string, body: string, sources: ReturnType<typeof sourceRef>[] = []): AskOperationResult {
+  return { status: 'READY_WITH_LIMITATIONS', reasonCode, parameters: { sources }, blocks: [{ type: 'SUMMARY', id, title, body, tone: 'CAUTION', actions: [] } as AskPresentationBlock], suggestions: [] };
 }
 
 export async function itemReserveAllocationResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
@@ -36,7 +37,7 @@ export async function itemReserveAllocationResult(userId: string, propertyId: st
   if (!matched.length) {
     const spoken = named[0] ?? null;
     return notice('ITEM_RESERVE_ITEM_NOT_FUNDED', 'item-reserve-no-item', spoken ? `There is no reserve line for your ${spoken}` : 'Tell me which item you mean',
-      spoken ? `Your reserve fund tracks the items on your capital timeline. If the ${spoken} is not on it, nothing is set aside for it yet.` : 'Name the roof, HVAC, water heater or an appliance.');
+      spoken ? `Your reserve fund tracks the items on your capital timeline. If the ${spoken} is not on it, nothing is set aside for it yet.` : 'Name the roof, HVAC, water heater or an appliance.', [sourceRef('HomeReserveFund', String(fund.id))]);
   }
 
   const rows = matched.map(({ line, name }) => {
@@ -67,7 +68,7 @@ export async function itemReserveAllocationResult(userId: string, propertyId: st
     { type: 'EVIDENCE', id: 'item-reserve-evidence', title: 'Sources and freshness', items: [{ label: 'Reserve Fund', source: `Self-reported balance, ${String(fund.posture ?? 'MODERATE').toLowerCase()} planning style`, observedAt: fund.lastRecalculatedAt?.toISOString?.() ?? null }] },
     { type: 'BOUNDARY', id: 'item-reserve-boundary', title: 'An estimate from your own records', body: `The balance is self-reported, and the split by item is the reserve fund’s own. ${fund.lastRecalculatedAt ? `Targets last calculated ${humanDate(fund.lastRecalculatedAt)}.` : ''}`.trim(), severity: 'INFO' },
   ] as AskPresentationBlock[];
-  return { status: never ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: never ? 'ITEM_RESERVE_NOT_CALCULATED' : undefined, blocks, suggestions: [] };
+  return { status: never ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: never ? 'ITEM_RESERVE_NOT_CALCULATED' : undefined, parameters: { sources: [sourceRef('HomeReserveFund', String(fund.id)), ...rows.map((row) => sourceRef('HomeReserveFundLineItem', row.id))] }, blocks, suggestions: [] };
 }
 
 registerCapabilityHandler('item-reserve-allocation.read', async (envelope) => itemReserveAllocationResult(envelope.userId, envelope.propertyId!, envelope.message));

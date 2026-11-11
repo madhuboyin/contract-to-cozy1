@@ -38,7 +38,7 @@ export async function getAskSession(userId: string, sessionId: string): Promise<
 /** Null when the whole composite must be withheld (property access lost or nothing still authorized); otherwise the row with its projection recomputed. */
 export async function gateComposedExecution<T extends { propertyId: string | null; resultJson: unknown }>(userId: string, execution: T): Promise<T | null> {
   if (!execution.propertyId || !isStoredComposite(execution.resultJson)) return execution;
-  const outcome = replayComposite(execution.resultJson, await buildAuthorizationView(userId, execution.propertyId));
+  const outcome = await replayComposite(execution.resultJson, await buildAuthorizationView(userId, execution.propertyId));
   if (outcome.kind === 'WITHHELD') return null;
   return outcome.kind === 'DELIVER' ? { ...execution, resultJson: outcome.delivered } : execution;
 }
