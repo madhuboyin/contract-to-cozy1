@@ -18,3 +18,13 @@ test('the capital reserve questions reach the reserve plan read, not the grounde
 test('a contribution change is still not the read', () => {
   assert.notEqual(resolveAskOperation('Set my reserve contribution to $500 a month').operationId, 'CAPITAL_RESERVE_PLAN');
 });
+
+test('"repair X now vs replace in N years" wordings (vs / versus) route to the repair-or-replace answer for a named item', () => {
+  const { resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');
+  for (const message of [
+    'repair roof now vs replace in 5 yrs which is better option',
+    'repair roof now versus replace in 5 years',
+    'replace vs repair my dishwasher',
+  ]) assert.equal(resolveAskOperation(message).operationId, 'REPLACEMENT_GUIDANCE', message);
+  assert.notEqual(resolveAskOperation('how do I repair a leaky faucet vs a new one').operationId, 'REPLACEMENT_GUIDANCE');
+});
