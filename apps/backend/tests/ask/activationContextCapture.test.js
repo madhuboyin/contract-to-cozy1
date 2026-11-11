@@ -11,6 +11,8 @@ const {
 } = require('../../src/services/ask/support/activationContextCapture.ts');
 const { isActivationContextActionTitle } = require('../../src/services/ask/healthGapCapture.ts');
 const { buildFocusedHomeActionGuidance } = require('../../src/services/ask/askFocusedGuidance.ts');
+const { reconcileActivationCaptureForSessionRead } = require('../../src/services/ask/execution/askSessions.ts');
+const { HouseholdRole } = require('@prisma/client');
 
 // Owner screenshot 2026-11-09: "Review and correct: Trigger details. Skip anything that does not change the active decision." had no button in Ask.
 // The action lists up to four missing starting facts; Ask now asks for each inline.
@@ -76,9 +78,11 @@ test('cards come in order: year built, size, affected item, details; each says w
     card = await deriveActivationContextCapture('p1', evaluateAll);
     assert.equal(card.request.requirementId, 'activation-trigger-details');
     assert.equal(card.request.inputSchema.type, 'GROUP');
-    assert.deepEqual(card.request.inputSchema.fields.map((field) => field.key), ['detail', 'recordIds']);
-    assert.equal(card.request.inputSchema.fields[0].inputSchema.maxLength, 4000);
-    assert.equal(card.request.inputSchema.fields[1].inputSchema.allowUpload, true);
+    assert.deepEqual(card.request.inputSchema.fields.map((field) => field.key), ['evidenceKind', 'detail', 'recordIds']);
+    assert.deepEqual(card.request.inputSchema.fields[0].inputSchema.options.map((option) => option.value), ['FREE_TEXT', 'CONVERSATION', 'DOCUMENT', 'QUOTE', 'INVOICE', 'PHOTO', 'EMAIL_PDF']);
+    assert.equal(card.request.inputSchema.fields[1].inputSchema.maxLength, 4000);
+    assert.equal(card.request.inputSchema.fields[2].inputSchema.allowUpload, true);
+    assert.equal(card.request.inputSchema.fields[2].inputSchema.uploadLabel, 'Add evidence');
     assert.doesNotMatch(card.request.helpText, /Question/, 'a single remaining question is not numbered');
     state.detail = 'The water heater is leaking.';
     assert.equal(await deriveActivationContextCapture('p1', evaluateAll), null, 'nothing missing: no card');
@@ -114,19 +118,49 @@ test('saving trigger details writes free-text evidence through the same service 
   try {
     const version = () => activationContextVersion({ activeTriggerId: state.activeTriggerId, entityType: state.entityType, entityId: state.entityId, detail: state.detail, evidenceCount: state.evidence.length });
     const stale = version();
-    await saveActivationContextAnswer({ userId: 'u1', propertyId: 'p1', requirementId: 'activation-trigger-details', answer: { detail: '  The water heater is leaking.  ' }, expectedContextVersion: version() });
+    await saveActivationContextAnswer({ userId: 'u1', propertyId: 'p1', requirementId: 'activation-trigger-details', answer: { evidenceKind: 'FREE_TEXT', detail: '  The water heater is leaking.  ' }, expectedContextVersion: version() });
     assert.equal(state.evidenceCalls.length, 1);
     assert.equal(state.evidenceCalls[0].kind, 'FREE_TEXT');
     assert.equal(state.evidenceCalls[0].detail, 'The water heater is leaking.', 'trimmed');
-    await saveActivationContextAnswer({ userId: 'u1', propertyId: 'p1', requirementId: 'activation-trigger-details', answer: { recordIds: ['record-1'] }, expectedContextVersion: version() });
+    await saveActivationContextAnswer({ userId: 'u1', propertyId: 'p1', requirementId: 'activation-trigger-details', answer: { evidenceKind: 'QUOTE', recordIds: ['record-1'] }, expectedContextVersion: version() });
     assert.equal(state.evidenceCalls[1].documentId, 'record-1', 'a selected or uploaded Home Record uses the canonical trigger-evidence writer');
-    await assert.rejects(saveActivationContextAnswer({ userId: 'u1', propertyId: 'p1', requirementId: 'activation-trigger-details', answer: { detail: 'again' }, expectedContextVersion: stale }), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
-    await assert.rejects(saveActivationContextAnswer({ userId: 'u1', propertyId: 'p1', requirementId: 'activation-trigger-details', answer: { detail: '   ' }, expectedContextVersion: version() }), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    assert.equal(state.evidenceCalls[1].kind, 'QUOTE', 'Ask preserves the Desktop evidence kind');
+    await assert.rejects(saveActivationContextAnswer({ userId: 'u1', propertyId: 'p1', requirementId: 'activation-trigger-details', answer: { evidenceKind: 'FREE_TEXT', detail: 'again' }, expectedContextVersion: stale }), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+    await assert.rejects(saveActivationContextAnswer({ userId: 'u1', propertyId: 'p1', requirementId: 'activation-trigger-details', answer: { evidenceKind: 'FREE_TEXT', detail: '   ' }, expectedContextVersion: version() }), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    await assert.rejects(saveActivationContextAnswer({ userId: 'u1', propertyId: 'p1', requirementId: 'activation-trigger-details', answer: { evidenceKind: 'FREE_TEXT', recordIds: ['record-1'] }, expectedContextVersion: version() }), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
     await assert.rejects(saveActivationContextAnswer({ userId: 'u1', propertyId: 'p1', requirementId: 'something-else', answer: { value: 'x' }, expectedContextVersion: version() }), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     assert.equal(state.evidenceCalls.length, 2);
   } finally { restore(); }
   assert.equal(isActivationContextRequirement('activation-affected-item'), true);
   assert.equal(isActivationContextRequirement('anything'), false);
+});
+
+test('session reads re-derive activation-owned capture cards from current Desktop state and remove duplicate View details', async () => {
+  const restore = stubPrisma();
+  const originalEvents = prisma.askExecutionEvent.findMany;
+  prisma.askExecutionEvent.findMany = async () => [];
+  try {
+    state.yearBuilt = 1990; state.propertySize = 1800; state.entityType = 'PROPERTY';
+    const execution = {
+      sessionId: 'session-1', propertyId: 'p1', operationId: 'HOME_ACTIONS',
+      parametersJson: { focusedHomeActionId: 'activation-context:trigger-1' },
+      resultJson: {
+        blocks: [{ type: 'SUMMARY', id: 'focused-home-action-guidance', actions: [{ id: 'view', label: 'View details' }] }],
+        captureRequests: [{ requirementId: 'activation-affected-item', captureKey: ACTIVATION_CONTEXT_CAPTURE_KEY }],
+      },
+    };
+    const refreshed = await reconcileActivationCaptureForSessionRead('u1', execution, HouseholdRole.OWNER);
+    assert.equal(refreshed.resultJson.captureRequests[0].requirementId, 'activation-trigger-details');
+    assert.deepEqual(refreshed.resultJson.blocks[0].actions, []);
+    state.detail = 'Desktop supplied the trigger detail.';
+    const resolved = await reconcileActivationCaptureForSessionRead('u1', execution, HouseholdRole.OWNER);
+    assert.deepEqual(resolved.resultJson.captureRequests, [], 'a Desktop save removes the stale Ask form on reload');
+    const viewer = await reconcileActivationCaptureForSessionRead('u1', execution, HouseholdRole.VIEWER);
+    assert.deepEqual(viewer.resultJson.captureRequests, [], 'a role downgrade removes the writable form');
+  } finally {
+    prisma.askExecutionEvent.findMany = originalEvents;
+    restore();
+  }
 });
 
 test('freshness is bound to the exact active trigger, and inline capture removes the desktop link', () => {

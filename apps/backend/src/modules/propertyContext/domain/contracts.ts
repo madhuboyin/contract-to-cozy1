@@ -135,7 +135,7 @@ export type ScalarCaptureInputSchema =
   | { type: 'BOOLEAN'; trueLabel: string; falseLabel: string }
   | { type: 'SINGLE_SELECT'; options: Array<{ label: string; value: string }> }
   | { type: 'MULTI_SELECT'; options: Array<{ label: string; value: string }>; maxItems?: number }
-  | { type: 'DOCUMENT_MULTI_SELECT'; options: Array<{ label: string; value: string }>; maxItems?: number; allowUpload?: boolean; /** Where an upload from this field is stored: Home Records through the canonical upload (project documents), else the Ask evidence route. */ uploadTarget?: 'HOME_RECORDS'; /** How a Home Records upload from this field is described and filed. */ uploadRecord?: DocumentUploadRecord }
+  | { type: 'DOCUMENT_MULTI_SELECT'; options: Array<{ label: string; value: string }>; maxItems?: number; allowUpload?: boolean; uploadLabel?: string; /** Where an upload from this field is stored: Home Records through the canonical upload (project documents), else the Ask evidence route. */ uploadTarget?: 'HOME_RECORDS'; /** How a Home Records upload from this field is described and filed. */ uploadRecord?: DocumentUploadRecord }
   | { type: 'INTEGER'; min?: number; max?: number; unit?: string }
   | { type: 'DECIMAL'; min?: number; max?: number; unit?: string }
   | { type: 'SHORT_TEXT'; maxLength: number }

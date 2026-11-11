@@ -15,6 +15,8 @@ import { askCaptureRequest } from './capture';
 
 export const ACTIVATION_CONTEXT_CAPTURE_KEY = 'ACTIVATION_CONTEXT_INPUTS';
 export const ACTIVATION_WHOLE_HOME_VALUE = 'PROPERTY';
+export const ACTIVATION_EVIDENCE_KINDS = ['FREE_TEXT', 'CONVERSATION', 'DOCUMENT', 'QUOTE', 'INVOICE', 'PHOTO', 'EMAIL_PDF'] as const;
+export type ActivationEvidenceKind = typeof ACTIVATION_EVIDENCE_KINDS[number];
 const MAX_ITEM_OPTIONS = 40;
 const FACT_KEY_FOR_GAP: Partial<Record<ActivationGapKey, string>> = { YEAR_BUILT: 'core.yearBuilt', PROPERTY_SIZE: 'core.propertySizeSqFt' };
 
@@ -81,9 +83,23 @@ async function detailRequest(propertyId: string, userId: string, state: Activati
     question: 'What prompted this decision?',
     helpText: `${position}Add a note, choose evidence already in Home Records, or upload a quote, invoice, photo, document, or email/PDF. Only include what changes the active decision.`,
     inputSchema: { type: 'GROUP', fields: [
+      { key: 'evidenceKind', label: 'Evidence type', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [
+        { label: 'Free text', value: 'FREE_TEXT' }, { label: 'Conversation note', value: 'CONVERSATION' },
+        { label: 'Document', value: 'DOCUMENT' }, { label: 'Contractor quote', value: 'QUOTE' },
+        { label: 'Invoice', value: 'INVOICE' }, { label: 'Photo', value: 'PHOTO' }, { label: 'Email or PDF', value: 'EMAIL_PDF' },
+      ] } },
       { key: 'detail', label: 'What happened', required: false, inputSchema: { type: 'LONG_TEXT', maxLength: 4000 } },
-      { key: 'recordIds', label: 'Evidence', required: false, inputSchema: { type: 'DOCUMENT_MULTI_SELECT', options: records.map((record) => ({ value: record.id, label: `${record.title} (${record.recordType.toLowerCase().replace(/_/g, ' ')})` })), maxItems: 10, allowUpload: true, uploadTarget: 'HOME_RECORDS' } },
-    ] } as unknown as AskCaptureRequest['inputSchema'],
+      { key: 'recordIds', label: 'Evidence', required: false, inputSchema: {
+        type: 'DOCUMENT_MULTI_SELECT', options: records.map((record) => ({ value: record.id, label: `${record.title} (${record.recordType.toLowerCase().replace(/_/g, ' ')})` })),
+        maxItems: 10, allowUpload: true, uploadLabel: 'Add evidence', uploadTarget: 'HOME_RECORDS',
+        uploadRecord: {
+          description: 'Evidence for the active home decision',
+          notice: 'Adding evidence saves the file to this home’s shared Home Records and links it to the active decision.',
+          recordTypeFrom: { fieldKey: 'evidenceKind', byValue: { DOCUMENT: 'OTHER', QUOTE: 'OTHER', INVOICE: 'INVOICE', PHOTO: 'PHOTO', EMAIL_PDF: 'OTHER' } },
+        },
+      } },
+    ], groups: [{ id: 'evidence', title: 'Evidence', description: 'Add only what changes the active decision.', fieldKeys: ['evidenceKind', 'detail', 'recordIds'] }] } as unknown as AskCaptureRequest['inputSchema'],
+    currentAnswer: {},
     expectedContextVersion: activationContextVersion(state),
   } as AskCaptureRequest;
 }
@@ -168,14 +184,20 @@ export async function saveActivationContextAnswer(input: { userId: string; prope
       await prisma.propertyOnboarding.update({ where: { propertyId: input.propertyId }, data: { triggerEntityType: 'INVENTORY_ITEM', triggerEntityId: item.id } });
     }
   } else if (input.requirementId === 'activation-trigger-details') {
-    const answer = input.answer && typeof input.answer === 'object' && !Array.isArray(input.answer) ? input.answer as { detail?: unknown; recordIds?: unknown } : {};
+    const answer = input.answer && typeof input.answer === 'object' && !Array.isArray(input.answer) ? input.answer as { evidenceKind?: unknown; detail?: unknown; recordIds?: unknown } : {};
+    const evidenceKind = typeof answer.evidenceKind === 'string' && (ACTIVATION_EVIDENCE_KINDS as readonly string[]).includes(answer.evidenceKind)
+      ? answer.evidenceKind as ActivationEvidenceKind
+      : null;
     const text = typeof answer.detail === 'string' ? answer.detail.trim() : '';
     const recordIds = Array.isArray(answer.recordIds) ? [...new Set(answer.recordIds.filter((id): id is string => typeof id === 'string' && Boolean(id)))] : [];
-    if ((!text && recordIds.length === 0) || text.length > 4000 || recordIds.length > 10) throw new ActivationCaptureError('Add a note up to 4,000 characters or choose up to 10 Home Records.', 'ASK_CAPTURE_VALIDATION_ERROR');
+    const fileBacked = evidenceKind != null && !['FREE_TEXT', 'CONVERSATION'].includes(evidenceKind);
+    if (!evidenceKind || (!text && recordIds.length === 0) || text.length > 4000 || recordIds.length > 10 || (fileBacked && recordIds.length === 0) || (!fileBacked && recordIds.length > 0)) {
+      throw new ActivationCaptureError('Choose the evidence type, then add the matching note or Home Record.', 'ASK_CAPTURE_VALIDATION_ERROR');
+    }
     const records = recordIds.length ? await prisma.propertyRecord.findMany({ where: { id: { in: recordIds }, propertyId: input.propertyId, createdByUserId: input.userId, lifecycleStatus: { not: 'TRASHED' } }, select: { id: true, title: true, recordType: true } }) : [];
     if (records.length !== recordIds.length) throw new ActivationCaptureError('One or more evidence records are not available for this home.', 'ASK_CAPTURE_VALIDATION_ERROR');
-    if (text) await addTriggerEvidence(input.propertyId, input.userId, { kind: 'FREE_TEXT', label: 'Homeowner context', detail: text, documentId: null, observedAt: new Date().toISOString(), consentContext: 'Homeowner entered this in Ask for the active onboarding trigger.' });
-    for (const record of records) await addTriggerEvidence(input.propertyId, input.userId, { kind: 'DOCUMENT', label: record.title, detail: null, documentId: record.id, observedAt: new Date().toISOString(), consentContext: 'Homeowner selected or uploaded this Home Record in Ask for the active onboarding trigger.' });
+    if (text && !fileBacked) await addTriggerEvidence(input.propertyId, input.userId, { kind: evidenceKind, label: evidenceKind === 'CONVERSATION' ? 'Conversation context' : 'Homeowner context', detail: text, documentId: null, observedAt: new Date().toISOString(), consentContext: 'Homeowner entered this in Ask for the active onboarding trigger.' });
+    for (const record of records) await addTriggerEvidence(input.propertyId, input.userId, { kind: evidenceKind, label: record.title, detail: text || null, documentId: record.id, observedAt: new Date().toISOString(), consentContext: 'Homeowner selected or uploaded this Home Record in Ask for the active onboarding trigger.' });
   } else {
     throw new ActivationCaptureError('This question is no longer active.', 'ASK_CAPTURE_NOT_ACTIVE');
   }

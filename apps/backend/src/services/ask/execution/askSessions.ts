@@ -3,7 +3,7 @@
 // re-exports the names below so existing imports keep working.
 import { recordAskCapabilityLifecycle } from '../askCapabilityLifecycle';
 import { finalizeRecoveryActions, restartAfterExpiryCandidates } from '../suggestedActions/recoveryCandidates';
-import { AskExecution, AskExecutionStatus, Prisma } from '@prisma/client';
+import { AskExecution, AskExecutionStatus, HouseholdRole, Prisma } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { ASK_RESPONSE_SCHEMA_VERSION, INTERACTIVE_ASK_EXECUTION_STATUSES, type AskExecutionResponse, type AskPendingWorkItem, type AskRecentSessionPage, type AskRecentSessionSummary, type AskSessionUpdateRequest, type ContinueAskExecution } from '../../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
@@ -12,6 +12,52 @@ import { resolvePropertyAccess } from '../../propertyAccess.service';
 import { buildAuthorizationView } from '../composition/authorizationView';
 import { isStoredComposite, replayComposite } from '../composition/replayGate';
 import { asInputJson, ensurePropertyAccess, expireIfSkillBindingChanged, mapPersistedExecution, preservedExecutionHistory, propertyLabel, propertySummary } from '../askHandlerSupport';
+import { evaluateFeatureContext } from '../../../modules/propertyContext/application/evaluateFeatureContext';
+import { ACTIVATION_CONTEXT_CAPTURE_KEY, deriveActivationContextCapture, dismissedActivationRequirements } from '../support/activationContextCapture';
+
+/**
+ * Activation capture cards are a live projection of the shared onboarding trigger, not an immutable claim about what is still missing. Historical answer
+ * blocks remain unchanged, but the pending form is re-derived on every session read so a Desktop save removes or advances an old Ask question. The
+ * activation-owned item/detail cards can be resumed on the original execution; Property Context cards are removed here and rebuilt by a fresh turn because
+ * their feature binding is persisted with the execution.
+ */
+export async function reconcileActivationCaptureForSessionRead<T extends { sessionId: string; propertyId: string | null; operationId: string | null; parametersJson: unknown; resultJson: unknown }>(
+  userId: string,
+  execution: T,
+  role: HouseholdRole | null,
+): Promise<T> {
+  if (execution.operationId !== 'HOME_ACTIONS' || !execution.propertyId) return execution;
+  const parameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+    ? execution.parametersJson as Record<string, unknown>
+    : {};
+  if (typeof parameters.focusedHomeActionId !== 'string' || !parameters.focusedHomeActionId.startsWith('activation-context:')) return execution;
+  const stored = execution.resultJson && typeof execution.resultJson === 'object' && !Array.isArray(execution.resultJson)
+    ? execution.resultJson as Record<string, unknown>
+    : null;
+  if (!stored) return execution;
+  const previous = Array.isArray(stored.captureRequests) ? stored.captureRequests : [];
+  const withoutActivation = previous.filter((request) => !(request && typeof request === 'object' && (request as { captureKey?: unknown }).captureKey === ACTIVATION_CONTEXT_CAPTURE_KEY));
+  let replacement: unknown[] = [];
+  if (role !== HouseholdRole.VIEWER) {
+    const current = await deriveActivationContextCapture(
+      execution.propertyId,
+      (feature) => evaluateFeatureContext(execution.propertyId!, userId, feature),
+      await dismissedActivationRequirements(execution.sessionId),
+      userId,
+    );
+    if (current && current.feature === null) replacement = [current.request];
+  }
+  const captureRequests = [...withoutActivation, ...replacement];
+  const blocks = Array.isArray(stored.blocks) ? stored.blocks.map((block) => {
+    if (!replacement.length || !block || typeof block !== 'object' || Array.isArray(block)) return block;
+    const value = block as Record<string, unknown>;
+    const actions = Array.isArray(value.actions)
+      ? value.actions.filter((action) => !(action && typeof action === 'object' && !Array.isArray(action) && /view details/i.test(String((action as { label?: unknown }).label ?? ''))))
+      : value.actions;
+    return { ...value, ...(Array.isArray(value.actions) ? { actions } : {}) };
+  }) : stored.blocks;
+  return { ...execution, resultJson: { ...stored, blocks, captureRequests } };
+}
 
 export async function getAskSession(userId: string, sessionId: string): Promise<AskExecutionResponse[]> {
   const session = await prisma.askSession.findFirst({ where: { id: sessionId, userId }, select: { id: true } });
@@ -25,14 +71,18 @@ export async function getAskSession(userId: string, sessionId: string): Promise<
   // is rechecked here rather than trusting the historical snapshot; any
   // execution for a property the user can no longer reach is dropped
   // rather than failing the whole session read.
-  const accessEntries = await Promise.all(propertyIds.map(async (propertyId) => [propertyId, Boolean(await resolvePropertyAccess(userId, propertyId))] as const));
-  const accessiblePropertyIds = new Set(accessEntries.filter(([, accessible]) => accessible).map(([propertyId]) => propertyId));
+  const accessEntries = await Promise.all(propertyIds.map(async (propertyId) => [propertyId, await resolvePropertyAccess(userId, propertyId)] as const));
+  const accessByPropertyId = new Map(accessEntries);
+  const accessiblePropertyIds = new Set(accessEntries.filter(([, access]) => Boolean(access)).map(([propertyId]) => propertyId));
   const visibleExecutions = executions.filter((execution) => !execution.propertyId || accessiblePropertyIds.has(execution.propertyId));
   const properties = await prisma.property.findMany({ where: { id: { in: [...accessiblePropertyIds] } }, select: { id: true, name: true, address: true, city: true, state: true } });
   const labels = new Map(properties.map((property) => [property.id, { id: property.id, label: propertyLabel(property) }]));
   // Composition FRD FR-PER-6: a stored composite is replayed only after its CURRENT authorization is applied; the stored domain answer is never recomputed.
   const gated = await Promise.all(visibleExecutions.map((execution) => gateComposedExecution(userId, execution)));
-  return gated.flatMap((execution) => (execution ? [mapPersistedExecution(execution, execution.propertyId ? labels.get(execution.propertyId) ?? null : null)] : []));
+  const reconciled = await Promise.all(gated.map((execution) => execution
+    ? reconcileActivationCaptureForSessionRead(userId, execution, execution.propertyId ? accessByPropertyId.get(execution.propertyId)?.role ?? null : null)
+    : null));
+  return reconciled.flatMap((execution) => (execution ? [mapPersistedExecution(execution, execution.propertyId ? labels.get(execution.propertyId) ?? null : null)] : []));
 }
 
 /** Null when the whole composite must be withheld (property access lost or nothing still authorized); otherwise the row with its projection recomputed. */

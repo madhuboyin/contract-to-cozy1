@@ -97,4 +97,10 @@ describe('a document field that uploads to Home Records with its own metadata', 
     await waitFor(() => expect(workflow.uploadRecordForWorkflow).toHaveBeenCalled());
     expect(workflow.uploadRecordForWorkflow.mock.calls[0][1]).toEqual(expect.objectContaining({ recordType: 'CLOSING_DOCUMENT', sensitivity: 'FINANCIAL' }));
   });
+
+  it('uses a workflow-specific upload label when provided', () => {
+    const evidence = { ...uploadField, inputSchema: { ...uploadField.inputSchema, uploadLabel: 'Add evidence' } };
+    render(<CaptureFieldControl compact propertyId="home-1" field={evidence} value={[]} siblingValues={{ documentType: 'QUOTE' }} disabled={false} onChange={jest.fn()} />);
+    expect(screen.getByRole('button', { name: /Add evidence/ })).toBeInTheDocument();
+  });
 });
