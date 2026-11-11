@@ -52,6 +52,8 @@ export interface ComposedTurnInput {
   createChild: CreateChild;
   loadAuthorizationView: () => Promise<AuthorizationView>;
   executionTimeoutMs: number;
+  /** A manual retry's clientRequestId; bound to each reservation it makes (FR-PER-10). */
+  requestKey?: string;
   now?: () => Date;
 }
 
@@ -103,17 +105,20 @@ const storedClausesOf = (row: AskExecution): ComposedClause[] => {
  * parent's CURRENT row (FR-PER-16: not near family expiration), not the in-memory copy. Returns null when the retry is not admitted.
  */
 export async function reserveAttempt(
-  db: CompositionDb, parentId: string, componentKey: string, kind: AttemptKind, childId: (number: number) => string, opts: { now: Date; executionTimeoutMs: number },
-): Promise<{ number: number; executionId: string } | null> {
+  db: CompositionDb, parentId: string, componentKey: string, kind: AttemptKind, childId: (number: number) => string, opts: { now: Date; executionTimeoutMs: number; requestKey?: string },
+): Promise<{ number: number; executionId: string } | 'DUPLICATE' | null> {
   for (let tries = 0; tries < MAX_CAS_RETRIES; tries += 1) {
     const row = await db.askExecution.findUnique({ where: { id: parentId } });
     if (!row) throw new Error('composite parent not found');
     if (kind !== 'INITIAL' && !retryAllowed({ parentExpiresAt: row.expiresAt, now: opts.now, executionTimeoutMs: opts.executionTimeoutMs }).allowed) return null;
     const state: AssemblyState = { version: row.assemblyVersion ?? null, attempts: storedOf(row).attempts };
     const expected = requireVersion(state);
+    // FR-PER-10: the same retry request delivered twice reserves once. The check reads the same row the reservation compare-and-sets, so a concurrent twin
+    // that loses the CAS re-reads, finds the key and stops.
+    if (opts.requestKey && state.attempts.some((a) => a.componentKey === componentKey && a.requestKey === opts.requestKey)) return 'DUPLICATE';
     const number = nextAttemptNumber(state.attempts, componentKey);
     const executionId = `unstarted:${childId(number)}`;
-    const reserved: Attempt = { executionId, componentKey, number, kind, status: 'RUNNING' };
+    const reserved: Attempt = { executionId, componentKey, number, kind, status: 'RUNNING', ...(opts.requestKey ? { requestKey: opts.requestKey } : {}) };
     const base = row.parametersJson && typeof row.parametersJson === 'object' && !Array.isArray(row.parametersJson) ? row.parametersJson as Record<string, unknown> : {};
     const composition = (base.composition && typeof base.composition === 'object' ? base.composition : {}) as Record<string, unknown>;
     const written = await db.askExecution.updateMany({
@@ -157,10 +162,15 @@ export function exhaustedComponentKeys(row: AskExecution): string[] {
   });
 }
 
+/** True when a manual retry request with this key already reserved an attempt on the parent. */
+export const hasRetryRequest = (row: AskExecution, requestKey: string): boolean => storedOf(row).attempts.some((a) => a.requestKey === requestKey);
+
 /** A manual retry after the automatic retry was exhausted: reserve a new RETRY attempt for each exhausted component only, then reassemble the same parent. */
 export async function retryExhaustedComposedTurn(input: Omit<ComposedTurnInput, 'clauses'>): Promise<AskExecution | 'TOO_NEAR_EXPIRATION'> {
   const row = (await input.db.askExecution.findUnique({ where: { id: input.parent.id } })) ?? input.parent;
   const clauses = storedClausesOf(row);
+  // A duplicate delivery of a retry already applied (or in flight) returns the parent as it stands, not an error.
+  if (input.requestKey && hasRetryRequest(row, input.requestKey)) return row;
   if (!clauses.length || !exhaustedComponentKeys(row).length) throw new AssemblyInvariantError('no exhausted component to retry');
   const decision = retryAllowed({ parentExpiresAt: row.expiresAt, now: (input.now ?? (() => new Date()))(), executionTimeoutMs: input.executionTimeoutMs });
   if (!decision.allowed) return 'TOO_NEAR_EXPIRATION';
@@ -200,10 +210,11 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   };
 
   const runAttempt = async (run: ComponentRun, kind: AttemptKind): Promise<Attempt | null> => {
-    const reserved = await reserveAttempt(db, parent.id, run.key, kind, (n) => childClientRequestId(parent.clientRequestId, run.key, n), { now: now(), executionTimeoutMs: input.executionTimeoutMs });
-    if (!reserved) return null;
+    const requestKey = kind === 'RETRY' && mode === 'RETRY_EXHAUSTED' ? input.requestKey : undefined;
+    const reserved = await reserveAttempt(db, parent.id, run.key, kind, (n) => childClientRequestId(parent.clientRequestId, run.key, n), { now: now(), executionTimeoutMs: input.executionTimeoutMs, ...(requestKey ? { requestKey } : {}) });
+    if (!reserved || reserved === 'DUPLICATE') return null;
     const outcome = await callChild(run, reserved.number);
-    const attempt: Attempt = { executionId: outcome.executionId, componentKey: run.key, number: reserved.number, kind, status: outcome.status };
+    const attempt: Attempt = { executionId: outcome.executionId, componentKey: run.key, number: reserved.number, kind, status: outcome.status, ...(requestKey ? { requestKey } : {}) };
     await recordAttempt(db, parent.id, attempt);
     return attempt;
   };
@@ -249,6 +260,14 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   });
   const states = selections.map(({ selection }) => (selection.attempt ? componentStateOf(selection.attempt.status, true) : 'FAILED' as const));
   const decision = decideStatus(states);
+  // FR-PER-15(f): the selected attempt id, number and reason for EVERY component, including the ones that ended failed, clarifying, terminal-limited or still
+  // pending (an explicit reason, never an absence), stored with the winning assembly so a partial composite is auditable without rebuilding selection.
+  const selectionMap = selections.map(({ run, selection }) => ({
+    componentKey: run.key, operationId: run.clause.operationId,
+    executionId: selection.attempt?.executionId ?? null, number: selection.attempt?.number ?? null, status: selection.attempt?.status ?? null,
+    reason: selection.reason ?? (selection.attempt ? 'LATEST_NO_SUCCESS' : 'NO_ATTEMPT'),
+  }));
+  const withSelection = (...args: Parameters<typeof compositeEnvelope> extends [...infer Head, unknown?] ? Head : never) => compositeEnvelope(...(args as Parameters<typeof compositeEnvelope> extends [...infer Head, unknown?] ? Head : never), selectionMap);
   const completedAt = now();
   const claimedVersion = requireVersion({ version: finalRow.assemblyVersion ?? null, attempts });
 
@@ -281,7 +300,7 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   if (decision.kind === 'CLARIFY_ALONE') {
     // The clarification is asked alone, under the parent: nothing else is shown and nothing is partially answered.
     const source = childById.get(selections[decision.clauseIndex].selection.attempt?.executionId ?? '');
-    return persist({ status: source?.status ?? 'NEEDS_CLARIFICATION', reasonCode: source?.reasonCode ?? 'ASK_ROUTING_AMBIGUOUS', resultJson: source?.resultJson ?? undefined, completedAt: null });
+    return persist({ status: source?.status ?? 'NEEDS_CLARIFICATION', reasonCode: source?.reasonCode ?? 'ASK_ROUTING_AMBIGUOUS', resultJson: source?.resultJson && typeof source.resultJson === 'object' && !Array.isArray(source.resultJson) ? { ...(source.resultJson as Record<string, unknown>), selection: selectionMap } : source?.resultJson ?? undefined, completedAt: null });
   }
 
   const outcomes: ComponentOutcome[] = selections.flatMap(({ run, selection }) => {
@@ -307,7 +326,7 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   if (notAnswered.some((entry) => entry.reasonCode === 'AskExecutionTimeoutError')) askCompositionTimeoutsTotal.inc();
 
   if (!outcomes.length) {
-    return persist({ status: 'READY_WITH_LIMITATIONS', reasonCode: 'COMPOSITE_NONE_ANSWERED', completedAt, resultJson: json(compositeEnvelope(null, null, notAnswered, attempts, false, [], clarificationBlocks)) });
+    return persist({ status: 'READY_WITH_LIMITATIONS', reasonCode: 'COMPOSITE_NONE_ANSWERED', completedAt, resultJson: json(withSelection(null, null, notAnswered, attempts, false, [], clarificationBlocks)) });
   }
 
   const composite = assembleComposite({ outcomes, dated: parseTargetDate(input.message) != null, notAnswered });
@@ -315,7 +334,7 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   // The final authorization gate (§6.10), before the composite becomes visible.
   const gate = await applyAuthorizationGate(composite, await input.loadAuthorizationView());
   if (gate.kind === 'WITHHELD') {
-    return persist({ status: 'UNAVAILABLE', reasonCode: gate.reason === 'PROPERTY_ACCESS_LOST' ? 'ASK_PROPERTY_NOT_FOUND' : 'ASK_COMPOSITE_NOT_AUTHORIZED', completedAt, resultJson: json(compositeEnvelope(null, null, [], attempts, true)) });
+    return persist({ status: 'UNAVAILABLE', reasonCode: gate.reason === 'PROPERTY_ACCESS_LOST' ? 'ASK_PROPERTY_NOT_FOUND' : 'ASK_COMPOSITE_NOT_AUTHORIZED', completedAt, resultJson: json(withSelection(null, null, [], attempts, true)) });
   }
   const visible = gate.composite;
   const issues = validateComposite(visible);
@@ -323,10 +342,10 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
     // FR-TRU-3: one envelope on the same parent, the validated sections inside, no merged figure and no answer-first line.
     askCompositionValidatorFailuresTotal.inc();
     const plain: CompositeResult = { ...visible, answerFirst: null, basis: null, status: 'READY_WITH_LIMITATIONS', coverage: 'PARTIAL' };
-    return persist({ status: 'READY_WITH_LIMITATIONS', reasonCode: 'COMPOSITE_VALIDATION_FAILED', completedAt, resultJson: json(compositeEnvelope(plain, projectForDelivery(plain), [], attempts, false, issues)) });
+    return persist({ status: 'READY_WITH_LIMITATIONS', reasonCode: 'COMPOSITE_VALIDATION_FAILED', completedAt, resultJson: json(withSelection(plain, projectForDelivery(plain), [], attempts, false, issues)) });
   }
   const delivered = projectForDelivery(visible);
-  return persist({ status: visible.status, reasonCode: visible.coverage === 'PARTIAL' ? 'COMPOSITE_PARTIAL' : undefined, completedAt, resultJson: json(compositeEnvelope(visible, delivered, visible.notAnswered, attempts, false, [], clarificationBlocks)) });
+  return persist({ status: visible.status, reasonCode: visible.coverage === 'PARTIAL' ? 'COMPOSITE_PARTIAL' : undefined, completedAt, resultJson: json(withSelection(visible, delivered, visible.notAnswered, attempts, false, [], clarificationBlocks)) });
   };
   let last: { row: AskExecution; won: boolean } | null = null;
   for (let round = 0; round < MAX_CAS_RETRIES; round += 1) {
@@ -349,7 +368,7 @@ const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString('en-
 /** The stored result of a composed parent: ordinary `blocks` (so every existing renderer works) plus the composite state that replay, refresh and the gate read. */
 export function compositeEnvelope(
   composite: CompositeResult | null, delivered: DeliveredComposite | null, notAnswered: ReadonlyArray<{ clause: string; reasonCode: string; detail: string }>,
-  attempts: Attempt[], withheld = false, validationIssues: string[] = [], clarificationBlocks: AskPresentationBlock[] = [],
+  attempts: Attempt[], withheld = false, validationIssues: string[] = [], clarificationBlocks: AskPresentationBlock[] = [], selection: unknown[] = [],
 ) {
   const blocks: AskPresentationBlock[] = [];
   if (withheld) {
@@ -374,7 +393,7 @@ export function compositeEnvelope(
     } as AskPresentationBlock);
   }
   return {
-    schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks, captureRequests: [], confirmation: null, clarification: null, suggestions: [] as string[],
+    schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks, captureRequests: [], confirmation: null, clarification: null, suggestions: [] as string[], selection: json(selection),
     composite: composite ? { ...json(composite), attempts: json(attempts), validationIssues } : { notAnswered: json(notAnswered), attempts: json(attempts), validationIssues },
   };
 }

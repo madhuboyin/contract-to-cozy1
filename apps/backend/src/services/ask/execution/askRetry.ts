@@ -77,9 +77,11 @@ export async function retryAskExecution(
   // automatic retry (the parent is a limited, partial answer, not FAILED_RETRYABLE) gets a new RETRY attempt for that component, then reassembles.
   if (source.assemblyVersion != null && source.propertyId) {
     const composite = await import('./refreshComposite');
+    // FR-PER-10: a retry request already applied (or in flight) under this clientRequestId returns the parent as it stands, never a second reservation.
+    if (composite.hasStoredRetryRequest(source, input.clientRequestId)) return composite.currentStoredComposite(userId, source);
     if (source.status === 'FAILED_RETRYABLE') return composite.recoverStoredComposite(userId, source, accountRole);
     if (composite.hasExhaustedComponent(source)) {
-      const retried = await composite.retryStoredCompositeComponents(userId, source, accountRole);
+      const retried = await composite.retryStoredCompositeComponents(userId, source, accountRole, input.clientRequestId);
       if (retried) return retried;
       const error = new Error('This answer is too close to expiring to retry. Ask the question again.');
       (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_RETRYABLE';

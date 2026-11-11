@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 require('ts-node/register');
 
-const { runComposedTurn, recordAttempt, recoverComposedTurn, refreshComposedTurn, reserveAttempt, retryExhaustedComposedTurn, exhaustedComponentKeys } = require('../../src/services/ask/composition/runComposedTurn.ts');
+const { runComposedTurn, recordAttempt, recoverComposedTurn, refreshComposedTurn, reserveAttempt, retryExhaustedComposedTurn, exhaustedComponentKeys, hasRetryRequest } = require('../../src/services/ask/composition/runComposedTurn.ts');
 const { replayComposite, isStoredComposite } = require('../../src/services/ask/composition/replayGate.ts');
 const { childClientRequestId, componentKeyOf } = require('../../src/services/ask/composition/attempts.ts');
 
@@ -441,4 +441,45 @@ test('FR-PER-16: a manual retry near family expiration is refused ("ask again"),
   assert.equal(await resume(db, createChild, retryExhaustedComposedTurn), 'TOO_NEAR_EXPIRATION');
   assert.equal(db.table.get('parent-1').parametersJson.composition.attempts.length, attemptsBefore);
   await assert.rejects(resume(fakeDb([parentRow({ assemblyVersion: 0, parametersJson: { composition: { attempts: [], clauses } } })]), createChild, retryExhaustedComposedTurn), /no exhausted component/);
+});
+
+// ---- review round 4: retry idempotency, selection for every component ----
+test('FR-PER-10: the same manual retry delivered twice (concurrently, then again later) reserves one attempt and runs one child', async () => {
+  const db = fakeDb([parentRow()]);
+  let failing = true;
+  const { createChild, calls } = idempotentChildren(db, (op) => (op === 'ITEM_REPLACEMENT_COST' && failing ? { throws: true } : null));
+  await run(db, createChild);
+  failing = false;
+  const before = calls.length;
+  const [a, b] = await Promise.all([1, 2].map(() => resume(db, createChild, retryExhaustedComposedTurn, { requestKey: 'retry-req-1' })));
+  assert.ok(a && b);
+  assert.equal(calls.length - before, 1, 'one child ran for two concurrent deliveries');
+  const attempts = db.table.get('parent-1').parametersJson.composition.attempts.filter((x) => x.componentKey.startsWith('ITEM_REPLACEMENT_COST'));
+  assert.equal(attempts.filter((x) => x.requestKey === 'retry-req-1').length, 1, 'one attempt carries the request key');
+  assert.equal(hasRetryRequest(db.table.get('parent-1'), 'retry-req-1'), true);
+  // A later duplicate, after the component is no longer exhausted, returns the parent as it stands rather than failing.
+  const later = await resume(db, createChild, retryExhaustedComposedTurn, { requestKey: 'retry-req-1' });
+  assert.equal(later.status, 'ANSWERED');
+  assert.equal(calls.length - before, 1);
+  // A different request key is a different retry: with nothing exhausted it is refused.
+  await assert.rejects(resume(db, createChild, retryExhaustedComposedTurn, { requestKey: 'retry-req-2' }), /no exhausted component/);
+});
+
+test('FR-PER-15(f): the parent stores the selected attempt and reason for every component, including failed, clarifying and pending ones', async () => {
+  const dbF = fakeDb([parentRow()]);
+  const failed = await run(dbF, scriptedChildren(dbF, (op) => (op === 'ITEM_REPLACEMENT_COST' ? { throws: true } : null)).createChild);
+  const f = failed.resultJson.selection;
+  assert.equal(f.length, 2, 'one entry per component, answered or not');
+  assert.equal(f.find((e) => e.operationId === 'INVENTORY_LOOKUP').reason, 'LOWEST_SUCCESSFUL');
+  const lost = f.find((e) => e.operationId === 'ITEM_REPLACEMENT_COST');
+  assert.deepEqual([lost.reason, lost.status, lost.number], ['LATEST_NO_SUCCESS', 'FAILED_RETRYABLE', 2], 'the failed component keeps its latest attempt and an explicit reason');
+  const dbC = fakeDb([parentRow()]);
+  const clarifying = await run(dbC, scriptedChildren(dbC, (op) => (op === 'ITEM_REPLACEMENT_COST' ? { status: 'NEEDS_CLARIFICATION' } : null)).createChild);
+  assert.equal(clarifying.resultJson.selection.find((e) => e.operationId === 'ITEM_REPLACEMENT_COST').status, 'NEEDS_CLARIFICATION');
+  const dbN = fakeDb([parentRow()]);
+  const none = await run(dbN, scriptedChildren(dbN, () => ({ status: 'FAILED_TERMINAL' })).createChild);
+  assert.equal(none.resultJson.selection.length, 2, 'a composite with nothing answered still records its selections');
+  assert.ok(none.resultJson.selection.every((e) => e.reason === 'ONLY_TERMINAL_LIMITED'));
+  const stored = await replayComposite(await storedComposite(), { propertyAccess: true, isOperationAuthorized: (op) => op !== 'INVENTORY_LOOKUP', authorizeSources: async () => 'AUTHORIZED' });
+  assert.equal(stored.delivered.selection.length, 2, 'the selection map survives a redacted replay');
 });

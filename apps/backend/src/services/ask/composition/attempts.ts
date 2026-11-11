@@ -15,6 +15,8 @@ export interface Attempt {
   kind: AttemptKind;
   /** The child's own execution status. */
   status: string;
+  /** FR-PER-10: the manual retry request (its clientRequestId) that reserved this attempt, so a duplicate delivery is recognized instead of reserving again. */
+  requestKey?: string;
 }
 
 export type SelectionReason = 'LOWEST_SUCCESSFUL' | 'EXPLICIT_REFRESH' | 'ONLY_TERMINAL_LIMITED';

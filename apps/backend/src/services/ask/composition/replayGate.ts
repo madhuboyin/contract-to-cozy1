@@ -22,9 +22,10 @@ export async function replayComposite(resultJson: unknown, view: AuthorizationVi
   const visible = gate.composite;
   const issues = validateComposite(visible);
   const attempts = stored.attempts ?? [];
+  const selection = Array.isArray((resultJson as Record<string, unknown>).selection) ? (resultJson as Record<string, unknown>).selection as unknown[] : [];
   if (issues.length) {
     const plain: CompositeResult = { ...visible, answerFirst: null, basis: null, status: 'READY_WITH_LIMITATIONS', coverage: 'PARTIAL' };
-    return { kind: 'DELIVER', delivered: { ...compositeEnvelope(plain, projectForDelivery(plain), [], attempts, false, issues) } };
+    return { kind: 'DELIVER', delivered: { ...compositeEnvelope(plain, projectForDelivery(plain), [], attempts, false, issues, [], selection) } };
   }
-  return { kind: 'DELIVER', delivered: { ...compositeEnvelope(visible, projectForDelivery(visible), visible.notAnswered, attempts) } };
+  return { kind: 'DELIVER', delivered: { ...compositeEnvelope(visible, projectForDelivery(visible), visible.notAnswered, attempts, false, [], [], selection) } };
 }
