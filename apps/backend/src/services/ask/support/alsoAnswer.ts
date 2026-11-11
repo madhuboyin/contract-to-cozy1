@@ -14,7 +14,11 @@ const MIN_CONFIDENCE = 0.85;
 const MAX_LABEL_CHARS = 60;
 const READ_FAMILIES = new Set(['RECORD_QUERY', 'STATUS_SUMMARY', 'DECISION_ANALYSIS']);
 // An answer that already states an item's timing and cost does not offer the same item's repair-or-replace read for a "when will it need replacing" part.
-const ALREADY_COVERED_UNLESS_REPAIR: Readonly<Record<string, string>> = { CAPITAL_ITEM_FUNDING_GOAL: 'REPLACEMENT_GUIDANCE' };
+const ALREADY_COVERED_CLAUSES: Readonly<Record<string, ReadonlySet<string>>> = {
+  // The funding answer uses the same capital-timeline cost source and states the
+  // dated replacement cost before calculating the reserve gap and monthly need.
+  CAPITAL_ITEM_FUNDING_GOAL: new Set(['ITEM_REPLACEMENT_COST', 'REPLACEMENT_GUIDANCE']),
+};
 const NEVER_OFFERED = new Set<string>(['GROUNDED_GUIDANCE', 'EMERGENCY_BOUNDARY', 'UNSAFE_RESTRICTED_BOUNDARY', 'OUT_OF_SCOPE_BOUNDARY']);
 
 /** The question split at its joining words, each part trimmed of its own joiner. Parts too short to be a question are folded into the part before them. */
@@ -76,6 +80,14 @@ export function resolveClauseOperation(clause: string): { operationId: AskOperat
 
 export interface AlsoAnswerOffer { operationId: AskOperationId; clause: string }
 
+/** Whether the selected answer contract already supplies this clause's result. */
+export function operationCoversClause(answeredOperationId: AskOperationId, clauseOperationId: AskOperationId, clause: string): boolean {
+  if (answeredOperationId === clauseOperationId) return true;
+  if (!ALREADY_COVERED_CLAUSES[answeredOperationId]?.has(clauseOperationId)) return false;
+  // Repair-vs-replace is a decision the funding calculation does not make.
+  return clauseOperationId !== 'REPLACEMENT_GUIDANCE' || !/\brepair\b/i.test(clause);
+}
+
 /** The first clause (the answered operation may have been picked by any of them) that clearly belongs to a different read operation, or null. */
 export function findAlsoAnswerOffer(message: string, answeredOperationId: AskOperationId): AlsoAnswerOffer | null {
   const clauses = splitQuestionClauses(message);
@@ -88,8 +100,7 @@ export function findAlsoAnswerOffer(message: string, answeredOperationId: AskOpe
     const clause = date && !parseTargetDate(dated) && /\b(?:save|set aside|put aside)\b/i.test(dated) ? `${dated} ${date.label}` : dated;
     const resolved = resolveClauseOperation(clause);
     if (!resolved) continue;
-    if (resolved.operationId === answeredOperationId || NEVER_OFFERED.has(resolved.operationId)) continue;
-    if (ALREADY_COVERED_UNLESS_REPAIR[answeredOperationId] === resolved.operationId && !/\brepair/i.test(clause)) continue;
+    if (operationCoversClause(answeredOperationId, resolved.operationId, clause) || NEVER_OFFERED.has(resolved.operationId)) continue;
     if (!READ_FAMILIES.has(resolved.family) || resolved.confidence < MIN_CONFIDENCE) continue;
     return { operationId: resolved.operationId, clause: clause.charAt(0).toUpperCase() + clause.slice(1) + '?' };
   }

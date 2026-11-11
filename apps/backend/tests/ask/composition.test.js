@@ -38,6 +38,12 @@ test('FR-DEC-6: two clauses that resolve to the same operation are one component
   assert.equal(out.reason, 'SAME_OPERATION');
 });
 
+test('FR-DEC-6: a funding answer that includes replacement cost stays one component', () => {
+  const out = decomposeForComposition('cost to replace roof in 5 yrs and how much i need to save each month');
+  assert.equal(out.kind, 'SINGLE');
+  assert.equal(out.reason, 'SAME_OPERATION');
+});
+
 test('FR-DEC-3: an operation not eligible for this home is not composed', () => {
   const out = decomposeForComposition('how old is my roof and what would a new one cost', { eligibleOperationIds: new Set(['INVENTORY_LOOKUP']) });
   assert.equal(out.kind, 'NOT_COMPOSED');

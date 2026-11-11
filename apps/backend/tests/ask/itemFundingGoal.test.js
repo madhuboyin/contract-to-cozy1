@@ -200,6 +200,8 @@ test('handler: no deposits logged is said plainly and treated as unknown, not ze
   assert.match(summary.body, /don’t have enough logged deposits to estimate what you currently save/);
   assert.match(summary.body, /In total you need about/);
   assert.doesNotMatch(summary.body, /more a month|already saving enough/);
+  assert.deepEqual(summary.bullets.map((bullet) => bullet.label), ['Replacement cost', 'Already set aside', 'Monthly target', 'Current saving pace']);
+  assert.match(summary.bullets[3].body, /Unknown/);
   const steps = result.blocks.find((b) => b.id === 'item-funding-steps');
   assert.equal(steps.rows.find((r) => r.id === 'additional').values.amount, 'Unknown');
   assert.match(summary.body, /Nothing in your reserve balance counts toward it/);

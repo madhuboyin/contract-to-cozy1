@@ -2,7 +2,7 @@
 // operation registry are the only inputs, so every rule is tested without a database. Nothing here executes an operation.
 import { getAskOperationDefinition, type AskOperationId } from '../askOperationRegistry';
 import { resolveAskRoutingCascade } from '../askRoutingCascade';
-import { resolveClauseOperation, splitQuestionClauses, standalone, subjectOf } from '../support/alsoAnswer';
+import { operationCoversClause, resolveClauseOperation, splitQuestionClauses, standalone, subjectOf } from '../support/alsoAnswer';
 import { parseTargetDate } from '../support/targetDate';
 import { COVERAGE_DECLARATIONS, coverageSkips } from './quantities';
 
@@ -40,24 +40,40 @@ export function decomposeForComposition(message: string, options: DecomposeOptio
   const subject = subjectOf(clauses[0]);
   const date = parseTargetDate(clauses[0], options.now);
   const routed: ComposedClause[] = [];
+  const definitions: Array<ReturnType<typeof getAskOperationDefinition>> = [];
   for (const part of clauses) {
     // FR-DEC-5 (interim, until Phase 3 slots): a later part's referent comes from the first part.
     const spoken = standalone(part, subject);
     const clause = date && !parseTargetDate(spoken, options.now) && /\b(?:cost|price|how much)\b/i.test(spoken) ? `${spoken} ${date.label}` : spoken;
-    const resolved = resolveClauseOperation(clause);
+    const resolved = resolveClauseOperation(clause) ?? (
+      whole.operation.operationId === 'CAPITAL_ITEM_FUNDING_GOAL'
+      && /\b(?:save|saving|set aside|put aside|per month|each month|a month)\b/i.test(clause)
+        ? { operationId: 'CAPITAL_ITEM_FUNDING_GOAL' as const, family: 'DECISION_ANALYSIS', confidence: MIN_CLAUSE_CONFIDENCE }
+        : null
+    );
     if (!resolved) return { kind: 'NOT_COMPOSED', reason: 'CLAUSE_NOT_COMPOSABLE', detail: `“${part}” did not route to a known read.`, clauseCount: clauses.length };
     // FR-DEC-3: confident routing to an operation on the composable allowlist, eligible for this user and property.
     if (resolved.confidence < MIN_CLAUSE_CONFIDENCE) return { kind: 'NOT_COMPOSED', reason: 'LOW_CONFIDENCE', detail: `“${part}” routed with low confidence.`, clauseCount: clauses.length };
     const definition = getAskOperationDefinition(resolved.operationId);
-    if (!definition.composableRead) return { kind: 'NOT_COMPOSED', reason: 'CLAUSE_NOT_COMPOSABLE', detail: `“${part}” needs ${resolved.operationId}, which is not a composable read.`, clauseCount: clauses.length };
     if (options.eligibleOperationIds && !options.eligibleOperationIds.has(resolved.operationId)) {
       return { kind: 'NOT_COMPOSED', reason: 'CLAUSE_NOT_ELIGIBLE', detail: `${resolved.operationId} is not available for this home.`, clauseCount: clauses.length };
     }
     routed.push({ clause: clause.charAt(0).toUpperCase() + clause.slice(1) + (clause.endsWith('?') ? '' : '?'), operationId: resolved.operationId, confidence: resolved.confidence });
+    definitions.push(definition);
   }
 
-  // FR-DEC-6: two clauses that resolve to the same operation are one component, answered by the ordinary single path.
-  if (routed[0].operationId === routed[1].operationId) return { kind: 'SINGLE', reason: 'SAME_OPERATION' };
+  // FR-DEC-6: clauses covered by the whole-message operation are one component.
+  // This includes the funding goal, whose contract already states the dated
+  // replacement cost as well as the reserve gap and monthly amount.
+  const wholeOperationId = whole.operation.operationId;
+  if (routed.every((entry) => operationCoversClause(wholeOperationId, entry.operationId, entry.clause))) {
+    return { kind: 'SINGLE', reason: 'SAME_OPERATION' };
+  }
+
+  const nonComposableIndex = definitions.findIndex((definition) => !definition.composableRead);
+  if (nonComposableIndex >= 0) {
+    return { kind: 'NOT_COMPOSED', reason: 'CLAUSE_NOT_COMPOSABLE', detail: `“${clauses[nonComposableIndex]}” needs ${routed[nonComposableIndex].operationId}, which is not a composable read.`, clauseCount: clauses.length };
+  }
 
   // FR-DEC-7: contractual coverage only; inactive while no operation declares any.
   const skipped: ComposedClause[] = [];

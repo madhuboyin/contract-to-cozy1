@@ -174,6 +174,12 @@ export async function itemFundingGoalResult(userId: string, propertyId: string, 
       type: 'SUMMARY', id: 'item-funding-summary',
       title: plan.nearTerm ? `${names}: about ${dollars(plan.stillToFundCents)} needed soon` : needsMore ? `${names}: save about ${dollars(plan.additionalPerMonthCents!)} more a month` : plan.currentPerMonthCents == null ? `${names}: about ${dollars(plan.neededPerMonthCents!)} a month in total` : `${names}: you are on track`,
       body: sentences.join(' '), tone: needsMore || plan.nearTerm ? 'CAUTION' : 'DEFAULT',
+      bullets: [
+        { label: 'Replacement cost', body: `About ${dollars(plan.costAtTargetCents)}${plan.items.length === 1 ? ` (range ${dollars(plan.items[0].costMinAtTargetCents)}–${dollars(plan.items[0].costMaxAtTargetCents)})` : ''} ${target ? when : `around ${humanDate(plan.planningDate)}`}.` },
+        { label: 'Already set aside', body: plan.setAsideCents > 0 ? `${dollars(plan.setAsideCents)} counts toward this goal; ${dollars(plan.stillToFundCents)} remains.` : `$0 counts toward this goal; ${dollars(plan.stillToFundCents)} remains.` },
+        { label: plan.nearTerm ? 'Needed soon' : 'Monthly target', body: plan.nearTerm ? `${dollars(plan.stillToFundCents)} as a lump sum because the target is only about ${plan.months} month${plan.months === 1 ? '' : 's'} away.` : `${dollars(plan.neededPerMonthCents!)} a month for ${plan.months} months.` },
+        { label: 'Current saving pace', body: plan.currentPerMonthCents == null ? `Unknown—there are not enough logged deposits from the last ${DEPOSIT_RATE_WINDOW_MONTHS} months.` : `${dollars(plan.currentPerMonthCents)} a month is estimated to be going toward ${names}${plan.additionalPerMonthCents! > 0 ? `; add about ${dollars(plan.additionalPerMonthCents!)} more a month` : '; no additional amount is needed'}.` },
+      ],
       actions: [
         { id: ITEM_FUNDING_ACTION_IDS.CAPITAL_PLAN, label: 'Show my full capital plan', interactionType: 'START_WORKFLOW' as const, message: 'Show my capital reserve plan.', operationId: 'CAPITAL_RESERVE_PLAN' as const, style: 'SECONDARY' as const },
         ...(canManage ? [{ id: RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION, label: 'Log a reserve deposit', interactionType: 'START_WORKFLOW' as const, message: RESERVE_FUND_COMMAND_MESSAGE, operationId: 'RESERVE_FUND_COMMAND' as const, actionId: RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION, style: 'SECONDARY' as const }] : []),
