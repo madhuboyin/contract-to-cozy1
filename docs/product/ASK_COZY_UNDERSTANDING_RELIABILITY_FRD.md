@@ -955,7 +955,7 @@ Each finding was checked before acceptance. Verified in the text: Phase 0 requir
 |---|---|---|
 | 0a — write-safety trace (FR-WRT-1) | **Done** 2026-11-11 | `docs/architecture/ASK_COZY_WRITE_SAFETY_TRACE.md` |
 | 0a — operation and routing baselines | **Done** 2026-11-11 | `docs/architecture/ASK_COZY_UNDERSTANDING_BASELINE_0A.md`; `apps/backend/scripts/ask-understanding-baseline.js` (reproduces every figure; no per-rule baseline until FR-FAST-1) |
-| 0b — catalogue, exclusions, grouping, feasibility | Not started | — |
+| 0b — catalogue, exclusions, grouping, feasibility | **Done** 2026-11-11 | `docs/architecture/ASK_COZY_DATA_POINT_CATALOGUE_0B.md`; `apps/backend/scripts/ask-data-catalogue.js`; committed manifest `src/services/ask/dataCatalogue/entityDispositions.json` (403 property-scoped entities) and `tests/ask/dataCatalogueManifest.test.js` (5/5). **Feasibility: yes, with coarse grouping (173 groups, ~1,730 sealed rows) and domain staging (first stage ~390)**; entity/field dispositions are proposals pending sign-off |
 | 0c — reachability baseline, sampling manifest | Not started | — |
 | 1, 1b, 1c, 2, 3 | Not started; scope confirmed after 0c | — |
 
