@@ -1,4 +1,5 @@
 import { correctKnownMisspellings } from './support/commonMisspellings';
+import { normalizeForRouting } from './support/routingNormalization';
 import {
   ASK_OPERATION_DEFINITIONS,
   getAskOperationDefinition,
@@ -52,6 +53,7 @@ export function propertyScopeForAskRouting(
   return decision.stage === 'SAFETY' ? null : propertyId ?? null;
 }
 
+const isSafetyBoundary = (id: string) => id === 'EMERGENCY_BOUNDARY' || id === 'UNSAFE_RESTRICTED_BOUNDARY' || id === 'OUT_OF_SCOPE_BOUNDARY';
 function resolution(operationId: AskOperationId, confidence: number): AskOperationResolution {
   return { ...getAskOperationDefinition(operationId), confidence };
 }
@@ -70,8 +72,10 @@ export function resolveAskRoutingCascade(rawMessage: string, options: {
   const language = options.language ?? ASK_DEFAULT_LANGUAGE;
   requireCertifiedAskLanguage(language);
   // Routing reads a closed list of common misspellings and split words as their correct form ("maintainence", "neighbor hood"); nothing else changes.
-  const message = correctKnownMisspellings(rawMessage);
-  const direct = resolveAskOperation(message);
+  // FR-NRM-9: safety is evaluated on the raw text first, so normalisation can never remove a safety signal; everything else routes on the normalised text.
+  const rawDirect = resolveAskOperation(correctKnownMisspellings(rawMessage));
+  const message = isSafetyBoundary(rawDirect.operationId) ? correctKnownMisspellings(rawMessage) : normalizeForRouting(rawMessage);
+  const direct = isSafetyBoundary(rawDirect.operationId) ? rawDirect : resolveAskOperation(message);
   if (direct.operationId === 'EMERGENCY_BOUNDARY' || direct.operationId === 'UNSAFE_RESTRICTED_BOUNDARY' || direct.operationId === 'OUT_OF_SCOPE_BOUNDARY') {
     return { language, operation: direct, stage: 'SAFETY', candidates: [{ operationId: direct.operationId, language, confidence: direct.confidence, confidenceBand: 'HIGH' }], requiresClarification: false, entityResolution: null };
   }
