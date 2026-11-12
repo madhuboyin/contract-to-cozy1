@@ -1,0 +1,146 @@
+{
+ "schemaVersion": 1,
+ "status": "PROPOSED allocations (owner decision D4: provisional until measured)",
+ "generatedFrom": {
+  "routableOperations": 120,
+  "writeCapableOperations": 32,
+  "coarseGroups": 173,
+  "domains": 14
+ },
+ "units": [
+  {
+   "unit": "operation",
+   "count": 120,
+   "rowsPerUnit": [
+    30,
+    20,
+    30
+   ],
+   "totalRows": [
+    3600,
+    2400,
+    3600
+   ],
+   "humanConfirmed": 3600,
+   "note": "per-operation screening floor; every write-capable operation row also human-confirmed in calibration"
+  },
+  {
+   "unit": "data-point-group (coarse)",
+   "count": 173,
+   "rowsPerUnit": [
+    10,
+    10,
+    10
+   ],
+   "totalRows": [
+    1730,
+    1730,
+    1730
+   ],
+   "humanConfirmed": 1730,
+   "note": "domain x value family x sensitivity; members get generated conformance and routing cases (FR-DATA-16)"
+  },
+  {
+   "unit": "query-shape x domain",
+   "count": 126,
+   "rowsPerUnit": [
+    10,
+    10,
+    10
+   ],
+   "totalRows": [
+    1260,
+    1260,
+    1260
+   ],
+   "humanConfirmed": 1260,
+   "note": "FR-DATA-10 shapes 1-9"
+  },
+  {
+   "unit": "facet-count stratum (1,2,3,4-6)",
+   "count": 4,
+   "rowsPerUnit": [
+    50,
+    30,
+    200
+   ],
+   "totalRows": [
+    200,
+    120,
+    800
+   ],
+   "humanConfirmed": 800,
+   "note": ">= 99 sealed families per stratum (about 200 rows)"
+  },
+  {
+   "unit": "facet-count stratum (>6, measurement only)",
+   "count": 1,
+   "rowsPerUnit": [
+    20,
+    10,
+    40
+   ],
+   "totalRows": [
+    20,
+    10,
+    40
+   ],
+   "humanConfirmed": 40,
+   "note": "not a release gate"
+  },
+  {
+   "unit": "stage-one domain selection (pooled)",
+   "count": 1,
+   "rowsPerUnit": [
+    100,
+    60,
+    762
+   ],
+   "totalRows": [
+    100,
+    60,
+    762
+   ],
+   "humanConfirmed": 762,
+   "note": ">= 381 independent families pooled; ~2 rows per family"
+  },
+  {
+   "unit": "safety invariants (wrong-write, near-miss, adversarial routing, reader closure)",
+   "count": 4,
+   "rowsPerUnit": [
+    0,
+    0,
+    381
+   ],
+   "totalRows": [
+    0,
+    0,
+    1524
+   ],
+   "humanConfirmed": 1524,
+   "note": "381 prompts each, zero observed failures"
+  },
+  {
+   "unit": "independent human set (distribution-weighted aggregate)",
+   "count": 1,
+   "rowsPerUnit": [
+    0,
+    0,
+    1000
+   ],
+   "totalRows": [
+    0,
+    0,
+    1000
+   ],
+   "humanConfirmed": 1000,
+   "note": "written by people who did not build Ask, from home scenarios"
+  }
+ ],
+ "totals": {
+  "tuning": 6910,
+  "calibration": 5580,
+  "sealed": 10716,
+  "humanConfirmed": 10716
+ }
+}
