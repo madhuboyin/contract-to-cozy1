@@ -182,7 +182,7 @@ export async function homeDeadlineMonitorResult(userId: string, propertyId: stri
 /** A what-if run (FRD v1.466): the homeowner's own numbers, computed without saving. Absent for the ordinary analysis. */
 interface RepairReplaceWhatIf { overrides: RepairReplaceOverrides }
 
-export async function replacementGuidanceResult(userId: string, propertyId: string, message: string, focusedInventoryItemId: string | null | undefined, executionId: string, whatIf?: RepairReplaceWhatIf): Promise<AskOperationResult> {
+export async function replacementGuidanceResult(userId: string, propertyId: string, message: string, focusedInventoryItemId: string | null | undefined, executionId: string, whatIf?: RepairReplaceWhatIf, options: { pure?: boolean } = {}): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const allItems = await prisma.inventoryItem.findMany({
     where: { propertyId }, orderBy: [{ isVerified: 'desc' }, { updatedAt: 'desc' }], take: 200,
@@ -253,12 +253,16 @@ export async function replacementGuidanceResult(userId: string, propertyId: stri
 
   const item = items[0];
   if (item.category === 'HVAC') {
+    // D17: the pure read never starts an HVAC decision thread (that persists); it says so and leaves the decision to its own turn.
+    if (options.pure) {
+      return { status: 'READY_WITH_LIMITATIONS', reasonCode: 'REPAIR_REPLACE_HVAC_OWN_DECISION', blocks: [{ type: 'SUMMARY', id: 'repair-replace-hvac-own-decision', title: `${item.name}: HVAC repair or replace is its own decision`, body: 'An HVAC system opens a guided decision that is saved to your home record, so it is not answered inside a longer question. Ask “Should I repair or replace my HVAC?” on its own to start it.', tone: 'CAUTION', actions: [] }], suggestions: [] };
+    }
     return hvacDecisionStartResult(userId, propertyId, message, executionId, item.id);
   }
   const evaluation = await evaluateFeatureContext(propertyId, userId, {
     featureKey: 'REPAIR_REPLACE', operationKey: 'RUN_ANALYSIS', operationInput: { inventoryItemId: item.id },
   });
-  const captureRequests: AskCaptureRequest[] = access.role === HouseholdRole.VIEWER || whatIf ? [] : evaluation.requirements.slice(0, 1).map((requirement) => ({
+  const captureRequests: AskCaptureRequest[] = access.role === HouseholdRole.VIEWER || whatIf || options.pure ? [] : evaluation.requirements.slice(0, 1).map((requirement) => ({
     requirementId: requirement.requirementId,
     captureKey: requirement.capture.captureKey,
     classification: requirement.classification,
@@ -274,7 +278,7 @@ export async function replacementGuidanceResult(userId: string, propertyId: stri
     confirmationText: null,
     expectedContextVersion: evaluation.contextVersion,
   }));
-  const analysis = await replaceRepairService.runItemAnalysis(propertyId, item.id, userId, whatIf?.overrides, evaluation.contextVersion, { preview: Boolean(whatIf) });
+  const analysis = await replaceRepairService.runItemAnalysis(propertyId, item.id, userId, whatIf?.overrides, evaluation.contextVersion, { preview: Boolean(whatIf) || Boolean(options.pure) });
   const verdict = analysis.verdict.toLowerCase().replace(/_/g, ' ');
   const rows = [
     { id: 'repair', values: { path: 'Estimated next repair', amount: analysis.estimatedNextRepairCostCents == null ? 'Not available' : money(analysis.estimatedNextRepairCostCents / 100), meaning: 'Modeled from category defaults, condition, and recorded repair history' } },

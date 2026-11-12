@@ -113,6 +113,8 @@ test('operations that must never be reached by fuzzy retrieval are absent from r
     'NOTIFICATION_SETTINGS_OVERVIEW',
     // Data-point read (reliability FRD D12): reached by its deterministic typed pattern only, so its examples cannot capture other questions.
     'DATA_POINT_READ',
+    // Pure repair-or-replace verdict (reliability FRD D17): reached only as a part of a composed answer.
+    'ITEM_REPAIR_REPLACE_VERDICT',
   ]);
   // The list also names some COMMAND-family operations (kept for their reasons above); they only need to still be non-routable.
   for (const id of expectedNonCommandInternal) assert.ok(internalOperations.includes(id), `${id} is listed as internal but is message-routable or missing`);

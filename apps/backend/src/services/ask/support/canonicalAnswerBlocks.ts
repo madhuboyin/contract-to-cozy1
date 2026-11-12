@@ -24,6 +24,7 @@ export const CANONICAL_ANSWER_BLOCK_ID_PREFIXES: Readonly<Partial<Record<AskOper
   // Item replacement cost: every block its handler emits (summary, items, evidence, boundary, and the notices) starts 'item-cost-'.
   ITEM_REPLACEMENT_COST: ['item-cost-'],
   DATA_POINT_READ: ['data-point-'],
+  ITEM_REPAIR_REPLACE_VERDICT: ['repair-replace-'],
   // Item reserve allocation: every block its handler emits starts 'item-reserve-'.
   ITEM_RESERVE_ALLOCATION: ['item-reserve-'],
   WARRANTY_LOOKUP: ['warranty-summary$', 'warranty-results$', 'warranty-empty$', 'warranty-no-match$', 'warranty-show-all$', 'warranty-item-'],

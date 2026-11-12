@@ -317,6 +317,7 @@ export type AskOperationId =
   | 'CAPITAL_ITEM_FUNDING_GOAL'
   | 'ITEM_REPLACEMENT_COST'
   | 'DATA_POINT_READ'
+  | 'ITEM_REPAIR_REPLACE_VERDICT'
   | 'ITEM_RESERVE_ALLOCATION'
   | 'PROPERTY_TAX_APPEAL_READINESS'
   | 'RENOVATION_PERMIT_READINESS'
@@ -594,6 +595,8 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'GUIDANCE_JOURNEY_CONTINUE',
   // Data-point read (reliability FRD D12): reached only by its deterministic typed pattern, never by the classifier, so its examples cannot capture other questions.
   'DATA_POINT_READ',
+  // Pure repair-or-replace verdict (reliability FRD D17): reached only as a part of a composed answer, never by message, so it cannot compete with REPLACEMENT_GUIDANCE.
+  'ITEM_REPAIR_REPLACE_VERDICT',
   // DIY project guide (ASK_COZY_DIY_PROJECT_GUIDE_PLAN): reached only by the declared row action on a DIY_PROJECTS row (launchContext.entityType DIY_PROJECT).
   // Not retrievable by message: it would compete with DIY_PROJECTS for "which DIY projects am I in the middle of?".
   'DIY_PROJECT_GUIDE',
@@ -679,8 +682,14 @@ const CAPABILITY_CONTINUITY_OPERATIONS = new Set<AskOperationId>([
 // Composition FRD §4.3 (D7): the operations that may run as a component of a composed answer. Approved by name; each must also pass the per-operation
 // runtime purity test in tests/ask/composableReadPurity.test.js (FR-ELG-6) before it appears here.
 // Not admitted yet: APPLIANCE_FAILURE_RISK (its real service path throws on an empty home, so it cannot pass the purity test until it has a data-backed fixture).
+/** Composable reads that are reached only as a part of a composed answer, never by message (D17). They are internal operations, so the message-routable rule does not apply. */
+export const COMPOSITION_ONLY_READ_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<AskOperationId>(['ITEM_REPAIR_REPLACE_VERDICT']);
+
+/** The pure, non-persisting variant a composed answer runs in place of an operation that persists (D17). The ordinary turn is unchanged. */
+export const COMPOSITION_PURE_VARIANTS: Readonly<Partial<Record<AskOperationId, AskOperationId>>> = { REPLACEMENT_GUIDANCE: 'ITEM_REPAIR_REPLACE_VERDICT' };
+
 export const COMPOSABLE_READ_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<AskOperationId>([
-  'ITEM_REPLACEMENT_COST', 'ITEM_RESERVE_ALLOCATION', 'INVENTORY_LOOKUP', 'WARRANTY_LOOKUP', 'MAINTENANCE_BUDGET_FORECAST', 'DO_NOTHING_SIMULATION',
+  'ITEM_REPLACEMENT_COST', 'ITEM_REPAIR_REPLACE_VERDICT', 'ITEM_RESERVE_ALLOCATION', 'INVENTORY_LOOKUP', 'WARRANTY_LOOKUP', 'MAINTENANCE_BUDGET_FORECAST', 'DO_NOTHING_SIMULATION',
   'HOME_UPGRADE_SCENARIOS', 'RECALL_REVIEW', 'HOME_TIMELINE_EVENTS',
 ]);
 
@@ -874,6 +883,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   CAPITAL_ITEM_FUNDING_GOAL: definition('CAPITAL_ITEM_FUNDING_GOAL', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'capital-item-funding.goal', ['SUMMARY', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   ITEM_REPLACEMENT_COST: definition('ITEM_REPLACEMENT_COST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'item-replacement-cost.read', ['SUMMARY', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   DATA_POINT_READ: definition('DATA_POINT_READ', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'data-point-read.read', ['SUMMARY', 'EVIDENCE']),
+  ITEM_REPAIR_REPLACE_VERDICT: definition('ITEM_REPAIR_REPLACE_VERDICT', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'repair-replace-verdict.read', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   ITEM_RESERVE_ALLOCATION: definition('ITEM_RESERVE_ALLOCATION', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'item-reserve-allocation.read', ['SUMMARY', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   RESERVE_FUND_COMMAND: definition('RESERVE_FUND_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'reserve-fund.command', ['SUMMARY', 'WORKFLOW_PROGRESS']),
   PROPERTY_TAX_APPEAL_READINESS: definition('PROPERTY_TAX_APPEAL_READINESS', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'property-tax.appeal-readiness', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
@@ -1132,7 +1142,7 @@ export function validateAskOperationDefinitions(): string[] {
       if (isWriteCapableOperation(entry.operationId)) issues.push(`${key}: a composable read must not be write-capable`);
       if (entry.safetyClass !== 'STANDARD') issues.push(`${key}: a composable read must be STANDARD, never ${entry.safetyClass}`);
       if (entry.executionMode !== 'DETERMINISTIC') issues.push(`${key}: a composable read must be deterministic`);
-      if (!entry.messageRoutable) issues.push(`${key}: a composable read must be message-routable`);
+      if (!entry.messageRoutable && !COMPOSITION_ONLY_READ_OPERATION_IDS.has(entry.operationId)) issues.push(`${key}: a composable read must be message-routable`);
       if (!entry.requiresProperty) issues.push(`${key}: a composable read must be property-scoped`);
       if (entry.family !== 'RECORD_QUERY' && entry.family !== 'STATUS_SUMMARY') issues.push(`${key}: a composable read must be a RECORD_QUERY or STATUS_SUMMARY, not ${entry.family}`);
       for (const blocked of ['WORKFLOW_PROGRESS', 'CONFIRMATION', 'CAPTURE'] as const) {

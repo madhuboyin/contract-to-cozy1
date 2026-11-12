@@ -26,8 +26,6 @@ test('FR-DEC-1/4: more than six parts, a material decision, or a write is not co
   assert.equal(seven.kind, 'NOT_COMPOSED');
   assert.equal(seven.reason, 'TOO_MANY_CLAUSES');
   assert.match(seven.detail, /7 parts/);
-  const material = decomposeForComposition('how old is my roof and should I repair or replace it');
-  assert.notEqual(material.kind, 'COMPOSE');
   const write = decomposeForComposition('how old is my roof and add a water heater to my inventory');
   assert.notEqual(write.kind, 'COMPOSE');
 });
@@ -39,18 +37,21 @@ test('FR-DEC-1 / Amendment A: three composable parts are composed together', () 
   assert.deepEqual(three.deferred, []);
 });
 
-test('FR-DEC-4a: age, warranty, cost and repair-or-replace in one prompt runs the three reads and names the decision it did not run', () => {
+test('D17 / FR-DEC-4a: age, warranty, cost and repair-or-replace in one prompt runs all four, the decision as its pure non-persisting variant', () => {
   const out = decomposeForComposition('How old is my water heater, is it under warranty, what would a replacement cost, and should I repair or replace it?');
   assert.equal(out.kind, 'COMPOSE');
-  assert.deepEqual(out.clauses.map((c) => c.operationId), ['INVENTORY_LOOKUP', 'WARRANTY_LOOKUP', 'ITEM_REPLACEMENT_COST']);
-  assert.equal(out.deferred.length, 1);
-  assert.equal(out.deferred[0].operationId, 'REPLACEMENT_GUIDANCE');
-  assert.equal(out.deferred[0].reason, 'NOT_COMPOSABLE');
-  assert.match(out.deferred[0].clause, /repair or replace my water heater/i);
+  assert.deepEqual(out.clauses.map((c) => c.operationId), ['INVENTORY_LOOKUP', 'WARRANTY_LOOKUP', 'ITEM_REPLACEMENT_COST', 'ITEM_REPAIR_REPLACE_VERDICT']);
+  assert.deepEqual(out.deferred, []);
+  assert.match(out.clauses[3].clause, /repair or replace my water heater/i);
 });
 
-test('FR-DEC-4a: with fewer than two runnable parts nothing is composed (the single path answers and notes what it left out)', () => {
-  const out = decomposeForComposition('how old is my roof and should I repair or replace it');
+test('FR-DEC-4a: a part that cannot run is deferred and named, and with fewer than two runnable parts nothing is composed', () => {
+  const partial = decomposeForComposition('how old is my roof, what would a new one cost and what is my favorite color');
+  assert.equal(partial.kind, 'COMPOSE');
+  assert.deepEqual(partial.clauses.map((c) => c.operationId), ['INVENTORY_LOOKUP', 'ITEM_REPLACEMENT_COST']);
+  assert.equal(partial.deferred.length, 1);
+  assert.equal(partial.deferred[0].reason, 'NOT_ROUTED');
+  const out = decomposeForComposition('how old is my roof and what is my favorite color');
   assert.equal(out.kind, 'NOT_COMPOSED');
 });
 

@@ -140,6 +140,15 @@ const fromItems = (result: DescribableResult, types: Record<string, (id: string)
 /** The authorization contract of every composable operation. Admission to COMPOSABLE_READ_OPERATION_IDS requires an entry here (registry validation + test). */
 export const COMPOSABLE_SOURCE_AUTHORIZATION: Readonly<Record<string, ComposableReadAuthorization>> = {
   ITEM_REPLACEMENT_COST: build({ allowed: ['HomeCapitalTimelineItem', 'Property'] }),
+  ITEM_REPAIR_REPLACE_VERDICT: build({
+    allowed: ['InventoryItem', 'Property'],
+    noRecordReasons: ['REPAIR_REPLACE_ITEM_NOT_IN_HOME_RECORD', 'REPAIR_REPLACE_HVAC_OWN_DECISION'],
+    derive: (result) => {
+      const params = isRecord(result.parameters) ? result.parameters : null;
+      if (params && typeof params.inventoryItemId === 'string') return [sourceRef('InventoryItem', params.inventoryItemId)];
+      return result.reasonCode === 'REPAIR_REPLACE_ROOF_FROM_PROFILE' ? [sourceRef('Property', '')] : [];
+    },
+  }),
   ITEM_RESERVE_ALLOCATION: build({ allowed: ['HomeReserveFundLineItem', 'HomeReserveFund'] }),
   INVENTORY_LOOKUP: build({
     allowed: ['InventoryItem', 'HomeEvent', 'Property'],

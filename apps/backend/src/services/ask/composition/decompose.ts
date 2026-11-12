@@ -1,6 +1,6 @@
 // Composition FRD §4.2: decide whether a typed message is a composed (two-component) question, before anything runs. Pure: routing, safety and the
 // operation registry are the only inputs, so every rule is tested without a database. Nothing here executes an operation.
-import { getAskOperationDefinition, type AskOperationId } from '../askOperationRegistry';
+import { COMPOSITION_PURE_VARIANTS, getAskOperationDefinition, type AskOperationId } from '../askOperationRegistry';
 import { resolveAskRoutingCascade } from '../askRoutingCascade';
 import { operationCoversClause, resolveClauseOperation, splitQuestionClauses, standalone, subjectOf } from '../support/alsoAnswer';
 import { parseTargetDate } from '../support/targetDate';
@@ -61,11 +61,14 @@ export function decomposeForComposition(message: string, options: DecomposeOptio
     if (!resolved) { refuse('CLAUSE_NOT_COMPOSABLE', `“${part}” did not route to a known read.`); deferred.push({ clause: tail(clause), reason: 'NOT_ROUTED', operationId: null }); continue; }
     // FR-DEC-3: confident routing to an operation on the composable allowlist, eligible for this user and property.
     if (resolved.confidence < MIN_CLAUSE_CONFIDENCE) { refuse('LOW_CONFIDENCE', `“${part}” routed with low confidence.`); deferred.push({ clause: tail(clause), reason: 'LOW_CONFIDENCE', operationId: resolved.operationId }); continue; }
-    const definition = getAskOperationDefinition(resolved.operationId);
-    if (options.eligibleOperationIds && !options.eligibleOperationIds.has(resolved.operationId)) {
+    // D17: an operation that persists runs inside a composed answer as its pure variant. Eligibility is judged on the operation the homeowner asked for.
+    const requestedOperationId = resolved.operationId;
+    const operationId = COMPOSITION_PURE_VARIANTS[requestedOperationId] ?? requestedOperationId;
+    const definition = getAskOperationDefinition(operationId);
+    if (options.eligibleOperationIds && !options.eligibleOperationIds.has(requestedOperationId)) {
       refuse('CLAUSE_NOT_ELIGIBLE', `${resolved.operationId} is not available for this home.`); deferred.push({ clause: tail(clause), reason: 'NOT_ELIGIBLE', operationId: resolved.operationId }); continue;
     }
-    routed.push({ clause: tail(clause), operationId: resolved.operationId, confidence: resolved.confidence });
+    routed.push({ clause: tail(clause), operationId, confidence: resolved.confidence });
     definitions.push(definition);
   }
 

@@ -748,6 +748,10 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
     recipe('Review renovation readiness', 'Show my renovation permit readiness', 'RENOVATION_PERMIT_READINESS', 'REVIEW_RENOVATION_READINESS', 'HOA_STATUS_REVIEW_RENOVATION'),
     recipe('Review home documents', 'Show my home documents', 'DOCUMENT_LOOKUP', 'REVIEW_DOCUMENTS', 'HOA_STATUS_REVIEW_DOCUMENTS'),
   ],
+  ITEM_REPAIR_REPLACE_VERDICT: [
+    recipe('Review recorded warranties', 'Show my recorded warranties', 'WARRANTY_LOOKUP', 'REVIEW_WARRANTIES', 'REPAIR_VERDICT_REVIEW_WARRANTIES'),
+    recipe('Review home inventory', 'Show my home inventory', 'INVENTORY_LOOKUP', 'REVIEW_HOME_INVENTORY', 'REPAIR_VERDICT_REVIEW_INVENTORY'),
+  ],
   DATA_POINT_READ: [
     recipe('Review home inventory', 'Show my home inventory', 'INVENTORY_LOOKUP', 'REVIEW_HOME_INVENTORY', 'DATA_POINT_REVIEW_INVENTORY'),
     recipe('Review recorded warranties', 'Show my recorded warranties', 'WARRANTY_LOOKUP', 'REVIEW_WARRANTIES', 'DATA_POINT_REVIEW_WARRANTIES'),

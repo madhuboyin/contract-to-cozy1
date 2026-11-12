@@ -133,6 +133,7 @@ register(['SELL_HOLD_RENT_GOAL_CAPTURE'], {
 // Authored launch-only reads: no input, no recorded home data.
 register([
   'HIRING_GUIDE',
+  'ITEM_REPAIR_REPLACE_VERDICT',
   'MAINTENANCE_TEMPLATES_BROWSE',
 ], {
   classification: 'LAUNCH_ONLY',

@@ -56,6 +56,7 @@ export const ASK_LAUNCH_ONLY_READ_OPERATION_IDS: ReadonlySet<AskOperationId> = n
   'HOME_BASICS_GUIDE',
   'HIRING_GUIDE',
   'DATA_POINT_READ',
+  'ITEM_REPAIR_REPLACE_VERDICT',
 ]);
 
 export type AskInteractionClass =
@@ -373,6 +374,21 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     note: 'Understanding reliability FRD (docs/product/ASK_COZY_UNDERSTANDING_RELIABILITY_FRD.md) Phase 1b, 2026-11-11. A STANDARD, read-only fact: one recorded detail of an inventory item, read through the allowlisted point-read template over the reviewed data-point catalogue.',
     uiSurface: { status: 'TRACED', notes: 'Shared generic renderer -- SUMMARY, EVIDENCE. No bespoke component.' },
     freshnessSource: { status: 'TRACED', notes: 'The live inventory row; read at request time.' },
+    idempotency: { status: 'TRACED', notes: 'N/A: a read with no side effects.' },
+    reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10). A missing value says how to add it inline.' },
+  },
+  ITEM_REPAIR_REPLACE_VERDICT: {
+    track: 'Decisions and projects',
+    rollClass: 'READ_RESULT',
+    canonicalOwner: 'repair-replace-verdict.read',
+    roleFloor: 'VIEWER',
+    messageRoutable: false,
+    confirmationCapable: false,
+    correctionModes: [],
+    note: 'Understanding reliability FRD D17, 2026-11-11. The pure repair-or-replace verdict: REPLACEMENT_GUIDANCE with persistence removed (analysis computed in preview mode, no capture request, HVAC named not started). Composition-only: reached as a part of a composed answer, never by message; the ordinary REPLACEMENT_GUIDANCE turn still saves.',
+    uiSurface: { status: 'TRACED', notes: 'Shared generic renderer -- SUMMARY, TABLE, EVIDENCE, BOUNDARY, GROUPED_LIST (item selection). No bespoke component.' },
+    freshnessSource: { status: 'TRACED', notes: 'Computed at request time from the inventory item and the Repair vs Replace engine in preview mode; nothing stored.' },
     idempotency: { status: 'TRACED', notes: 'N/A: a read with no side effects.' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
     handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10). A missing value says how to add it inline.' },

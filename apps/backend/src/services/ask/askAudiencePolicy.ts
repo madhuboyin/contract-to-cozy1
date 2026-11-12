@@ -284,6 +284,7 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('CAPITAL_ITEM_FUNDING_GOAL', OWNER_LIFECYCLE_MODES),
   definePolicy('ITEM_REPLACEMENT_COST', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('DATA_POINT_READ', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
+  definePolicy('ITEM_REPAIR_REPLACE_VERDICT', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('ITEM_RESERVE_ALLOCATION', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('PROPERTY_TAX_APPEAL_READINESS', ALL_MODES),
   definePolicy('RENOVATION_PERMIT_READINESS', KNOWN_MODES),

@@ -311,6 +311,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   CAPITAL_ITEM_FUNDING_GOAL: 'Replacing the roof in five years costs about $27,000; about $380 more a month would fund it.',
   ITEM_REPLACEMENT_COST: 'A new roof is about $12,000 in today\'s dollars and about $17,000 at its expected replacement window.',
   DATA_POINT_READ: 'The recorded detail of your refrigerator in the home inventory: its serial number is SN12345, model and brand as recorded.',
+  ITEM_REPAIR_REPLACE_VERDICT: 'Your water heater: repair or replace? The repair-or-replace verdict for this item, with the modeled repair and replacement costs and the factors behind it.',
   ITEM_RESERVE_ALLOCATION: 'About $4,000 of your reserve is set aside for the roof, 20% of its $20,000 reserve target.',
   PROPERTY_TAX_APPEAL_READINESS: 'The property-tax assessment appeal is not ready because it still needs comparable-value evidence.',
   RENOVATION_PERMIT_READINESS: 'The remodel is blocked until the recorded permit approval is complete.',
