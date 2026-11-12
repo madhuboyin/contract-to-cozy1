@@ -18,8 +18,11 @@ const POLITE_TAIL = /[\s,.!?;:]*(?:(?:please|pls|thanks|thank\s+you|thx)\b[\s,.!
 const DOMAIN_ALLOWLIST = new Set(['boiler', 'heater', 'dryer', 'washer', 'sealer', 'filter', 'gutter', 'gutters', 'shutter', 'shutters', 'planter', 'faucet', 'sewer', 'siding', 'stove', 'oven', 'range', 'roofer', 'plumber', 'painter', 'cooler', 'router', 'heated', 'heats', 'cools', 'costs', 'owner', 'owners', 'fence', 'fences', 'paint', 'tiles', 'floor', 'floors', 'ceiling', 'attic', 'garage']);
 
 export function stripFraming(message: string): string {
+  // A question mark is kept: the local classifier was calibrated on questions and scores them lower without it (fixture ask-routing-independent-v2-011).
+  const asked = /\?\s*(?:(?:please|pls|thanks|thank\s+you|thx)\b[\s,.!?;:]*)*$/i.test(message);
   let text = message.replace(GREETING, '').replace(CAN_YOU_TELL_ME, '').replace(POLITE_LEAD, '').replace(TELL_ME_LEAD, '').replace(POLITE_TAIL, '');
   text = text.replace(/\s{2,}/g, ' ').trim();
+  if (asked && text.length && !text.endsWith('?')) text += '?';
   return text.length ? text : message.trim();
 }
 

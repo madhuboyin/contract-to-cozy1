@@ -4,8 +4,9 @@ const { normalizeForRouting, stripFraming, oneEditKind, correctToken } = require
 const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
 
 test('framing is stripped, meaning words are kept', () => {
-  assert.equal(stripFraming('hey cozy, how old is my roof please?'), 'how old is my roof');
-  assert.equal(stripFraming('Can you please tell me how much I should save monthly?'), 'how much I should save monthly');
+  assert.equal(stripFraming('hey cozy, how old is my roof please?'), 'how old is my roof?');
+  assert.equal(stripFraming('Can you please tell me how much I should save monthly?'), 'how much I should save monthly?');
+  assert.equal(stripFraming('how old is my roof please'), 'how old is my roof');
   assert.equal(stripFraming('tell me when my warranty expires'), 'tell me when my warranty expires');
   assert.equal(stripFraming('please'), 'please');
 });
