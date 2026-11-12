@@ -72,7 +72,7 @@ All **[Executed]** on 2026-11-11, working tree at `f30e65aa` plus the then-uncom
 | One transposed letter in the longest word | 149 / 396 (37.6%) |
 | **All edits** | **1,893 / 2,292 (82.6%)** |
 
-Where the broken prompts went (counts of breaks): "can you tell me" — 32 to a `MONITOR` operation (`HOME_DEADLINE_MONITOR`), 3 to a `WRITE`, 6 to another `READ`, 15 clarification, 15 fallback. Typo — 149 fallback, 52 clarification, 36 `READ`, 10 `WRITE`. **17 edited prompts landed on a write operation** across all edits. The transposed-letter edit hits the longest word, so 37.6% is a stress figure, not a typical-typo rate.
+Where the broken prompts went (counts of breaks): "can you tell me" — 32 to a `MONITOR` operation (`HOME_DEADLINE_MONITOR`), 3 to a `WRITE`, 6 to another `READ`, 15 clarification, 15 fallback. Typo — 149 fallback, 52 clarification, 36 `READ`, 10 `WRITE`. **17 edited prompts landed on a write operation** across all edits. **Corrected by the Phase 0a baseline (2026-11-11): by the command-based definition of write-capable (FR-WRT-4) the figure is 49** (35 of them the `can you tell me` prefix routed to the confirmation-gated `HOME_DEADLINE_MONITOR` command); the 17 counted the unreliable `WRITE` label. The transposed-letter edit hits the longest word, so 37.6% is a stress figure, not a typical-typo rate.
 
 ### 2.4 The answer gate is a second, independent failure point
 
@@ -954,7 +954,7 @@ Each finding was checked before acceptance. Verified in the text: Phase 0 requir
 | Phase / slice | State | Evidence |
 |---|---|---|
 | 0a — write-safety trace (FR-WRT-1) | **Done** 2026-11-11 | `docs/architecture/ASK_COZY_WRITE_SAFETY_TRACE.md` |
-| 0a — operation and routing baselines | In progress | — |
+| 0a — operation and routing baselines | **Done** 2026-11-11 | `docs/architecture/ASK_COZY_UNDERSTANDING_BASELINE_0A.md`; `apps/backend/scripts/ask-understanding-baseline.js` (reproduces every figure; no per-rule baseline until FR-FAST-1) |
 | 0b — catalogue, exclusions, grouping, feasibility | Not started | — |
 | 0c — reachability baseline, sampling manifest | Not started | — |
 | 1, 1b, 1c, 2, 3 | Not started; scope confirmed after 0c | — |
