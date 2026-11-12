@@ -291,7 +291,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       try {
       composed = await runComposedTurn({
         db: prisma as never, userId, accountRole, parent: execution, message: input.message, sessionId: session.id, propertyId: composedPropertyId,
-        clauses: decomposition.clauses, createChild: createAskExecution, executionTimeoutMs: controls.executionTimeoutMs,
+        clauses: decomposition.clauses, deferred: decomposition.deferred, createChild: createAskExecution, executionTimeoutMs: controls.executionTimeoutMs,
         loadAuthorizationView: () => buildAuthorizationView(userId, composedPropertyId, controls),
         finalizeResult: (result) => finalizeSuggestedNextActions({
           result, executionId: execution.id, userId, sessionId: session.id, propertyId: composedPropertyId,

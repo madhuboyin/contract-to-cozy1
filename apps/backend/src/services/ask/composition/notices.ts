@@ -3,7 +3,7 @@
 // Composition FRD FR-DEC-4: the one honest sentence appended to a single-operation answer when the message had more than one part and could not be composed.
 export function declinedCompositionNote(reason: string, clauseCount: number) {
   const body = reason === 'TOO_MANY_CLAUSES'
-    ? `Your message had ${clauseCount} parts. Ask answers up to two together, so this may not cover every part. Ask the others on their own and I’ll answer each.`
+    ? `Your message had ${clauseCount} parts. Ask answers up to six together, so this may not cover every part. Ask the others on their own and I’ll answer each.`
     : 'Your message had more than one question, and I couldn’t combine them into one answer, so this covers the main one. Ask the other part on its own and I’ll answer it.';
   return { type: 'SUMMARY' as const, id: 'composition-declined-note', title: 'Part of your question isn’t answered here', body, tone: 'CAUTION' as const, actions: [] };
 }

@@ -54,6 +54,8 @@ export function standalone(clause: string, subject: string | null): string {
   // "what would be the replacement cost" -> "how much would a replacement water heater cost".
   if (/^what (?:would|will) (?:be )?the (?:replacement )?cost$|^what (?:would|will) be the replacement cost$/i.test(trimmed)) return `how much would a replacement ${noun} cost`;
   if (/^how much would (?:a|the) replacement cost$/i.test(trimmed)) return `how much would a replacement ${noun} cost`;
+  // "what would a replacement cost" / "what does a replacement run" (no "the", no "be").
+  if (/^(?:what|how much) (?:would|will|does|do) (?:a|an|the) replacement (?:cost|run|set me back)$/i.test(trimmed)) return `how much would a replacement ${noun} cost`;
   return /\b(?:new|replacement|another)\s+one\b/i.test(clause)
     ? clause.replace(/\b(new|replacement|another)\s+one\b/i, `$1 ${noun}`)
     : clause.replace(/\b(?:it|that|this|them|those items|these items)\b(?!\s+(?:cost|do|mean))/i, subject);

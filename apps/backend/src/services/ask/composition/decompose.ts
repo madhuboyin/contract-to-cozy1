@@ -6,15 +6,18 @@ import { operationCoversClause, resolveClauseOperation, splitQuestionClauses, st
 import { parseTargetDate } from '../support/targetDate';
 import { COVERAGE_DECLARATIONS, coverageSkips } from './quantities';
 
-export const MAX_COMPOSED_COMPONENTS = 2;
+/** Understanding reliability FRD D4/Amendment A (FR-DEC-1): up to six facets are composed; more are never silently truncated. */
+export const MAX_COMPOSED_COMPONENTS = 6;
 const MIN_CLAUSE_CONFIDENCE = 0.85;
 
 export interface ComposedClause { clause: string; operationId: AskOperationId; confidence: number }
+/** FR-DEC-4a: a part that was NOT run. It is named in the answer with the reason, never dropped and never guessed. */
+export interface DeferredClause { clause: string; reason: 'NOT_ROUTED' | 'LOW_CONFIDENCE' | 'NOT_ELIGIBLE' | 'NOT_COMPOSABLE'; operationId: AskOperationId | null }
 
 export type DecompositionOutcome =
   | { kind: 'SINGLE'; reason: 'ONE_CLAUSE' | 'FULL_MESSAGE_GATE' | 'SAME_OPERATION' }
   | { kind: 'NOT_COMPOSED'; reason: 'TOO_MANY_CLAUSES' | 'CLAUSE_NOT_COMPOSABLE' | 'CLAUSE_NOT_ELIGIBLE' | 'LOW_CONFIDENCE'; detail: string; clauseCount: number }
-  | { kind: 'COMPOSE'; clauses: ComposedClause[]; skipped: ComposedClause[] };
+  | { kind: 'COMPOSE'; clauses: ComposedClause[]; skipped: ComposedClause[]; deferred: DeferredClause[] };
 
 export interface DecomposeOptions {
   /** Operations this user and property may run (the existing discoverability set). Omitted means every registered operation. */
@@ -41,6 +44,10 @@ export function decomposeForComposition(message: string, options: DecomposeOptio
   const date = parseTargetDate(clauses[0], options.now);
   const routed: ComposedClause[] = [];
   const definitions: Array<ReturnType<typeof getAskOperationDefinition>> = [];
+  const deferred: DeferredClause[] = [];
+  const tail = (clause: string) => clause.charAt(0).toUpperCase() + clause.slice(1) + (clause.endsWith('?') ? '' : '?');
+  const refusals: Array<{ reason: 'CLAUSE_NOT_COMPOSABLE' | 'CLAUSE_NOT_ELIGIBLE' | 'LOW_CONFIDENCE'; detail: string }> = [];
+  const refuse = (reason: (typeof refusals)[number]['reason'], detail: string) => { refusals.push({ reason, detail }); };
   for (const part of clauses) {
     // FR-DEC-5 (interim, until Phase 3 slots): a later part's referent comes from the first part.
     const spoken = standalone(part, subject);
@@ -51,14 +58,14 @@ export function decomposeForComposition(message: string, options: DecomposeOptio
         ? { operationId: 'CAPITAL_ITEM_FUNDING_GOAL' as const, family: 'DECISION_ANALYSIS', confidence: MIN_CLAUSE_CONFIDENCE }
         : null
     );
-    if (!resolved) return { kind: 'NOT_COMPOSED', reason: 'CLAUSE_NOT_COMPOSABLE', detail: `“${part}” did not route to a known read.`, clauseCount: clauses.length };
+    if (!resolved) { refuse('CLAUSE_NOT_COMPOSABLE', `“${part}” did not route to a known read.`); deferred.push({ clause: tail(clause), reason: 'NOT_ROUTED', operationId: null }); continue; }
     // FR-DEC-3: confident routing to an operation on the composable allowlist, eligible for this user and property.
-    if (resolved.confidence < MIN_CLAUSE_CONFIDENCE) return { kind: 'NOT_COMPOSED', reason: 'LOW_CONFIDENCE', detail: `“${part}” routed with low confidence.`, clauseCount: clauses.length };
+    if (resolved.confidence < MIN_CLAUSE_CONFIDENCE) { refuse('LOW_CONFIDENCE', `“${part}” routed with low confidence.`); deferred.push({ clause: tail(clause), reason: 'LOW_CONFIDENCE', operationId: resolved.operationId }); continue; }
     const definition = getAskOperationDefinition(resolved.operationId);
     if (options.eligibleOperationIds && !options.eligibleOperationIds.has(resolved.operationId)) {
-      return { kind: 'NOT_COMPOSED', reason: 'CLAUSE_NOT_ELIGIBLE', detail: `${resolved.operationId} is not available for this home.`, clauseCount: clauses.length };
+      refuse('CLAUSE_NOT_ELIGIBLE', `${resolved.operationId} is not available for this home.`); deferred.push({ clause: tail(clause), reason: 'NOT_ELIGIBLE', operationId: resolved.operationId }); continue;
     }
-    routed.push({ clause: clause.charAt(0).toUpperCase() + clause.slice(1) + (clause.endsWith('?') ? '' : '?'), operationId: resolved.operationId, confidence: resolved.confidence });
+    routed.push({ clause: tail(clause), operationId: resolved.operationId, confidence: resolved.confidence });
     definitions.push(definition);
   }
 
@@ -66,23 +73,29 @@ export function decomposeForComposition(message: string, options: DecomposeOptio
   // This includes the funding goal, whose contract already states the dated
   // replacement cost as well as the reserve gap and monthly amount.
   const wholeOperationId = whole.operation.operationId;
-  if (routed.every((entry) => operationCoversClause(wholeOperationId, entry.operationId, entry.clause))) {
+  if (!deferred.length && routed.every((entry) => operationCoversClause(wholeOperationId, entry.operationId, entry.clause))) {
     return { kind: 'SINGLE', reason: 'SAME_OPERATION' };
   }
 
-  const nonComposableIndex = definitions.findIndex((definition) => !definition.composableRead);
-  if (nonComposableIndex >= 0) {
-    return { kind: 'NOT_COMPOSED', reason: 'CLAUSE_NOT_COMPOSABLE', detail: `“${clauses[nonComposableIndex]}” needs ${routed[nonComposableIndex].operationId}, which is not a composable read.`, clauseCount: clauses.length };
+  // A part that routes to an operation that is not a composable read (a decision that persists, or a write) is NOT run here (FR-DEC-4a, FR-DEC-0): it is named.
+  const composable: ComposedClause[] = [];
+  routed.forEach((entry, index) => {
+    if (definitions[index].composableRead) composable.push(entry);
+    else { refuse('CLAUSE_NOT_COMPOSABLE', `“${entry.clause}” needs ${entry.operationId}, which is not a composable read.`); deferred.push({ clause: entry.clause, reason: 'NOT_COMPOSABLE', operationId: entry.operationId }); }
+  });
+  // FR-DEC-4a: partial execution needs at least two parts that can run together; with fewer, the single-operation path answers and notes what it left out.
+  if (composable.length < 2) {
+    if (refusals.length) return { kind: 'NOT_COMPOSED', reason: refusals[0].reason, detail: refusals[0].detail, clauseCount: clauses.length };
+    return { kind: 'SINGLE', reason: 'SAME_OPERATION' };
   }
 
-  // FR-DEC-7: contractual coverage only; inactive while no operation declares any.
+  // FR-DEC-7: contractual coverage only; a part an earlier kept part already states is skipped.
   const skipped: ComposedClause[] = [];
-  const kept = routed.filter((entry, index) => {
-    const other = routed[index === 0 ? 1 : 0];
-    if (index === 1 && coverageSkips(routed[0].operationId, entry.clause)) { skipped.push(entry); return false; }
-    return other != null;
-  });
+  const kept: ComposedClause[] = [];
+  for (const entry of composable) {
+    if (kept.some((earlier) => coverageSkips(earlier.operationId, entry.clause))) skipped.push(entry); else kept.push(entry);
+  }
   void COVERAGE_DECLARATIONS;
   if (kept.length < 2) return { kind: 'SINGLE', reason: 'SAME_OPERATION' };
-  return { kind: 'COMPOSE', clauses: kept, skipped };
+  return { kind: 'COMPOSE', clauses: kept, skipped, deferred };
 }

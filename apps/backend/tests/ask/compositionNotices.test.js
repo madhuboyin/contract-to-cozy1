@@ -16,7 +16,7 @@ test('a declined composition names the unanswered part and carries no action', (
 test('too many parts states the cap and the count', () => {
   const block = declinedCompositionNote('TOO_MANY_CLAUSES', 3);
   assert.match(block.body, /3 parts/);
-  assert.match(block.body, /two together/);
+  assert.match(block.body, /six together/);
 });
 
 test('a gone item asks one focused question and never guesses', () => {

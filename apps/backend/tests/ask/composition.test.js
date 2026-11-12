@@ -21,15 +21,37 @@ test('FR-DEC-0: a safety phrase anywhere governs the whole turn and nothing is r
   ]) assert.equal(decomposeForComposition(message).kind === 'COMPOSE', false, message);
 });
 
-test('FR-DEC-1/4: more than two parts, a material decision, or a write is not composed and never silently truncated', () => {
-  const three = decomposeForComposition('how old is my roof and what would a new one cost and what warranties do I have');
-  assert.equal(three.kind, 'NOT_COMPOSED');
-  assert.equal(three.reason, 'TOO_MANY_CLAUSES');
-  assert.match(three.detail, /3 parts/);
+test('FR-DEC-1/4: more than six parts, a material decision, or a write is not composed and never silently truncated', () => {
+  const seven = decomposeForComposition('how old is my roof and what would a new one cost and what warranties do I have and what is in my inventory and what recalls do I have and how much does maintenance cost and what is my reserve plan');
+  assert.equal(seven.kind, 'NOT_COMPOSED');
+  assert.equal(seven.reason, 'TOO_MANY_CLAUSES');
+  assert.match(seven.detail, /7 parts/);
   const material = decomposeForComposition('how old is my roof and should I repair or replace it');
   assert.notEqual(material.kind, 'COMPOSE');
   const write = decomposeForComposition('how old is my roof and add a water heater to my inventory');
   assert.notEqual(write.kind, 'COMPOSE');
+});
+
+test('FR-DEC-1 / Amendment A: three composable parts are composed together', () => {
+  const three = decomposeForComposition('how old is my roof and what would a new one cost and what warranties do I have');
+  assert.equal(three.kind, 'COMPOSE');
+  assert.deepEqual(three.clauses.map((c) => c.operationId), ['INVENTORY_LOOKUP', 'ITEM_REPLACEMENT_COST', 'WARRANTY_LOOKUP']);
+  assert.deepEqual(three.deferred, []);
+});
+
+test('FR-DEC-4a: age, warranty, cost and repair-or-replace in one prompt runs the three reads and names the decision it did not run', () => {
+  const out = decomposeForComposition('How old is my water heater, is it under warranty, what would a replacement cost, and should I repair or replace it?');
+  assert.equal(out.kind, 'COMPOSE');
+  assert.deepEqual(out.clauses.map((c) => c.operationId), ['INVENTORY_LOOKUP', 'WARRANTY_LOOKUP', 'ITEM_REPLACEMENT_COST']);
+  assert.equal(out.deferred.length, 1);
+  assert.equal(out.deferred[0].operationId, 'REPLACEMENT_GUIDANCE');
+  assert.equal(out.deferred[0].reason, 'NOT_COMPOSABLE');
+  assert.match(out.deferred[0].clause, /repair or replace my water heater/i);
+});
+
+test('FR-DEC-4a: with fewer than two runnable parts nothing is composed (the single path answers and notes what it left out)', () => {
+  const out = decomposeForComposition('how old is my roof and should I repair or replace it');
+  assert.equal(out.kind, 'NOT_COMPOSED');
 });
 
 test('FR-DEC-6: two clauses that resolve to the same operation are one component (the ordinary single path)', () => {

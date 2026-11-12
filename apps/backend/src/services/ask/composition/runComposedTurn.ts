@@ -14,7 +14,7 @@ import {
 import { quantitiesOf } from './quantities';
 import { COMPOSABLE_SOURCE_AUTHORIZATION, type CompositeSourceReference } from './sourceAuthorization';
 import { extractSlots, sanitizeSlots } from './slots';
-import type { ComposedClause } from './decompose';
+import type { ComposedClause, DeferredClause } from './decompose';
 import {
   applyAttemptMutation, childClientRequestId, componentKeyOf, nextAttemptNumber, requireVersion, retryAllowed, selectAttempt, AssemblyInvariantError,
   type Attempt, type AttemptKind, type AssemblyState,
@@ -50,6 +50,8 @@ export interface ComposedTurnInput {
   propertyId: string;
   /** Omitted on recovery and refresh: the clauses stored on the parent at start are used. */
   clauses?: ComposedClause[];
+  /** FR-DEC-4a: parts that were not run, named in the answer. Stored on the parent so recovery and refresh name them again. */
+  deferred?: DeferredClause[];
   createChild: CreateChild;
   loadAuthorizationView: () => Promise<AuthorizationView>;
   /** Runs the assembled parent through the same governed Suggested Next Action pipeline as an ordinary settled answer. */
@@ -96,6 +98,11 @@ export async function recordAttempt(db: CompositionDb, parentId: string, attempt
 interface ComponentRun { clause: ComposedClause; key: string }
 export type DriveMode = 'START' | 'RECOVER' | 'REFRESH' | 'RETRY_EXHAUSTED';
 
+const storedDeferredOf = (row: AskExecution): DeferredClause[] => {
+  const raw = row.parametersJson && typeof row.parametersJson === 'object' && !Array.isArray(row.parametersJson) ? (row.parametersJson as Record<string, unknown>).composition : null;
+  const deferred = raw && typeof raw === 'object' ? (raw as { deferred?: unknown }).deferred : null;
+  return Array.isArray(deferred) ? deferred as DeferredClause[] : [];
+};
 const storedClausesOf = (row: AskExecution): ComposedClause[] => {
   const raw = row.parametersJson && typeof row.parametersJson === 'object' && !Array.isArray(row.parametersJson) ? (row.parametersJson as Record<string, unknown>).composition : null;
   const clauses = raw && typeof raw === 'object' ? (raw as { clauses?: unknown }).clauses : null;
@@ -137,7 +144,7 @@ export async function runComposedTurn(input: ComposedTurnInput): Promise<AskExec
   const { db, parent } = input;
   const clauses = input.clauses ?? [];
   // FR-PER-13: a composed parent starts at version 0. The clauses are stored so an interrupted turn can be recovered and a refresh can rerun every component.
-  await db.askExecution.update({ where: { id: parent.id }, data: { status: 'RUNNING', assemblyVersion: 0, parametersJson: json({ composition: { attempts: [], clauses }, slots: sanitizeSlots(extractSlots(input.message)) }) } });
+  await db.askExecution.update({ where: { id: parent.id }, data: { status: 'RUNNING', assemblyVersion: 0, parametersJson: json({ composition: { attempts: [], clauses, ...(input.deferred?.length ? { deferred: input.deferred } : {}) }, slots: sanitizeSlots(extractSlots(input.message)) }) } });
   await db.askExecutionEvent.create({ data: { executionId: parent.id, eventType: 'COMPOSED_TURN_STARTED', metadataJson: json({ components: clauses.map((c) => c.operationId) }) } });
   askCompositionTotal.inc({ outcome: 'composed' });
   return driveComposite({ ...input, clauses }, 'START');
@@ -366,7 +373,11 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
     }
     return [{ clause: run.clause.clause, reasonCode: attempt?.status === 'FAILED_RETRYABLE' ? 'AskExecutionTimeoutError' : `COMPONENT_${attempt?.status ?? 'FAILED'}`, detail: 'This part could not be answered right now.' }];
   });
-  for (const entry of notAnswered) askCompositionUnansweredTotal.inc({ reason: entry.reasonCode === 'AskExecutionTimeoutError' ? 'timeout' : entry.reasonCode.startsWith('COMPONENT_') ? 'component_failed' : 'needs_clarification' });
+  // FR-DEC-4a: the parts that were never run are named beside the parts that were, with the reason, so nothing the homeowner asked is silently dropped.
+  for (const part of input.deferred ?? storedDeferredOf(input.parent)) {
+    notAnswered.push({ clause: part.clause, reasonCode: `DEFERRED_${part.reason}`, detail: part.reason === 'NOT_COMPOSABLE' ? 'This part makes or saves a decision, so I answer it on its own. Ask it separately.' : 'I couldn’t match this part to something I can answer together with the others. Ask it on its own.' });
+  }
+  for (const entry of notAnswered) askCompositionUnansweredTotal.inc({ reason: entry.reasonCode === 'AskExecutionTimeoutError' ? 'timeout' : entry.reasonCode.startsWith('COMPONENT_') ? 'component_failed' : entry.reasonCode.startsWith('DEFERRED_') ? 'deferred' : 'needs_clarification' });
   if (notAnswered.some((entry) => entry.reasonCode === 'AskExecutionTimeoutError')) askCompositionTimeoutsTotal.inc();
 
   if (!outcomes.length) {

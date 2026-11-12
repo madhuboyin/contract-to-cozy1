@@ -579,3 +579,23 @@ test('FR-PER-6: the delivered envelope carries no attempt or selection evidence 
   assert.deepEqual(withheld.resultJson.composite.attempts, []);
   assert.deepEqual(withheld.resultJson.selection, []);
 });
+
+test('FR-DEC-4a / Amendment A: a deferred part is stored on the parent, named in the answer, and named again after recovery', async () => {
+  const db = fakeDb([parentRow()]);
+  const { createChild, calls } = scriptedChildren(db);
+  const deferred = [{ clause: 'Should I repair or replace my roof?', reason: 'NOT_COMPOSABLE', operationId: 'REPLACEMENT_GUIDANCE' }];
+  const parent = await run(db, createChild, { deferred });
+  assert.equal(calls.length, 2, 'only the composable parts run; the deferred part creates no child');
+  assert.ok(calls.every((c) => c.operationId !== 'REPLACEMENT_GUIDANCE'));
+  assert.equal(parent.status, 'READY_WITH_LIMITATIONS');
+  assert.equal(parent.resultJson.composite.coverage, 'PARTIAL');
+  const note = parent.resultJson.blocks.find((b) => b.id === 'composite-not-answered');
+  assert.ok(note, 'the deferred part is named');
+  assert.match(note.body, /repair or replace my roof/i);
+  assert.match(note.body, /Ask it separately/);
+  // the plan is persisted (FR-PER-17): the stored parent carries the deferred part
+  assert.deepEqual(db.table.get('parent-1').parametersJson.composition.deferred, deferred);
+  // recovery re-reads the stored plan and names the same part
+  const again = await recoverComposedTurn({ db, userId: 'u1', parent: db.table.get('parent-1'), message: 'm', sessionId: 's1', propertyId: 'p1', createChild, loadAuthorizationView: allowAll, executionTimeoutMs: 30_000, now: () => NOW });
+  assert.match(again.resultJson.blocks.find((b) => b.id === 'composite-not-answered').body, /repair or replace my roof/i);
+});
