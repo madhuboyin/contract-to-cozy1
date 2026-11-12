@@ -21,13 +21,24 @@ test('FR-DEC-0: a safety phrase anywhere governs the whole turn and nothing is r
   ]) assert.equal(decomposeForComposition(message).kind === 'COMPOSE', false, message);
 });
 
-test('FR-DEC-1/4: more than six parts, a material decision, or a write is not composed and never silently truncated', () => {
+test('FR-FACET-2 / FR-DEC-1: more than six parts answers the first six and names every part beyond them; a write is still not composed', () => {
   const seven = decomposeForComposition('how old is my roof and what would a new one cost and what warranties do I have and what is in my inventory and what recalls do I have and how much does maintenance cost and what is my reserve plan');
-  assert.equal(seven.kind, 'NOT_COMPOSED');
-  assert.equal(seven.reason, 'TOO_MANY_CLAUSES');
-  assert.match(seven.detail, /7 parts/);
+  assert.equal(seven.kind, 'COMPOSE');
+  assert.ok(seven.clauses.length <= 6);
+  const over = seven.deferred.filter((d) => d.reason === 'OVER_LIMIT');
+  assert.equal(over.length, 1); assert.match(over[0].clause, /reserve plan/i);
+  // the six that were looked at are answered or individually named; nothing is dropped
+  assert.equal(seven.clauses.length + seven.deferred.length + seven.skipped.length, 7);
   const write = decomposeForComposition('how old is my roof and add a water heater to my inventory');
   assert.notEqual(write.kind, 'COMPOSE');
+});
+
+test('D12 / FR-FACET-5: data-point parts compose and each reads the one entity the first part named', () => {
+  const out = decomposeForComposition('How old is my water heater, who is the warranty with, what did I pay for it, and what is the model number?');
+  assert.equal(out.kind, 'COMPOSE');
+  assert.deepEqual(out.clauses.map((c) => c.operationId), ['INVENTORY_LOOKUP', 'DATA_POINT_READ', 'DATA_POINT_READ', 'DATA_POINT_READ']);
+  for (const c of out.clauses.slice(1)) assert.match(c.clause, /water heater/i);
+  assert.equal(new Set(out.clauses.map((c) => c.clause)).size, 4, 'four distinct component keys');
 });
 
 test('FR-DEC-1 / Amendment A: three composable parts are composed together', () => {

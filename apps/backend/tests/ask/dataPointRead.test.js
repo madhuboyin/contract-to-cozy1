@@ -2,7 +2,7 @@
 const test = require('node:test'); const assert = require('node:assert/strict');
 require('ts-node/register/transpile-only');
 const { DATA_POINT_DEFINITIONS, READABLE_ITEM_FIELDS, resolveDataPoint } = require('../../src/services/ask/dataPoint/dataPointCatalogue.ts');
-const { matchItemsByName, readItemDataPoint } = require('../../src/services/ask/dataPoint/dataPointReader.ts');
+const { matchItemsByName, readDataPoint } = require('../../src/services/ask/dataPoint/dataPointReader.ts');
 const { resolveAskOperation, getAskOperationDefinition } = require('../../src/services/ask/askOperationRegistry.ts');
 const { prisma } = require('../../src/lib/prisma.ts');
 const propertyAccessService = require('../../src/services/propertyAccess.service.ts');
@@ -25,7 +25,7 @@ test('every catalogued field exists on its Prisma model, and every entity is pro
   }
 });
 test('data points resolve from homeowner wording; ambiguity resolves to null, never a guess', () => {
-  const cases = { 'what is the serial number of my fridge': 'item.serial', 'when was my furnace installed': 'item.installedOn', 'how much did I pay for my dryer': 'item.purchaseCost', 'when was my water heater last serviced': 'item.lastServicedOn', 'what condition is my dishwasher in': 'item.condition', 'what are the notes on my freezer': 'item.notes' };
+  const cases = { 'what is the serial number of my fridge': 'item.serial', 'when was my furnace installed': 'item.installedOn', 'how much did I pay for my dryer': 'item.purchaseCost', 'when was my water heater last serviced': 'item.lastServicedOn', 'what condition is my dishwasher in': 'item.condition' };
   for (const [m, id] of Object.entries(cases)) assert.equal(resolveDataPoint(m)?.id, id, m);
   assert.equal(resolveDataPoint('how is the weather'), null);
 });
@@ -36,18 +36,18 @@ test('item matching: names, synonyms, plurals; a different item does not match',
   assert.deepEqual(matchItemsByName('what is the model of my furnace', items), []);
 });
 test('routing: unrouted detail questions go to DATA_POINT_READ; existing routes still win', () => {
-  assert.equal(resolveAskOperation('what are the notes on my freezer').operationId, 'DATA_POINT_READ');
+  assert.equal(resolveAskOperation('what condition is my freezer in').operationId, 'DATA_POINT_READ');
   assert.equal(resolveAskOperation('how much does a new roof cost').operationId, 'ITEM_REPLACEMENT_COST');
   assert.equal(getAskOperationDefinition('DATA_POINT_READ').safetyClass, 'STANDARD');
 });
 
 function stub(items, calls = []) {
-  propertyAccessService.resolvePropertyAccess = async () => ({ propertyId: 'p1', userId: 'u1', role: 'VIEWER', isOwner: false });
+  propertyAccessService.resolvePropertyAccess = async () => ({ propertyId: 'p1', userId: 'u1', role: 'OWNER', isOwner: true });
   prisma.inventoryItem = { findMany: async (args) => { calls.push(args); return items; } };
 }
 test('the reader is property-scoped, capped, and selects only catalogued columns', async () => {
   const calls = []; stub([{ id: 'i1', name: 'Refrigerator', serialNumber: 'SN1', room: { name: 'Kitchen' } }], calls);
-  const r = await readItemDataPoint('p1', resolveDataPoint('serial number of my fridge'), 'serial number of my fridge');
+  const r = await readDataPoint('p1', 'OWNER', resolveDataPoint('serial number of my fridge'), 'serial number of my fridge');
   assert.equal(r.status, 'FOUND');
   assert.deepEqual(calls[0].where, { propertyId: 'p1' }); assert.equal(calls[0].take, 200);
   assert.deepEqual(Object.keys(calls[0].select).sort(), ['id', 'name', 'room', 'serialNumber']);
@@ -72,7 +72,7 @@ test('formatting by family', () => {
   assert.equal(formatDataPointValue(by('item.tags'), ['a', 'b']), 'a, b');
 });
 test('a data point outside the catalogue is refused by the reader', async () => {
-  await assert.rejects(readItemDataPoint('p1', { id: 'x', field: 'sourceHash' }, 'x'), /reviewed catalogue/);
+  await assert.rejects(readDataPoint('p1', 'OWNER', { id: 'x', entity: 'InventoryItem', field: 'sourceHash', audience: 'VIEWER' }, 'x'), /reviewed catalogue/);
 });
 
 test('the real answer survives the answer-trust pipeline (a rejected answer would become a clarification card)', async () => {
@@ -98,7 +98,7 @@ test('other domains resolve by their cue word; a bare detail never picks an enti
 });
 test('warranty, policy and task reads are property-scoped, select catalogued columns only, and list a few unnamed records', async () => {
   const calls = [];
-  propertyAccessService.resolvePropertyAccess = async () => ({ propertyId: 'p1', userId: 'u1', role: 'VIEWER', isOwner: false });
+  propertyAccessService.resolvePropertyAccess = async () => ({ propertyId: 'p1', userId: 'u1', role: 'OWNER', isOwner: true });
   prisma.warranty = { findMany: async (a) => { calls.push(['warranty', a]); return [{ id: 'w1', providerName: 'Frigidaire Protect', category: 'APPLIANCE', inventoryItem: { name: 'Dishwasher' }, expiryDate: new Date('2027-03-01T12:00:00Z') }]; } };
   prisma.insurancePolicy = { findMany: async (a) => { calls.push(['policy', a]); return [{ id: 'ip1', carrierName: 'State Farm', coverageType: 'HO3', deductibleCents: 100000 }]; } };
   prisma.propertyMaintenanceTask = { findMany: async (a) => { calls.push(['task', a]); return [{ id: 't1', title: 'Clean gutters', nextDueDate: new Date('2026-12-01T12:00:00Z') }, { id: 't2', title: 'Change furnace filter', nextDueDate: null }]; } };
@@ -114,4 +114,51 @@ test('warranty, policy and task reads are property-scoped, select catalogued col
   assert.equal(unnamedTask.reasonCode, 'DATA_POINT_ITEM_NOT_FOUND');
   for (const [, a] of calls) { assert.deepEqual(a.where, { propertyId: 'p1' }); assert.ok(a.take <= 200); }
   assert.ok(!('sourceHash' in calls[0][1].select));
+});
+
+const roleStub = (role, items) => {
+  propertyAccessService.resolvePropertyAccess = async () => ({ propertyId: 'p1', userId: 'u1', role, isOwner: role === 'OWNER' });
+  prisma.inventoryItem = { findMany: async () => items };
+  prisma.warranty = { findMany: async () => [{ id: 'w1', providerName: 'A', category: 'APPLIANCE', inventoryItem: { name: 'Dishwasher' }, cost: 120, expiryDate: new Date('2027-03-01T12:00:00Z') }, { id: 'w2', providerName: 'B', category: 'APPLIANCE', inventoryItem: { name: 'Furnace' }, cost: 80, expiryDate: new Date('2028-03-01T12:00:00Z') }] };
+};
+test('every data point has an explicit audience floor, free-form item notes are not catalogued, and domains no longer claim claims', () => {
+  for (const p of DATA_POINT_DEFINITIONS) assert.ok(['VIEWER', 'CONTRIBUTOR', 'OWNER'].includes(p.audience), p.id);
+  assert.equal(DATA_POINT_DEFINITIONS.some((p) => p.field === 'notes'), false);
+  assert.deepEqual([...new Set(DATA_POINT_DEFINITIONS.map((p) => p.domain))].sort(), ['appliances-inventory', 'insurance', 'maintenance', 'warranties']);
+  for (const p of DATA_POINT_DEFINITIONS.filter((x) => x.sensitivity === 'FINANCIAL')) assert.notEqual(p.audience, 'VIEWER', `${p.id}: money is not shown to viewers`);
+});
+test('a viewer is refused a restricted field by the handler AND by the reader; a contributor is not', async () => {
+  roleStub('VIEWER', [{ id: 'i1', name: 'Furnace', serialNumber: 'SN9', purchaseCostCents: 100000, installedOn: new Date('2018-04-02T12:00:00Z'), room: null }]);
+  const denied = await dataPointReadResult('u1', 'p1', 'what is the serial number of my furnace');
+  assert.equal(denied.reasonCode, 'DATA_POINT_RESTRICTED'); assert.ok(!JSON.stringify(denied).includes('SN9'));
+  await assert.rejects(readDataPoint('p1', 'VIEWER', resolveDataPoint('serial number of my furnace'), 'serial number of my furnace'), /may not read/);
+  assert.equal((await dataPointReadResult('u1', 'p1', 'when was my furnace installed')).status, 'ANSWERED', 'a viewer still reads plain facts');
+  roleStub('CONTRIBUTOR', [{ id: 'i1', name: 'Furnace', serialNumber: 'SN9', room: null }]);
+  assert.match((await dataPointReadResult('u1', 'p1', 'what is the serial number of my furnace')).blocks[0].body, /SN9/);
+});
+test('provenance: each answer carries the actual record id of its own entity, with the audience floor of restricted fields', async () => {
+  roleStub('OWNER', []);
+  prisma.insurancePolicy = { findMany: async () => [{ id: 'ip1', carrierName: 'State Farm', deductibleCents: 100000 }] };
+  prisma.propertyMaintenanceTask = { findMany: async () => [{ id: 't1', title: 'Clean gutters', nextDueDate: new Date('2026-12-01T12:00:00Z') }] };
+  const pol = await dataPointReadResult('u1', 'p1', 'what is my insurance deductible');
+  assert.deepEqual(pol.parameters.sources, [{ sourceType: 'InsurancePolicy', sourceId: 'ip1', minRole: 'CONTRIBUTOR' }]);
+  const task = await dataPointReadResult('u1', 'p1', 'when is the gutter cleaning task due');
+  assert.deepEqual(task.parameters.sources, [{ sourceType: 'PropertyMaintenanceTask', sourceId: 't1' }]);
+});
+test('several warranties and none named: one clarification listing them, never all values unasked', async () => {
+  roleStub('OWNER', []);
+  const r = await dataPointReadResult('u1', 'p1', 'when does my warranty expire');
+  assert.equal(r.reasonCode, 'DATA_POINT_AMBIGUOUS'); assert.match(r.blocks[0].body, /Dishwasher warranty, Furnace warranty/);
+  assert.equal((await dataPointReadResult('u1', 'p1', 'when does my furnace warranty expire')).status, 'ANSWERED');
+});
+test('source authorization: a restricted source is redacted once the role drops, and the new entity types are checked against live rows for this property', async () => {
+  const { COMPOSABLE_SOURCE_AUTHORIZATION: AUTH, sourceRef } = require('../../src/services/ask/composition/sourceAuthorization.ts');
+  const seen = [];
+  const ctx = (role, present) => ({ userId: 'u1', propertyId: 'p1', role, exists: async (model, where) => { seen.push([model, where]); return present; } });
+  const restricted = [{ ...sourceRef('InsurancePolicy', 'ip1'), minRole: 'CONTRIBUTOR' }];
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx('VIEWER', true), restricted), 'REDACT_SECTION');
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx('CONTRIBUTOR', true), restricted), 'AUTHORIZED');
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources({ ...ctx('OWNER', true), role: undefined }, restricted), 'REDACT_SECTION', 'no known role fails closed');
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx('OWNER', false), [sourceRef('PropertyMaintenanceTask', 't1')]), 'REDACT_SECTION');
+  assert.deepEqual(seen.at(-1), ['PropertyMaintenanceTask', { id: 't1', propertyId: 'p1' }]);
 });

@@ -577,7 +577,7 @@ test('seasonal maintenance rich responses pass the complete semantic trust pipel
   assert.doesNotMatch(projection, /property-1|dashboard\/seasonal/);
 });
 
-test('semantic uncertainty requests focused clarification without claiming a mismatch', () => {
+test('semantic uncertainty with no real alternative declines plainly (FR-REC-1/4: no one-option card) without claiming a mismatch', () => {
   const uncertain = validateAskAnswerTrustPipeline({
     question: 'What maintenance is pending?', operationId: 'MAINTENANCE_STATUS', semanticEnabled: true,
     result: attachAskAuthoritativeSourceEvidence({
@@ -588,10 +588,9 @@ test('semantic uncertainty requests focused clarification without claiming a mis
   });
   assert.equal(uncertain.semantic.outcome, 'UNKNOWN');
   assert.equal(uncertain.trust.checks.questionCoverage, 'UNKNOWN');
-  assert.equal(uncertain.result.status, 'NEEDS_CLARIFICATION');
-  assert.equal(uncertain.result.reasonCode, 'ASK_ANSWER_RELEVANCE_UNCERTAIN_CLARIFICATION_REQUIRED');
-  assert.match(uncertain.result.blocks[0].body, /not confident the answer I prepared is what you asked for/i);
-  assert.deepEqual(uncertain.result.clarification.options.map((option) => option.operationId), ['MAINTENANCE_STATUS'], 'UNKNOWN does not advertise an unproven semantic competitor');
+  assert.equal(uncertain.result.status, 'READY_WITH_LIMITATIONS');
+  assert.equal(uncertain.result.reasonCode, 'ASK_ANSWER_UNVERIFIED_NO_ALTERNATIVE');
+  assert.equal(uncertain.result.clarification, undefined);
 
   const afterClarification = validateAskAnswerTrustPipeline({
     question: 'What maintenance is pending? Clarification: pending upkeep',

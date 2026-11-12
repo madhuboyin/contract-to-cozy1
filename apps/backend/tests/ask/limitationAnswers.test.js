@@ -39,7 +39,9 @@ test('an operation reached by a certain rule that answers with its own plain lim
 test('a plain limitation from a score-based route is still checked, unless the operation has a canonical contract', () => {
   const plain = () => { const result = notRecorded(); return { ...result, blocks: [{ ...result.blocks[0], id: 'plain-limitation' }] }; };
   const checked = validateAskAnswerTrustPipeline({ question: 'is my water heater still good', operationId: 'REPLACEMENT_GUIDANCE', result: plain(), semanticEnabled: true, propertyId: 'p1' });
-  assert.equal(checked.result.status, 'NEEDS_CLARIFICATION');
+  // FR-REC-1/4: still checked (UNKNOWN), but with no real alternative the outcome is a plain decline, never a one-option card.
+  assert.equal(checked.result.status, 'READY_WITH_LIMITATIONS');
+  assert.equal(checked.result.reasonCode, 'ASK_ANSWER_UNVERIFIED_NO_ALTERNATIVE');
   assert.equal(checked.semantic.outcome, 'UNKNOWN');
   const certain = validateAskAnswerTrustPipeline({ question: 'is my water heater still good', operationId: 'REPLACEMENT_GUIDANCE', result: plain(), semanticEnabled: true, propertyId: 'p1', routedDeterministically: true });
   assert.equal(certain.result.status, 'READY_WITH_LIMITATIONS');
@@ -58,7 +60,8 @@ test('only a plain limitation skips the check: an answer with data, or a vague a
   assert.equal(isAskHonestLimitationResult({ ...base, blocks: [...base.blocks, { type: 'GROUPED_LIST', id: 'x', title: 'Items', filters: [], sections: [], actions: [] }] }), false, 'data blocks are verified');
   const vague = withEvidence({ status: 'ANSWERED', blocks: [{ type: 'SUMMARY', id: 'vague', title: 'Response', body: 'I found a result.', tone: 'DEFAULT', actions: [] }], suggestions: [] }, 'MAINTENANCE_STATUS');
   const validation = validateAskAnswerTrustPipeline({ question: 'What maintenance is pending?', operationId: 'MAINTENANCE_STATUS', result: vague, semanticEnabled: true, routedDeterministically: true });
-  assert.equal(validation.result.status, 'NEEDS_CLARIFICATION', 'a deterministic route does not excuse a vague answer');
+  assert.equal(validation.result.reasonCode, 'ASK_ANSWER_UNVERIFIED_NO_ALTERNATIVE', 'a deterministic route does not excuse a vague answer (it is declined, never shown as an answer)');
+  assert.equal(validation.result.clarification, undefined);
 });
 
 test('"no active decision yet" can start one, and its buttons survive the answer-trust allowlist', () => {

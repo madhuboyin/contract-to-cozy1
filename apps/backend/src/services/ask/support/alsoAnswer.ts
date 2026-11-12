@@ -19,7 +19,8 @@ const ALREADY_COVERED_CLAUSES: Readonly<Record<string, ReadonlySet<string>>> = {
   // dated replacement cost before calculating the reserve gap and monthly need.
   CAPITAL_ITEM_FUNDING_GOAL: new Set(['ITEM_REPLACEMENT_COST', 'REPLACEMENT_GUIDANCE']),
 };
-const NEVER_OFFERED = new Set<string>(['GROUNDED_GUIDANCE', 'EMERGENCY_BOUNDARY', 'UNSAFE_RESTRICTED_BOUNDARY', 'OUT_OF_SCOPE_BOUNDARY']);
+// DATA_POINT_READ is composable but never offered as a chip: it is matched by a catalogue alias, and a chip must not depend on a record this home may not have.
+const NEVER_OFFERED = new Set<string>(['DATA_POINT_READ', 'GROUNDED_GUIDANCE', 'EMERGENCY_BOUNDARY', 'UNSAFE_RESTRICTED_BOUNDARY', 'OUT_OF_SCOPE_BOUNDARY']);
 
 /** The question split at its joining words, each part trimmed of its own joiner. Parts too short to be a question are folded into the part before them. */
 export function splitQuestionClauses(message: string): string[] {

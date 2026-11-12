@@ -683,13 +683,13 @@ const CAPABILITY_CONTINUITY_OPERATIONS = new Set<AskOperationId>([
 // runtime purity test in tests/ask/composableReadPurity.test.js (FR-ELG-6) before it appears here.
 // Not admitted yet: APPLIANCE_FAILURE_RISK (its real service path throws on an empty home, so it cannot pass the purity test until it has a data-backed fixture).
 /** Composable reads that are reached only as a part of a composed answer, never by message (D17). They are internal operations, so the message-routable rule does not apply. */
-export const COMPOSITION_ONLY_READ_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<AskOperationId>(['ITEM_REPAIR_REPLACE_VERDICT']);
+export const COMPOSITION_ONLY_READ_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<AskOperationId>(['ITEM_REPAIR_REPLACE_VERDICT', 'DATA_POINT_READ']);
 
 /** The pure, non-persisting variant a composed answer runs in place of an operation that persists (D17). The ordinary turn is unchanged. */
 export const COMPOSITION_PURE_VARIANTS: Readonly<Partial<Record<AskOperationId, AskOperationId>>> = { REPLACEMENT_GUIDANCE: 'ITEM_REPAIR_REPLACE_VERDICT' };
 
 export const COMPOSABLE_READ_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<AskOperationId>([
-  'ITEM_REPLACEMENT_COST', 'ITEM_REPAIR_REPLACE_VERDICT', 'ITEM_RESERVE_ALLOCATION', 'INVENTORY_LOOKUP', 'WARRANTY_LOOKUP', 'MAINTENANCE_BUDGET_FORECAST', 'DO_NOTHING_SIMULATION',
+  'ITEM_REPLACEMENT_COST', 'ITEM_REPAIR_REPLACE_VERDICT', 'DATA_POINT_READ', 'ITEM_RESERVE_ALLOCATION', 'INVENTORY_LOOKUP', 'WARRANTY_LOOKUP', 'MAINTENANCE_BUDGET_FORECAST', 'DO_NOTHING_SIMULATION',
   'HOME_UPGRADE_SCENARIOS', 'RECALL_REVIEW', 'HOME_TIMELINE_EVENTS',
 ]);
 
@@ -2064,7 +2064,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   // Understanding reliability FRD D12 (Phase 1b): a question about ONE recorded detail of a named item ("what did I pay for my dryer", "when was my furnace installed").
   // Last before the fallback so every more specific route above wins; the handler resolves the detail from the reviewed catalogue and the item from the home inventory.
   if (dataPointQuestionPattern.test(message) && resolveDataPoint(message)) {
-    return resolved('DATA_POINT_READ', 0.8);
+    return resolved('DATA_POINT_READ', 0.9);
   }
   return resolved('GROUNDED_GUIDANCE', 0.55);
 }

@@ -7,7 +7,7 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { humanDate, money } from '../askFormatting';
 import { ensurePropertyAccess } from '../askHandlerSupport';
-import { resolveDataPoint, type DataPointDefinition } from '../dataPoint/dataPointCatalogue';
+import { resolveDataPoint, roleMayRead, type DataPointDefinition } from '../dataPoint/dataPointCatalogue';
 import { readDataPoint } from '../dataPoint/dataPointReader';
 
 const ENTITY_COPY: Record<string, { plural: string; singular: string; collection: string; record: string }> = {
@@ -32,11 +32,16 @@ const notice = (reasonCode: string, id: string, title: string, body: string): As
 });
 
 export async function dataPointReadResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
-  await ensurePropertyAccess(userId, propertyId);
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const role = String(access.role);
   const point = resolveDataPoint(message);
   if (!point) return notice('DATA_POINT_NOT_IDENTIFIED', 'data-point-unidentified', 'Which detail do you mean?', 'Tell me the detail and the item, for example “the serial number of my refrigerator” or “when my furnace was installed”.');
-  const read = await readDataPoint(propertyId, point, message);
+  if (!roleMayRead(role, point)) {
+    return notice('DATA_POINT_RESTRICTED', 'data-point-restricted', 'That detail is shown to contributors and owners', `${point.label} is only shown to household members who can edit this home. Ask the home’s owner if you need it.`);
+  }
+  const read = await readDataPoint(propertyId, role, point, message);
   const where = ENTITY_COPY[point.entity];
+  if (read.status === 'AMBIGUOUS') return notice('DATA_POINT_AMBIGUOUS', 'data-point-ambiguous', `Which ${where.singular} do you mean?`, `You have more than one: ${read.rows.map((r) => r.name).join(', ')}. Name one and I’ll tell you ${point.label.charAt(0).toLowerCase()}${point.label.slice(1)}.`);
   if (read.status === 'ITEM_NOT_FOUND') return notice('DATA_POINT_NO_INVENTORY', 'data-point-no-inventory', `No ${where.plural} are recorded yet`, `Add it to your home record and I can tell you its details.`);
   if (read.status === 'NO_ITEM_NAMED') return notice('DATA_POINT_ITEM_NOT_FOUND', 'data-point-item-not-found', `I don’t see that in your ${where.collection}`, `${point.label} comes from the ${where.singular} record. Name one you have recorded, or add it first.`);
   const present = read.rows.filter((r) => r.value !== null && r.value !== '' && !(Array.isArray(r.value) && r.value.length === 0));
@@ -49,7 +54,7 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
   if (missing > 0) sentences.push(`${missing === 1 ? 'One matching item has' : `${missing} matching items have`} nothing recorded for this.`);
   return {
     status: missing > 0 ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: missing > 0 ? 'DATA_POINT_PARTIAL' : undefined,
-    parameters: { sources: present.map((r) => (point.entity === 'InventoryItem' ? sourceRef('InventoryItem', r.id) : point.entity === 'Warranty' ? sourceRef('Warranty', r.id) : sourceRef('Property', propertyId))) },
+    parameters: { sources: present.map((r) => ({ ...sourceRef(point.entity, r.id), ...(point.audience !== 'VIEWER' ? { minRole: point.audience } : {}) })) },
     blocks: [
       { type: 'SUMMARY', id: 'data-point-summary', title: `${point.label}: ${present.map((r) => formatDataPointValue(point, r.value)).join('; ')}`, body: sentences.join(' '), tone: missing > 0 ? 'CAUTION' : 'DEFAULT', actions: [] },
       { type: 'EVIDENCE', id: 'data-point-evidence', title: 'Where this comes from', items: present.map((r) => ({ label: r.name, source: `${where.record}${r.roomName ? ` (${r.roomName})` : ''}`, observedAt: null })) },

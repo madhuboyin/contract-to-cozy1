@@ -12,7 +12,7 @@ const MIN_CLAUSE_CONFIDENCE = 0.85;
 
 export interface ComposedClause { clause: string; operationId: AskOperationId; confidence: number }
 /** FR-DEC-4a: a part that was NOT run. It is named in the answer with the reason, never dropped and never guessed. */
-export interface DeferredClause { clause: string; reason: 'NOT_ROUTED' | 'LOW_CONFIDENCE' | 'NOT_ELIGIBLE' | 'NOT_COMPOSABLE'; operationId: AskOperationId | null }
+export interface DeferredClause { clause: string; reason: 'NOT_ROUTED' | 'LOW_CONFIDENCE' | 'NOT_ELIGIBLE' | 'NOT_COMPOSABLE' | 'OVER_LIMIT'; operationId: AskOperationId | null }
 
 export type DecompositionOutcome =
   | { kind: 'SINGLE'; reason: 'ONE_CLAUSE' | 'FULL_MESSAGE_GATE' | 'SAME_OPERATION' }
@@ -35,16 +35,15 @@ export function decomposeForComposition(message: string, options: DecomposeOptio
 
   const clauses = splitQuestionClauses(message);
   if (clauses.length < 2) return { kind: 'SINGLE', reason: 'ONE_CLAUSE' };
-  // FR-DEC-1: more than the cap is not composed and never silently truncated.
-  if (clauses.length > MAX_COMPOSED_COMPONENTS) {
-    return { kind: 'NOT_COMPOSED', reason: 'TOO_MANY_CLAUSES', detail: `${clauses.length} parts were seen; at most ${MAX_COMPOSED_COMPONENTS} are composed.`, clauseCount: clauses.length };
-  }
+  // FR-FACET-2 / FR-DEC-1: the first MAX_COMPOSED_COMPONENTS parts are answered; every part beyond them is named as not answered (never silently truncated).
+  const overflow = clauses.splice(MAX_COMPOSED_COMPONENTS);
+  const overLimit: DeferredClause[] = overflow.map((part) => ({ clause: part.charAt(0).toUpperCase() + part.slice(1) + (part.endsWith('?') ? '' : '?'), reason: 'OVER_LIMIT', operationId: null }));
 
   const subject = subjectOf(clauses[0]);
   const date = parseTargetDate(clauses[0], options.now);
   const routed: ComposedClause[] = [];
   const definitions: Array<ReturnType<typeof getAskOperationDefinition>> = [];
-  const deferred: DeferredClause[] = [];
+  const deferred: DeferredClause[] = [...overLimit];
   const tail = (clause: string) => clause.charAt(0).toUpperCase() + clause.slice(1) + (clause.endsWith('?') ? '' : '?');
   const refusals: Array<{ reason: 'CLAUSE_NOT_COMPOSABLE' | 'CLAUSE_NOT_ELIGIBLE' | 'LOW_CONFIDENCE'; detail: string }> = [];
   const refuse = (reason: (typeof refusals)[number]['reason'], detail: string) => { refusals.push({ reason, detail }); };
@@ -68,7 +67,11 @@ export function decomposeForComposition(message: string, options: DecomposeOptio
     if (options.eligibleOperationIds && !options.eligibleOperationIds.has(requestedOperationId)) {
       refuse('CLAUSE_NOT_ELIGIBLE', `${resolved.operationId} is not available for this home.`); deferred.push({ clause: tail(clause), reason: 'NOT_ELIGIBLE', operationId: resolved.operationId }); continue;
     }
-    routed.push({ clause: tail(clause), operationId, confidence: resolved.confidence });
+    // FR-FACET-5/6: a detail question with no item of its own is about the item the first part named ("what is the model number" -> "... for my water heater"), so every
+    // facet reads the same resolved entity and the handler never has to guess.
+    const noun = subject ? subject.replace(/^(?:my|our)\s+/, '').toLowerCase() : null;
+    const aboutSubject = operationId === 'DATA_POINT_READ' && subject && noun && !clause.toLowerCase().includes(noun) ? `${clause.replace(/\?+$/, '')} for ${subject}` : clause;
+    routed.push({ clause: tail(aboutSubject), operationId, confidence: resolved.confidence });
     definitions.push(definition);
   }
 
@@ -88,7 +91,8 @@ export function decomposeForComposition(message: string, options: DecomposeOptio
   });
   // FR-DEC-4a: partial execution needs at least two parts that can run together; with fewer, the single-operation path answers and notes what it left out.
   if (composable.length < 2) {
-    if (refusals.length) return { kind: 'NOT_COMPOSED', reason: refusals[0].reason, detail: refusals[0].detail, clauseCount: clauses.length };
+    if (overLimit.length && !refusals.length) return { kind: 'NOT_COMPOSED', reason: 'TOO_MANY_CLAUSES', detail: `${clauses.length + overflow.length} parts were seen; at most ${MAX_COMPOSED_COMPONENTS} are composed.`, clauseCount: clauses.length + overflow.length };
+    if (refusals.length) return { kind: 'NOT_COMPOSED', reason: refusals[0].reason, detail: refusals[0].detail, clauseCount: clauses.length + overflow.length };
     return { kind: 'SINGLE', reason: 'SAME_OPERATION' };
   }
 

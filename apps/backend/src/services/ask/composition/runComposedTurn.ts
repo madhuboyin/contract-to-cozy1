@@ -375,7 +375,7 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   });
   // FR-DEC-4a: the parts that were never run are named beside the parts that were, with the reason, so nothing the homeowner asked is silently dropped.
   for (const part of input.deferred ?? storedDeferredOf(input.parent)) {
-    notAnswered.push({ clause: part.clause, reasonCode: `DEFERRED_${part.reason}`, detail: part.reason === 'NOT_COMPOSABLE' ? 'This part makes or saves a decision, so I answer it on its own. Ask it separately.' : 'I couldn’t match this part to something I can answer together with the others. Ask it on its own.' });
+    notAnswered.push({ clause: part.clause, reasonCode: `DEFERRED_${part.reason}`, detail: part.reason === 'OVER_LIMIT' ? 'I answer up to six parts at a time, so I stopped before this one. Ask it on its own.' : part.reason === 'NOT_COMPOSABLE' ? 'This part makes or saves a decision, so I answer it on its own. Ask it separately.' : 'I couldn’t match this part to something I can answer together with the others. Ask it on its own.' });
   }
   for (const entry of notAnswered) askCompositionUnansweredTotal.inc({ reason: entry.reasonCode === 'AskExecutionTimeoutError' ? 'timeout' : entry.reasonCode.startsWith('COMPONENT_') ? 'component_failed' : entry.reasonCode.startsWith('DEFERRED_') ? 'deferred' : 'needs_clarification' });
   if (notAnswered.some((entry) => entry.reasonCode === 'AskExecutionTimeoutError')) askCompositionTimeoutsTotal.inc();

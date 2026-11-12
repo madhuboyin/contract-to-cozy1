@@ -15,6 +15,7 @@ const seedWithReserve = (model, method) => {
 
 const MESSAGES = {
   ITEM_REPLACEMENT_COST: 'how much does a new roof cost',
+  DATA_POINT_READ: 'when was my furnace installed',
   ITEM_REPAIR_REPLACE_VERDICT: 'should I repair or replace my water heater',
   ITEM_RESERVE_ALLOCATION: 'how much of my reserve is set aside for the roof',
   INVENTORY_LOOKUP: 'how old is my roof',

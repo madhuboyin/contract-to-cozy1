@@ -44,6 +44,9 @@ const ANSWERS = {
   ITEM_REPLACEMENT_COST: { status: 'ANSWERED', blocks: [summary('item-cost-summary', 'A new Roof is about $11,500 in today’s dollars'), { type: 'TABLE', id: 'item-cost-items', title: 'The item', columns: [{ key: 'today', label: 'Today’s dollars' }], rows: [{ id: 'r', values: { today: '$8,000–$15,000' } }], actions: [] }], quantities: [cost('TODAY', 800_000, 1_500_000), cost('WINDOW', 1_660_000, 3_120_000)], sources: [{ sourceType: 'HomeCapitalTimelineItem', sourceId: 'tl-1' }] },
 };
 
+// Non-enumerable on purpose: older tests iterate ANSWERS as the two-part roof example.
+Object.defineProperty(ANSWERS, 'DATA_POINT_READ', { enumerable: false, writable: true, value: { status: 'ANSWERED', blocks: [summary('data-point-summary', 'The model number: X1')], sources: [{ sourceType: 'InventoryItem', sourceId: 'i1' }] } });
+
 /** A scripted createChild: `script(operationId, attemptNumber)` returns { status, throws? } overriding the default answer. */
 function scriptedChildren(db, script = () => null) {
   const calls = [];
@@ -598,4 +601,64 @@ test('FR-DEC-4a / Amendment A: a deferred part is stored on the parent, named in
   // recovery re-reads the stored plan and names the same part
   const again = await recoverComposedTurn({ db, userId: 'u1', parent: db.table.get('parent-1'), message: 'm', sessionId: 's1', propertyId: 'p1', createChild, loadAuthorizationView: allowAll, executionTimeoutMs: 30_000, now: () => NOW });
   assert.match(again.resultJson.blocks.find((b) => b.id === 'composite-not-answered').body, /repair or replace my roof/i);
+});
+
+// ---- DATA_POINT_READ as a composable read: record-level authorization, audience floors, six children ----
+const { COMPOSABLE_SOURCE_AUTHORIZATION: SRC } = require('../../src/services/ask/composition/sourceAuthorization.ts');
+const dpClause = (text) => ({ clause: text, operationId: 'DATA_POINT_READ', confidence: 0.9 });
+const sixClauses = [
+  { clause: 'How old is my water heater?', operationId: 'INVENTORY_LOOKUP', confidence: 0.96 },
+  dpClause('Who is the warranty with for my water heater?'), dpClause('What did I pay for my water heater?'), dpClause('What is the model number for my water heater?'),
+  dpClause('What is the serial number for my water heater?'), dpClause('When was my water heater installed?'),
+];
+const viewWith = ({ role, present = () => true }) => async () => ({
+  propertyAccess: true, isOperationAuthorized: () => true,
+  authorizeSources: async (operationId, sources) => SRC[operationId].authorizeSources({ userId: 'u1', propertyId: 'p1', role, exists: async (model, where) => present(model, where) }, sources),
+});
+const answersWithFloor = (sources) => { ANSWERS.DATA_POINT_READ.sources = sources; };
+
+test('six facet children (one entity, five data points) run, assemble once, survive replay, and every record is authorized by id', async () => {
+  answersWithFloor([{ sourceType: 'InventoryItem', sourceId: 'i1' }]);
+  const checked = [];
+  const db = fakeDb([parentRow()]);
+  const { createChild, calls } = scriptedChildren(db);
+  const parent = await run(db, createChild, { clauses: sixClauses, loadAuthorizationView: viewWith({ role: 'OWNER', present: (m, w) => { checked.push([m, w]); return true; } }) });
+  assert.equal(calls.length, 6);
+  assert.equal(parent.resultJson.composite.sections.length, 6);
+  assert.equal(parent.status, 'ANSWERED');
+  const dp = checked.filter(([, w]) => w.id === 'i1');
+  assert.ok(dp.length >= 5 && dp.every(([m, w]) => m === 'InventoryItem' && w.propertyId === 'p1'), 'each data-point section reauthorizes its record by id and property');
+  const replay = await replayComposite(parent, await viewWith({ role: 'OWNER' })());
+  assert.equal(replay.kind, 'DELIVER'); assert.equal(replay.delivered.composite.sections.length, 6);
+});
+test('a viewer never keeps a restricted data-point section: it is redacted at assembly and on replay, the plain sections stay', async () => {
+  answersWithFloor([{ sourceType: 'InventoryItem', sourceId: 'i1', minRole: 'CONTRIBUTOR' }]);
+  const db = fakeDb([parentRow()]);
+  const parent = await run(db, scriptedChildren(db).createChild, { clauses: sixClauses.slice(0, 3), loadAuthorizationView: viewWith({ role: 'VIEWER' }) });
+  assert.equal(parent.status, 'READY_WITH_LIMITATIONS');
+  const delivered = JSON.stringify(parent.resultJson.blocks);
+  assert.ok(delivered.includes('s1-inventory-roof-profile'), 'the unrestricted inventory section stays');
+  assert.ok(!delivered.includes('data-point-summary'), 'restricted sections are gone from the viewer projection');
+  const later = await replayComposite(parent, await viewWith({ role: 'OWNER' })());
+  assert.ok(JSON.stringify(later.delivered.blocks).includes('data-point-summary'), 'restored role restores the sections');
+  const demoted = await replayComposite(later.delivered ? parent : parent, await viewWith({ role: 'VIEWER' })());
+  assert.ok(!JSON.stringify(demoted.delivered.blocks).includes('data-point-summary'), 'a demoted member loses them on replay');
+});
+test('a record that is not on this property (or was deleted) redacts only its own section', async () => {
+  answersWithFloor([{ sourceType: 'InventoryItem', sourceId: 'other-property-item' }]);
+  const db = fakeDb([parentRow()]);
+  const parent = await run(db, scriptedChildren(db).createChild, { clauses: sixClauses.slice(0, 3), loadAuthorizationView: viewWith({ role: 'OWNER', present: (m, w) => w.id !== 'other-property-item' }) });
+  assert.equal(parent.status, 'READY_WITH_LIMITATIONS');
+  assert.ok(JSON.stringify(parent.resultJson.blocks).includes('s1-inventory-roof-profile'));
+  assert.ok(!JSON.stringify(parent.resultJson.blocks).includes('data-point-summary'));
+});
+test('the six-child composite refreshes on the same parent with all six components rerun', async () => {
+  answersWithFloor([{ sourceType: 'InventoryItem', sourceId: 'i1' }]);
+  const db = fakeDb([parentRow()]);
+  const first = scriptedChildren(db);
+  await run(db, first.createChild, { clauses: sixClauses, loadAuthorizationView: viewWith({ role: 'OWNER' }) });
+  const second = scriptedChildren(db);
+  const refreshed = await refreshComposedTurn({ db, userId: 'u1', parent: db.table.get('parent-1'), message: 'm', sessionId: 's1', propertyId: 'p1', createChild: second.createChild, loadAuthorizationView: viewWith({ role: 'OWNER' }), executionTimeoutMs: 30_000, now: () => NOW });
+  assert.equal(second.calls.length, 6, 'every component reruns on refresh');
+  assert.equal(refreshed.resultJson.composite.sections.length, 6);
 });

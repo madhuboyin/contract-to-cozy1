@@ -3,7 +3,8 @@
 // owner's order (appliances-inventory, entity InventoryItem). Each entry is an engineering PROPOSAL pending owner sign-off of the D11 field list (see the FRD §38 decisions).
 export type DataPointFamily = 'text' | 'date' | 'money' | 'dollars' | 'enum' | 'tags' | 'flag';
 export type DataPointEntity = 'InventoryItem' | 'Warranty' | 'InsurancePolicy' | 'PropertyMaintenanceTask';
-export type DataPointDomain = 'appliances-inventory' | 'warranty-insurance-claims' | 'maintenance';
+export type DataPointDomain = 'appliances-inventory' | 'warranties' | 'insurance' | 'maintenance';
+export type AudienceFloor = 'VIEWER' | 'CONTRIBUTOR' | 'OWNER';
 export interface DataPointDefinition {
   /** Stable id used by plans, fixtures and tests (never a column name). */
   readonly id: string;
@@ -19,11 +20,31 @@ export interface DataPointDefinition {
   /** How the value is phrased when present. */
   readonly sentence: string;
   readonly sensitivity: 'HOME' | 'FINANCIAL';
+  /** The lowest household role that may be shown this data point. Explicit for every point (a point with no entry in FIELD_AUDIENCE fails the module load), enforced by the reader and re-checked on composite replay. */
+  readonly audience: AudienceFloor;
   /** Words that must appear in the message for a point of a non-inventory entity ("warranty", "policy", "task"), so a bare "expires" never picks an entity. */
   readonly cues?: readonly string[];
 }
 
-const d = (x: DataPointDefinition): DataPointDefinition => x;
+/** Per-point audience floors (review 2026-11-11). Money, serial numbers, free-form coverage text and tags are not shown to viewers; plain item, date and status facts are. Pending owner sign-off like the rest of the catalogue. */
+const FIELD_AUDIENCE: Readonly<Record<string, AudienceFloor>> = Object.freeze({
+  'item.brand': 'VIEWER', 'item.manufacturer': 'VIEWER', 'item.model': 'VIEWER', 'item.serial': 'CONTRIBUTOR', 'item.installedOn': 'VIEWER', 'item.purchasedOn': 'VIEWER',
+  'item.lastServicedOn': 'VIEWER', 'item.expectedExpiryDate': 'VIEWER', 'item.condition': 'VIEWER', 'item.category': 'VIEWER', 'item.efficiencyRating': 'VIEWER',
+  'item.purchaseCost': 'CONTRIBUTOR', 'item.replacementCost': 'CONTRIBUTOR', 'item.tags': 'CONTRIBUTOR',
+  'warranty.expiryDate': 'VIEWER', 'warranty.startDate': 'VIEWER', 'warranty.provider': 'VIEWER', 'warranty.coverage': 'CONTRIBUTOR', 'warranty.cost': 'CONTRIBUTOR',
+  'policy.carrier': 'VIEWER', 'policy.expiryDate': 'VIEWER', 'policy.startDate': 'VIEWER', 'policy.deductible': 'CONTRIBUTOR', 'policy.premium': 'CONTRIBUTOR',
+  'policy.coverageType': 'VIEWER', 'policy.personalPropertyLimit': 'CONTRIBUTOR',
+  'task.nextDueDate': 'VIEWER', 'task.lastCompletedDate': 'VIEWER', 'task.status': 'VIEWER', 'task.priority': 'VIEWER', 'task.frequency': 'VIEWER',
+  'task.estimatedCost': 'CONTRIBUTOR', 'task.actualCost': 'CONTRIBUTOR',
+});
+const d = (x: Omit<DataPointDefinition, 'audience'>): DataPointDefinition => {
+  const audience = FIELD_AUDIENCE[x.id];
+  if (!audience) throw new Error(`data point ${x.id} has no audience floor; the catalogue fails closed`);
+  return { ...x, audience };
+};
+const ROLE_RANK: Readonly<Record<string, number>> = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 };
+/** Whether a household role may be shown a data point. An unknown role is refused. */
+export const roleMayRead = (role: string, point: DataPointDefinition): boolean => (ROLE_RANK[role] ?? 0) >= ROLE_RANK[point.audience];
 const INVENTORY_POINTS: readonly DataPointDefinition[] = [
   d({ id: 'item.brand', domain: 'appliances-inventory', entity: 'InventoryItem', field: 'brand', family: 'text', label: 'The brand', aliases: ['brand', 'maker', 'who makes'], sentence: 'is made by', sensitivity: 'HOME' }),
   d({ id: 'item.manufacturer', domain: 'appliances-inventory', entity: 'InventoryItem', field: 'manufacturer', family: 'text', label: 'The manufacturer', aliases: ['manufacturer', 'manufactured by'], sentence: 'is made by', sensitivity: 'HOME' }),
@@ -38,16 +59,16 @@ const INVENTORY_POINTS: readonly DataPointDefinition[] = [
   d({ id: 'item.efficiencyRating', domain: 'appliances-inventory', entity: 'InventoryItem', field: 'efficiencyRating', family: 'text', label: 'Its efficiency rating', aliases: ['efficiency rating', 'efficiency', 'energy rating', 'energy star'], sentence: 'has an efficiency rating of', sensitivity: 'HOME' }),
   d({ id: 'item.purchaseCost', domain: 'appliances-inventory', entity: 'InventoryItem', field: 'purchaseCostCents', family: 'money', label: 'What it cost when bought', aliases: ['purchase price', 'purchase cost', 'paid for', 'did i pay', 'cost when i bought', 'bought for', 'price paid'], sentence: 'was bought for', sensitivity: 'FINANCIAL' }),
   d({ id: 'item.replacementCost', domain: 'appliances-inventory', entity: 'InventoryItem', field: 'replacementCostCents', family: 'money', label: 'The recorded replacement cost', aliases: ['recorded replacement cost', 'replacement value'], sentence: 'has a recorded replacement cost of', sensitivity: 'FINANCIAL' }),
-  d({ id: 'item.notes', domain: 'appliances-inventory', entity: 'InventoryItem', field: 'notes', family: 'text', label: 'The notes you saved', aliases: ['notes'], sentence: 'has these notes', sensitivity: 'HOME' }),
+  // item.notes is deliberately NOT catalogued: free-form text can hold anything (review 2026-11-11).
   d({ id: 'item.tags', domain: 'appliances-inventory', entity: 'InventoryItem', field: 'tags', family: 'tags', label: 'Its tags', aliases: ['tags', 'tagged'], sentence: 'is tagged', sensitivity: 'HOME' }),
 ];
 
 const W = ['warranty', 'warranties', 'warrantied'];
 const P = ['policy', 'policies', 'insurance', 'insurer', 'insured'];
 const T = ['task', 'tasks', 'chore', 'reminder', 'maintenance'];
-const w = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues'>): DataPointDefinition => d({ ...x, domain: 'warranty-insurance-claims', entity: 'Warranty', cues: W });
-const pol = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues'>): DataPointDefinition => d({ ...x, domain: 'warranty-insurance-claims', entity: 'InsurancePolicy', cues: P });
-const mt = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues'>): DataPointDefinition => d({ ...x, domain: 'maintenance', entity: 'PropertyMaintenanceTask', cues: T });
+const w = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues' | 'audience'>): DataPointDefinition => d({ ...x, domain: 'warranties', entity: 'Warranty', cues: W });
+const pol = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues' | 'audience'>): DataPointDefinition => d({ ...x, domain: 'insurance', entity: 'InsurancePolicy', cues: P });
+const mt = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues' | 'audience'>): DataPointDefinition => d({ ...x, domain: 'maintenance', entity: 'PropertyMaintenanceTask', cues: T });
 const OTHER_DOMAINS: readonly DataPointDefinition[] = [
   w({ id: 'warranty.expiryDate', field: 'expiryDate', family: 'date', label: 'When the warranty expires', aliases: ['expire', 'expires', 'expiration', 'expiry', 'expiry date', 'run out', 'runs out', 'good until', 'end'], sentence: 'expires', sensitivity: 'HOME' }),
   w({ id: 'warranty.startDate', field: 'startDate', family: 'date', label: 'When the warranty started', aliases: ['start', 'starts', 'started', 'begin', 'began', 'start date', 'effective'], sentence: 'started', sensitivity: 'HOME' }),

@@ -25,7 +25,7 @@ export async function buildAuthorizationView(userId: string, propertyId: string,
     authorizeSources: async (operationId, sources) => {
       const contract = COMPOSABLE_SOURCE_AUTHORIZATION[operationId];
       if (!contract) return 'REDACT_SECTION';
-      return contract.authorizeSources({ userId, propertyId, exists: (model: CompositeSourceType, where) => recordExists(model, where) }, sources);
+      return contract.authorizeSources({ userId, propertyId, role: String(access.role), exists: (model: CompositeSourceType, where) => recordExists(model, where) }, sources);
     },
   };
 }

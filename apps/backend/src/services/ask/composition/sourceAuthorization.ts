@@ -10,11 +10,14 @@ import type { AskOperationId } from '../askOperationRegistry';
 
 export type CompositeSourceType =
   | 'Property' | 'InventoryItem' | 'Warranty' | 'HomeCapitalTimelineItem' | 'HomeReserveFund' | 'HomeReserveFundLineItem'
-  | 'DoNothingSimulationRun' | 'DoNothingScenario' | 'HomeDigitalTwin' | 'HomeTwinScenario' | 'RecallMatch' | 'HomeEvent';
+  | 'DoNothingSimulationRun' | 'DoNothingScenario' | 'HomeDigitalTwin' | 'HomeTwinScenario' | 'RecallMatch' | 'HomeEvent'
+  | 'InsurancePolicy' | 'PropertyMaintenanceTask';
 
 export interface CompositeSourceReference {
   sourceType: CompositeSourceType;
   sourceId: string;
+  /** The lowest household role that may see what this record contributes (per-field audience floor). Checked against the CURRENT role at every authorization; absent means any role. */
+  minRole?: 'CONTRIBUTOR' | 'OWNER';
   /** Optional opaque version of the record's visibility when the operation can state one (for example `updatedAt`); never content. */
   visibilityVersion?: string;
 }
@@ -24,6 +27,8 @@ export type SourceVerdict = 'AUTHORIZED' | 'REDACT_SECTION' | 'WITHHOLD_COMPOSIT
 export interface SourceAuthorizationContext {
   userId: string;
   propertyId: string;
+  /** The requesting user's CURRENT household role on the property. Required to honour a `minRole` on a source; a source with a minRole and no role fails closed. */
+  role?: string;
   /** True when a record of `model` matching `where` exists. Injected, so every rule is tested with a fake. */
   exists(model: CompositeSourceType, where: Record<string, unknown>): Promise<boolean>;
 }
@@ -36,6 +41,7 @@ export interface ComposableReadAuthorization {
   authorizeSources(context: SourceAuthorizationContext, sources: readonly CompositeSourceReference[]): Promise<SourceVerdict>;
 }
 
+const ROLE_RANK: Record<string, number> = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 };
 export const MAX_SOURCES_PER_SECTION = 50;
 const MAX_ID_LENGTH = 128;
 const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -54,6 +60,8 @@ const CHECKS: Record<CompositeSourceType, { where: (context: SourceAuthorization
   HomeTwinScenario: { where: (c, id) => ({ id, propertyId: c.propertyId }), onMissing: 'REDACT_SECTION' },
   RecallMatch: { where: (c, id) => ({ id, propertyId: c.propertyId, status: { in: ['OPEN', 'NEEDS_CONFIRMATION'] } }), onMissing: 'REDACT_SECTION' },
   // The same predicate the timeline and inventory-history reads apply: current, not deleted, and private events only to their author.
+  InsurancePolicy: { where: (c, id) => ({ id, propertyId: c.propertyId }), onMissing: 'REDACT_SECTION' },
+  PropertyMaintenanceTask: { where: (c, id) => ({ id, propertyId: c.propertyId }), onMissing: 'REDACT_SECTION' },
   HomeEvent: { where: (c, id) => ({ id, propertyId: c.propertyId, isCurrent: true, deletedAt: null, OR: [{ visibility: { not: 'PRIVATE' } }, { createdById: c.userId }] }), onMissing: 'REDACT_SECTION' },
 };
 
@@ -69,7 +77,7 @@ export function withSources<T extends { parameters?: unknown }>(result: T, refs:
 const validRef = (raw: unknown, allowed: ReadonlySet<CompositeSourceType>): CompositeSourceReference | null => {
   if (!isRecord(raw) || typeof raw.sourceType !== 'string' || typeof raw.sourceId !== 'string') return null;
   if (!allowed.has(raw.sourceType as CompositeSourceType) || !raw.sourceId || raw.sourceId.length > MAX_ID_LENGTH) return null;
-  return { sourceType: raw.sourceType as CompositeSourceType, sourceId: raw.sourceId, ...(typeof raw.visibilityVersion === 'string' ? { visibilityVersion: raw.visibilityVersion.slice(0, MAX_ID_LENGTH) } : {}) };
+  return { sourceType: raw.sourceType as CompositeSourceType, sourceId: raw.sourceId, ...(raw.minRole === 'CONTRIBUTOR' || raw.minRole === 'OWNER' ? { minRole: raw.minRole } : {}), ...(typeof raw.visibilityVersion === 'string' ? { visibilityVersion: raw.visibilityVersion.slice(0, MAX_ID_LENGTH) } : {}) };
 };
 
 /** Items a result lists, across grouped lists and timelines, with the entity type each declares. */
@@ -117,6 +125,8 @@ function build(contract: OperationContract): ComposableReadAuthorization {
       let verdict: SourceVerdict = 'AUTHORIZED';
       for (const source of sources) {
         if (!allowed.has(source.sourceType)) return 'REDACT_SECTION';
+        // Per-field audience floor, re-checked against the live role on every replay: a demoted member never keeps a restricted section.
+        if (source.minRole && (ROLE_RANK[context.role ?? ''] ?? 0) < ROLE_RANK[source.minRole]) return 'REDACT_SECTION';
         const check = CHECKS[source.sourceType];
         if (!check) return 'REDACT_SECTION';
         // A Property reference always means THIS property; an empty id (synthetic events) is read as the requested property.
@@ -171,6 +181,10 @@ export const COMPOSABLE_SOURCE_AUTHORIZATION: Readonly<Record<string, Composable
   RECALL_REVIEW: build({
     allowed: ['RecallMatch'], noRecordReasons: ['NO_OPEN_RECALL_MATCHES'],
     derive: (result) => listedItems(result.blocks).filter((item) => item.blockId === 'recall-review-matches').map((item) => sourceRef('RecallMatch', item.id)),
+  }),
+  DATA_POINT_READ: build({
+    allowed: ['InventoryItem', 'Warranty', 'InsurancePolicy', 'PropertyMaintenanceTask', 'Property'],
+    noRecordReasons: ['DATA_POINT_NOT_IDENTIFIED', 'DATA_POINT_NO_INVENTORY', 'DATA_POINT_ITEM_NOT_FOUND', 'DATA_POINT_NOT_RECORDED', 'DATA_POINT_RESTRICTED', 'DATA_POINT_AMBIGUOUS'],
   }),
   HOME_TIMELINE_EVENTS: build({
     allowed: ['HomeEvent', 'Property'], noRecordReasons: ['HOME_TIMELINE_EMPTY'],

@@ -427,7 +427,8 @@ export function validateAskAnswerTrustPipeline(input: {
     // "Get general educational home guidance" is the fallback that just failed; it is a choice only when nothing else is.
     if (candidateOperationIds.length > 1) candidateOperationIds = candidateOperationIds.filter((operationId) => operationId !== 'GROUNDED_GUIDANCE');
     candidateOperationIds = candidateOperationIds.slice(0, 3);
-    if (candidateOperationIds.every((operationId) => operationId === 'GROUNDED_GUIDANCE')) {
+    // FR-REC-1 / FR-REC-4: a card needs at least two options, and a withheld answer is never followed by a card whose only option re-runs the same operation.
+    if (candidateOperationIds.length < 2 || candidateOperationIds.every((operationId) => operationId === 'GROUNDED_GUIDANCE')) {
       // Nothing real to choose between: a one-option question that re-runs the failed fallback only ends in "I still couldn't verify".
       return {
         result: {

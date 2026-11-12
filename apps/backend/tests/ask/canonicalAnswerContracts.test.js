@@ -68,13 +68,14 @@ test('a clarification never offers a write or export operation as the request th
   }
 });
 
-test('a read-only competitor is still offered', () => {
+test('a read-only competitor alone is not a card (FR-REC-1): one option is declined, not offered', () => {
   const validation = validateAskAnswerTrustPipeline({
     question: 'what need to be taken care for my plant for winter', operationId: 'GROUNDED_GUIDANCE', semanticEnabled: true, propertyId: 'p1',
     result: fallbackAnswer('Pending and completed maintenance tasks: the furnace filter task is due soon and two tasks are completed.'),
   });
   assert.equal(validation.semantic.competingOperationId, 'MAINTENANCE_STATUS');
-  assert.deepEqual((validation.result.clarification?.options ?? []).map((option) => option.operationId), ['MAINTENANCE_STATUS']);
+  assert.equal(validation.result.clarification, undefined);
+  assert.equal(validation.result.reasonCode, 'ASK_ANSWER_UNVERIFIED_NO_ALTERNATIVE');
 });
 
 test('an appliance name matches whole words only: "washer" is not "Dishwasher"', () => {

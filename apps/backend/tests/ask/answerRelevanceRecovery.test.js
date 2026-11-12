@@ -72,9 +72,11 @@ test('the router’s close runner-ups are offered; weak or distant ones and the 
   assert.doesNotMatch(JSON.stringify(validation.result.blocks), /verify|prepared response|exact wording/i);
 });
 
-test('without runner-ups an unproven real operation is still the single option, as before', () => {
+test('FR-REC-1/4: without runner-ups there is no one-option card; the answer is declined plainly instead of re-running the same operation', () => {
   const validation = validateAskAnswerTrustPipeline({ question: 'What maintenance is pending?', operationId: 'MAINTENANCE_STATUS', result: vague(), semanticEnabled: true });
-  assert.deepEqual(validation.result.clarification.options.map((option) => option.operationId), ['MAINTENANCE_STATUS']);
+  assert.equal(validation.result.status, 'READY_WITH_LIMITATIONS');
+  assert.equal(validation.result.reasonCode, 'ASK_ANSWER_UNVERIFIED_NO_ALTERNATIVE');
+  assert.equal(validation.result.clarification, undefined, 'no card whose only option re-runs the withheld operation');
 });
 
 test('after a clarification that still cannot be matched, the message says what to try and is not retryable', () => {
