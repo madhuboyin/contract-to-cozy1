@@ -1,3 +1,5 @@
+import { resolveDataPoint } from './dataPoint/dataPointCatalogue';
+import { isWriteCapableOperation } from './support/writeCapability';
 import { isItemCostMessage, isItemFundingGoalMessage, isItemReserveAllocationMessage } from './support/itemFundingWording';
 import { validateCoverageDeclarations } from './composition/quantities';
 import { COMPOSABLE_SOURCE_AUTHORIZATION } from './composition/sourceAuthorization';
@@ -314,6 +316,7 @@ export type AskOperationId =
   | 'CAPITAL_RESERVE_PLAN'
   | 'CAPITAL_ITEM_FUNDING_GOAL'
   | 'ITEM_REPLACEMENT_COST'
+  | 'DATA_POINT_READ'
   | 'ITEM_RESERVE_ALLOCATION'
   | 'PROPERTY_TAX_APPEAL_READINESS'
   | 'RENOVATION_PERMIT_READINESS'
@@ -589,6 +592,8 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   // context naming one journey (a Home Action or a journey list item). Not retrievable by message: it would compete with
   // GUIDANCE_JOURNEYS_LIST for "where am I in my guided journey?".
   'GUIDANCE_JOURNEY_CONTINUE',
+  // Data-point read (reliability FRD D12): reached only by its deterministic typed pattern, never by the classifier, so its examples cannot capture other questions.
+  'DATA_POINT_READ',
   // DIY project guide (ASK_COZY_DIY_PROJECT_GUIDE_PLAN): reached only by the declared row action on a DIY_PROJECTS row (launchContext.entityType DIY_PROJECT).
   // Not retrievable by message: it would compete with DIY_PROJECTS for "which DIY projects am I in the middle of?".
   'DIY_PROJECT_GUIDE',
@@ -868,6 +873,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   CAPITAL_RESERVE_PLAN: definition('CAPITAL_RESERVE_PLAN', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'capital-reserve.plan', ['SUMMARY', 'PROGRESS', 'GROUPED_LIST', 'TABLE', 'TIMELINE', 'EVIDENCE', 'BOUNDARY']),
   CAPITAL_ITEM_FUNDING_GOAL: definition('CAPITAL_ITEM_FUNDING_GOAL', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'capital-item-funding.goal', ['SUMMARY', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   ITEM_REPLACEMENT_COST: definition('ITEM_REPLACEMENT_COST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'item-replacement-cost.read', ['SUMMARY', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
+  DATA_POINT_READ: definition('DATA_POINT_READ', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'data-point-read.read', ['SUMMARY', 'EVIDENCE']),
   ITEM_RESERVE_ALLOCATION: definition('ITEM_RESERVE_ALLOCATION', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'item-reserve-allocation.read', ['SUMMARY', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   RESERVE_FUND_COMMAND: definition('RESERVE_FUND_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'reserve-fund.command', ['SUMMARY', 'WORKFLOW_PROGRESS']),
   PROPERTY_TAX_APPEAL_READINESS: definition('PROPERTY_TAX_APPEAL_READINESS', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'property-tax.appeal-readiness', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
@@ -1122,6 +1128,8 @@ export function validateAskOperationDefinitions(): string[] {
     if (entry.composableRead && (typeof sourceContract?.describeSources !== 'function' || typeof sourceContract?.authorizeSources !== 'function')) issues.push(`${key}: composable read has no source describe/authorize contract (FR-AUT-1)`);
     if (!entry.composableRead && sourceContract) issues.push(`${key}: has a source-authorization contract but is not on the composable allowlist`);
     if (entry.composableRead) {
+      // FR-WRT-4 (reliability FRD): writes are never composed. The command registry, not the `effect` label, decides what can write.
+      if (isWriteCapableOperation(entry.operationId)) issues.push(`${key}: a composable read must not be write-capable`);
       if (entry.safetyClass !== 'STANDARD') issues.push(`${key}: a composable read must be STANDARD, never ${entry.safetyClass}`);
       if (entry.executionMode !== 'DETERMINISTIC') issues.push(`${key}: a composable read must be deterministic`);
       if (!entry.messageRoutable) issues.push(`${key}: a composable read must be message-routable`);
@@ -1606,6 +1614,9 @@ const householdInvitationPattern = /\b(?:invite|add|share (?:my|the) home with)\
 const explicitCapabilityPattern = /\b(?:tool|something (?:available|to help)|anything (?:available|to help)|what can help|do you have|feature available)\b/i;
 const capabilityPattern = /\b(tool|something available|what can help|do you have|help me (?:with|plan)|refinanc|sell.*rent|compare.{0,40}(?:quotes?|bids?|proposals?|estimates?)|organize.{0,40}(?:records?|documents?|paperwork)|track.{0,40}(?:permits?|projects?)|plan.{0,40}(?:renovation|remodel|replacement)|savings?|rebates?|monitor)\b/i;
 
+/** A question frame (what/when/who/which/how much/how old/tell me) about "my"/"the" something; the detail itself is decided by the reviewed catalogue, not by this pattern. */
+const dataPointQuestionPattern = /^\s*(?:what(?:'s|s)?|when(?:'s)?|who|which|how (?:much|old|long)|tell me|show me)\b.*\b(?:my|our|the)\b/i;
+
 export function resolveAskOperation(message: string): AskOperationResolution {
   const resolved = (operationId: AskOperationId, confidence: number): AskOperationResolution => ({
     ...getAskOperationDefinition(operationId),
@@ -2039,6 +2050,11 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   // Community (FRD v1.479): events, city alerts and trash pickup for the home's city. Last before the fallback, so every more specific route above wins.
   if (communityPattern.test(message) && !communityOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('COMMUNITY_UPDATES', 0.95);
+  }
+  // Understanding reliability FRD D12 (Phase 1b): a question about ONE recorded detail of a named item ("what did I pay for my dryer", "when was my furnace installed").
+  // Last before the fallback so every more specific route above wins; the handler resolves the detail from the reviewed catalogue and the item from the home inventory.
+  if (dataPointQuestionPattern.test(message) && resolveDataPoint(message)) {
+    return resolved('DATA_POINT_READ', 0.8);
   }
   return resolved('GROUNDED_GUIDANCE', 0.55);
 }

@@ -144,6 +144,7 @@ register([
 
 // Read-only operations excluded from fuzzy routing but reachable by an allowlisted deterministic typed route.
 register([
+  'DATA_POINT_READ',
   'HOME_BASICS_GUIDE',
   'NOTIFICATIONS_OVERVIEW',
   'NOTIFICATION_SETTINGS_OVERVIEW',

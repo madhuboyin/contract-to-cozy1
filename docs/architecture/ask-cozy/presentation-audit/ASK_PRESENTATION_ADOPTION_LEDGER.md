@@ -2,7 +2,7 @@
 
 **Generated:** by `apps/backend/scripts/generate-ask-adoption-ledger.js` from the live operation registry. Do not edit by hand.
 
-**Operations:** 225
+**Operations:** 230
 
 Each registered Ask operation has exactly one class. The class is derived from registry facts (family, allowed block types) plus an explicit
 list of operations this effort reviewed (`REVIEWED_OPERATIONS` in `apps/backend/src/services/ask/presentation/adoptionLedger.ts`). A test fails
@@ -12,10 +12,10 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | Class | Operations |
 |---|---:|
 | Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified) | 102 |
-| Requires collection adoption | 21 |
-| Requires trust or rationale adoption | 0 |
+| Requires collection adoption | 24 |
+| Requires trust or rationale adoption | 1 |
 | Compact receipt: no rich migration needed | 99 |
-| Specialized workflow requiring later review | 0 |
+| Specialized workflow requiring later review | 1 |
 | Not applicable (boundary operations) | 3 |
 
 ## Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified)
@@ -129,6 +129,7 @@ contract-level journey, or explicit producer-contract review; it is not verified
 
 | Operation | Why |
 |---|---|
+| `COMMUNITY_UPDATES` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `ENVIRONMENT_REPORT` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `HOA_COMPLIANCE_STATUS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `HOME_BASICS_GUIDE` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
@@ -138,6 +139,8 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `HOME_RECORD_EXPORT_STATUS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `HOME_WORK_ITEMS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `HOUSEHOLD_ACCESS_SUMMARY` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
+| `ITEM_REPLACEMENT_COST` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
+| `ITEM_RESERVE_ALLOCATION` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `MATERIAL_SPEC_UPDATE` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `NOTIFICATIONS_OVERVIEW` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `NOTIFICATION_SETTINGS_OVERVIEW` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
@@ -155,6 +158,7 @@ contract-level journey, or explicit producer-contract review; it is not verified
 
 | Operation | Why |
 |---|---|
+| `CAPITAL_ITEM_FUNDING_GOAL` | A material decision or monitor: needs rationale, basis date, assumptions and limits checked against the COMPARE or monitor profile. |
 
 ## Compact receipt: no rich migration needed
 
@@ -264,6 +268,7 @@ contract-level journey, or explicit producer-contract review; it is not verified
 
 | Operation | Why |
 |---|---|
+| `DATA_POINT_READ` | A read with no list or table block allowed: a direct-answer profile only, not yet audited. |
 
 ## Not applicable (boundary operations)
 

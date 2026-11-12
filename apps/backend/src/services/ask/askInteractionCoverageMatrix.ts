@@ -55,6 +55,7 @@ export const ASK_LAUNCH_ONLY_READ_OPERATION_IDS: ReadonlySet<AskOperationId> = n
   'SEASONAL_HOME_CARE',
   'HOME_BASICS_GUIDE',
   'HIRING_GUIDE',
+  'DATA_POINT_READ',
 ]);
 
 export type AskInteractionClass =
@@ -360,6 +361,21 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     idempotency: { status: 'TRACED', notes: 'N/A: a read with no side effects.' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
     handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10). Follow-ups are the capital outlook and ownership costs, inline.' },
+  },
+  DATA_POINT_READ: {
+    track: 'Records and capture',
+    rollClass: 'READ_RESULT',
+    canonicalOwner: 'data-point-read.read',
+    roleFloor: 'VIEWER',
+    messageRoutable: false,
+    confirmationCapable: false,
+    correctionModes: [],
+    note: 'Understanding reliability FRD (docs/product/ASK_COZY_UNDERSTANDING_RELIABILITY_FRD.md) Phase 1b, 2026-11-11. A STANDARD, read-only fact: one recorded detail of an inventory item, read through the allowlisted point-read template over the reviewed data-point catalogue.',
+    uiSurface: { status: 'TRACED', notes: 'Shared generic renderer -- SUMMARY, EVIDENCE. No bespoke component.' },
+    freshnessSource: { status: 'TRACED', notes: 'The live inventory row; read at request time.' },
+    idempotency: { status: 'TRACED', notes: 'N/A: a read with no side effects.' },
+    reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10). A missing value says how to add it inline.' },
   },
   ITEM_RESERVE_ALLOCATION: {
     track: 'Financial and ownership',

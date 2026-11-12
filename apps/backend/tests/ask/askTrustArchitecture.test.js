@@ -111,6 +111,8 @@ test('operations that must never be reached by fuzzy retrieval are absent from r
     // Notifications as a conversation (FRD v1.7): reached by deterministic typed routes and declared chips, never fuzzy retrieval.
     'NOTIFICATIONS_OVERVIEW',
     'NOTIFICATION_SETTINGS_OVERVIEW',
+    // Data-point read (reliability FRD D12): reached by its deterministic typed pattern only, so its examples cannot capture other questions.
+    'DATA_POINT_READ',
   ]);
   // The list also names some COMMAND-family operations (kept for their reasons above); they only need to still be non-routable.
   for (const id of expectedNonCommandInternal) assert.ok(internalOperations.includes(id), `${id} is listed as internal but is message-routable or missing`);

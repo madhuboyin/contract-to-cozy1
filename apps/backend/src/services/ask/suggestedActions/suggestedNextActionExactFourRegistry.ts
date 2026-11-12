@@ -325,6 +325,7 @@ export const RESULT_OWNERSHIP_RELATIONSHIPS: Readonly<Record<string, readonly st
   CAPITAL_RESERVE_PLAN: operationSpecificContinuationOutcomeKeys('CAPITAL_RESERVE_PLAN'),
   CAPITAL_ITEM_FUNDING_GOAL: operationSpecificContinuationOutcomeKeys('CAPITAL_ITEM_FUNDING_GOAL'),
   ITEM_REPLACEMENT_COST: operationSpecificContinuationOutcomeKeys('ITEM_REPLACEMENT_COST'),
+  DATA_POINT_READ: operationSpecificContinuationOutcomeKeys('DATA_POINT_READ'),
   ITEM_RESERVE_ALLOCATION: operationSpecificContinuationOutcomeKeys('ITEM_RESERVE_ALLOCATION'),
   CAPITAL_TIMELINE_COMMAND: operationSpecificContinuationOutcomeKeys('CAPITAL_TIMELINE_COMMAND'),
   PROPERTY_TAX_APPEAL_READINESS: operationSpecificContinuationOutcomeKeys('PROPERTY_TAX_APPEAL_READINESS'),

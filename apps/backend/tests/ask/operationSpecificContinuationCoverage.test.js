@@ -19,7 +19,7 @@ const {
 
 // Reviewed 2026-11-02: the only operation added since the previous hash (commit a9c7f710) is COMMUNITY_UPDATES, now covered by recipes.
 // Reviewed 2026-11-10: the operations added since 2026-11-08 are ITEM_REPLACEMENT_COST and ITEM_RESERVE_ALLOCATION, each covered by recipes (capital outlook, ownership costs).
-const REVIEWED_OPERATION_REGISTRY_HASH = 'ca538077031a069c1079483434faa3517628544c21f21f6c82ccf5d805c6e198';
+const REVIEWED_OPERATION_REGISTRY_HASH = '398462fbc8d1e03d2a2d4c05eb333533dc908f706cf318b5d0ada39bca19232b';
 const registryIds = () => Object.keys(ASK_OPERATION_DEFINITIONS).sort();
 const registryHash = () => createHash('sha256').update(registryIds().join('\n')).digest('hex');
 

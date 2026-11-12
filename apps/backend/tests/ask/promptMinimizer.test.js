@@ -1,6 +1,6 @@
 const test = require('node:test'); const assert = require('node:assert/strict');
 require('ts-node/register/transpile-only');
-const { minimizePrompt, detectIdentifiers } = require('../../src/services/ask/support/promptMinimizer.ts');
+const { minimizePrompt, detectIdentifiers } = require('../../src/services/ask/privacy/promptMinimizer.ts');
 
 const ADVERSARIAL = [
   'email me at jane.doe@example.com when my warranty expires',
