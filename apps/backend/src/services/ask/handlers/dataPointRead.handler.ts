@@ -7,7 +7,7 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { humanDate, money } from '../askFormatting';
 import { ensurePropertyAccess } from '../askHandlerSupport';
-import { resolveDataPoint, roleMayRead, type DataPointDefinition } from '../dataPoint/dataPointCatalogue';
+import { audienceFloorCopy, resolveDataPoint, roleMayRead, type DataPointDefinition } from '../dataPoint/dataPointCatalogue';
 import { readDataPoint } from '../dataPoint/dataPointReader';
 
 const ENTITY_COPY: Record<string, { plural: string; singular: string; collection: string; record: string }> = {
@@ -37,7 +37,8 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
   const point = resolveDataPoint(message);
   if (!point) return notice('DATA_POINT_NOT_IDENTIFIED', 'data-point-unidentified', 'Which detail do you mean?', 'Tell me the detail and the item, for example “the serial number of my refrigerator” or “when my furnace was installed”.');
   if (!roleMayRead(role, point)) {
-    return notice('DATA_POINT_RESTRICTED', 'data-point-restricted', 'That detail is shown to contributors and owners', `${point.label} is only shown to household members who can edit this home. Ask the home’s owner if you need it.`);
+    const copy = audienceFloorCopy(point.audience);
+    return notice('DATA_POINT_RESTRICTED', 'data-point-restricted', copy.title, `${point.label} is only shown to ${copy.who}. Ask the home’s owner if you need it.`);
   }
   const read = await readDataPoint(propertyId, role, point, message);
   const where = ENTITY_COPY[point.entity];

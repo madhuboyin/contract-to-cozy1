@@ -26,6 +26,7 @@ export const FAST_PATH_RULES: readonly FastPathRule[] = Object.freeze([
   { id: 'DATA_POINT_TYPED_READ', version: 1, description: 'Question frame plus a unique reviewed data-point alias routes to DATA_POINT_READ (askOperationRegistry.ts dataPointQuestionPattern).', status: 'UNCERTIFIED' },
 ]);
 
+/** The upper bound must be STRICTLY below this (an upper bound of exactly 1% does not certify). A non-finite or missing bound also fails. */
 export const MAX_INCORRECT_HIGH_CONFIDENCE_RATE = 0.01;
 export const MIN_SEALED_FAMILIES_FOR_CLAIM = 381;
 
@@ -37,7 +38,7 @@ export function validateFastPathRule(rule: FastPathRule): string[] {
   const e = rule.evidence;
   if (!e) return [...issues, `${rule.id}: certified without evidence`];
   if (e.sealedFamilies < MIN_SEALED_FAMILIES_FOR_CLAIM) issues.push(`${rule.id}: sealed set of ${e.sealedFamilies} families is below ${MIN_SEALED_FAMILIES_FOR_CLAIM}`);
-  if (e.incorrectUpperBound > MAX_INCORRECT_HIGH_CONFIDENCE_RATE) issues.push(`${rule.id}: incorrect-high-confidence upper bound ${e.incorrectUpperBound} exceeds ${MAX_INCORRECT_HIGH_CONFIDENCE_RATE}`);
+  if (!(e.incorrectUpperBound < MAX_INCORRECT_HIGH_CONFIDENCE_RATE)) issues.push(`${rule.id}: incorrect-high-confidence upper bound ${e.incorrectUpperBound} is not strictly below ${MAX_INCORRECT_HIGH_CONFIDENCE_RATE}`);
   if (!e.adjacentNegativesPassed) issues.push(`${rule.id}: adjacent-data-point negatives did not pass`);
   if (!e.sealedSetId || !e.certifiedAt) issues.push(`${rule.id}: certificate lacks its sealed set id or date`);
   return issues;

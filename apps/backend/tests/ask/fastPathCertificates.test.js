@@ -10,7 +10,10 @@ test('a certificate needs the sealed evidence under the thresholds; an uncertifi
   assert.deepEqual(validateFastPathRule(rule), []);
   assert.match(validateFastPathRule({ ...rule, evidence: undefined })[0], /without evidence/);
   assert.match(validateFastPathRule({ ...rule, evidence: { ...good, sealedFamilies: 100 } })[0], /below 381/);
-  assert.match(validateFastPathRule({ ...rule, evidence: { ...good, incorrectUpperBound: 0.03 } })[0], /exceeds/);
+  assert.match(validateFastPathRule({ ...rule, evidence: { ...good, incorrectUpperBound: 0.03 } })[0], /not strictly below/);
+  assert.match(validateFastPathRule({ ...rule, evidence: { ...good, incorrectUpperBound: 0.01 } })[0], /not strictly below/, 'exactly 1% does not certify');
+  assert.match(validateFastPathRule({ ...rule, evidence: { ...good, incorrectUpperBound: NaN } })[0], /not strictly below/);
+  assert.deepEqual(validateFastPathRule({ ...rule, evidence: { ...good, incorrectUpperBound: 0.0099999 } }), []);
   assert.match(validateFastPathRule({ ...rule, evidence: { ...good, adjacentNegativesPassed: false } })[0], /adjacent/);
   assert.match(validateFastPathRule({ ...rule, status: 'UNCERTIFIED' })[0], /must not carry a certificate/);
 });

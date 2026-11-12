@@ -1,6 +1,7 @@
-// Reviewed data-point catalogue (reliability FRD FR-DATA-1..5, D11, D12, D13). The Prisma schema says what exists; this file says what the homeowner may be shown and
-// how they ask for it. FAIL CLOSED: a field not listed here cannot be read through DATA_POINT_READ, whatever the schema contains. Slice 1b-1 covers the first domain in the
-// owner's order (appliances-inventory, entity InventoryItem). Each entry is an engineering PROPOSAL pending owner sign-off of the D11 field list (see the FRD §38 decisions).
+// Proposed data-point catalogue (reliability FRD FR-DATA-1..5, D11, D12, D13). The Prisma schema says what exists; this file says what the homeowner may be shown and
+// how they ask for it. FAIL CLOSED: a field not listed here cannot be read through DATA_POINT_READ, whatever the schema contains. The catalogue holds 33 PROPOSED data
+// points (inventory 14, warranties 5, insurance 7, maintenance 7). The owner approved the field floors and the four-domain split for exactly these 33 ids at catalogue
+// version 1 (2026-11-12); see APPROVED_DATA_POINT_IDS below. Any other id, or any change of a floor, needs a new approval and a new version.
 export type DataPointFamily = 'text' | 'date' | 'money' | 'dollars' | 'enum' | 'tags' | 'flag';
 export type DataPointEntity = 'InventoryItem' | 'Warranty' | 'InsurancePolicy' | 'PropertyMaintenanceTask';
 export type DataPointDomain = 'appliances-inventory' | 'warranties' | 'insurance' | 'maintenance';
@@ -26,7 +27,7 @@ export interface DataPointDefinition {
   readonly cues?: readonly string[];
 }
 
-/** Per-point audience floors (review 2026-11-11). Money, serial numbers, free-form coverage text and tags are not shown to viewers; plain item, date and status facts are. Pending owner sign-off like the rest of the catalogue. */
+/** Per-point audience floors (review 2026-11-11). Money, serial numbers, free-form coverage text and tags are not shown to viewers; plain item, date and status facts are. Floors approved by the owner 2026-11-12 for catalogue version 1. */
 const FIELD_AUDIENCE: Readonly<Record<string, AudienceFloor>> = Object.freeze({
   'item.brand': 'VIEWER', 'item.manufacturer': 'VIEWER', 'item.model': 'VIEWER', 'item.serial': 'CONTRIBUTOR', 'item.installedOn': 'VIEWER', 'item.purchasedOn': 'VIEWER',
   'item.lastServicedOn': 'VIEWER', 'item.expectedExpiryDate': 'VIEWER', 'item.condition': 'VIEWER', 'item.category': 'VIEWER', 'item.efficiencyRating': 'VIEWER',
@@ -102,6 +103,19 @@ export const READABLE_FIELDS: Readonly<Record<DataPointEntity, readonly string[]
 });
 export const READABLE_ITEM_FIELDS: readonly string[] = READABLE_FIELDS.InventoryItem;
 
+/** Catalogue version the owner's approval covers. Bump it with any added id or changed audience floor, and re-approve. */
+export const DATA_POINT_CATALOGUE_VERSION = 1;
+/** Owner approval record (2026-11-12): field audience floors and the 4-domain split (appliances-inventory, warranties, insurance, maintenance; claims is a future domain), for these exact ids at catalogue version 1 only. */
+export const DATA_POINT_APPROVAL = Object.freeze({ catalogueVersion: 1, approvedOn: '2026-11-12', scope: 'field audience floors and four-domain split, exact ids only' });
+export const APPROVED_DATA_POINT_IDS: readonly string[] = Object.freeze([
+  'item.brand', 'item.manufacturer', 'item.model', 'item.serial', 'item.installedOn', 'item.purchasedOn', 'item.lastServicedOn', 'item.expectedExpiryDate', 'item.condition', 'item.category', 'item.efficiencyRating', 'item.purchaseCost', 'item.replacementCost', 'item.tags',
+  'warranty.expiryDate', 'warranty.startDate', 'warranty.provider', 'warranty.coverage', 'warranty.cost',
+  'policy.carrier', 'policy.expiryDate', 'policy.startDate', 'policy.deductible', 'policy.premium', 'policy.coverageType', 'policy.personalPropertyLimit',
+  'task.nextDueDate', 'task.lastCompletedDate', 'task.status', 'task.priority', 'task.frequency', 'task.estimatedCost', 'task.actualCost',
+]);
+/** Categories the owner presumes owner-only for any FUTURE catalogue entry (not catalogued today): mortgage/equity/financing, bank/payment, full policy or account ids, household identity/access, title/ownership, tax ids. */
+export const FUTURE_OWNER_ONLY_PRESUMPTIONS: readonly string[] = Object.freeze(['mortgage-equity-financing', 'bank-payment', 'full-policy-or-account-ids', 'household-identity-access', 'title-ownership', 'tax-ids']);
+
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** The data point a message asks about, or null when none or more than one distinct point matches (never guess between two). Longest alias wins; ties across points = null. */
@@ -117,4 +131,13 @@ export function resolveDataPoint(message: string): DataPointDefinition | null {
     else if (weight === best.length && best.point.id !== point.id) tied = true;
   }
   return best && !tied ? best.point : null;
+}
+
+/** Who a floor is shown to, in homeowner words. Generated from the point's actual floor so the restriction message never states a different audience than the check enforces. */
+export function audienceFloorCopy(floor: AudienceFloor): { title: string; who: string } {
+  switch (floor) {
+    case 'OWNER': return { title: 'That detail is shown to the home’s owner', who: 'the home’s owner' };
+    case 'CONTRIBUTOR': return { title: 'That detail is shown to contributors and owners', who: 'household members who can edit this home' };
+    default: return { title: 'That detail is shown to everyone in the household', who: 'everyone in the household' };
+  }
 }

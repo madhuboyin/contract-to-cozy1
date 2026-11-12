@@ -1,7 +1,7 @@
 // Phase 1b (reliability FRD D12, FR-DATA-3/4/15): reviewed catalogue, allowlisted point-read template, DATA_POINT_READ handler.
 const test = require('node:test'); const assert = require('node:assert/strict');
 require('ts-node/register/transpile-only');
-const { DATA_POINT_DEFINITIONS, READABLE_ITEM_FIELDS, resolveDataPoint } = require('../../src/services/ask/dataPoint/dataPointCatalogue.ts');
+const { DATA_POINT_DEFINITIONS, READABLE_ITEM_FIELDS, resolveDataPoint, APPROVED_DATA_POINT_IDS, DATA_POINT_CATALOGUE_VERSION, DATA_POINT_APPROVAL, audienceFloorCopy } = require('../../src/services/ask/dataPoint/dataPointCatalogue.ts');
 const { matchItemsByName, readDataPoint } = require('../../src/services/ask/dataPoint/dataPointReader.ts');
 const { resolveAskOperation, getAskOperationDefinition } = require('../../src/services/ask/askOperationRegistry.ts');
 const { prisma } = require('../../src/lib/prisma.ts');
@@ -161,4 +161,23 @@ test('source authorization: a restricted source is redacted once the role drops,
   assert.equal(await AUTH.DATA_POINT_READ.authorizeSources({ ...ctx('OWNER', true), role: undefined }, restricted), 'REDACT_SECTION', 'no known role fails closed');
   assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx('OWNER', false), [sourceRef('PropertyMaintenanceTask', 't1')]), 'REDACT_SECTION');
   assert.deepEqual(seen.at(-1), ['PropertyMaintenanceTask', { id: 't1', propertyId: 'p1' }]);
+});
+
+test('owner approval (2026-11-12) covers exactly the 33 catalogued ids at catalogue version 1; any unapproved id or version drift fails', () => {
+  assert.equal(DATA_POINT_CATALOGUE_VERSION, DATA_POINT_APPROVAL.catalogueVersion, 'a new catalogue version needs a new approval record');
+  const ids = DATA_POINT_DEFINITIONS.map((p) => p.id);
+  assert.equal(new Set(ids).size, ids.length, 'ids are unique');
+  assert.deepEqual(ids.filter((id) => !APPROVED_DATA_POINT_IDS.includes(id)), [], 'every catalogued id must be owner-approved');
+  assert.deepEqual(APPROVED_DATA_POINT_IDS.filter((id) => !ids.includes(id)), [], 'an approved id that is no longer catalogued must be removed from the approval');
+  assert.equal(ids.length, 33);
+  const by = (d) => DATA_POINT_DEFINITIONS.filter((p) => p.domain === d).length;
+  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance')], [14, 5, 7, 7]);
+});
+test('the restriction copy is generated from the field floor, so it never names a different audience than the check enforces', async () => {
+  assert.match(audienceFloorCopy('CONTRIBUTOR').title, /contributors and owners/);
+  assert.match(audienceFloorCopy('OWNER').title, /owner/); assert.doesNotMatch(audienceFloorCopy('OWNER').title, /contributors/);
+  // a viewer reading a CONTRIBUTOR-floor field gets the contributor copy; an OWNER-floor point (none catalogued today) would get the owner copy
+  roleStub('VIEWER', [{ id: 'i1', name: 'Furnace', serialNumber: 'SN9', room: null }]);
+  const denied = await dataPointReadResult('u1', 'p1', 'what is the serial number of my furnace');
+  assert.equal(denied.blocks[0].title, audienceFloorCopy('CONTRIBUTOR').title);
 });
