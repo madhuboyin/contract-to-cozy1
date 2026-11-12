@@ -1,5 +1,11 @@
 import type { AskOperationResult } from './askOperationRegistry';
 
+/** FR-GATE-1: the block ids a read answer of INVENTORY_LOOKUP may carry. The contract below reads these constants, and tests/ask/answerContractConformance.test.js
+ *  checks every one is still emitted by the handler, so renaming a block id in the handler cannot silently strand the contract. */
+export const INVENTORY_READ_ANSWER_BLOCK_IDS = Object.freeze({
+  EMPTY: 'inventory-empty', NO_MATCH: 'inventory-no-match', RESULTS: 'inventory-results', ROOF_PROFILE: 'inventory-roof-profile',
+} as const);
+
 const INVENTORY_SUBJECT = '(?:inventory|appliance|system|equipment)';
 const DETAIL_SUBJECT = '(?:details|information|records?)';
 
@@ -37,15 +43,15 @@ export function matchesIncompleteInventoryAnswerContract(result: AskOperationRes
   if (!['ANSWERED', 'READY_WITH_LIMITATIONS'].includes(result.status)) return false;
   return result.blocks.some((block) => (
     block.type === 'SUMMARY'
-      && block.id === 'inventory-empty'
+      && block.id === INVENTORY_READ_ANSWER_BLOCK_IDS.EMPTY
       && /no inventory items are recorded/i.test(block.title)
   ) || (
     block.type === 'SUMMARY'
-      && block.id === 'inventory-no-match'
+      && block.id === INVENTORY_READ_ANSWER_BLOCK_IDS.NO_MATCH
       && /incomplete inventory records/i.test(block.title)
   ) || (
     block.type === 'GROUPED_LIST'
-      && block.id === 'inventory-results'
+      && block.id === INVENTORY_READ_ANSWER_BLOCK_IDS.RESULTS
       && /incomplete inventory records/i.test(block.title)
   ));
 }
@@ -60,7 +66,7 @@ export function matchesInventoryAnswerContract(question: string, result: AskOper
 
   const empty = result.blocks.some((block) => (
     block.type === 'SUMMARY'
-      && block.id === 'inventory-empty'
+      && block.id === INVENTORY_READ_ANSWER_BLOCK_IDS.EMPTY
       && /no inventory items are recorded/i.test(block.title)
   ));
   if (empty) return true;
@@ -69,7 +75,7 @@ export function matchesInventoryAnswerContract(question: string, result: AskOper
   if (result.reasonCode === 'INVENTORY_ROOF_FROM_PROFILE'
     && result.blocks.length === 1
     && result.blocks[0].type === 'SUMMARY'
-    && result.blocks[0].id === 'inventory-roof-profile') return true;
+    && result.blocks[0].id === INVENTORY_READ_ANSWER_BLOCK_IDS.ROOF_PROFILE) return true;
 
   if (isIncompleteInventoryRequest(question)) {
     return matchesIncompleteInventoryAnswerContract(result);
@@ -78,22 +84,22 @@ export function matchesInventoryAnswerContract(question: string, result: AskOper
   if (isLifecycleInventoryRequest(question)) {
     return result.blocks.some((block) => (
       block.type === 'SUMMARY'
-        && block.id === 'inventory-no-match'
+        && block.id === INVENTORY_READ_ANSWER_BLOCK_IDS.NO_MATCH
         && /items with a recorded end-of-life date in the next three years/i.test(block.title)
     ) || (
       block.type === 'GROUPED_LIST'
-        && block.id === 'inventory-results'
+        && block.id === INVENTORY_READ_ANSWER_BLOCK_IDS.RESULTS
         && /recorded lifecycle dates approaching/i.test(block.title)
     ));
   }
 
   return result.blocks.some((block) => (
     block.type === 'SUMMARY'
-      && block.id === 'inventory-no-match'
+      && block.id === INVENTORY_READ_ANSWER_BLOCK_IDS.NO_MATCH
       && /matching inventory record/i.test(block.title)
   ) || (
     block.type === 'GROUPED_LIST'
-      && block.id === 'inventory-results'
+      && block.id === INVENTORY_READ_ANSWER_BLOCK_IDS.RESULTS
       && /inventory details/i.test(block.title)
   ));
 }

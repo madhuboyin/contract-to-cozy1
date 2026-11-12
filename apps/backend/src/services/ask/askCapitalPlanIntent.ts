@@ -1,6 +1,7 @@
 import type { AskOperationResult } from './askOperationRegistry';
 
-const CAPITAL_PLAN_BLOCK_IDS = new Set([
+/** FR-GATE-1: declared and exported so the conformance test can check every id is still emitted. */
+export const CAPITAL_PLAN_BLOCK_IDS = new Set([
   'capital-reserve-summary',
   'capital-timeline-table',
   'capital-bundle-opportunity',

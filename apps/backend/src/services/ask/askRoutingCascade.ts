@@ -188,16 +188,21 @@ export function resolveAskRoutingCascade(rawMessage: string, options: {
     retrievalPath: candidate.retrievalPath,
     confidenceBand: candidate.confidenceBand,
   }));
+  // FR-REC-1: a clarification never has fewer than two options. With one candidate there is nothing to choose between, so the turn is not matched
+  // (REMOTE_FALLBACK, the safe not-matched path) instead of asking the user to confirm the only choice.
+  const notMatched: AskRoutingDecision = { language, operation: direct, stage: 'REMOTE_FALLBACK', candidates, requiresClarification: false, entityResolution: null };
   if (options.classifierEnabled === false && candidates.length) {
-    return { language, operation: direct, stage: 'CLARIFICATION', candidates, requiresClarification: true, entityResolution: null };
+    return candidates.length < 2 ? notMatched : { language, operation: direct, stage: 'CLARIFICATION', candidates, requiresClarification: true, entityResolution: null };
   }
   if (classification.outcome === 'AMBIGUOUS' || classification.outcome === 'MULTI_INTENT') {
+    if (candidates.length < 2) return notMatched;
     return { language, operation: direct, stage: 'CLARIFICATION', candidates, requiresClarification: true, entityResolution: null };
   }
   if (classification.outcome === 'RESOLVED' && classification.selectedOperationId) {
     const selected = retrieved.find((candidate) => candidate.operationId === classification.selectedOperationId)!;
     const definition = getAskOperationDefinition(selected.operationId);
     if (selected.confidenceBand !== 'HIGH' && (definition.semantic.materiality === 'HIGH' || definition.semantic.effect === 'WRITE')) {
+      if (candidates.length < 2) return notMatched;
       return { language, operation: direct, stage: 'CLARIFICATION', candidates, requiresClarification: true, entityResolution: null };
     }
     return { language, operation: resolution(selected.operationId, selected.score), stage: 'LOCAL_CLASSIFIER', candidates, requiresClarification: false, entityResolution: resolveAskEntityState({ message, operationId: selected.operationId, propertyId: options.propertyId, launchEntityId: options.launchEntityId, requiresProperty: definition.requiresProperty }) };
