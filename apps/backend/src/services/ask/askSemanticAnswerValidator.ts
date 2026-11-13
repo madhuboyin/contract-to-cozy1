@@ -20,8 +20,9 @@ import { matchesStatusBoardAnswerContract } from './askStatusBoardIntent';
 import { matchesPropertySummaryAnswerContract } from './askPropertySummaryIntent';
 import { matchesCoverageGapsAnswerContract } from './askCoverageIntent';
 import { matchesSavedResultsAnswerContract, matchesWorkOverviewAnswerContract } from './askWorkSavedIntent';
+import { matchesOperationAnswerContract } from './answerContract/operationAnswerContract';
 
-export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-3.7';
+export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-3.8';
 
 export interface AskSemanticAnswerRelevanceResult {
   schemaVersion: '1.0';
@@ -297,6 +298,15 @@ export function validateAskSemanticAnswerRelevance(input: {
       outcome: 'FAIL', selectedOperationId: input.operationId, competingOperationId: competitor!.operationId,
       selectedOperationScore: selectedScore, competingOperationScore: competingScore, questionAnswerScore,
       reasonCodes: [selectedHardNegative ? 'ANSWER_MATCHES_OPERATION_HARD_NEGATIVE' : 'ANSWER_FAVORS_DIFFERENT_OPERATION'],
+    });
+  }
+  // A declared handler variant may corroborate an answer only after explicit
+  // source-operation and competing-operation mismatch checks have passed.
+  if (matchesOperationAnswerContract(input.operationId, input.result)) {
+    return finish({
+      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: competitor?.operationId ?? null,
+      selectedOperationScore: selectedScore, competingOperationScore: competingScore, questionAnswerScore,
+      reasonCodes: ['DECLARED_OPERATION_VARIANT_MATCH'],
     });
   }
   const selectedDominates = Boolean(selectedCandidate && selectedCandidate.rawScore >= competingScore - 0.02);

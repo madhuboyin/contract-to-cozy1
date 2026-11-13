@@ -1,4 +1,4 @@
-// FR-DATA-10 shapes 7-9: the registries ship empty, no shape is enabled, and a declaration missing any required attribute fails validation.
+// FR-DATA-10 shapes 7-9: reviewed declarations enable the owner path, while an incomplete declaration fails closed.
 const test = require('node:test'); const assert = require('node:assert/strict');
 require('ts-node/register/transpile-only');
 const r = require('../../src/services/ask/dataPoint/queryShapeRegistries.ts');

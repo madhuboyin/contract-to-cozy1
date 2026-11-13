@@ -41,7 +41,7 @@ const operations = Object.values(reg.ASK_OPERATION_DEFINITIONS).filter((d) => re
 // A handler file often serves several operations (and command receipts of operations that are not message-routable), so the block ids scanned from it are attributed to the FILE, not to one operation. `attribution` says which.
 const fileUsers = new Map(); for (const o of operations) { const k = o.handlerFiles.join('|'); fileUsers.set(k, (fileUsers.get(k) ?? 0) + 1); }
 for (const o of operations) o.attribution = fileUsers.get(o.handlerFiles.join('|')) === 1 ? 'EXCLUSIVE_FILE' : 'SHARED_FILE';
-const manifest = { version: 1, generatedBy: 'scripts/ask-answer-contract-manifest.js', operationCount: operations.length, operations };
+const manifest = { version: 2, generatedBy: 'scripts/ask-answer-contract-manifest.js', operationCount: operations.length, operations };
 const text = `${JSON.stringify(manifest, null, 1)}\n`;
 if (process.argv.includes('--write')) { fs.writeFileSync(OUT, text); const byTier = {}; for (const o of operations) byTier[o.evidenceTier] = (byTier[o.evidenceTier] ?? 0) + 1; console.log(`wrote ${operations.length} operations`, byTier, `no handler file: ${operations.filter((o) => !o.handlerFiles.length).length}`); }
 else { const cur = fs.existsSync(OUT) ? fs.readFileSync(OUT, 'utf8') : ''; if (cur !== text) { console.error('answer-contract manifest is out of date: run node scripts/ask-answer-contract-manifest.js --write'); process.exit(1); } console.log('manifest is current'); }

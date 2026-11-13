@@ -1,6 +1,6 @@
-// FR-DATA-10 shapes 7-9 (time series / comparison, absence, cross-entity). These shapes are NOT supported by the generic reader today, and this file does not add support: it fixes the declaration each entry must make
-// BEFORE any question may be answered in that shape, and validates it. The three registries ship EMPTY on purpose: every entry is an owner-reviewed declaration (which history source is canonical, which requirement
-// applies to which home, which relation may be joined), not something the implementation may invent. An entry that omits a required attribute fails validation, so it can never be enabled by accident.
+// FR-DATA-10 shapes 7-9 (time series / comparison, absence, cross-entity).
+// The generic reader enables only the owner-reviewed declarations below. An
+// incomplete declaration fails validation, so support is never inferred.
 import { DATA_POINT_BY_ID, type DataPointEntity } from './dataPointCatalogue';
 
 /** Shape 7: only a catalogued data point with a canonical HISTORICAL source, a defined timestamp, ordering, de-duplication and supersession behaviour. */
@@ -110,7 +110,7 @@ export function validateCrossEntity(entries: readonly CrossEntityRelationDeclara
   }
   return issues;
 }
-/** True when the generic reader may answer a question in shape 7, 8 or 9. Today it is false for all three because every registry is empty. */
+/** True when at least one valid, reviewed declaration enables the shape. */
 export const queryShapesEnabled = (): { timeSeries: boolean; absence: boolean; crossEntity: boolean } => ({
   timeSeries: TIME_SERIES_REGISTRY.length > 0 && validateTimeSeries().length === 0,
   absence: ABSENCE_REQUIREMENT_REGISTRY.length > 0 && validateAbsence().length === 0,
