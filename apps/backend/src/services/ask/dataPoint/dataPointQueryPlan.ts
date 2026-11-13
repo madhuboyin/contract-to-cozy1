@@ -66,12 +66,12 @@ const f = (point: string, type: FieldType, column: string, words: string[], labe
 
 export const QUERY_TEMPLATES: readonly QueryTemplate[] = Object.freeze([
   {
-    id: 'inventory', entity: 'InventoryItem', delegate: 'inventoryItem', nouns: ['appliances', 'inventory items', 'household items', 'items in my inventory'], singularNouns: ['appliance', 'inventory item'], plural: 'inventory items', singular: 'inventory item',
+    id: 'inventory', entity: 'InventoryItem', delegate: 'inventoryItem', nouns: ['appliances', 'inventory items', 'household items', 'items in my inventory', 'everything in my home', 'everything in my house', 'all my appliances', 'all of my appliances', 'hvac items', 'hvac systems', 'hvac equipment', 'plumbing items'], singularNouns: ['appliance', 'inventory item'], plural: 'inventory items', singular: 'inventory item',
     labelSelect: { name: true }, labelFields: ['name'], countFloor: 'VIEWER',
     fields: {
       installedOn: f('item.installedOn', 'date', 'installedOn', ['installed', 'install date', 'age', 'old', 'older', 'oldest', 'newest', 'newer'], 'installed'),
       purchasedOn: f('item.purchasedOn', 'date', 'purchasedOn', ['purchased', 'bought', 'purchase date'], 'purchased'),
-      purchaseCost: f('item.purchaseCost', 'money', 'purchaseCostCents', ['purchase price', 'purchase cost', 'paid', 'bought for', 'purchase', 'spend', 'spent'], 'purchase price', { measure: true }),
+      purchaseCost: f('item.purchaseCost', 'money', 'purchaseCostCents', ['purchase price', 'purchase cost', 'paid', 'pay', 'bought for', 'purchase', 'spend', 'spent'], 'purchase price', { measure: true }),
       replacementCost: f('item.replacementCost', 'money', 'replacementCostCents', ['replacement cost', 'replacement value', 'replace', 'replacement'], 'replacement cost', { measure: true }),
       condition: f('item.condition', 'enum', 'condition', ['condition'], 'condition', { sortable: false, groupable: true }),
       category: f('item.category', 'enum', 'category', ['category'], 'category', { sortable: false, groupable: true }),
@@ -104,7 +104,7 @@ export const QUERY_TEMPLATES: readonly QueryTemplate[] = Object.freeze([
     enumWords: {}, dateField: 'expiryDate',
   },
   {
-    id: 'tasks', entity: 'PropertyMaintenanceTask', delegate: 'propertyMaintenanceTask', nouns: ['maintenance tasks', 'maintenance items'], singularNouns: ['maintenance task'], plural: 'maintenance tasks', singular: 'maintenance task',
+    id: 'tasks', entity: 'PropertyMaintenanceTask', delegate: 'propertyMaintenanceTask', nouns: ['maintenance tasks', 'maintenance items', 'spent on maintenance', 'spend on maintenance', 'maintenance spending', 'maintenance costs', 'maintenance cost'], singularNouns: ['maintenance task'], plural: 'maintenance tasks', singular: 'maintenance task',
     labelSelect: { title: true }, labelFields: ['title'], countFloor: 'VIEWER',
     fields: {
       nextDueDate: f('task.nextDueDate', 'date', 'nextDueDate', ['due', 'overdue', 'next due', 'deadline'], 'due'),
@@ -304,6 +304,8 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
   const text = norm(message);
   // "claim checklist step", "claim timeline event", "claim document" name a child of one claim (a point read), not the kind "claims".
   if (/\bclaim (?:checklist|timeline|events?|documents?|steps?|attachments?)\b/.test(text) && !QUERY_TEMPLATES.find((t) => t.id === 'claimChecklist')!.nouns.some((n) => text.includes(` ${n} `))) return { kind: 'NONE' };
+  // A past period ("last year", "last month") is not a supported window: the question gets no plan rather than an answer over all time.
+  if (/\blast (?:year|month|week)\b/.test(text)) return { kind: 'NONE' };
   const picked = pickTemplate(text);
   if (!picked) return { kind: 'NONE' };
   if (picked === 'AMBIGUOUS') return { kind: 'CLARIFY', reasonCode: 'DATA_POINT_QUERY_AMBIGUOUS_KIND', title: 'Which records do you mean?', body: 'Your question could be about more than one kind of record. Name one, for example “my warranties” or “my insurance policies”.' };
@@ -367,7 +369,7 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
   for (const [key, words] of Object.entries(template.enumWords)) {
     const field = template.fields[key];
     for (const [word, value] of Object.entries(words).sort((a, b) => b[0].length - a[0].length)) {
-      const rx = key === 'condition' ? new RegExp(`\\b${word} condition\\b`) : key === 'priority' ? new RegExp(`\\b${word} priority\\b`) : new RegExp(`\\b${word}\\b`);
+      const rx = key === 'condition' ? new RegExp(`\\b${word} condition\\b`) : key === 'priority' ? new RegExp(word === 'urgent' ? '\\burgent\\b' : `\\b${word} priority\\b`) : new RegExp(`\\b${word}\\b`);
       if (key === 'category' && template.id === 'inventory' && !/\bcategory\b|\bhvac\b|\bplumbing\b|\belectrical\b|\bsafety\b|\bfurniture\b|\belectronics\b/.test(text)) continue;
       if (key === 'category' && template.id === 'saleItems' && !/\bcategory\b/.test(text)) continue;
       if (key === 'status' && (template.id === 'tasks' || template.id === 'buyerTasks') && /\boverdue\b/.test(text)) continue;
@@ -380,12 +382,12 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
   if (template.id === 'claims' && /\bopen\b/.test(text) && !predicates.some((p) => p.field === 'status')) push({ field: 'status', op: 'in', value: OPEN_CLAIM_STATES, describe: 'open' });
   // A qualifier the plan did not turn into a predicate must not be silently dropped ("how many OPEN claims" answered as "how many claims" would be a wrong answer): such a question gets no plan.
   if ((template.id === 'tasks' || template.id === 'buyerTasks') && /\b(open|active|outstanding|incomplete|left|remaining)\b/.test(text) && !excludesClosed && !predicates.some((p) => p.field === 'status')) { excludesClosed = true; }
-  const stray = /\b(open|active|current|upcoming|recent|unresolved|outstanding|incomplete|late|broken|failing|unpaid|expensive|valuable)\b/.exec(text);
-  const strayConsumed = stray && ((template.id === 'claims' && stray[1] === 'open' && predicates.some((p) => p.op === 'in')) || (Object.values(template.enumWords).some((words) => stray[1] in words) && predicates.some((p) => p.op === 'equals')) || ((template.id === 'tasks' || template.id === 'buyerTasks') && /open|active|outstanding|incomplete/.test(stray[1])) || (/expensive|valuable/.test(stray[1]) && /\b(most|least) (expensive|valuable)\b|\bexpensive\b.*\b(than|over|under)\b/.test(text)));
+  const stray = /\b(open|active|current|upcoming|recent|unresolved|outstanding|incomplete|late|broken|failing|unpaid|expensive|valuable|urgent|critical|important)\b/.exec(text);
+  const strayConsumed = stray && ((stray[1] === 'urgent' && predicates.some((p) => p.field === 'priority')) || (template.id === 'claims' && stray[1] === 'open' && predicates.some((p) => p.op === 'in')) || (Object.values(template.enumWords).some((words) => stray[1] in words) && predicates.some((p) => p.op === 'equals')) || ((template.id === 'tasks' || template.id === 'buyerTasks') && /open|active|outstanding|incomplete/.test(stray[1])) || (/expensive|valuable/.test(stray[1]) && /\b(most|least) (expensive|valuable)\b|\bexpensive\b.*\b(than|over|under)\b/.test(text)));
   if (stray && !strayConsumed) return { kind: 'NONE' };
 
   // A singular noun names ONE record ("my claim roof hail", "my warranty"): only a superlative ("the oldest appliance", "which warranty expires first") may use it; everything else needs the plural kind.
-  const preSuperlative = /\b(most expensive|most valuable|priciest|costliest|most costly|least expensive|cheapest|oldest|newest|youngest|largest|highest|lowest|biggest|soonest|earliest|latest|next to expire|expires? (?:first|soonest|next)|expiring (?:first|soonest|next)|due (?:first|soonest|next)|first to expire)\b/.test(text);
+  const preSuperlative = /\b(most expensive|most valuable|priciest|costliest|most costly|least expensive|cheapest|oldest|newest|youngest|largest|highest|lowest|biggest|soonest|earliest|latest|next to expire|expires? (?:first|soonest|next(?! (?:month|week|year|\d)))|expiring (?:first|soonest|next(?! (?:month|week|year|\d)))|due (?:first|soonest|next(?! (?:month|week|year|\d)))|first to expire)\b/.test(text);
   const aggregateWord = /\b(average|mean|typical|total(?! assessed)|sum|combined|altogether)\b/.test(text);
   if (!plural && !preSuperlative && !(template.singularAggregate && aggregateWord)) return { kind: 'NONE' };
 
@@ -395,7 +397,7 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
   // "total assessed value" is a FIELD NAME, not a request to add up: "total" counts as a sum word only when it is not followed by "assessed".
   const sumQ = /\b(total(?! assessed)|sum|combined|altogether|add up|spen[dt])\b|\bhow much (?:have|did) (?:i|we) (?:been )?(?:paid|received|get|got)\b/.test(text);
   const avgQ = /\b(average|mean|typical)\b/.test(text);
-  const superlative = /\b(most expensive|most valuable|priciest|costliest|most costly|least expensive|cheapest|oldest|newest|youngest|largest|highest|lowest|biggest|soonest|earliest|latest|next to expire|expires? (?:first|soonest|next)|expiring (?:first|soonest|next)|due (?:first|soonest|next)|first to expire)\b/.exec(text);
+  const superlative = /\b(most expensive|most valuable|priciest|costliest|most costly|least expensive|cheapest|oldest|newest|youngest|largest|highest|lowest|biggest|soonest|earliest|latest|next to expire|expires? (?:first|soonest|next(?! (?:month|week|year|\d)))|expiring (?:first|soonest|next(?! (?:month|week|year|\d)))|due (?:first|soonest|next(?! (?:month|week|year|\d)))|first to expire)\b/.exec(text);
   const listQ = /\b(list|show|what|which)\b.*\b(?:do i have|have i got|are there|i have|i own)\b|\b(?:list|show) (?:all )?(?:of )?(?:my|our|the)\b/.test(text);
 
   const limitAsk = (() => { const k = /\b(?:top|first|my)?\s*(\d+|three|five|ten)\b\s+(?:most|oldest|newest|cheapest|priciest|costliest)/.exec(text) ?? /\btop (\d+|three|five|ten)\b/.exec(text); return k ? num(k[1]) : null; })();

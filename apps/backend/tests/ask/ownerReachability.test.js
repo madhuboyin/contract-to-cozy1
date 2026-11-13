@@ -141,3 +141,25 @@ test('buyer task counts and seller-readiness questions: new buyer-task templates
   // ("What do I need to do before selling my home?" stays with the life-event entry: an existing routing test owns it)
   for (const q of ['Is my house ready to list?', 'What repairs should I make before selling?', 'What is the most important thing to fix before selling?', 'What is left on my seller prep?']) assert.equal(route(q), 'SELLER_PREP_CHECKLIST', q);
 });
+
+// ---- sixth natural-phrasing probe: maintenance and inventory (2026-11-13) ----
+test('maintenance and inventory: "due next month" is a window not a ranking, "urgent" is never dropped, spend and "everything in my home" total, "last year" is not answered over all time', () => {
+  const { planDataPointQuery } = require('../../src/services/ask/dataPoint/dataPointQueryPlan.ts');
+  const NOW = new Date('2026-11-13T12:00:00Z'); const plan = (q) => { const o = planDataPointQuery(q, NOW); assert.equal(o.kind, 'PLAN', q); return o.plan; };
+  const route = (q) => resolveAskOperation(q).operationId;
+  // a window, not a ranking
+  const next = plan('Which maintenance tasks are due next month?'); assert.deepEqual([next.shape, next.predicates.map((p) => p.op)], ['FILTER', ['gte', 'lt']]);
+  assert.equal(plan('Which maintenance task is due next?').shape, 'TOP_K'); assert.equal(plan('Which warranty expires next?').shape, 'TOP_K', 'a real "next" is still a ranking');
+  // a qualifier is a predicate or the question gets no plan
+  assert.deepEqual(plan('How many urgent maintenance tasks do I have?').predicates.map((p) => [p.field, p.value]), [['priority', 'URGENT']]);
+  assert.deepEqual(plan('How many HVAC items do I have?').predicates.map((p) => [p.field, p.value]), [['category', 'HVAC']]);
+  assert.equal(planDataPointQuery('What did I spend on maintenance last year?', NOW).kind, 'NONE', 'a past period is not supported, so it is not answered over all time');
+  // spend and totals
+  assert.deepEqual([plan('How much have I spent on maintenance?').aggregate.fn, plan('How much have I spent on maintenance?').aggregate.field], ['SUM', 'actualCost']);
+  assert.equal(plan('What is the total replacement cost of everything in my home?').aggregate.field, 'replacementCost'); assert.equal(plan('What did I pay for my appliances in total?').aggregate.field, 'purchaseCost');
+  // last-done and room/location questions
+  assert.equal(resolveDataPoint('When was my gutter cleaning last done?')?.id, 'task.lastCompletedDate'); assert.equal(route('When was my gutter cleaning last done?'), 'DATA_POINT_READ');
+  assert.equal(resolveDataPoint('When was my warranty last done?')?.id ?? null, null);
+  for (const q of ['Where is my water heater located?', 'What room is my refrigerator in?']) assert.equal(route(q), 'INVENTORY_LOOKUP', q);
+  assert.notEqual(route('Where is my deed?'), 'INVENTORY_LOOKUP');
+});
