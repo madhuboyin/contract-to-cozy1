@@ -38,3 +38,6 @@ Same `HomeBuyerChecklist` parent, same reader mode, same lifecycle rules. Exact 
 
 ## Slice 4 as built (catalogue v8, 2026-11-13): record -> versions
 Unlike slices 1-3 this is not parent-first: a property has many records, so the parent must be NAMED and pass `visibleRecordWhere(role)` + ACTIVE + not trashed before any version is read (reader mode `RECORD_VERSION`; the path is also listed in `RELATION_ENTITIES` so the model/scoping checks cover it). Ids (VIEWER): `recordVersion.number`, `.uploadedDate`, `.scanStatus`, `.integrityStatus`. Only the named record's current version (or `version N`) is returned. Remaining: claims.
+
+## Claims (catalogue v9, 2026-11-13): not a relation read
+Schema check: `Claim` carries `propertyId` directly, so it is read as a NAMED entity through the existing mode (property-scoped, title selects, display by type) rather than through the insurance-policy parent proposed in the original order. The relation-read design therefore has four built paths (tasks, milestones, sale items, record versions) and claims needed none; claim checklist items, documents and timeline events (true children) remain unbuilt.

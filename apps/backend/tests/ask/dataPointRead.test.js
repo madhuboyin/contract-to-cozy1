@@ -126,10 +126,10 @@ const roleStub = (role, items) => {
   prisma.inventoryItem = { findMany: async () => items };
   prisma.warranty = { findMany: async () => [{ id: 'w1', providerName: 'A', category: 'APPLIANCE', inventoryItem: { name: 'Dishwasher' }, cost: 120, expiryDate: new Date('2027-03-01T12:00:00Z') }, { id: 'w2', providerName: 'B', category: 'APPLIANCE', inventoryItem: { name: 'Furnace' }, cost: 80, expiryDate: new Date('2028-03-01T12:00:00Z') }] };
 };
-test('every data point has an explicit audience floor, free-form item notes are not catalogued, and domains no longer claim claims', () => {
+test('every data point has an explicit audience floor, free-form item notes are not catalogued, and claims is now its own domain', () => {
   for (const p of DATA_POINT_DEFINITIONS) assert.ok(['VIEWER', 'CONTRIBUTOR', 'OWNER'].includes(p.audience), p.id);
   assert.equal(DATA_POINT_DEFINITIONS.some((p) => p.field === 'notes'), false);
-  assert.deepEqual([...new Set(DATA_POINT_DEFINITIONS.map((p) => p.domain))].sort(), ['appliances-inventory', 'buyer', 'documents-records', 'insurance', 'maintenance', 'reserve-ownership-costs', 'seller-prep', 'warranties']);
+  assert.deepEqual([...new Set(DATA_POINT_DEFINITIONS.map((p) => p.domain))].sort(), ['appliances-inventory', 'buyer', 'claims', 'documents-records', 'insurance', 'maintenance', 'reserve-ownership-costs', 'seller-prep', 'warranties']);
   for (const p of DATA_POINT_DEFINITIONS.filter((x) => x.sensitivity === 'FINANCIAL')) assert.notEqual(p.audience, 'VIEWER', `${p.id}: money is not shown to viewers`);
 });
 test('a viewer is refused a restricted field by the handler AND by the reader; a contributor is not', async () => {
@@ -168,15 +168,15 @@ test('source authorization: a restricted source is redacted once the role drops,
   assert.deepEqual(seen.at(-1), ['PropertyMaintenanceTask', { id: 't1', propertyId: 'p1' }]);
 });
 
-test('owner approval (2026-11-12) covers exactly the 79 catalogued ids at catalogue version 8 (33 at v1 + 14 reserve-ownership-costs + 12 seller-prep/buyer + 4 record + 4 buyerTask + 4 buyerMilestone + 4 saleItem + 4 recordVersion); any unapproved id or version drift fails', () => {
+test('owner approval (2026-11-12) covers exactly the 90 catalogued ids at catalogue version 9 (33 at v1 + 14 reserve-ownership-costs + 12 seller-prep/buyer + 4 record + 4 buyerTask + 4 buyerMilestone + 4 saleItem + 4 recordVersion + 11 claim); any unapproved id or version drift fails', () => {
   assert.equal(DATA_POINT_CATALOGUE_VERSION, DATA_POINT_APPROVAL.catalogueVersion, 'a new catalogue version needs a new approval record');
   const ids = DATA_POINT_DEFINITIONS.map((p) => p.id);
   assert.equal(new Set(ids).size, ids.length, 'ids are unique');
   assert.deepEqual(ids.filter((id) => !APPROVED_DATA_POINT_IDS.includes(id)), [], 'every catalogued id must be owner-approved');
   assert.deepEqual(APPROVED_DATA_POINT_IDS.filter((id) => !ids.includes(id)), [], 'an approved id that is no longer catalogued must be removed from the approval');
-  assert.equal(ids.length, 79); assert.equal(DATA_POINT_CATALOGUE_VERSION, 8);
+  assert.equal(ids.length, 90); assert.equal(DATA_POINT_CATALOGUE_VERSION, 9);
   const by = (d) => DATA_POINT_DEFINITIONS.filter((p) => p.domain === d).length;
-  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance'), by('reserve-ownership-costs'), by('seller-prep'), by('buyer'), by('documents-records')], [14, 5, 7, 7, 14, 13, 11, 8]);
+  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance'), by('reserve-ownership-costs'), by('seller-prep'), by('buyer'), by('documents-records'), by('claims')], [14, 5, 7, 7, 14, 13, 11, 8, 11]);
 });
 test('the restriction copy is generated from the field floor, so it never names a different audience than the check enforces', async () => {
   assert.match(audienceFloorCopy('CONTRIBUTOR').title, /contributors and owners/);
@@ -607,4 +607,63 @@ test('v8 replay: the version is re-resolved through its CURRENT, visible, active
   await AUTH.DATA_POINT_READ.authorizeSources(ctx('OWNER', true), [sourceRef('PropertyRecordVersion', 'v2')]);
   assert.equal(seen.at(-1)[1].record.visibility, undefined, 'owners are not filtered');
   assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx('VIEWER', false), [sourceRef('PropertyRecordVersion', 'v2')]), 'REDACT_SECTION');
+});
+
+// ---- Catalogue v9: claims (NAMED read; status/dates CONTRIBUTOR, amounts and claim number OWNER) ----
+const dec = (n) => ({ toNumber: () => n });
+const clm = (o) => ({ id: 'c1', propertyId: 'p1', title: 'Basement flood', type: 'WATER_DAMAGE', status: 'UNDER_REVIEW', description: 'SECRET-DESC', providerName: 'SECRET-PROVIDER', externalUrl: 'SECRET-URL', incidentAt: new Date('2026-08-02T12:00:00Z'), openedAt: new Date('2026-08-03T12:00:00Z'), submittedAt: new Date('2026-08-05T12:00:00Z'), closedAt: null, nextFollowUpAt: new Date('2026-11-20T12:00:00Z'), deductibleAmount: dec(1000), estimatedLossAmount: dec(7777), settlementAmount: dec(5555), claimNumber: 'CLM-SECRET-9', ...o });
+function clStub(role, rows = [clm({})], calls = []) {
+  propertyAccessService.resolvePropertyAccess = async () => ({ propertyId: 'p1', userId: 'u1', role, isOwner: role === 'OWNER' });
+  prisma.claim = { findMany: async (a) => { calls.push(a); return rows.map((r) => Object.fromEntries(Object.keys({ id: 1, ...a.select }).map((k) => [k, r[k]]))); } };
+}
+test('v9 claim floors and routing: status/dates CONTRIBUTOR, amounts and claim number OWNER; compound cues; bare words select nothing', () => {
+  const f = (id) => DATA_POINT_DEFINITIONS.find((p) => p.id === id).audience;
+  for (const id of ['claim.status', 'claim.type', 'claim.incidentDate', 'claim.openedDate', 'claim.submittedDate', 'claim.closedDate', 'claim.nextFollowUp']) assert.equal(f(id), 'CONTRIBUTOR', id);
+  for (const id of ['claim.deductible', 'claim.estimatedLoss', 'claim.settlement', 'claim.claimNumber']) assert.equal(f(id), 'OWNER', id);
+  for (const cue of ['claim', 'insurance claim', 'warranty claim']) {
+    assert.equal(resolveDataPoint(`what is the status of my ${cue}`)?.id, 'claim.status', cue);
+    assert.equal(resolveDataPoint(`what is the settlement on my ${cue}`)?.id, 'claim.settlement', cue);
+    assert.equal(resolveDataPoint(`what is the claim number of my ${cue}`)?.id, 'claim.claimNumber', cue);
+    assert.equal(resolveDataPoint(`when is the next follow-up on my ${cue}`)?.id, 'claim.nextFollowUp', cue);
+  }
+  assert.equal(resolveDataPoint('what is the deductible on my insurance policy')?.id, 'policy.deductible', 'a policy deductible is not a claim deductible');
+  assert.equal(resolveDataPoint('what is the status of my task')?.id, 'task.status');
+  assert.equal(resolveDataPoint('what is the settlement'), null);
+  const defs = DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'Claim').map((p) => p.field);
+  for (const banned of ['title', 'description', 'providerName', 'externalUrl', 'createdBy', 'insurancePolicyId', 'warrantyId', 'checklistCompletionPct', 'lastActivityAt']) assert.ok(!defs.includes(banned), banned);
+});
+test('v9 read: property-scoped, named by title but never echoing it; a contributor reads status and dates; amounts and the claim number are refused below OWNER and never selected', async () => {
+  const calls = []; clStub('CONTRIBUTOR', [clm({})], calls);
+  const st = await dataPointReadResult('u1', 'p1', 'what is the status of my claim basement flood');
+  assert.equal(st.status, 'ANSWERED'); assert.match(st.blocks[0].body, /water damage claim has status under review/i); assert.ok(!JSON.stringify(st).includes('Basement flood'));
+  assert.equal(calls[0].where.propertyId, 'p1'); assert.equal(calls[0].select.deductibleAmount, undefined);
+  for (const q of ['what is the settlement on my claim', 'what is the deductible on my claim', 'what is the estimated loss on my claim', 'what is the claim number of my claim']) {
+    const r = await dataPointReadResult('u1', 'p1', q); assert.equal(r.reasonCode, 'DATA_POINT_RESTRICTED', q);
+    const text = JSON.stringify(r); for (const s of ['5555', '7777', '1,000', 'CLM-SECRET-9']) assert.ok(!text.includes(s), `${q} leaked ${s}`);
+  }
+  assert.equal(calls.filter((c) => c.select && ('settlementAmount' in c.select || 'claimNumber' in c.select)).length, 0, 'restricted columns are not even selected for a contributor');
+  clStub('VIEWER'); assert.equal((await dataPointReadResult('u1', 'p1', 'what is the status of my claim')).reasonCode, 'DATA_POINT_RESTRICTED', 'a viewer cannot read claim status');
+  clStub('OWNER');
+  assert.match((await dataPointReadResult('u1', 'p1', 'what is the settlement on my claim')).blocks[0].body, /\$5,555/);
+  assert.match((await dataPointReadResult('u1', 'p1', 'what is the claim number of my claim')).blocks[0].body, /CLM-SECRET-9/);
+  const owner = JSON.stringify(await dataPointReadResult('u1', 'p1', 'what is the deductible on my claim')); for (const s of ['SECRET-DESC', 'SECRET-PROVIDER', 'SECRET-URL']) assert.ok(!owner.includes(s), s);
+});
+test('v9 lifecycle and ambiguity: a closed or denied claim carries its follow-up as a past value; several claims need a name; replay re-checks role and property', async () => {
+  for (const st of ['CLOSED', 'DENIED']) {
+    clStub('CONTRIBUTOR', [clm({ status: st })]);
+    assert.equal((await dataPointReadResult('u1', 'p1', 'what is the status of my claim')).status, 'ANSWERED', 'status stays plain');
+    const due = (await dataPointReadResult('u1', 'p1', 'when is the next follow-up on my claim')).blocks[0].body;
+    assert.match(due, new RegExp(`is ${st.toLowerCase()}\\. Its recorded date was`)); assert.doesNotMatch(due, /next follow-up on/);
+  }
+  clStub('CONTRIBUTOR', [clm({}), clm({ id: 'c2', title: 'Roof hail', type: 'STORM_WIND_HAIL' })]);
+  assert.match((await dataPointReadResult('u1', 'p1', 'what is the status of my claim')).reasonCode, /AMBIGUOUS/);
+  assert.match((await dataPointReadResult('u1', 'p1', 'what is the status of my claim roof hail')).blocks[0].body, /storm wind hail claim has status/i);
+  clStub('CONTRIBUTOR', []); assert.equal((await dataPointReadResult('u1', 'p1', 'what is the status of my claim')).reasonCode, 'DATA_POINT_NO_INVENTORY');
+  const { COMPOSABLE_SOURCE_AUTHORIZATION: AUTH, sourceRef } = require('../../src/services/ask/composition/sourceAuthorization.ts');
+  const seen = []; const ctx = (role, present) => ({ userId: 'u1', propertyId: 'p1', role, exists: async (m, w) => { seen.push([m, w]); return present; } });
+  const ref = { ...sourceRef('Claim', 'c1'), minRole: 'OWNER' };
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx('OWNER', true), [ref]), 'AUTHORIZED');
+  assert.deepEqual(seen.at(-1), ['Claim', { id: 'c1', propertyId: 'p1' }]);
+  assert.notEqual(await AUTH.DATA_POINT_READ.authorizeSources(ctx('CONTRIBUTOR', true), [ref]), 'AUTHORIZED', 'an OWNER-floor source is redacted once the role drops');
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx('OWNER', false), [ref]), 'REDACT_SECTION');
 });
