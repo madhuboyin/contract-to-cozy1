@@ -124,7 +124,7 @@ const roleStub = (role, items) => {
 test('every data point has an explicit audience floor, free-form item notes are not catalogued, and domains no longer claim claims', () => {
   for (const p of DATA_POINT_DEFINITIONS) assert.ok(['VIEWER', 'CONTRIBUTOR', 'OWNER'].includes(p.audience), p.id);
   assert.equal(DATA_POINT_DEFINITIONS.some((p) => p.field === 'notes'), false);
-  assert.deepEqual([...new Set(DATA_POINT_DEFINITIONS.map((p) => p.domain))].sort(), ['appliances-inventory', 'buyer', 'insurance', 'maintenance', 'reserve-ownership-costs', 'seller-prep', 'warranties']);
+  assert.deepEqual([...new Set(DATA_POINT_DEFINITIONS.map((p) => p.domain))].sort(), ['appliances-inventory', 'buyer', 'documents-records', 'insurance', 'maintenance', 'reserve-ownership-costs', 'seller-prep', 'warranties']);
   for (const p of DATA_POINT_DEFINITIONS.filter((x) => x.sensitivity === 'FINANCIAL')) assert.notEqual(p.audience, 'VIEWER', `${p.id}: money is not shown to viewers`);
 });
 test('a viewer is refused a restricted field by the handler AND by the reader; a contributor is not', async () => {
@@ -163,15 +163,15 @@ test('source authorization: a restricted source is redacted once the role drops,
   assert.deepEqual(seen.at(-1), ['PropertyMaintenanceTask', { id: 't1', propertyId: 'p1' }]);
 });
 
-test('owner approval (2026-11-12) covers exactly the 59 catalogued ids at catalogue version 3 (33 at v1 + 14 reserve-ownership-costs + 12 seller-prep/buyer); any unapproved id or version drift fails', () => {
+test('owner approval (2026-11-12) covers exactly the 63 catalogued ids at catalogue version 4 (33 at v1 + 14 reserve-ownership-costs + 12 seller-prep/buyer + 4 record); any unapproved id or version drift fails', () => {
   assert.equal(DATA_POINT_CATALOGUE_VERSION, DATA_POINT_APPROVAL.catalogueVersion, 'a new catalogue version needs a new approval record');
   const ids = DATA_POINT_DEFINITIONS.map((p) => p.id);
   assert.equal(new Set(ids).size, ids.length, 'ids are unique');
   assert.deepEqual(ids.filter((id) => !APPROVED_DATA_POINT_IDS.includes(id)), [], 'every catalogued id must be owner-approved');
   assert.deepEqual(APPROVED_DATA_POINT_IDS.filter((id) => !ids.includes(id)), [], 'an approved id that is no longer catalogued must be removed from the approval');
-  assert.equal(ids.length, 59); assert.equal(DATA_POINT_CATALOGUE_VERSION, 3);
+  assert.equal(ids.length, 63); assert.equal(DATA_POINT_CATALOGUE_VERSION, 4);
   const by = (d) => DATA_POINT_DEFINITIONS.filter((p) => p.domain === d).length;
-  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance'), by('reserve-ownership-costs'), by('seller-prep'), by('buyer')], [14, 5, 7, 7, 14, 9, 3]);
+  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance'), by('reserve-ownership-costs'), by('seller-prep'), by('buyer'), by('documents-records')], [14, 5, 7, 7, 14, 9, 3, 4]);
 });
 test('the restriction copy is generated from the field floor, so it never names a different audience than the check enforces', async () => {
   assert.match(audienceFloorCopy('CONTRIBUTOR').title, /contributors and owners/);
@@ -267,13 +267,13 @@ function sbStub(role, { prep = [], sale = [], buyer = [] } = {}, calls = []) {
   prisma.propertySaleCase = { findMany: async (a) => { calls.push(['sale', a]); return sale; } };
   prisma.homeBuyerChecklist = { findMany: async (a) => { calls.push(['buyer', a]); return buyer; } };
 }
-test('v3: every seller-prep/buyer point is CONTRIBUTOR and resolves by its cue; bare words pick nothing', () => {
-  for (const p of DATA_POINT_DEFINITIONS.filter((x) => x.domain === 'seller-prep' || x.domain === 'buyer')) assert.equal(p.audience, 'CONTRIBUTOR', p.id);
+test('v4: every seller-prep/buyer point is VIEWER (shared journey facts, owner policy 2026-11-12) and resolves by its cue; bare words pick nothing', () => {
+  for (const p of DATA_POINT_DEFINITIONS.filter((x) => x.domain === 'seller-prep' || x.domain === 'buyer')) assert.equal(p.audience, 'VIEWER', p.id);
   const cases = { 'what is the paint condition for my sale prep': 'salePrep.paint', 'what is my curb appeal condition': 'salePrep.curbAppeal', 'what is my staging readiness': 'salePrep.staging', 'what is my target list date for selling': 'saleCase.targetListDate', 'what is my target close date for selling my home': 'saleCase.targetCloseDate', 'what stage is my buyer journey at': 'buyer.stage', 'when is my buyer move in date': 'buyer.moveInDate', 'what is my buyer closing date': 'buyer.targetCloseDate' };
   for (const [m, id] of Object.entries(cases)) assert.equal(resolveDataPoint(m)?.id, id, m);
   assert.equal(resolveDataPoint('what is my closing date'), null, 'no sale or buyer cue');
 });
-test('v3 reads: singleton, property-scoped, catalogued columns only; inactive buyer journey is flagged; viewers are refused', async () => {
+test('v4 reads: singleton, property-scoped, catalogued columns only; inactive buyer journey is flagged; viewers read shared journey facts', async () => {
   const calls = []; sbStub('CONTRIBUTOR', { prep: [{ id: 'sp1', paintCondition: 'FAIR' }], sale: [{ id: 'sc1', targetListDate: new Date('2027-03-01T12:00:00Z') }], buyer: [{ id: 'b1', stage: 'UNDER_CONTRACT', status: 'PAUSED' }] }, calls);
   assert.match((await dataPointReadResult('u1', 'p1', 'what is the paint condition for my sale prep')).blocks[0].body, /fair/);
   assert.match((await dataPointReadResult('u1', 'p1', 'what is my target list date for selling')).blocks[0].body, /March 1, 2027|Mar(ch)? 1/);
@@ -281,13 +281,56 @@ test('v3 reads: singleton, property-scoped, catalogued columns only; inactive bu
   assert.equal(b.status, 'READY_WITH_LIMITATIONS'); assert.match(b.blocks[0].body, /under contract/); assert.match(b.blocks[0].body, /paused, so what is recorded may be out of date/);
   for (const [, a] of calls) { assert.deepEqual(a.where, { propertyId: 'p1' }); assert.equal(a.take, 1); }
   assert.deepEqual(Object.keys(calls[2][1].select).sort(), ['id', 'stage', 'status']);
-  assert.deepEqual(b.parameters.sources, [{ sourceType: 'HomeBuyerChecklist', sourceId: 'b1', minRole: 'CONTRIBUTOR' }]);
+  assert.deepEqual(b.parameters.sources, [{ sourceType: 'HomeBuyerChecklist', sourceId: 'b1' }]);
   sbStub('VIEWER', { prep: [{ id: 'sp1', paintCondition: 'FAIR' }], sale: [], buyer: [{ id: 'b1', stage: 'EXPLORING', status: 'ACTIVE' }] });
-  for (const q of ['what is the paint condition for my sale prep', 'what stage is my buyer journey at']) assert.equal((await dataPointReadResult('u1', 'p1', q)).reasonCode, 'DATA_POINT_RESTRICTED', q);
+  for (const q of ['what is the paint condition for my sale prep', 'what stage is my buyer journey at']) assert.equal((await dataPointReadResult('u1', 'p1', q)).status, 'ANSWERED', q);
   sbStub('OWNER', {}); assert.equal((await dataPointReadResult('u1', 'p1', 'what is my target list date for selling')).reasonCode, 'DATA_POINT_NO_INVENTORY');
 });
 test('v3 sources are authorised against the live row for this property', async () => {
   const { COMPOSABLE_SOURCE_AUTHORIZATION: AUTH, sourceRef } = require('../../src/services/ask/composition/sourceAuthorization.ts');
   const seen = []; const ctx = { userId: 'u1', propertyId: 'p1', role: 'OWNER', exists: async (m, w) => { seen.push([m, w]); return true; } };
   for (const t of ['PropertySalePrepProfile', 'PropertySaleCase', 'HomeBuyerChecklist']) { assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx, [sourceRef(t, 'x1')]), 'AUTHORIZED'); assert.deepEqual(seen.at(-1), [t, { id: 'x1', propertyId: 'p1' }]); }
+});
+
+// ---- Catalogue v4: Home Records metadata reuses the canonical visibility rule ----
+function recStub(role, rows, calls = []) {
+  propertyAccessService.resolvePropertyAccess = async () => ({ propertyId: 'p1', userId: 'u1', role, isOwner: role === 'OWNER' });
+  prisma.propertyRecord = { findMany: async (a) => { calls.push(a); return rows.filter((r) => Object.entries(a.where).every(([k, v]) => k === 'propertyId' || (v && typeof v === 'object') || r[k] === v)); } };
+}
+const rec = (o) => ({ id: 'r1', title: 'Roof permit', recordType: 'PERMIT', verificationStatus: 'VERIFIED', effectiveTo: new Date('2030-05-01T12:00:00Z'), retainUntil: new Date('2033-01-01T12:00:00Z'), visibility: 'HOUSEHOLD', lifecycleStatus: 'ACTIVE', trashedAt: null, ...o });
+test('v4 record points: floors, specific aliases, no collision with warranty/policy expiry', () => {
+  const f = (id) => DATA_POINT_DEFINITIONS.find((p) => p.id === id).audience;
+  assert.deepEqual(['record.type', 'record.verification', 'record.effectiveTo', 'record.retainUntil'].map(f), ['VIEWER', 'VIEWER', 'VIEWER', 'OWNER']);
+  assert.equal(resolveDataPoint('what type of document is my roof permit')?.id, 'record.type');
+  assert.equal(resolveDataPoint('is my roof permit record verified')?.id, 'record.verification');
+  assert.equal(resolveDataPoint('what is my permit document valid until')?.id, 'record.effectiveTo');
+  assert.equal(resolveDataPoint('when does my warranty document expire')?.id, 'warranty.expiryDate', 'a record cue does not steal warranty expiry');
+});
+test('v4 record read: the canonical visibility rule is in the query; an owner-only record is indistinguishable from a missing one for non-owners', async () => {
+  const calls = []; const rows = [rec({}), rec({ id: 'r2', title: 'Will and trust', visibility: 'OWNER_ONLY', recordType: 'LEGAL' }), rec({ id: 'r3', title: 'Old trashed deed', lifecycleStatus: 'TRASHED' })];
+  recStub('CONTRIBUTOR', rows, calls);
+  const ok = await dataPointReadResult('u1', 'p1', 'what type of document is my roof permit');
+  assert.equal(ok.status, 'ANSWERED'); assert.match(ok.blocks[0].body, /permit/);
+  assert.deepEqual(calls[0].where, { propertyId: 'p1', lifecycleStatus: 'ACTIVE', trashedAt: null, visibility: 'HOUSEHOLD' });
+  const hidden = await dataPointReadResult('u1', 'p1', 'what type of document is my will and trust');
+  const missing = await dataPointReadResult('u1', 'p1', 'what type of document is my gazebo plan');
+  assert.equal(hidden.reasonCode, missing.reasonCode); assert.equal(hidden.blocks[0].title, missing.blocks[0].title); assert.ok(!JSON.stringify(hidden).includes('LEGAL'));
+  const trashed = await dataPointReadResult('u1', 'p1', 'what type of document is my old trashed deed');
+  assert.equal(trashed.reasonCode, missing.reasonCode, 'a trashed record is not answered');
+  recStub('OWNER', rows, calls);
+  assert.deepEqual(calls.at(-1) && (await dataPointReadResult('u1', 'p1', 'what type of document is my will and trust'), calls.at(-1).where), { propertyId: 'p1', lifecycleStatus: 'ACTIVE', trashedAt: null });
+  assert.equal((await dataPointReadResult('u1', 'p1', 'what type of document is my will and trust')).status, 'ANSWERED', 'owners see owner-only records');
+});
+test('v4 record retention is OWNER-only: refused for contributors and viewers, answered for owners', async () => {
+  for (const role of ['VIEWER', 'CONTRIBUTOR']) { recStub(role, [rec({})]); const r = await dataPointReadResult('u1', 'p1', 'what is the retention date of my roof permit record'); assert.equal(r.reasonCode, 'DATA_POINT_RESTRICTED', role); assert.ok(!JSON.stringify(r).includes('2033')); }
+  recStub('OWNER', [rec({})]); assert.match((await dataPointReadResult('u1', 'p1', 'what is the retention date of my roof permit record')).blocks[0].body, /2033/);
+  recStub('VIEWER', [rec({})]); assert.equal((await dataPointReadResult('u1', 'p1', 'is my roof permit record verified')).status, 'ANSWERED');
+});
+test('v4 record sources replay with the current role: an owner-only record redacts for a non-owner', async () => {
+  const { COMPOSABLE_SOURCE_AUTHORIZATION: AUTH, sourceRef } = require('../../src/services/ask/composition/sourceAuthorization.ts');
+  const seen = []; const ctx = (role) => ({ userId: 'u1', propertyId: 'p1', role, exists: async (m, w) => { seen.push([m, w]); return true; } });
+  await AUTH.DATA_POINT_READ.authorizeSources(ctx('CONTRIBUTOR'), [sourceRef('PropertyRecord', 'r1')]);
+  assert.deepEqual(seen.at(-1), ['PropertyRecord', { id: 'r1', propertyId: 'p1', lifecycleStatus: 'ACTIVE', trashedAt: null, visibility: 'HOUSEHOLD' }]);
+  await AUTH.DATA_POINT_READ.authorizeSources(ctx('OWNER'), [sourceRef('PropertyRecord', 'r1')]);
+  assert.deepEqual(seen.at(-1)[1], { id: 'r1', propertyId: 'p1', lifecycleStatus: 'ACTIVE', trashedAt: null });
 });

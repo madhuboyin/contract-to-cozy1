@@ -1,10 +1,10 @@
 // Proposed data-point catalogue (reliability FRD FR-DATA-1..5, D11, D12, D13). The Prisma schema says what exists; this file says what the homeowner may be shown and
 // how they ask for it. FAIL CLOSED: a field not listed here cannot be read through DATA_POINT_READ, whatever the schema contains. The catalogue holds 33 PROPOSED data
 // points (inventory 14, warranties 5, insurance 7, maintenance 7) plus 14 reserve and ownership-cost points (catalogue version 2). The owner approved the field floors and the
-// domain split for exactly these 59 ids (33 at version 1, 14 at version 2, 12 at version 3, all 2026-11-12); see APPROVED_DATA_POINT_IDS below. Any other id, or any change of a floor, needs a new approval and a new version.
+// domain split for exactly these 63 ids (33 at version 1, 14 at version 2, 12 at version 3, 4 at version 4; all 2026-11-12); see APPROVED_DATA_POINT_IDS below. Any other id, or any change of a floor, needs a new approval and a new version.
 export type DataPointFamily = 'text' | 'date' | 'money' | 'dollars' | 'enum' | 'tags' | 'flag' | 'percent' | 'number';
-export type DataPointEntity = 'InventoryItem' | 'Warranty' | 'InsurancePolicy' | 'PropertyMaintenanceTask' | 'HomeReserveFund' | 'PropertyTaxBillRecord' | 'PropertyTaxAssessmentRecord' | 'PropertySalePrepProfile' | 'PropertySaleCase' | 'HomeBuyerChecklist';
-export type DataPointDomain = 'appliances-inventory' | 'warranties' | 'insurance' | 'maintenance' | 'reserve-ownership-costs' | 'seller-prep' | 'buyer';
+export type DataPointEntity = 'InventoryItem' | 'Warranty' | 'InsurancePolicy' | 'PropertyMaintenanceTask' | 'HomeReserveFund' | 'PropertyTaxBillRecord' | 'PropertyTaxAssessmentRecord' | 'PropertySalePrepProfile' | 'PropertySaleCase' | 'HomeBuyerChecklist' | 'PropertyRecord';
+export type DataPointDomain = 'appliances-inventory' | 'warranties' | 'insurance' | 'maintenance' | 'reserve-ownership-costs' | 'seller-prep' | 'buyer' | 'documents-records';
 export type AudienceFloor = 'VIEWER' | 'CONTRIBUTOR' | 'OWNER';
 export interface DataPointDefinition {
   /** Stable id used by plans, fixtures and tests (never a column name). */
@@ -41,10 +41,12 @@ const FIELD_AUDIENCE: Readonly<Record<string, AudienceFloor>> = Object.freeze({
   'reserve.balance': 'CONTRIBUTOR', 'reserve.monthlyContribution': 'CONTRIBUTOR', 'reserve.shortfall': 'CONTRIBUTOR', 'reserve.posture': 'VIEWER', 'reserve.horizonYears': 'VIEWER', 'reserve.lastRecalculated': 'VIEWER',
   'taxBill.amount': 'CONTRIBUTOR', 'taxBill.effectiveRate': 'VIEWER', 'taxBill.issueDate': 'VIEWER',
   'taxAssessment.totalAssessedValue': 'CONTRIBUTOR', 'taxAssessment.taxableValue': 'CONTRIBUTOR', 'taxAssessment.landValue': 'CONTRIBUTOR', 'taxAssessment.improvementValue': 'CONTRIBUTOR', 'taxAssessment.assessmentDate': 'VIEWER',
-  // Catalogue version 3 (owner decision 2026-11-12): sale and buyer-journey facts are not shown to viewers.
-  'salePrep.paint': 'CONTRIBUTOR', 'salePrep.curbAppeal': 'CONTRIBUTOR', 'salePrep.flooring': 'CONTRIBUTOR', 'salePrep.kitchen': 'CONTRIBUTOR', 'salePrep.bathroom': 'CONTRIBUTOR', 'salePrep.staging': 'CONTRIBUTOR',
-  'saleCase.status': 'CONTRIBUTOR', 'saleCase.targetListDate': 'CONTRIBUTOR', 'saleCase.targetCloseDate': 'CONTRIBUTOR',
-  'buyer.stage': 'CONTRIBUTOR', 'buyer.targetCloseDate': 'CONTRIBUTOR', 'buyer.moveInDate': 'CONTRIBUTOR',
+  // Catalogue version 4 (owner policy 2026-11-12): ordinary journey status, stage and dates are shared household information (viewers read, contributors change), matching the direct
+  // buyer/seller operations. Amounts, rates, financing/contract terms and title details stay OWNER and are not catalogued. Record points follow the record's own visibility (see readDataPoint).
+  'salePrep.paint': 'VIEWER', 'salePrep.curbAppeal': 'VIEWER', 'salePrep.flooring': 'VIEWER', 'salePrep.kitchen': 'VIEWER', 'salePrep.bathroom': 'VIEWER', 'salePrep.staging': 'VIEWER',
+  'saleCase.status': 'VIEWER', 'saleCase.targetListDate': 'VIEWER', 'saleCase.targetCloseDate': 'VIEWER',
+  'buyer.stage': 'VIEWER', 'buyer.targetCloseDate': 'VIEWER', 'buyer.moveInDate': 'VIEWER',
+  'record.type': 'VIEWER', 'record.verification': 'VIEWER', 'record.effectiveTo': 'VIEWER', 'record.retainUntil': 'OWNER',
 });
 const d = (x: Omit<DataPointDefinition, 'audience'>): DataPointDefinition => {
   const audience = FIELD_AUDIENCE[x.id];
@@ -147,7 +149,18 @@ const SELL_BUY_POINTS: readonly DataPointDefinition[] = [
   by({ id: 'buyer.moveInDate', field: 'moveInDate', family: 'date', label: 'The move-in date', aliases: ['move in date', 'move in', 'moving in', 'when do i move in'], sentence: 'has a move-in date of', sensitivity: 'HOME' }),
 ];
 
-export const DATA_POINT_DEFINITIONS: readonly DataPointDefinition[] = Object.freeze([...INVENTORY_POINTS, ...OTHER_DOMAINS, ...RESERVE_COST_POINTS, ...SELL_BUY_POINTS]);
+const REC = ['home record', 'home records', 'document', 'documents', 'record', 'records'];
+const rc = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues' | 'audience'>): DataPointDefinition => d({ ...x, domain: 'documents-records', entity: 'PropertyRecord', cues: REC });
+// Catalogue version 4: Home Records metadata. visibility is the record-level access authority (homeRecordsAccess.visibleRecordWhere), sensitivity is classification only; the floor below can only narrow a visible record.
+// Aliases are deliberately specific: 'expires' belongs to warranty/policy points, so a record's end date is asked as "effective until / valid until".
+const RECORD_POINTS: readonly DataPointDefinition[] = [
+  rc({ id: 'record.type', field: 'recordType', family: 'enum', label: 'The record type', aliases: ['record type', 'document type', 'type of record', 'type of document', 'what type of document', 'what type of record', 'what kind of document', 'what kind of record'], sentence: 'is filed as', sensitivity: 'HOME' }),
+  rc({ id: 'record.verification', field: 'verificationStatus', family: 'enum', label: 'Its verification status', aliases: ['verified', 'verification', 'verification status', 'is it verified'], sentence: 'has verification status', sensitivity: 'HOME' }),
+  rc({ id: 'record.effectiveTo', field: 'effectiveTo', family: 'date', label: 'The date it is effective until', aliases: ['effective until', 'effective through', 'effective to', 'valid until', 'valid through'], sentence: 'is effective until', sensitivity: 'HOME' }),
+  rc({ id: 'record.retainUntil', field: 'retainUntil', family: 'date', label: 'The retention date', aliases: ['retain until', 'retained until', 'keep until', 'retention date', 'retention'], sentence: 'is retained until', sensitivity: 'HOME' }),
+];
+
+export const DATA_POINT_DEFINITIONS: readonly DataPointDefinition[] = Object.freeze([...INVENTORY_POINTS, ...OTHER_DOMAINS, ...RESERVE_COST_POINTS, ...SELL_BUY_POINTS, ...RECORD_POINTS]);
 export const DATA_POINT_BY_ID: ReadonlyMap<string, DataPointDefinition> = new Map(DATA_POINT_DEFINITIONS.map((p) => [p.id, p]));
 /** The only columns the reader may select per entity (FR-DATA-15: the select list is built from this allowlist, never from user text). */
 export const READABLE_FIELDS: Readonly<Record<DataPointEntity, readonly string[]>> = Object.freeze({
@@ -161,13 +174,14 @@ export const READABLE_FIELDS: Readonly<Record<DataPointEntity, readonly string[]
   PropertySalePrepProfile: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'PropertySalePrepProfile').map((p) => p.field),
   PropertySaleCase: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'PropertySaleCase').map((p) => p.field),
   HomeBuyerChecklist: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'HomeBuyerChecklist').map((p) => p.field),
+  PropertyRecord: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'PropertyRecord').map((p) => p.field),
 });
 export const READABLE_ITEM_FIELDS: readonly string[] = READABLE_FIELDS.InventoryItem;
 
 /** Catalogue version the owner's approval covers. Bump it with any added id or changed audience floor, and re-approve. */
-export const DATA_POINT_CATALOGUE_VERSION = 3;
+export const DATA_POINT_CATALOGUE_VERSION = 4;
 /** Owner approval record (2026-11-12): field audience floors and the domain split (appliances-inventory, warranties, insurance, maintenance; claims is a future domain), version 1 = 33 ids; version 2 adds the 14 reserve-ownership-costs ids (all 14 approved as proposed, tax amounts at CONTRIBUTOR, Expense kept own-profile only, claims deferred). */
-export const DATA_POINT_APPROVAL = Object.freeze({ catalogueVersion: 3, approvedOn: '2026-11-12', scope: 'field audience floors and domain split, exact ids only (33 at v1 + 14 reserve-ownership-costs at v2 + 12 seller-prep/buyer at v3, all CONTRIBUTOR; PropertyRecord deferred)' });
+export const DATA_POINT_APPROVAL = Object.freeze({ catalogueVersion: 4, approvedOn: '2026-11-12', scope: 'field audience floors and domain split, exact ids only (33 at v1 + 14 reserve-ownership-costs at v2 + 12 seller-prep/buyer at v3 + 4 PropertyRecord at v4); v4 lowers the 12 v3 floors CONTRIBUTOR -> VIEWER (shared journey facts) and approves record.type/verification/effectiveTo at VIEWER and record.retainUntil at OWNER, only for records visible under visibleRecordWhere(role)' });
 export const APPROVED_DATA_POINT_IDS: readonly string[] = Object.freeze([
   'item.brand', 'item.manufacturer', 'item.model', 'item.serial', 'item.installedOn', 'item.purchasedOn', 'item.lastServicedOn', 'item.expectedExpiryDate', 'item.condition', 'item.category', 'item.efficiencyRating', 'item.purchaseCost', 'item.replacementCost', 'item.tags',
   'warranty.expiryDate', 'warranty.startDate', 'warranty.provider', 'warranty.coverage', 'warranty.cost',
@@ -179,6 +193,7 @@ export const APPROVED_DATA_POINT_IDS: readonly string[] = Object.freeze([
   'salePrep.paint', 'salePrep.curbAppeal', 'salePrep.flooring', 'salePrep.kitchen', 'salePrep.bathroom', 'salePrep.staging',
   'saleCase.status', 'saleCase.targetListDate', 'saleCase.targetCloseDate',
   'buyer.stage', 'buyer.targetCloseDate', 'buyer.moveInDate',
+  'record.type', 'record.verification', 'record.effectiveTo', 'record.retainUntil',
 ]);
 /** Categories the owner presumes owner-only for any FUTURE catalogue entry (not catalogued today): mortgage/equity/financing, bank/payment, full policy or account ids, household identity/access, title/ownership, tax ids. */
 export const FUTURE_OWNER_ONLY_PRESUMPTIONS: readonly string[] = Object.freeze(['mortgage-equity-financing', 'bank-payment', 'full-policy-or-account-ids', 'household-identity-access', 'title-ownership', 'tax-ids']);

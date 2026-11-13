@@ -1,7 +1,9 @@
 // Generic data-point read (reliability FRD FR-DATA-3/4/15, D12), shape 1 (point read) and shape 2 (record lookup) for the reviewed entities.
 // The ONLY query that can run is the allowlisted template below: property-scoped, a select list built from the reviewed catalogue, a hard row cap. Nothing in the
 // message reaches a query string; the message only chooses WHICH reviewed data point and WHICH records (matched in memory against the property's own item names).
+import type { HouseholdRole } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
+import { visibleRecordWhere } from '../../homeRecordsAccess';
 import { DATA_POINT_DEFINITIONS, READABLE_FIELDS, roleMayRead, type DataPointDefinition, type DataPointEntity } from './dataPointCatalogue';
 
 export const DATA_POINT_ITEM_ROW_CAP = 200;
@@ -44,7 +46,7 @@ function taxLimitation(r: any): string | null {
   if (r.sourceType === 'HOMEOWNER_REPORTED' && r.confidence !== 'VERIFIED') return `This ${r.taxYear} figure was entered by you and has not been matched to an official source.`;
   return null;
 }
-interface EntitySpec { readonly mode?: 'NAMED' | 'SINGLETON' | 'LATEST_TAX_YEAR'; readonly where?: Record<string, unknown>; readonly orderBy?: unknown; readonly limitation?: (row: any) => string | null; readonly delegate: string; readonly extraSelect: Record<string, unknown>; readonly labels: (row: any) => string[]; readonly display: (row: any) => string; readonly listUnnamedUpTo: number; readonly roomName?: (row: any) => string | null }
+interface EntitySpec { readonly mode?: 'NAMED' | 'SINGLETON' | 'LATEST_TAX_YEAR'; readonly where?: Record<string, unknown>; readonly roleWhere?: (role: string) => Record<string, unknown>; readonly orderBy?: unknown; readonly limitation?: (row: any) => string | null; readonly delegate: string; readonly extraSelect: Record<string, unknown>; readonly labels: (row: any) => string[]; readonly display: (row: any) => string; readonly listUnnamedUpTo: number; readonly roomName?: (row: any) => string | null }
 const ENTITY_SPECS: Readonly<Record<DataPointEntity, EntitySpec>> = {
   InventoryItem: { delegate: 'inventoryItem', extraSelect: { name: true, room: { select: { name: true } } }, labels: (r) => [r.name], display: (r) => r.name, listUnnamedUpTo: 0, roomName: (r) => r.room?.name ?? null },
   Warranty: { delegate: 'warranty', extraSelect: { providerName: true, category: true, inventoryItem: { select: { name: true } } }, labels: (r) => [r.inventoryItem?.name, r.providerName, String(r.category ?? '').replace(/_/g, ' ')].filter(Boolean), display: (r) => (r.inventoryItem?.name ? `${r.inventoryItem.name} warranty` : r.providerName ? `${r.providerName} warranty` : 'warranty'), listUnnamedUpTo: 1 },
@@ -53,6 +55,9 @@ const ENTITY_SPECS: Readonly<Record<DataPointEntity, EntitySpec>> = {
   // HomeReserveFund is one row per property (propertyId @unique): singleton read, no name to match. Its balance columns default to 0, so a fund that was never recalculated is flagged.
   HomeReserveFund: { mode: 'SINGLETON', delegate: 'homeReserveFund', extraSelect: { lastRecalculatedAt: true }, labels: () => [], display: () => 'home reserve fund', listUnnamedUpTo: 0,
     limitation: (r) => (r.lastRecalculatedAt ? null : 'The fund has never been recalculated, so zeros here may be defaults rather than your real figures.') },
+  // Home Records metadata: named by title. The canonical visibility rule (visibleRecordWhere) is applied to the query itself, so a record this role may not see is never selected and is
+  // indistinguishable from one that does not exist. Active, not trashed. The data-point floor (record.retainUntil is OWNER) can only narrow this.
+  PropertyRecord: { delegate: 'propertyRecord', extraSelect: { title: true }, roleWhere: (role) => ({ lifecycleStatus: 'ACTIVE', trashedAt: null, ...visibleRecordWhere(role as HouseholdRole) }), labels: (r) => [r.title], display: (r) => String(r.title), listUnnamedUpTo: 0 },
   PropertyTaxBillRecord: { mode: 'LATEST_TAX_YEAR', delegate: 'propertyTaxBillRecord', where: { status: 'ACTIVE', supersededById: null }, orderBy: [{ taxYear: 'desc' }, { observedAt: 'desc' }], extraSelect: { taxYear: true, sourceType: true, confidence: true }, labels: () => [], display: (r) => `${r.taxYear} property tax bill`, listUnnamedUpTo: 0, limitation: taxLimitation },
   // Sale prep, sale case and buyer journey are one row per property (propertyId @unique): singleton reads. A buyer journey that is not ACTIVE says so, so a stale stage is not stated plainly.
   PropertySalePrepProfile: { mode: 'SINGLETON', delegate: 'propertySalePrepProfile', extraSelect: {}, labels: () => [], display: () => 'sale prep profile', listUnnamedUpTo: 0 },
@@ -85,7 +90,7 @@ export async function readDataPoint(propertyId: string, role: string, point: Dat
     const value = record[point.field] ?? null;
     return { point, status: isPresent(value) ? 'FOUND' : 'NOT_RECORDED', rows: [{ id: String(record.id), name: spec.display(record), value, roomName: null, limitation: spec.limitation?.(record) ?? null }] };
   }
-  const records: any[] = await (prisma as any)[spec.delegate].findMany({ where: { propertyId }, select, take: DATA_POINT_ITEM_ROW_CAP });
+  const records: any[] = await (prisma as any)[spec.delegate].findMany({ where: { propertyId, ...(spec.roleWhere?.(role) ?? {}) }, select, take: DATA_POINT_ITEM_ROW_CAP });
   const named = records.map((r) => ({ r, id: String(r.id), name: spec.labels(r).join(' ') }));
   // A record is named when every significant word of one of its labels is in the message (matchItemsByName works on one label string; try each label).
   const hit = new Set<string>();
