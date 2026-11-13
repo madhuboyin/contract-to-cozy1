@@ -88,3 +88,8 @@ test('natural insurance and sale-plan questions no longer fall to the open-ended
   // first-person subjects no longer hide a detail question ("how much do I pay"), but a bare question with no recorded detail still resolves to nothing
   assert.equal(resolveDataPoint('How much do I pay for lunch?'), null);
 });
+
+test('the "due" cue never takes a buyer deadline or a "what is coming due" list question', () => {
+  for (const q of ['What is coming due before we close on this home?', 'What is due this week?', 'When is my warranty due?', 'When is my inspection contingency due']) assert.notEqual(resolveDataPoint(q)?.id, 'task.nextDueDate', q);
+  assert.notEqual(resolveAskOperation('What is coming due before we close on this home?').operationId, 'DATA_POINT_READ');
+});
