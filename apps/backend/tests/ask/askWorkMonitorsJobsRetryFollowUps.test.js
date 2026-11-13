@@ -122,7 +122,7 @@ test('every FR-WORK-001 provider is connected, valid, and has a registered reade
   assert.deepEqual(validateAskWorkProviders(), []);
   assert.deepEqual(ASK_WORK_PROVIDER_REGISTRY.filter((entry) => entry.reader.state === 'UNAVAILABLE').map((entry) => entry.id), []);
   for (const entry of ASK_WORK_PROVIDER_REGISTRY) assert.ok(ASK_WORK_PROVIDER_READERS[entry.id], entry.id);
-  assert.equal(workProviderReadFloor(ASK_WORK_PROVIDER_REGISTRY.find((entry) => entry.id === 'SCHEDULED_FOLLOW_UPS')), 'VIEWER');
+  assert.equal(workProviderReadFloor(ASK_WORK_PROVIDER_REGISTRY.find((entry) => entry.id === 'SCHEDULED_FOLLOW_UPS')), 'CONTRIBUTOR', 'its read operations include the claim reads, which are CONTRIBUTOR-floor (owner audience policy 2026-11-13)');
   assert.equal(workProviderReadFloor(ASK_WORK_PROVIDER_REGISTRY.find((entry) => entry.id === 'QUEUED_JOBS')), null);
 });
 

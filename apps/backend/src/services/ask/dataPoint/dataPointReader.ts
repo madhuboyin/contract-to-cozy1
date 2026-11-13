@@ -51,7 +51,7 @@ function taxLimitation(r: any): string | null {
   if (r.sourceType === 'HOMEOWNER_REPORTED' && r.confidence !== 'VERIFIED') return `This ${r.taxYear} figure was entered by you and has not been matched to an official source.`;
   return null;
 }
-interface EntitySpec { readonly mode?: 'NAMED' | 'SINGLETON' | 'LATEST_TAX_YEAR' | 'RELATION_CHILD' | 'RECORD_VERSION'; /** Relation children: statuses at which a date/priority is not an active obligation (the status itself is still answered plainly). */ readonly inactiveChildStatuses?: readonly string[]; readonly where?: Record<string, unknown>; readonly roleWhere?: (role: string) => Record<string, unknown>; readonly orderBy?: unknown; readonly limitation?: (row: any) => string | null; /** NAMED reads: a status word when this field of this row is a recorded past value rather than an active obligation. */ readonly inactiveStatus?: (row: any, point: DataPointDefinition) => string | null; readonly delegate: string; readonly extraSelect: Record<string, unknown>; readonly labels: (row: any) => string[]; readonly display: (row: any) => string; readonly listUnnamedUpTo: number; readonly roomName?: (row: any) => string | null }
+interface EntitySpec { readonly mode?: 'NAMED' | 'SINGLETON' | 'LATEST_TAX_YEAR' | 'RELATION_CHILD' | 'RECORD_VERSION' | 'CLAIM_CHILD'; /** Relation children: statuses at which a date/priority is not an active obligation (the status itself is still answered plainly). */ readonly inactiveChildStatuses?: readonly string[]; readonly where?: Record<string, unknown>; readonly roleWhere?: (role: string) => Record<string, unknown>; readonly orderBy?: unknown; readonly limitation?: (row: any) => string | null; /** NAMED reads: a status word when this field of this row is a recorded past value rather than an active obligation. */ readonly inactiveStatus?: (row: any, point: DataPointDefinition) => string | null; readonly delegate: string; readonly extraSelect: Record<string, unknown>; readonly labels: (row: any) => string[]; readonly display: (row: any) => string; readonly listUnnamedUpTo: number; readonly roomName?: (row: any) => string | null }
 const ENTITY_SPECS: Readonly<Record<DataPointEntity, EntitySpec>> = {
   InventoryItem: { delegate: 'inventoryItem', extraSelect: { name: true, room: { select: { name: true } } }, labels: (r) => [r.name], display: (r) => r.name, listUnnamedUpTo: 0, roomName: (r) => r.room?.name ?? null },
   Warranty: { delegate: 'warranty', extraSelect: { providerName: true, category: true, inventoryItem: { select: { name: true } } }, labels: (r) => [r.inventoryItem?.name, r.providerName, String(r.category ?? '').replace(/_/g, ' ')].filter(Boolean), display: (r) => (r.inventoryItem?.name ? `${r.inventoryItem.name} warranty` : r.providerName ? `${r.providerName} warranty` : 'warranty'), listUnnamedUpTo: 1 },
@@ -74,6 +74,10 @@ const ENTITY_SPECS: Readonly<Record<DataPointEntity, EntitySpec>> = {
   // Claims have a plain propertyId (NAMED read). The title only selects; the row is named by its type. A closed or denied claim's follow-up date is a recorded past value.
   Claim: { delegate: 'claim', extraSelect: { title: true, type: true, status: true }, labels: (r) => [r.title], display: (r) => `${typeWords(r.type)} claim`, listUnnamedUpTo: 1,
     inactiveStatus: (r, point) => (point.field === 'nextFollowUpAt' && ['CLOSED', 'DENIED'].includes(String(r.status)) ? String(r.status).toLowerCase() : null) },
+  // Claim children: reached only through a NAMED claim (see the CLAIM_CHILD branch). A checklist step is chosen by its number, an event or document by its structured type; none is defaulted to "the latest".
+  ClaimChecklistItem: { mode: 'CLAIM_CHILD', delegate: 'claimChecklistItem', extraSelect: { orderIndex: true }, labels: () => [], display: () => 'checklist step', listUnnamedUpTo: 0 },
+  ClaimTimelineEvent: { mode: 'CLAIM_CHILD', delegate: 'claimTimelineEvent', extraSelect: { type: true }, labels: () => [], display: () => 'timeline event', listUnnamedUpTo: 0 },
+  ClaimDocument: { mode: 'CLAIM_CHILD', delegate: 'claimDocument', extraSelect: { type: true }, labels: () => [], display: () => 'claim document', listUnnamedUpTo: 0 },
   PropertyRecord: { delegate: 'propertyRecord', extraSelect: { title: true }, roleWhere: (role) => ({ lifecycleStatus: 'ACTIVE', trashedAt: null, ...visibleRecordWhere(role as HouseholdRole) }), labels: (r) => [r.title], display: (r) => String(r.title), listUnnamedUpTo: 0 },
   PropertyTaxBillRecord: { mode: 'LATEST_TAX_YEAR', delegate: 'propertyTaxBillRecord', where: { status: 'ACTIVE', supersededById: null }, orderBy: [{ taxYear: 'desc' }, { observedAt: 'desc' }], extraSelect: { taxYear: true, sourceType: true, confidence: true }, labels: () => [], display: (r) => `${r.taxYear} property tax bill`, listUnnamedUpTo: 0, limitation: taxLimitation },
   // Sale prep, sale case and buyer journey are one row per property (propertyId @unique): singleton reads. A buyer journey that is not ACTIVE says so, so a stale stage is not stated plainly.
@@ -95,6 +99,42 @@ export async function readDataPoint(propertyId: string, role: string, point: Dat
   if (!allowed?.includes(point.field) || !DATA_POINT_DEFINITIONS.includes(point)) throw new Error(`data point ${point.id} is not in the reviewed catalogue`);
   const spec = ENTITY_SPECS[point.entity];
   const select: Record<string, unknown> = { id: true, ...spec.extraSelect, [point.field]: true };
+  if (spec.mode === 'CLAIM_CHILD') {
+    // Parent first: the claim is property-scoped and must be named (several claims) or be the only one. Children are read ONLY through it.
+    const claims: any[] = await (prisma as any).claim.findMany({ where: { propertyId }, select: { id: true, title: true, type: true, status: true }, take: DATA_POINT_ITEM_ROW_CAP });
+    if (!claims.length) return { point, status: 'ITEM_NOT_FOUND', rows: [] };
+    const hitIds = new Set(matchItemsByName(message, claims.map((c) => ({ id: String(c.id), name: String(c.title) }))).map((m) => m.id));
+    let namedClaims = claims.filter((c) => hitIds.has(String(c.id)));
+    if (namedClaims.length > 1) { const specificity = (c: any) => tokens(String(c.title)).length; const top = Math.max(...namedClaims.map(specificity)); namedClaims = namedClaims.filter((c) => specificity(c) === top); }
+    if (!namedClaims.length && claims.length === 1) namedClaims = claims;
+    if (!namedClaims.length) return { point, status: 'NO_ITEM_NAMED', rows: [] };
+    if (namedClaims.length > 1) return { point, status: 'AMBIGUOUS', candidateCount: namedClaims.length, rows: [] };
+    const claim = namedClaims[0]; const claimName = `${typeWords(claim.type)} claim`;
+    const lower = ` ${message.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ')} `;
+    const children: any[] = await (prisma as any)[spec.delegate].findMany({
+      where: { claimId: claim.id, ...(point.entity === 'ClaimDocument' ? { document: { propertyId, lifecycleStatus: 'ACTIVE', trashedAt: null, ...visibleRecordWhere(role as HouseholdRole) } } : {}) },
+      select, take: 100, orderBy: point.entity === 'ClaimChecklistItem' ? [{ orderIndex: 'asc' }] : [{ createdAt: 'asc' }],
+    });
+    if (!children.length) return { point, status: 'ITEM_NOT_FOUND', rows: [] };
+    let chosen: any[];
+    if (point.entity === 'ClaimChecklistItem') {
+      const m = /\bstep (\d{1,3})\b/.exec(lower);
+      chosen = m ? children.filter((c) => c.orderIndex === Number(m[1]) - 1) : children.length === 1 ? children : [];
+      if (!chosen.length && !m) return { point, status: 'AMBIGUOUS', candidateCount: children.length, rows: [] };
+      if (!chosen.length) return { point, status: 'NO_ITEM_NAMED', rows: [] };
+    } else {
+      // An event or document is chosen by its structured type; never by position and never as "the latest" (a stored answer could go stale on replay).
+      const typeHit = (c: any) => lower.includes(` ${typeWords(c.type)} `) || (typeWords(c.type) === 'follow up' && /\bfollow ?up\b/.test(lower)) || (point.entity === 'ClaimDocument' && lower.includes(` ${typeWords(c.type)}s `));
+      chosen = children.filter(typeHit);
+      if (!chosen.length) return { point, status: 'NO_ITEM_NAMED', rows: [] };
+      if (chosen.length > 1) return { point, status: 'AMBIGUOUS', candidateCount: chosen.length, rows: [] };
+    }
+    const row = chosen[0]; const value = row[point.field] ?? null;
+    const name = point.entity === 'ClaimChecklistItem' ? `${claimName} checklist step ${Number(row.orderIndex) + 1}` : point.entity === 'ClaimTimelineEvent' ? `${claimName} ${typeWords(row.type)} event` : `${claimName} ${typeWords(row.type)} document`;
+    // A checklist step on a closed or denied claim is a historical value, not an open obligation.
+    const limitation = point.entity === 'ClaimChecklistItem' && ['CLOSED', 'DENIED'].includes(String(claim.status)) ? `This claim is ${typeWords(claim.status)}, so this step may no longer represent an open obligation.` : null;
+    return { point, status: isPresent(value) ? 'FOUND' : 'NOT_RECORDED', rows: [{ id: String(row.id), name, value, roomName: null, limitation }] };
+  }
   if (spec.mode === 'RECORD_VERSION') {
     const parentSpec = ENTITY_SPECS.PropertyRecord;
     const records: any[] = await (prisma as any)[parentSpec.delegate].findMany({ where: { propertyId, ...(parentSpec.roleWhere?.(role) ?? {}) }, select: { id: true, title: true, currentVersionId: true }, take: DATA_POINT_ITEM_ROW_CAP });

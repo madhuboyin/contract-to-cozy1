@@ -60,7 +60,7 @@ test('claim and project follow-ups are unaffected by a savings gate that says no
 test('the provider now derives its read floor from claims, projects and savings reads, with the savings command\'s own action floor', () => {
   const provider = ASK_WORK_PROVIDER_REGISTRY.find((entry) => entry.id === 'SCHEDULED_FOLLOW_UPS');
   assert.ok(provider.readOperationIds.includes('SAVINGS_OPPORTUNITIES'));
-  assert.equal(workProviderReadFloor(provider), 'VIEWER');
+  assert.equal(workProviderReadFloor(provider), 'CONTRIBUTOR', 'derived from its strictest read operation: the claim reads are CONTRIBUTOR-floor (owner audience policy 2026-11-13)');
   assert.equal(workActionAllowed(provider, 'SAVINGS_BENEFIT_COMMAND', 'VIEWER'), false);
   assert.equal(workActionAllowed(provider, 'SAVINGS_BENEFIT_COMMAND', 'CONTRIBUTOR'), true);
   assert.deepEqual(parseAskWorkKey('followUp:savings:sa1'), { provider: 'SCHEDULED_FOLLOW_UPS', kind: 'followUpSavings', entityId: 'sa1' });

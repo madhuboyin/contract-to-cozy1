@@ -168,15 +168,15 @@ test('source authorization: a restricted source is redacted once the role drops,
   assert.deepEqual(seen.at(-1), ['PropertyMaintenanceTask', { id: 't1', propertyId: 'p1' }]);
 });
 
-test('owner approval (2026-11-12) covers exactly the 90 catalogued ids at catalogue version 9 (33 at v1 + 14 reserve-ownership-costs + 12 seller-prep/buyer + 4 record + 4 buyerTask + 4 buyerMilestone + 4 saleItem + 4 recordVersion + 11 claim); any unapproved id or version drift fails', () => {
+test('owner approval (2026-11-12) covers exactly the 95 catalogued ids at catalogue version 10 (33 at v1 + 14 reserve-ownership-costs + 12 seller-prep/buyer + 4 record + 4 buyerTask + 4 buyerMilestone + 4 saleItem + 4 recordVersion + 11 claim + 5 claim-child); any unapproved id or version drift fails', () => {
   assert.equal(DATA_POINT_CATALOGUE_VERSION, DATA_POINT_APPROVAL.catalogueVersion, 'a new catalogue version needs a new approval record');
   const ids = DATA_POINT_DEFINITIONS.map((p) => p.id);
   assert.equal(new Set(ids).size, ids.length, 'ids are unique');
   assert.deepEqual(ids.filter((id) => !APPROVED_DATA_POINT_IDS.includes(id)), [], 'every catalogued id must be owner-approved');
   assert.deepEqual(APPROVED_DATA_POINT_IDS.filter((id) => !ids.includes(id)), [], 'an approved id that is no longer catalogued must be removed from the approval');
-  assert.equal(ids.length, 90); assert.equal(DATA_POINT_CATALOGUE_VERSION, 9);
+  assert.equal(ids.length, 95); assert.equal(DATA_POINT_CATALOGUE_VERSION, 10);
   const by = (d) => DATA_POINT_DEFINITIONS.filter((p) => p.domain === d).length;
-  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance'), by('reserve-ownership-costs'), by('seller-prep'), by('buyer'), by('documents-records'), by('claims')], [14, 5, 7, 7, 14, 13, 11, 8, 11]);
+  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance'), by('reserve-ownership-costs'), by('seller-prep'), by('buyer'), by('documents-records'), by('claims')], [14, 5, 7, 7, 14, 13, 11, 8, 16]);
 });
 test('the restriction copy is generated from the field floor, so it never names a different audience than the check enforces', async () => {
   assert.match(audienceFloorCopy('CONTRIBUTOR').title, /contributors and owners/);
@@ -696,3 +696,71 @@ test('v8 replay (P1 fix): a version selected as current stops authorizing once a
   assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx('OWNER'), [sourceRef('CurrentPropertyRecordVersion', 'v4')]), 'AUTHORIZED');
 });
 
+
+// ---- Catalogue v10: claim children (checklist step, timeline event, claim document), through a NAMED claim ----
+const clmP = (o) => ({ id: 'c1', title: 'Basement flood', type: 'WATER_DAMAGE', status: 'IN_PROGRESS', ...o });
+function ccStub(role, { claims = [clmP({})], steps = [], events = [], docs = [] } = {}, calls = []) {
+  propertyAccessService.resolvePropertyAccess = async () => ({ propertyId: 'p1', userId: 'u1', role, isOwner: role === 'OWNER' });
+  prisma.claim = { findMany: async (a) => { calls.push(['claim', a]); return claims; } };
+  prisma.claimChecklistItem = { findMany: async (a) => { calls.push(['step', a]); return steps; } };
+  prisma.claimTimelineEvent = { findMany: async (a) => { calls.push(['event', a]); return events; } };
+  prisma.claimDocument = { findMany: async (a) => { calls.push(['doc', a]); return docs; } };
+}
+const stp = (n, o) => ({ id: `s${n}`, orderIndex: n - 1, status: 'OPEN', required: true, completedAt: null, ...o });
+test('v10 routing and floors: compound child cues beat the claim cue; bare words select nothing; all five ids are CONTRIBUTOR', () => {
+  const f = (id) => DATA_POINT_DEFINITIONS.find((p) => p.id === id).audience;
+  for (const id of ['claimChecklist.status', 'claimChecklist.required', 'claimChecklist.completedDate', 'claimEvent.occurredDate', 'claimDocument.attachedDate']) assert.equal(f(id), 'CONTRIBUTOR', id);
+  assert.equal(resolveDataPoint('what is the status of claim checklist step 2 on my claim')?.id, 'claimChecklist.status', 'the more specific cue wins the tie with claim.status');
+  assert.equal(resolveDataPoint('is claim checklist step 2 required')?.id, 'claimChecklist.required');
+  assert.equal(resolveDataPoint('when was claim checklist step 2 completed')?.id, 'claimChecklist.completedDate');
+  assert.equal(resolveDataPoint('when did the submitted claim timeline event happen')?.id, 'claimEvent.occurredDate');
+  assert.equal(resolveDataPoint('when was the estimate claim document attached')?.id, 'claimDocument.attachedDate');
+  assert.equal(resolveDataPoint('what is the status of my claim')?.id, 'claim.status', 'the claim point is unchanged');
+  assert.equal(resolveDataPoint('what is the status of step 2'), null);
+  const banned = ['title', 'description', 'meta', 'notes', 'claimDocumentId', 'documentId', 'primaryClaimDocumentId', 'storageKey', 'completedBy', 'createdBy'];
+  for (const e of ['ClaimChecklistItem', 'ClaimTimelineEvent', 'ClaimDocument']) for (const b of banned) assert.ok(!DATA_POINT_DEFINITIONS.some((p) => p.entity === e && p.field === b), `${e}.${b}`);
+});
+test('v10 checklist: the claim is named first; a step is chosen by number; free-form columns are never selected; a closed claim carries a limitation; the flag reads yes/no', async () => {
+  const calls = []; ccStub('CONTRIBUTOR', { steps: [stp(1, { status: 'DONE', completedAt: new Date('2026-09-10T12:00:00Z') }), stp(2, { required: false })] }, calls);
+  const st = await dataPointReadResult('u1', 'p1', 'what is the status of claim checklist step 1 on my basement flood claim');
+  assert.equal(st.status, 'ANSWERED'); assert.match(st.blocks[0].body, /water damage claim checklist step 1 has status done/i);
+  assert.equal(calls[0][1].where.propertyId, 'p1'); assert.deepEqual(calls[1][1].where, { claimId: 'c1' });
+  assert.deepEqual(Object.keys(calls[1][1].select).sort(), ['id', 'orderIndex', 'status']);
+  assert.deepEqual(st.parameters.sources, [{ sourceType: 'ClaimChecklistItem', sourceId: 's1', minRole: 'CONTRIBUTOR' }]);
+  assert.match((await dataPointReadResult('u1', 'p1', 'is claim checklist step 2 required')).blocks[0].body, /is required: no/);
+  assert.match((await dataPointReadResult('u1', 'p1', 'when was claim checklist step 1 completed')).blocks[0].body, /was completed .*10/);
+  assert.equal((await dataPointReadResult('u1', 'p1', 'what is the status of claim checklist step 9')).reasonCode, 'DATA_POINT_ITEM_NOT_FOUND');
+  assert.equal((await dataPointReadResult('u1', 'p1', 'what is the status of the claim checklist step')).reasonCode, 'DATA_POINT_AMBIGUOUS', 'several steps and none numbered');
+  ccStub('CONTRIBUTOR', { claims: [clmP({ status: 'CLOSED' })], steps: [stp(1)] });
+  assert.match((await dataPointReadResult('u1', 'p1', 'what is the status of claim checklist step 1')).blocks[0].body, /claim is closed, so this step may no longer represent an open obligation/);
+  ccStub('VIEWER', { steps: [stp(1)] }); assert.equal((await dataPointReadResult('u1', 'p1', 'what is the status of claim checklist step 1')).reasonCode, 'DATA_POINT_RESTRICTED');
+  ccStub('CONTRIBUTOR', { claims: [clmP({}), clmP({ id: 'c2', title: 'Roof hail', type: 'STORM_WIND_HAIL' })], steps: [stp(1)] });
+  assert.equal((await dataPointReadResult('u1', 'p1', 'what is the status of claim checklist step 1')).reasonCode, 'DATA_POINT_ITEM_NOT_FOUND', 'two claims and none named: nothing is guessed');
+});
+test('v10 events and documents: chosen by structured type only, never "the latest"; two of a type are ambiguous without detail; documents must pass the record visibility filter', async () => {
+  const ev = (id, type, at) => ({ id, type, occurredAt: new Date(at) });
+  const calls = []; ccStub('CONTRIBUTOR', { events: [ev('e1', 'SUBMITTED', '2026-08-05T12:00:00Z'), ev('e2', 'NOTE', '2026-08-06T12:00:00Z'), ev('e3', 'NOTE', '2026-08-07T12:00:00Z')] }, calls);
+  assert.match((await dataPointReadResult('u1', 'p1', 'when did the submitted claim timeline event happen')).blocks[0].body, /submitted event happened .*5/i);
+  assert.equal((await dataPointReadResult('u1', 'p1', 'when did the note claim timeline event happen')).reasonCode, 'DATA_POINT_AMBIGUOUS', 'two notes: not defaulted to the latest');
+  assert.equal((await dataPointReadResult('u1', 'p1', 'when did the latest claim timeline event happen')).reasonCode, 'DATA_POINT_ITEM_NOT_FOUND', '"latest" selects nothing');
+  assert.ok(!('title' in calls.find((c) => c[0] === 'event')[1].select) && !('meta' in calls.find((c) => c[0] === 'event')[1].select));
+  const dcalls = []; ccStub('CONTRIBUTOR', { docs: [{ id: 'd1', type: 'ESTIMATE', createdAt: new Date('2026-09-02T12:00:00Z') }] }, dcalls);
+  const doc = await dataPointReadResult('u1', 'p1', 'when was the estimate claim document attached'); assert.match(doc.blocks[0].body, /estimate document was attached .*2/i);
+  const q = dcalls.find((c) => c[0] === 'doc')[1]; assert.equal(q.where.claimId, 'c1');
+  assert.deepEqual(q.where.document, { propertyId: 'p1', lifecycleStatus: 'ACTIVE', trashedAt: null, visibility: 'HOUSEHOLD' }, 'the Home Record visibility rule applies in addition to the claim');
+  assert.deepEqual(Object.keys(q.select).sort(), ['createdAt', 'id', 'type']);
+  const ocalls = []; ccStub('OWNER', { docs: [] }, ocalls); await dataPointReadResult('u1', 'p1', 'when was the estimate claim document attached');
+  assert.equal(ocalls.find((c) => c[0] === 'doc')[1].where.document.visibility, undefined, 'owners are not filtered');
+  ccStub('VIEWER', { docs: [] }); assert.equal((await dataPointReadResult('u1', 'p1', 'when was the estimate claim document attached')).reasonCode, 'DATA_POINT_RESTRICTED');
+});
+test('v10 replay: checklist and event re-check the claim in this property; a document re-checks BOTH the claim and the role-visible Home Record', async () => {
+  const { COMPOSABLE_SOURCE_AUTHORIZATION: AUTH, sourceRef } = require('../../src/services/ask/composition/sourceAuthorization.ts');
+  const seen = []; const ctx = (role, present) => ({ userId: 'u1', propertyId: 'p1', role, exists: async (m, w) => { seen.push([m, w]); return present; } });
+  const ref = (t, id) => ({ ...sourceRef(t, id), minRole: 'CONTRIBUTOR' });
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx('CONTRIBUTOR', true), [ref('ClaimChecklistItem', 's1')]), 'AUTHORIZED'); assert.deepEqual(seen.at(-1), ['ClaimChecklistItem', { id: 's1', claim: { propertyId: 'p1' } }]);
+  await AUTH.DATA_POINT_READ.authorizeSources(ctx('CONTRIBUTOR', true), [ref('ClaimTimelineEvent', 'e1')]); assert.deepEqual(seen.at(-1)[1], { id: 'e1', propertyId: 'p1', claim: { propertyId: 'p1' } });
+  await AUTH.DATA_POINT_READ.authorizeSources(ctx('CONTRIBUTOR', true), [ref('ClaimDocument', 'd1')]);
+  assert.deepEqual(seen.at(-1), ['ClaimDocument', { id: 'd1', claim: { propertyId: 'p1' }, document: { propertyId: 'p1', lifecycleStatus: 'ACTIVE', trashedAt: null, visibility: 'HOUSEHOLD' } }]);
+  assert.notEqual(await AUTH.DATA_POINT_READ.authorizeSources(ctx('VIEWER', true), [ref('ClaimDocument', 'd1')]), 'AUTHORIZED', 'a viewer is below the CONTRIBUTOR floor');
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx('CONTRIBUTOR', false), [ref('ClaimDocument', 'd1')]), 'REDACT_SECTION', 'the record is no longer visible to this role');
+});

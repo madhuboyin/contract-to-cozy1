@@ -3,7 +3,7 @@
 // points (inventory 14, warranties 5, insurance 7, maintenance 7) plus 14 reserve and ownership-cost points (catalogue version 2). The owner approved the field floors and the
 // domain split for exactly these 71 ids (33 at version 1, 14 at version 2, 12 at version 3, 4 at version 4, 4 at version 5, 4 at version 6; all 2026-11-12); see APPROVED_DATA_POINT_IDS below. Any other id, or any change of a floor, needs a new approval and a new version.
 export type DataPointFamily = 'text' | 'date' | 'money' | 'dollars' | 'enum' | 'tags' | 'flag' | 'percent' | 'number';
-export type DataPointEntity = 'InventoryItem' | 'Warranty' | 'InsurancePolicy' | 'PropertyMaintenanceTask' | 'HomeReserveFund' | 'PropertyTaxBillRecord' | 'PropertyTaxAssessmentRecord' | 'PropertySalePrepProfile' | 'PropertySaleCase' | 'HomeBuyerChecklist' | 'PropertyRecord' | 'HomeBuyerTask' | 'BuyerJourneyMilestone' | 'SaleReadinessItem' | 'PropertyRecordVersion' | 'Claim';
+export type DataPointEntity = 'InventoryItem' | 'Warranty' | 'InsurancePolicy' | 'PropertyMaintenanceTask' | 'HomeReserveFund' | 'PropertyTaxBillRecord' | 'PropertyTaxAssessmentRecord' | 'PropertySalePrepProfile' | 'PropertySaleCase' | 'HomeBuyerChecklist' | 'PropertyRecord' | 'HomeBuyerTask' | 'BuyerJourneyMilestone' | 'SaleReadinessItem' | 'PropertyRecordVersion' | 'Claim' | 'ClaimChecklistItem' | 'ClaimTimelineEvent' | 'ClaimDocument';
 export type DataPointDomain = 'appliances-inventory' | 'warranties' | 'insurance' | 'maintenance' | 'reserve-ownership-costs' | 'seller-prep' | 'buyer' | 'documents-records' | 'claims';
 export type AudienceFloor = 'VIEWER' | 'CONTRIBUTOR' | 'OWNER';
 export interface DataPointDefinition {
@@ -27,6 +27,8 @@ export interface DataPointDefinition {
   readonly cues?: readonly string[];
   /** True when the cues are compound phrases ("buyer task") that must take precedence over a generic cue ("task") that is also present. The bare generic word never selects this point. */
   readonly compoundCue?: boolean;
+  /** Child entities whose cue contains the parent's cue: the matched cue's length also counts, so "claim timeline event" beats "claim". */
+  readonly specificCue?: boolean;
 }
 
 /** Per-point audience floors (review 2026-11-11). Money, serial numbers, free-form coverage text and tags are not shown to viewers; plain item, date and status facts are. Floors approved by the owner 2026-11-12 for catalogue version 1. */
@@ -60,6 +62,9 @@ const FIELD_AUDIENCE: Readonly<Record<string, AudienceFloor>> = Object.freeze({
   // Catalogue version 9 (built 2026-11-13; ids ratified by the owner AFTER implementation, 2026-11-13; floors per the owner's 2026-11-12 relation order: claim status/dates CONTRIBUTOR, amounts/identifiers OWNER).
   'claim.status': 'CONTRIBUTOR', 'claim.type': 'CONTRIBUTOR', 'claim.incidentDate': 'CONTRIBUTOR', 'claim.openedDate': 'CONTRIBUTOR', 'claim.submittedDate': 'CONTRIBUTOR', 'claim.closedDate': 'CONTRIBUTOR', 'claim.nextFollowUp': 'CONTRIBUTOR',
   'claim.deductible': 'OWNER', 'claim.estimatedLoss': 'OWNER', 'claim.settlement': 'OWNER', 'claim.claimNumber': 'OWNER',
+  // Catalogue version 10 (built 2026-11-13 on the owner's suggested claim-children policy; exact ids proposed by the implementation and awaiting owner ratification): claim children, reached only through a NAMED claim.
+  'claimChecklist.status': 'CONTRIBUTOR', 'claimChecklist.required': 'CONTRIBUTOR', 'claimChecklist.completedDate': 'CONTRIBUTOR',
+  'claimEvent.occurredDate': 'CONTRIBUTOR', 'claimDocument.attachedDate': 'CONTRIBUTOR',
 });
 const d = (x: Omit<DataPointDefinition, 'audience'>): DataPointDefinition => {
   const audience = FIELD_AUDIENCE[x.id];
@@ -229,16 +234,36 @@ const CLAIM_POINTS: readonly DataPointDefinition[] = [
   cl({ id: 'claim.settlement', field: 'settlementAmount', family: 'dollars', label: 'The settlement amount', aliases: ['settlement', 'settlement amount', 'how much was i paid', 'payout', 'how much did they pay'], sentence: 'has a settlement of', sensitivity: 'FINANCIAL' }),
   cl({ id: 'claim.claimNumber', field: 'claimNumber', family: 'text', label: 'The claim number', aliases: ['claim number', 'claim id', 'claim reference', 'reference number'], sentence: 'has claim number', sensitivity: 'FINANCIAL' }),
 ];
+const CLC = ['claim checklist step', 'claim checklist steps', 'claim checklist item', 'claim checklist items', 'claim step', 'claim steps'];
+const clc = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues' | 'audience' | 'compoundCue'>): DataPointDefinition => d({ specificCue: true, ...x, domain: 'claims', entity: 'ClaimChecklistItem', cues: CLC, compoundCue: true });
+const CLE = ['claim timeline event', 'claim timeline events', 'claim event', 'claim events', 'claim timeline'];
+const cle = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues' | 'audience' | 'compoundCue'>): DataPointDefinition => d({ specificCue: true, ...x, domain: 'claims', entity: 'ClaimTimelineEvent', cues: CLE, compoundCue: true });
+const CLD = ['claim document', 'claim documents', 'claim attachment', 'claim attachments'];
+const cld = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues' | 'audience' | 'compoundCue'>): DataPointDefinition => d({ specificCue: true, ...x, domain: 'claims', entity: 'ClaimDocument', cues: CLD, compoundCue: true });
+// Catalogue version 10: claim children. Every read goes through a NAMED claim (property-scoped, CONTRIBUTOR floor). The free-form checklist title and description, timeline title/description/meta, document title/notes,
+// the document and record ids and any storage data are NOT catalogued (OWNER-only or excluded). A checklist step is selected by its number ("step 2"); an event or document by its structured type. An event or document is
+// never defaulted to "the latest": a selection that could go stale on replay is not offered. A claim document additionally needs its PropertyRecord to be visible to the caller (neither parent broadens the other).
+const CLAIM_CHILD_POINTS: readonly DataPointDefinition[] = [
+  clc({ id: 'claimChecklist.status', field: 'status', family: 'enum', label: 'The checklist step status', aliases: ['status', 'is it done', 'is it complete'], sentence: 'has status', sensitivity: 'HOME' }),
+  clc({ id: 'claimChecklist.required', field: 'required', family: 'flag', label: 'Whether the step is required', aliases: ['required', 'is it required', 'optional', 'is it optional'], sentence: 'is required:', sensitivity: 'HOME' }),
+  clc({ id: 'claimChecklist.completedDate', field: 'completedAt', family: 'date', label: 'When the step was completed', aliases: ['completed', 'completed on', 'when was it completed', 'when did i complete', 'finished'], sentence: 'was completed', sensitivity: 'HOME' }),
+  cle({ id: 'claimEvent.occurredDate', field: 'occurredAt', family: 'date', label: 'When the event happened', aliases: ['when', 'when did it happen', 'when was it', 'date', 'happened', 'occurred'], sentence: 'happened', sensitivity: 'HOME' }),
+  cld({ id: 'claimDocument.attachedDate', field: 'createdAt', family: 'date', label: 'When the document was attached', aliases: ['when', 'attached', 'when was it attached', 'when was it added', 'added', 'date'], sentence: 'was attached', sensitivity: 'HOME' }),
+];
 /** Allowlisted parent-to-child relation paths (relation-read design). The child has no propertyId; it is reached ONLY through the parent, which is property-scoped. Depth is always 1. */
 export const RELATION_ENTITIES: Readonly<Record<string, { readonly parent: DataPointEntity; readonly parentDelegate: string; readonly key: string; /** How the parent is named in a limitation sentence. */ readonly parentNoun: string; /** Parent statuses at which a read is normal; "paused" ones read with a notice; anything else is a historical read needing a named child. */ readonly normalStatuses: readonly string[]; readonly pausedStatuses: readonly string[] }>> = Object.freeze({
   HomeBuyerTask: { parent: 'HomeBuyerChecklist', parentDelegate: 'homeBuyerChecklist', key: 'checklistId', parentNoun: 'buyer journey', normalStatuses: ['ACTIVE'], pausedStatuses: ['PAUSED'] },
   // Reached through a NAMED, role-visible PropertyRecord (reader mode RECORD_VERSION), not parent-first; listed so the model check and the property-scoping rule cover it.
   PropertyRecordVersion: { parent: 'PropertyRecord', parentDelegate: 'propertyRecord', key: 'recordId', parentNoun: 'record', normalStatuses: ['ACTIVE'], pausedStatuses: [] },
+  // Claim children are reached through a NAMED claim (reader mode CLAIM_CHILD); listed so the model check and property-scoping rule cover them.
+  ClaimChecklistItem: { parent: 'Claim', parentDelegate: 'claim', key: 'claimId', parentNoun: 'claim', normalStatuses: ['DRAFT', 'IN_PROGRESS', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED'], pausedStatuses: [] },
+  ClaimTimelineEvent: { parent: 'Claim', parentDelegate: 'claim', key: 'claimId', parentNoun: 'claim', normalStatuses: ['DRAFT', 'IN_PROGRESS', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'DENIED', 'CLOSED'], pausedStatuses: [] },
+  ClaimDocument: { parent: 'Claim', parentDelegate: 'claim', key: 'claimId', parentNoun: 'claim', normalStatuses: ['DRAFT', 'IN_PROGRESS', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'DENIED', 'CLOSED'], pausedStatuses: [] },
   SaleReadinessItem: { parent: 'PropertySaleCase', parentDelegate: 'propertySaleCase', key: 'saleCaseId', parentNoun: 'sale case', normalStatuses: ['PREPARING', 'LISTED', 'UNDER_CONTRACT'], pausedStatuses: [] },
   BuyerJourneyMilestone: { parent: 'HomeBuyerChecklist', parentDelegate: 'homeBuyerChecklist', key: 'checklistId', parentNoun: 'buyer journey', normalStatuses: ['ACTIVE'], pausedStatuses: ['PAUSED'] },
 });
 
-export const DATA_POINT_DEFINITIONS: readonly DataPointDefinition[] = Object.freeze([...INVENTORY_POINTS, ...OTHER_DOMAINS, ...RESERVE_COST_POINTS, ...SELL_BUY_POINTS, ...RECORD_POINTS, ...BUYER_TASK_POINTS, ...BUYER_MILESTONE_POINTS, ...SALE_ITEM_POINTS, ...RECORD_VERSION_POINTS, ...CLAIM_POINTS]);
+export const DATA_POINT_DEFINITIONS: readonly DataPointDefinition[] = Object.freeze([...INVENTORY_POINTS, ...OTHER_DOMAINS, ...RESERVE_COST_POINTS, ...SELL_BUY_POINTS, ...RECORD_POINTS, ...BUYER_TASK_POINTS, ...BUYER_MILESTONE_POINTS, ...SALE_ITEM_POINTS, ...RECORD_VERSION_POINTS, ...CLAIM_POINTS, ...CLAIM_CHILD_POINTS]);
 export const DATA_POINT_BY_ID: ReadonlyMap<string, DataPointDefinition> = new Map(DATA_POINT_DEFINITIONS.map((p) => [p.id, p]));
 /** The only columns the reader may select per entity (FR-DATA-15: the select list is built from this allowlist, never from user text). */
 export const READABLE_FIELDS: Readonly<Record<DataPointEntity, readonly string[]>> = Object.freeze({
@@ -258,13 +283,16 @@ export const READABLE_FIELDS: Readonly<Record<DataPointEntity, readonly string[]
   SaleReadinessItem: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'SaleReadinessItem').map((p) => p.field),
   PropertyRecordVersion: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'PropertyRecordVersion').map((p) => p.field),
   Claim: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'Claim').map((p) => p.field),
+  ClaimChecklistItem: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'ClaimChecklistItem').map((p) => p.field),
+  ClaimTimelineEvent: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'ClaimTimelineEvent').map((p) => p.field),
+  ClaimDocument: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'ClaimDocument').map((p) => p.field),
 });
 export const READABLE_ITEM_FIELDS: readonly string[] = READABLE_FIELDS.InventoryItem;
 
 /** Catalogue version the owner's approval covers. Bump it with any added id or changed audience floor, and re-approve. */
-export const DATA_POINT_CATALOGUE_VERSION = 9;
+export const DATA_POINT_CATALOGUE_VERSION = 10;
 /** Owner approval record (2026-11-12): field audience floors and the domain split (appliances-inventory, warranties, insurance, maintenance; claims is a future domain), version 1 = 33 ids; version 2 adds the 14 reserve-ownership-costs ids (all 14 approved as proposed, tax amounts at CONTRIBUTOR, Expense kept own-profile only, claims deferred). */
-export const DATA_POINT_APPROVAL = Object.freeze({ catalogueVersion: 9, approvedOn: '2026-11-13', postBuildRatification: Object.freeze({ v8: '2026-11-13', v9: '2026-11-13', note: 'The v8 (recordVersion) and v9 (claim) ids were implemented first and ratified by the owner afterwards, on 2026-11-13; v2-v7 were approved before they were built.' }), scope: 'field audience floors and domain split, exact ids only (33 at v1 + 14 reserve-ownership-costs at v2 + 12 seller-prep/buyer at v3 + 4 PropertyRecord at v4 + 4 buyerTask at v5 + 4 buyerMilestone at v6 + 4 saleItem at v7 + 4 recordVersion at v8 + 11 claim at v9 (7 CONTRIBUTOR, 4 OWNER); the v5-v8 ids are VIEWER, read through the buyer checklist / sale case relations and through a named, role-visible record); v4 lowers the 12 v3 floors CONTRIBUTOR -> VIEWER (shared journey facts) and approves record.type/verification/effectiveTo at VIEWER and record.retainUntil at OWNER, only for records visible under visibleRecordWhere(role)' });
+export const DATA_POINT_APPROVAL = Object.freeze({ catalogueVersion: 10, approvedOn: '2026-11-13', postBuildRatification: Object.freeze({ v8: '2026-11-13', v9: '2026-11-13', v10: 'PENDING', note: 'The v8 (recordVersion) and v9 (claim) ids were implemented first and ratified by the owner afterwards, on 2026-11-13; v2-v7 were approved before they were built. The v10 (claim child) ids were implemented on the owner\'s suggested policy and are NOT yet ratified.' }), scope: 'field audience floors and domain split, exact ids only (33 at v1 + 14 reserve-ownership-costs at v2 + 12 seller-prep/buyer at v3 + 4 PropertyRecord at v4 + 4 buyerTask at v5 + 4 buyerMilestone at v6 + 4 saleItem at v7 + 4 recordVersion at v8 + 11 claim at v9 (7 CONTRIBUTOR, 4 OWNER) + 5 claim-child at v10 (all CONTRIBUTOR, awaiting ratification); the v5-v8 ids are VIEWER, read through the buyer checklist / sale case relations and through a named, role-visible record); v4 lowers the 12 v3 floors CONTRIBUTOR -> VIEWER (shared journey facts) and approves record.type/verification/effectiveTo at VIEWER and record.retainUntil at OWNER, only for records visible under visibleRecordWhere(role)' });
 export const APPROVED_DATA_POINT_IDS: readonly string[] = Object.freeze([
   'item.brand', 'item.manufacturer', 'item.model', 'item.serial', 'item.installedOn', 'item.purchasedOn', 'item.lastServicedOn', 'item.expectedExpiryDate', 'item.condition', 'item.category', 'item.efficiencyRating', 'item.purchaseCost', 'item.replacementCost', 'item.tags',
   'warranty.expiryDate', 'warranty.startDate', 'warranty.provider', 'warranty.coverage', 'warranty.cost',
@@ -283,6 +311,7 @@ export const APPROVED_DATA_POINT_IDS: readonly string[] = Object.freeze([
   'recordVersion.number', 'recordVersion.uploadedDate', 'recordVersion.scanStatus', 'recordVersion.integrityStatus',
   'claim.status', 'claim.type', 'claim.incidentDate', 'claim.openedDate', 'claim.submittedDate', 'claim.closedDate', 'claim.nextFollowUp',
   'claim.deductible', 'claim.estimatedLoss', 'claim.settlement', 'claim.claimNumber',
+  'claimChecklist.status', 'claimChecklist.required', 'claimChecklist.completedDate', 'claimEvent.occurredDate', 'claimDocument.attachedDate',
 ]);
 /** Categories the owner presumes owner-only for any FUTURE catalogue entry (not catalogued today): mortgage/equity/financing, bank/payment, full policy or account ids, household identity/access, title/ownership, tax ids. */
 export const FUTURE_OWNER_ONLY_PRESUMPTIONS: readonly string[] = Object.freeze(['mortgage-equity-financing', 'bank-payment', 'full-policy-or-account-ids', 'household-identity-access', 'title-ownership', 'tax-ids']);
@@ -295,9 +324,11 @@ export function resolveDataPoint(message: string): DataPointDefinition | null {
   let best: { point: DataPointDefinition; length: number } | null = null; let tied = false;
   for (const point of DATA_POINT_DEFINITIONS) for (const alias of point.aliases) {
     // Points of a non-inventory entity need that entity's cue word in the message; the cue also breaks ties against inventory points.
-    if (point.cues && !point.cues.some((cue) => new RegExp(`\\b${escapeRe(cue)}\\b`).test(text))) continue;
+    let cueLength = 0;
+    if (point.cues) { const hit = point.cues.filter((cue) => new RegExp(`\\b${escapeRe(cue)}\\b`).test(text)); if (!hit.length) continue; cueLength = Math.max(...hit.map((c) => c.length)); }
     if (!new RegExp(`\\b${escapeRe(alias)}\\b`).test(text)) continue;
-    const weight = alias.length + (point.cues ? 100 : 0) + (point.compoundCue ? 200 : 0);
+    // A child entity's cue ("claim checklist step") contains its parent's ("claim"), so its points also score by how specific the matched cue is; this does not change any other entity's scoring.
+    const weight = alias.length + (point.cues ? 100 : 0) + (point.compoundCue ? 200 : 0) + (point.specificCue ? cueLength : 0);
     if (!best || weight > best.length) { best = { point, length: weight }; tied = false; }
     else if (weight === best.length && best.point.id !== point.id) tied = true;
   }

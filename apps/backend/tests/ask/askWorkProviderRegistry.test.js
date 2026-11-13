@@ -40,7 +40,7 @@ test('read floor is the strictest read operation floor; action floors are per co
     }, null);
     assert.equal(workProviderReadFloor(entry), strictest, entry.id);
   }
-  assert.equal(workProviderReadFloor(byId('CLAIMS')), 'VIEWER');
+  assert.equal(workProviderReadFloor(byId('CLAIMS')), 'CONTRIBUTOR', 'claim status and dates are CONTRIBUTOR-floor (owner audience policy 2026-11-13)');
   assert.equal(workProviderReadFloor(byId('MONITORS')), 'CONTRIBUTOR');
   assert.equal(workActionAllowed(byId('CLAIMS'), 'CLAIM_TRANSITION', 'VIEWER'), false);
   assert.equal(workActionAllowed(byId('CLAIMS'), 'CLAIM_TRANSITION', 'CONTRIBUTOR'), true);

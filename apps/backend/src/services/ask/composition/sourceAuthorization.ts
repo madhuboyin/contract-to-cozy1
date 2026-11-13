@@ -13,7 +13,7 @@ import { visibleRecordWhere } from '../../homeRecordsAccess';
 export type CompositeSourceType =
   | 'Property' | 'InventoryItem' | 'Warranty' | 'HomeCapitalTimelineItem' | 'HomeReserveFund' | 'HomeReserveFundLineItem'
   | 'DoNothingSimulationRun' | 'DoNothingScenario' | 'HomeDigitalTwin' | 'HomeTwinScenario' | 'RecallMatch' | 'HomeEvent'
-  | 'InsurancePolicy' | 'PropertyMaintenanceTask' | 'PropertyTaxBillRecord' | 'PropertyTaxAssessmentRecord' | 'PropertySalePrepProfile' | 'PropertySaleCase' | 'HomeBuyerChecklist' | 'PropertyRecord' | 'HomeBuyerTask' | 'BuyerJourneyMilestone' | 'SaleReadinessItem' | 'PropertyRecordVersion' | 'CurrentPropertyRecordVersion' | 'Claim';
+  | 'InsurancePolicy' | 'PropertyMaintenanceTask' | 'PropertyTaxBillRecord' | 'PropertyTaxAssessmentRecord' | 'PropertySalePrepProfile' | 'PropertySaleCase' | 'HomeBuyerChecklist' | 'PropertyRecord' | 'HomeBuyerTask' | 'BuyerJourneyMilestone' | 'SaleReadinessItem' | 'PropertyRecordVersion' | 'CurrentPropertyRecordVersion' | 'Claim' | 'ClaimChecklistItem' | 'ClaimTimelineEvent' | 'ClaimDocument';
 
 export interface CompositeSourceReference {
   sourceType: CompositeSourceType;
@@ -73,6 +73,10 @@ const CHECKS: Record<CompositeSourceType, { where: (context: SourceAuthorization
   // Child of the buyer checklist: re-resolved through its CURRENT property-scoped checklist on replay (a task that moved or became not applicable is redacted).
   HomeBuyerTask: { where: (c, id) => ({ id, checklist: { propertyId: c.propertyId }, applicability: { not: 'NOT_APPLICABLE' } }), onMissing: 'REDACT_SECTION' },
   Claim: { where: (c, id) => ({ id, propertyId: c.propertyId }), onMissing: 'REDACT_SECTION' },
+  ClaimChecklistItem: { where: (c, id) => ({ id, claim: { propertyId: c.propertyId } }), onMissing: 'REDACT_SECTION' },
+  ClaimTimelineEvent: { where: (c, id) => ({ id, propertyId: c.propertyId, claim: { propertyId: c.propertyId } }), onMissing: 'REDACT_SECTION' },
+  // A claim document needs BOTH its claim in this property AND its Home Record visible to this role (neither parent broadens the other).
+  ClaimDocument: { where: (c, id) => ({ id, claim: { propertyId: c.propertyId }, document: { propertyId: c.propertyId, lifecycleStatus: 'ACTIVE', trashedAt: null, ...visibleRecordWhere(c.role as HouseholdRole) } }), onMissing: 'REDACT_SECTION' },
   // A version that was selected AS CURRENT must still be the record's current version on replay (relation: PropertyRecordCurrentVersion), with the same visibility/lifecycle rules.
   CurrentPropertyRecordVersion: { where: (c, id) => ({ id, currentForRecord: { is: { propertyId: c.propertyId, lifecycleStatus: 'ACTIVE', trashedAt: null, ...visibleRecordWhere(c.role as HouseholdRole) } } }), onMissing: 'REDACT_SECTION' },
   PropertyRecordVersion: { where: (c, id) => ({ id, record: { propertyId: c.propertyId, lifecycleStatus: 'ACTIVE', trashedAt: null, ...visibleRecordWhere(c.role as HouseholdRole) } }), onMissing: 'REDACT_SECTION' },
@@ -201,7 +205,7 @@ export const COMPOSABLE_SOURCE_AUTHORIZATION: Readonly<Record<string, Composable
     derive: (result) => listedItems(result.blocks).filter((item) => item.blockId === 'recall-review-matches').map((item) => sourceRef('RecallMatch', item.id)),
   }),
   DATA_POINT_READ: build({
-    allowed: ['InventoryItem', 'Warranty', 'InsurancePolicy', 'PropertyMaintenanceTask', 'HomeReserveFund', 'PropertyTaxBillRecord', 'PropertyTaxAssessmentRecord', 'PropertySalePrepProfile', 'PropertySaleCase', 'HomeBuyerChecklist', 'PropertyRecord', 'HomeBuyerTask', 'BuyerJourneyMilestone', 'SaleReadinessItem', 'PropertyRecordVersion', 'CurrentPropertyRecordVersion', 'Claim', 'Property'],
+    allowed: ['InventoryItem', 'Warranty', 'InsurancePolicy', 'PropertyMaintenanceTask', 'HomeReserveFund', 'PropertyTaxBillRecord', 'PropertyTaxAssessmentRecord', 'PropertySalePrepProfile', 'PropertySaleCase', 'HomeBuyerChecklist', 'PropertyRecord', 'HomeBuyerTask', 'BuyerJourneyMilestone', 'SaleReadinessItem', 'PropertyRecordVersion', 'CurrentPropertyRecordVersion', 'Claim', 'ClaimChecklistItem', 'ClaimTimelineEvent', 'ClaimDocument', 'Property'],
     noRecordReasons: ['DATA_POINT_NOT_IDENTIFIED', 'DATA_POINT_NO_INVENTORY', 'DATA_POINT_ITEM_NOT_FOUND', 'DATA_POINT_NOT_RECORDED', 'DATA_POINT_RESTRICTED', 'DATA_POINT_AMBIGUOUS'],
   }),
   HOME_TIMELINE_EVENTS: build({

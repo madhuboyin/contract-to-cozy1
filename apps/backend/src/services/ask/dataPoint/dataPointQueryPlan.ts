@@ -188,6 +188,8 @@ const withinRange = (n: number, unit: string) => !(unit.startsWith('year') && n 
 /** The plan for a message at a given time, or why there is none. Never throws on user text. */
 export function planDataPointQuery(message: string, now: Date = new Date()): QueryPlanOutcome {
   const text = norm(message);
+  // "claim checklist step", "claim timeline event", "claim document" name a child of one claim (a point read), not the kind "claims".
+  if (/\bclaim (?:checklist|timeline|events?|documents?|steps?|attachments?)\b/.test(text)) return { kind: 'NONE' };
   const picked = pickTemplate(text);
   if (!picked) return { kind: 'NONE' };
   if (picked === 'AMBIGUOUS') return { kind: 'CLARIFY', reasonCode: 'DATA_POINT_QUERY_AMBIGUOUS_KIND', title: 'Which records do you mean?', body: 'Your question could be about more than one kind of record. Name one, for example “my warranties” or “my insurance policies”.' };

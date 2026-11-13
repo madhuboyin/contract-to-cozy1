@@ -46,7 +46,7 @@ function install(role, item = { id: ITEM, claimId: CLAIM, title: 'Photos of the 
   prisma.claim = { findFirst: async (a) => (a.where.id === CLAIM ? { id: CLAIM, title: 'Storm damage', status: 'DRAFT', lastActivityAt: T } : null) };
   prisma.claimChecklistItem = {
     findFirst: async (a) => (item && a.where.id === item.id ? item : null),
-    findMany: async () => [{ id: ITEM, title: 'Photos of the damage', description: 'Wide and close', required: true, status: 'OPEN' }, { id: 'i2', title: 'Repair estimate', description: null, required: false, status: 'DONE' }],
+    findMany: async () => [{ id: ITEM, orderIndex: 0, title: 'Photos of the damage', description: 'Wide and close', required: true, status: 'OPEN' }, { id: 'i2', orderIndex: 1, title: 'Repair estimate', description: null, required: false, status: 'DONE' }],
     count: async () => 2,
   };
   ClaimsService.addTimelineEvent = async (...a) => { calls.push(['note', ...a]); return {}; };

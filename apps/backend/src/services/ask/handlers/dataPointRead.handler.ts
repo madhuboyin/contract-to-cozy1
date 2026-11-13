@@ -25,6 +25,9 @@ const ENTITY_COPY: Record<string, { plural: string; singular: string; collection
   SaleReadinessItem: { plural: 'sale-readiness items', singular: 'sale-readiness item', collection: 'sale-readiness items', record: 'Sale-readiness item', none: 'No sale-readiness item is recorded yet' },
   PropertyRecordVersion: { plural: 'record versions', singular: 'record', collection: 'home records', record: 'Home record version', none: 'No home record is on file yet' },
   Claim: { plural: 'claims', singular: 'claim', collection: 'claims', record: 'Claim', none: 'No claim is recorded for this home yet' },
+  ClaimChecklistItem: { plural: 'claim checklist steps', singular: 'claim checklist step', collection: 'claim checklist', record: 'Claim checklist step', none: 'No claim is recorded for this home yet' },
+  ClaimTimelineEvent: { plural: 'claim timeline events', singular: 'claim timeline event', collection: 'claim timeline', record: 'Claim timeline event', none: 'No claim is recorded for this home yet' },
+  ClaimDocument: { plural: 'claim documents', singular: 'claim document', collection: 'claim documents', record: 'Claim document', none: 'No claim is recorded for this home yet' },
   HomeBuyerTask: { plural: 'buyer tasks', singular: 'buyer task', collection: 'buyer tasks', record: 'Buyer plan task', none: 'No buyer task is recorded yet' },
   PropertyRecord: { plural: 'home records', singular: 'home record', collection: 'home records', record: 'Home record' },
   PropertyTaxBillRecord: { plural: 'property tax bills', singular: 'property tax bill', collection: 'property tax bills', record: 'Property tax bill record', none: 'No property tax bill is recorded yet' },
@@ -39,6 +42,7 @@ export function formatDataPointValue(point: DataPointDefinition, value: unknown)
     case 'enum': return words(value);
     case 'percent': return `${(Number(typeof value === 'object' && value && 'toNumber' in value ? (value as { toNumber(): number }).toNumber() : value) * 100).toFixed(3)}%`;
     case 'number': return String(value);
+    case 'flag': return value === true ? 'yes' : value === false ? 'no' : String(value);
     case 'tags': return (value as unknown[]).map(String).join(', ');
     default: return String(value);
   }

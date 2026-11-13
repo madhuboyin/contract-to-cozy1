@@ -28,7 +28,8 @@ test('the coverage section keeps the VIEWER floor and every household role is ad
   }
   // No section carries its own floor or a primary-homeowner rule: every floor is derived from the section's read operations.
   assert.equal(ASK_RECORD_SECTION_REGISTRY.every((entry) => !('roleFloor' in entry) && !('primaryOwnerOnly' in entry)), true);
-  assert.deepEqual([...new Set(ASK_RECORD_SECTION_REGISTRY.map((entry) => recordSectionRoleFloor(entry)))].sort(), ['VIEWER']);
+  // The incidents-and-claims section reads claim status and dates, which are CONTRIBUTOR-floor (owner audience policy 2026-11-13); every other section stays VIEWER.
+  assert.deepEqual([...new Set(ASK_RECORD_SECTION_REGISTRY.map((entry) => recordSectionRoleFloor(entry)))].sort(), ['CONTRIBUTOR', 'VIEWER']);
   assert.deepEqual(validateAskRecordSectionRegistry(), []);
   assert.equal(section.pagedCollection && section.collectionReader === 'PAGED_COLLECTION' && typeof ASK_RECORD_COLLECTION_READERS.coverage === 'function', true);
 });
