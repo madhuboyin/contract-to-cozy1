@@ -1063,7 +1063,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "DATA_POINT_READ",
   "confidence": 0.93,
   "order": 79,
-  "hash": "469abf98095c4b44",
+  "hash": "2bd3aaba73540f7a",
   "condition": "isDataPointComputedQuery(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "../homeRecordsAccess.ts:visibleRecordWhere",
@@ -1108,6 +1108,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
    "dataPoint/queryShapeRegistries.ts:CROSS_ENTITY_RELATION_REGISTRY",
    "dataPoint/queryShapeRegistries.ts:TIME_SERIES_REGISTRY",
    "dataPoint/queryShapeRegistries.ts:TIME_SERIES_REGISTRY",
+   "dataPoint/queryShapeRegistries.ts:catalogueFloor",
    "dataPoint/queryShapeRegistries.ts:queryShapesEnabled",
    "dataPoint/queryShapeRegistries.ts:validateAbsence",
    "dataPoint/queryShapeRegistries.ts:validateCrossEntity",
@@ -1982,7 +1983,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "DATA_POINT_READ",
   "confidence": 0.9,
   "order": 148,
-  "hash": "f64934d1ca7291f5",
+  "hash": "f031b722d5e93c92",
   "condition": "(dataPointQuestionPattern.test(message) && (resolveDataPoint(message) || resolveDataPointsMulti(message).length >= 2)) || isDataPointQuer...",
   "references": [
    "../homeRecordsAccess.ts:visibleRecordWhere",
@@ -2047,6 +2048,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
    "dataPoint/queryShapeRegistries.ts:CROSS_ENTITY_RELATION_REGISTRY",
    "dataPoint/queryShapeRegistries.ts:TIME_SERIES_REGISTRY",
    "dataPoint/queryShapeRegistries.ts:TIME_SERIES_REGISTRY",
+   "dataPoint/queryShapeRegistries.ts:catalogueFloor",
    "dataPoint/queryShapeRegistries.ts:queryShapesEnabled",
    "dataPoint/queryShapeRegistries.ts:validateAbsence",
    "dataPoint/queryShapeRegistries.ts:validateCrossEntity",
