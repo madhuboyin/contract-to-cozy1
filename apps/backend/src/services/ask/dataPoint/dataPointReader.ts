@@ -6,6 +6,10 @@ import { DATA_POINT_DEFINITIONS, READABLE_FIELDS, roleMayRead, type DataPointDef
 
 export const DATA_POINT_ITEM_ROW_CAP = 200;
 export const DATA_POINT_TAX_ROW_CAP = 20;
+/** The tax year a message names: a four-digit number in 1900-2199 (a bare 4500 or 1234 is not a year). Null when none. Several candidates: the first that matches a record year is used by the reader. */
+export function namedTaxYears(message: string): string[] {
+  return [...message.matchAll(/(?<![\d$,.])(19\d\d|20\d\d|21\d\d)(?![\d,]|\.\d)/g)].map((m) => m[1]);
+}
 const STOP = new Set(['the', 'and', 'for', 'with', 'of', 'my', 'our', 'in', 'a', 'an', 'unit', 'system']);
 const SYNONYMS: Readonly<Record<string, readonly string[]>> = { refrigerator: ['fridge'], fridge: ['refrigerator'], 'air conditioner': ['ac', 'a/c'], ac: ['air conditioner'], dishwasher: ['dish washer'], 'water heater': ['hot water heater', 'boiler tank'], hvac: ['furnace', 'heat pump'], microwave: ['micro wave'] };
 
@@ -50,6 +54,11 @@ const ENTITY_SPECS: Readonly<Record<DataPointEntity, EntitySpec>> = {
   HomeReserveFund: { mode: 'SINGLETON', delegate: 'homeReserveFund', extraSelect: { lastRecalculatedAt: true }, labels: () => [], display: () => 'home reserve fund', listUnnamedUpTo: 0,
     limitation: (r) => (r.lastRecalculatedAt ? null : 'The fund has never been recalculated, so zeros here may be defaults rather than your real figures.') },
   PropertyTaxBillRecord: { mode: 'LATEST_TAX_YEAR', delegate: 'propertyTaxBillRecord', where: { status: 'ACTIVE', supersededById: null }, orderBy: [{ taxYear: 'desc' }, { observedAt: 'desc' }], extraSelect: { taxYear: true, sourceType: true, confidence: true }, labels: () => [], display: (r) => `${r.taxYear} property tax bill`, listUnnamedUpTo: 0, limitation: taxLimitation },
+  // Sale prep, sale case and buyer journey are one row per property (propertyId @unique): singleton reads. A buyer journey that is not ACTIVE says so, so a stale stage is not stated plainly.
+  PropertySalePrepProfile: { mode: 'SINGLETON', delegate: 'propertySalePrepProfile', extraSelect: {}, labels: () => [], display: () => 'sale prep profile', listUnnamedUpTo: 0 },
+  PropertySaleCase: { mode: 'SINGLETON', delegate: 'propertySaleCase', extraSelect: {}, labels: () => [], display: () => 'sale plan', listUnnamedUpTo: 0 },
+  HomeBuyerChecklist: { mode: 'SINGLETON', delegate: 'homeBuyerChecklist', extraSelect: { status: true }, labels: () => [], display: () => 'buyer journey', listUnnamedUpTo: 0,
+    limitation: (r) => (r.status && r.status !== 'ACTIVE' ? `This buyer journey is ${String(r.status).toLowerCase().replace(/_/g, ' ')}, so what is recorded may be out of date.` : null) },
   PropertyTaxAssessmentRecord: { mode: 'LATEST_TAX_YEAR', delegate: 'propertyTaxAssessmentRecord', where: { status: 'ACTIVE', supersededById: null }, orderBy: [{ taxYear: 'desc' }, { observedAt: 'desc' }], extraSelect: { taxYear: true, sourceType: true, confidence: true }, labels: () => [], display: (r) => `${r.taxYear} property tax assessment`, listUnnamedUpTo: 0, limitation: taxLimitation },
 };
 
@@ -70,8 +79,8 @@ export async function readDataPoint(propertyId: string, role: string, point: Dat
     if (!records.length) return { point, status: 'ITEM_NOT_FOUND', rows: [] };
     let record = records[0];
     if (spec.mode === 'LATEST_TAX_YEAR') {
-      const named = /\b(20\d\d)\b/.exec(message)?.[1];
-      if (named) { record = records.find((r) => String(r.taxYear) === named); if (!record) return { point, status: 'NO_ITEM_NAMED', rows: [] }; }
+      const named = namedTaxYears(message);
+      if (named.length) { record = records.find((r) => named.includes(String(r.taxYear))); if (!record) return { point, status: 'NO_ITEM_NAMED', rows: [] }; }
     }
     const value = record[point.field] ?? null;
     return { point, status: isPresent(value) ? 'FOUND' : 'NOT_RECORDED', rows: [{ id: String(record.id), name: spec.display(record), value, roomName: null, limitation: spec.limitation?.(record) ?? null }] };

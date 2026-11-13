@@ -124,7 +124,7 @@ const roleStub = (role, items) => {
 test('every data point has an explicit audience floor, free-form item notes are not catalogued, and domains no longer claim claims', () => {
   for (const p of DATA_POINT_DEFINITIONS) assert.ok(['VIEWER', 'CONTRIBUTOR', 'OWNER'].includes(p.audience), p.id);
   assert.equal(DATA_POINT_DEFINITIONS.some((p) => p.field === 'notes'), false);
-  assert.deepEqual([...new Set(DATA_POINT_DEFINITIONS.map((p) => p.domain))].sort(), ['appliances-inventory', 'insurance', 'maintenance', 'reserve-ownership-costs', 'warranties']);
+  assert.deepEqual([...new Set(DATA_POINT_DEFINITIONS.map((p) => p.domain))].sort(), ['appliances-inventory', 'buyer', 'insurance', 'maintenance', 'reserve-ownership-costs', 'seller-prep', 'warranties']);
   for (const p of DATA_POINT_DEFINITIONS.filter((x) => x.sensitivity === 'FINANCIAL')) assert.notEqual(p.audience, 'VIEWER', `${p.id}: money is not shown to viewers`);
 });
 test('a viewer is refused a restricted field by the handler AND by the reader; a contributor is not', async () => {
@@ -163,15 +163,15 @@ test('source authorization: a restricted source is redacted once the role drops,
   assert.deepEqual(seen.at(-1), ['PropertyMaintenanceTask', { id: 't1', propertyId: 'p1' }]);
 });
 
-test('owner approval (2026-11-12) covers exactly the 47 catalogued ids at catalogue version 2 (33 at v1 + 14 reserve-ownership-costs); any unapproved id or version drift fails', () => {
+test('owner approval (2026-11-12) covers exactly the 59 catalogued ids at catalogue version 3 (33 at v1 + 14 reserve-ownership-costs + 12 seller-prep/buyer); any unapproved id or version drift fails', () => {
   assert.equal(DATA_POINT_CATALOGUE_VERSION, DATA_POINT_APPROVAL.catalogueVersion, 'a new catalogue version needs a new approval record');
   const ids = DATA_POINT_DEFINITIONS.map((p) => p.id);
   assert.equal(new Set(ids).size, ids.length, 'ids are unique');
   assert.deepEqual(ids.filter((id) => !APPROVED_DATA_POINT_IDS.includes(id)), [], 'every catalogued id must be owner-approved');
   assert.deepEqual(APPROVED_DATA_POINT_IDS.filter((id) => !ids.includes(id)), [], 'an approved id that is no longer catalogued must be removed from the approval');
-  assert.equal(ids.length, 47); assert.equal(DATA_POINT_CATALOGUE_VERSION, 2);
+  assert.equal(ids.length, 59); assert.equal(DATA_POINT_CATALOGUE_VERSION, 3);
   const by = (d) => DATA_POINT_DEFINITIONS.filter((p) => p.domain === d).length;
-  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance'), by('reserve-ownership-costs')], [14, 5, 7, 7, 14]);
+  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance'), by('reserve-ownership-costs'), by('seller-prep'), by('buyer')], [14, 5, 7, 7, 14, 9, 3]);
 });
 test('the restriction copy is generated from the field floor, so it never names a different audience than the check enforces', async () => {
   assert.match(audienceFloorCopy('CONTRIBUTOR').title, /contributors and owners/);
@@ -241,4 +241,53 @@ test('v2 sources are authorised against live ACTIVE non-superseded tax rows', as
   const ctx = { userId: 'u1', propertyId: 'p1', role: 'OWNER', exists: async (m, w) => { seen.push([m, w]); return false; } };
   assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx, [sourceRef('PropertyTaxBillRecord', 'tb1')]), 'REDACT_SECTION');
   assert.deepEqual(seen.at(-1), ['PropertyTaxBillRecord', { id: 'tb1', propertyId: 'p1', status: 'ACTIVE', supersededById: null }]);
+});
+
+// ---- Review fixes: tax-year selection beyond 20xx ----
+test('named tax year: any year 1900-2199 is honoured; unrelated four-digit numbers are not years', async () => {
+  const { namedTaxYears } = require('../../src/services/ask/dataPoint/dataPointReader.ts');
+  assert.deepEqual(namedTaxYears('my 1999 property tax assessment'), ['1999']);
+  assert.deepEqual(namedTaxYears('the 2025 bill'), ['2025']);
+  for (const m of ['bill of $4500', 'I paid 12,345 on 1234 oak street', 'order 4500 property tax bill', 'about 20255 dollars']) assert.deepEqual(namedTaxYears(m), [], m);
+  const rows = [taxRow({ id: 'new', taxYear: 2025 }), taxRow({ id: 'old', taxYear: 1999, billAmount: { toNumber: () => 1800 } })];
+  taxStub('OWNER', { bills: rows });
+  assert.match((await dataPointReadResult('u1', 'p1', 'what was my 1999 property tax bill amount')).blocks[0].body, /1999 property tax bill.*\$1,800/, 'existing 1999 record');
+  assert.match((await dataPointReadResult('u1', 'p1', 'what was my 2025 property tax bill amount')).blocks[0].body, /2025 property tax bill.*\$6,200/, 'current 20xx record');
+  taxStub('OWNER', { bills: [taxRow({ id: 'new', taxYear: 2025 })] });
+  const missing = await dataPointReadResult('u1', 'p1', 'what was my 1999 property tax bill amount');
+  assert.equal(missing.reasonCode, 'DATA_POINT_ITEM_NOT_FOUND'); assert.doesNotMatch(JSON.stringify(missing), /6,200/, 'missing 1999 does not fall back to the newest record');
+  const unrelated = await dataPointReadResult('u1', 'p1', 'what is my property tax bill amount for order 4500');
+  assert.match(unrelated.blocks[0].body, /2025 property tax bill/, 'an unrelated number does not select a year, the latest is used and named');
+});
+
+// ---- Catalogue v3: seller prep, sale case, buyer journey (singleton reads, CONTRIBUTOR floor) ----
+function sbStub(role, { prep = [], sale = [], buyer = [] } = {}, calls = []) {
+  propertyAccessService.resolvePropertyAccess = async () => ({ propertyId: 'p1', userId: 'u1', role, isOwner: role === 'OWNER' });
+  prisma.propertySalePrepProfile = { findMany: async (a) => { calls.push(['prep', a]); return prep; } };
+  prisma.propertySaleCase = { findMany: async (a) => { calls.push(['sale', a]); return sale; } };
+  prisma.homeBuyerChecklist = { findMany: async (a) => { calls.push(['buyer', a]); return buyer; } };
+}
+test('v3: every seller-prep/buyer point is CONTRIBUTOR and resolves by its cue; bare words pick nothing', () => {
+  for (const p of DATA_POINT_DEFINITIONS.filter((x) => x.domain === 'seller-prep' || x.domain === 'buyer')) assert.equal(p.audience, 'CONTRIBUTOR', p.id);
+  const cases = { 'what is the paint condition for my sale prep': 'salePrep.paint', 'what is my curb appeal condition': 'salePrep.curbAppeal', 'what is my staging readiness': 'salePrep.staging', 'what is my target list date for selling': 'saleCase.targetListDate', 'what is my target close date for selling my home': 'saleCase.targetCloseDate', 'what stage is my buyer journey at': 'buyer.stage', 'when is my buyer move in date': 'buyer.moveInDate', 'what is my buyer closing date': 'buyer.targetCloseDate' };
+  for (const [m, id] of Object.entries(cases)) assert.equal(resolveDataPoint(m)?.id, id, m);
+  assert.equal(resolveDataPoint('what is my closing date'), null, 'no sale or buyer cue');
+});
+test('v3 reads: singleton, property-scoped, catalogued columns only; inactive buyer journey is flagged; viewers are refused', async () => {
+  const calls = []; sbStub('CONTRIBUTOR', { prep: [{ id: 'sp1', paintCondition: 'FAIR' }], sale: [{ id: 'sc1', targetListDate: new Date('2027-03-01T12:00:00Z') }], buyer: [{ id: 'b1', stage: 'UNDER_CONTRACT', status: 'PAUSED' }] }, calls);
+  assert.match((await dataPointReadResult('u1', 'p1', 'what is the paint condition for my sale prep')).blocks[0].body, /fair/);
+  assert.match((await dataPointReadResult('u1', 'p1', 'what is my target list date for selling')).blocks[0].body, /March 1, 2027|Mar(ch)? 1/);
+  const b = await dataPointReadResult('u1', 'p1', 'what stage is my buyer journey at');
+  assert.equal(b.status, 'READY_WITH_LIMITATIONS'); assert.match(b.blocks[0].body, /under contract/); assert.match(b.blocks[0].body, /paused, so what is recorded may be out of date/);
+  for (const [, a] of calls) { assert.deepEqual(a.where, { propertyId: 'p1' }); assert.equal(a.take, 1); }
+  assert.deepEqual(Object.keys(calls[2][1].select).sort(), ['id', 'stage', 'status']);
+  assert.deepEqual(b.parameters.sources, [{ sourceType: 'HomeBuyerChecklist', sourceId: 'b1', minRole: 'CONTRIBUTOR' }]);
+  sbStub('VIEWER', { prep: [{ id: 'sp1', paintCondition: 'FAIR' }], sale: [], buyer: [{ id: 'b1', stage: 'EXPLORING', status: 'ACTIVE' }] });
+  for (const q of ['what is the paint condition for my sale prep', 'what stage is my buyer journey at']) assert.equal((await dataPointReadResult('u1', 'p1', q)).reasonCode, 'DATA_POINT_RESTRICTED', q);
+  sbStub('OWNER', {}); assert.equal((await dataPointReadResult('u1', 'p1', 'what is my target list date for selling')).reasonCode, 'DATA_POINT_NO_INVENTORY');
+});
+test('v3 sources are authorised against the live row for this property', async () => {
+  const { COMPOSABLE_SOURCE_AUTHORIZATION: AUTH, sourceRef } = require('../../src/services/ask/composition/sourceAuthorization.ts');
+  const seen = []; const ctx = { userId: 'u1', propertyId: 'p1', role: 'OWNER', exists: async (m, w) => { seen.push([m, w]); return true; } };
+  for (const t of ['PropertySalePrepProfile', 'PropertySaleCase', 'HomeBuyerChecklist']) { assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx, [sourceRef(t, 'x1')]), 'AUTHORIZED'); assert.deepEqual(seen.at(-1), [t, { id: 'x1', propertyId: 'p1' }]); }
 });

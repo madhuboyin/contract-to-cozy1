@@ -11,7 +11,7 @@ import type { AskOperationId } from '../askOperationRegistry';
 export type CompositeSourceType =
   | 'Property' | 'InventoryItem' | 'Warranty' | 'HomeCapitalTimelineItem' | 'HomeReserveFund' | 'HomeReserveFundLineItem'
   | 'DoNothingSimulationRun' | 'DoNothingScenario' | 'HomeDigitalTwin' | 'HomeTwinScenario' | 'RecallMatch' | 'HomeEvent'
-  | 'InsurancePolicy' | 'PropertyMaintenanceTask' | 'PropertyTaxBillRecord' | 'PropertyTaxAssessmentRecord';
+  | 'InsurancePolicy' | 'PropertyMaintenanceTask' | 'PropertyTaxBillRecord' | 'PropertyTaxAssessmentRecord' | 'PropertySalePrepProfile' | 'PropertySaleCase' | 'HomeBuyerChecklist';
 
 export interface CompositeSourceReference {
   sourceType: CompositeSourceType;
@@ -63,6 +63,9 @@ const CHECKS: Record<CompositeSourceType, { where: (context: SourceAuthorization
   InsurancePolicy: { where: (c, id) => ({ id, propertyId: c.propertyId }), onMissing: 'REDACT_SECTION' },
   PropertyMaintenanceTask: { where: (c, id) => ({ id, propertyId: c.propertyId }), onMissing: 'REDACT_SECTION' },
   // Tax records: still ACTIVE and not superseded, so a figure that was replaced after the answer was composed is redacted on replay rather than shown stale.
+  PropertySalePrepProfile: { where: (c, id) => ({ id, propertyId: c.propertyId }), onMissing: 'REDACT_SECTION' },
+  PropertySaleCase: { where: (c, id) => ({ id, propertyId: c.propertyId }), onMissing: 'REDACT_SECTION' },
+  HomeBuyerChecklist: { where: (c, id) => ({ id, propertyId: c.propertyId }), onMissing: 'REDACT_SECTION' },
   PropertyTaxBillRecord: { where: (c, id) => ({ id, propertyId: c.propertyId, status: 'ACTIVE', supersededById: null }), onMissing: 'REDACT_SECTION' },
   PropertyTaxAssessmentRecord: { where: (c, id) => ({ id, propertyId: c.propertyId, status: 'ACTIVE', supersededById: null }), onMissing: 'REDACT_SECTION' },
   HomeEvent: { where: (c, id) => ({ id, propertyId: c.propertyId, isCurrent: true, deletedAt: null, OR: [{ visibility: { not: 'PRIVATE' } }, { createdById: c.userId }] }), onMissing: 'REDACT_SECTION' },
@@ -186,7 +189,7 @@ export const COMPOSABLE_SOURCE_AUTHORIZATION: Readonly<Record<string, Composable
     derive: (result) => listedItems(result.blocks).filter((item) => item.blockId === 'recall-review-matches').map((item) => sourceRef('RecallMatch', item.id)),
   }),
   DATA_POINT_READ: build({
-    allowed: ['InventoryItem', 'Warranty', 'InsurancePolicy', 'PropertyMaintenanceTask', 'HomeReserveFund', 'PropertyTaxBillRecord', 'PropertyTaxAssessmentRecord', 'Property'],
+    allowed: ['InventoryItem', 'Warranty', 'InsurancePolicy', 'PropertyMaintenanceTask', 'HomeReserveFund', 'PropertyTaxBillRecord', 'PropertyTaxAssessmentRecord', 'PropertySalePrepProfile', 'PropertySaleCase', 'HomeBuyerChecklist', 'Property'],
     noRecordReasons: ['DATA_POINT_NOT_IDENTIFIED', 'DATA_POINT_NO_INVENTORY', 'DATA_POINT_ITEM_NOT_FOUND', 'DATA_POINT_NOT_RECORDED', 'DATA_POINT_RESTRICTED', 'DATA_POINT_AMBIGUOUS'],
   }),
   HOME_TIMELINE_EVENTS: build({

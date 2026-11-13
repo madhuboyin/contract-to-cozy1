@@ -1,10 +1,10 @@
 // Proposed data-point catalogue (reliability FRD FR-DATA-1..5, D11, D12, D13). The Prisma schema says what exists; this file says what the homeowner may be shown and
 // how they ask for it. FAIL CLOSED: a field not listed here cannot be read through DATA_POINT_READ, whatever the schema contains. The catalogue holds 33 PROPOSED data
 // points (inventory 14, warranties 5, insurance 7, maintenance 7) plus 14 reserve and ownership-cost points (catalogue version 2). The owner approved the field floors and the
-// domain split for exactly these 47 ids (33 at version 1, 14 more at version 2, both 2026-11-12); see APPROVED_DATA_POINT_IDS below. Any other id, or any change of a floor, needs a new approval and a new version.
+// domain split for exactly these 59 ids (33 at version 1, 14 at version 2, 12 at version 3, all 2026-11-12); see APPROVED_DATA_POINT_IDS below. Any other id, or any change of a floor, needs a new approval and a new version.
 export type DataPointFamily = 'text' | 'date' | 'money' | 'dollars' | 'enum' | 'tags' | 'flag' | 'percent' | 'number';
-export type DataPointEntity = 'InventoryItem' | 'Warranty' | 'InsurancePolicy' | 'PropertyMaintenanceTask' | 'HomeReserveFund' | 'PropertyTaxBillRecord' | 'PropertyTaxAssessmentRecord';
-export type DataPointDomain = 'appliances-inventory' | 'warranties' | 'insurance' | 'maintenance' | 'reserve-ownership-costs';
+export type DataPointEntity = 'InventoryItem' | 'Warranty' | 'InsurancePolicy' | 'PropertyMaintenanceTask' | 'HomeReserveFund' | 'PropertyTaxBillRecord' | 'PropertyTaxAssessmentRecord' | 'PropertySalePrepProfile' | 'PropertySaleCase' | 'HomeBuyerChecklist';
+export type DataPointDomain = 'appliances-inventory' | 'warranties' | 'insurance' | 'maintenance' | 'reserve-ownership-costs' | 'seller-prep' | 'buyer';
 export type AudienceFloor = 'VIEWER' | 'CONTRIBUTOR' | 'OWNER';
 export interface DataPointDefinition {
   /** Stable id used by plans, fixtures and tests (never a column name). */
@@ -41,6 +41,10 @@ const FIELD_AUDIENCE: Readonly<Record<string, AudienceFloor>> = Object.freeze({
   'reserve.balance': 'CONTRIBUTOR', 'reserve.monthlyContribution': 'CONTRIBUTOR', 'reserve.shortfall': 'CONTRIBUTOR', 'reserve.posture': 'VIEWER', 'reserve.horizonYears': 'VIEWER', 'reserve.lastRecalculated': 'VIEWER',
   'taxBill.amount': 'CONTRIBUTOR', 'taxBill.effectiveRate': 'VIEWER', 'taxBill.issueDate': 'VIEWER',
   'taxAssessment.totalAssessedValue': 'CONTRIBUTOR', 'taxAssessment.taxableValue': 'CONTRIBUTOR', 'taxAssessment.landValue': 'CONTRIBUTOR', 'taxAssessment.improvementValue': 'CONTRIBUTOR', 'taxAssessment.assessmentDate': 'VIEWER',
+  // Catalogue version 3 (owner decision 2026-11-12): sale and buyer-journey facts are not shown to viewers.
+  'salePrep.paint': 'CONTRIBUTOR', 'salePrep.curbAppeal': 'CONTRIBUTOR', 'salePrep.flooring': 'CONTRIBUTOR', 'salePrep.kitchen': 'CONTRIBUTOR', 'salePrep.bathroom': 'CONTRIBUTOR', 'salePrep.staging': 'CONTRIBUTOR',
+  'saleCase.status': 'CONTRIBUTOR', 'saleCase.targetListDate': 'CONTRIBUTOR', 'saleCase.targetCloseDate': 'CONTRIBUTOR',
+  'buyer.stage': 'CONTRIBUTOR', 'buyer.targetCloseDate': 'CONTRIBUTOR', 'buyer.moveInDate': 'CONTRIBUTOR',
 });
 const d = (x: Omit<DataPointDefinition, 'audience'>): DataPointDefinition => {
   const audience = FIELD_AUDIENCE[x.id];
@@ -121,7 +125,29 @@ const RESERVE_COST_POINTS: readonly DataPointDefinition[] = [
   ta({ id: 'taxAssessment.assessmentDate', field: 'assessmentDate', family: 'date', label: 'The assessment date', aliases: ['assessment date', 'assessed on', 'when was it assessed', 'when was my home assessed', 'when was my house assessed'], sentence: 'was assessed', sensitivity: 'HOME' }),
 ];
 
-export const DATA_POINT_DEFINITIONS: readonly DataPointDefinition[] = Object.freeze([...INVENTORY_POINTS, ...OTHER_DOMAINS, ...RESERVE_COST_POINTS]);
+const SP = ['sale prep', 'seller prep', 'selling', 'prepare to sell', 'curb appeal', 'staging'];
+const SC = ['sale case', 'sale plan', 'selling', 'sell my home', 'sell my house', 'listing'];
+const BY = ['buyer', 'buying', 'buyer journey', 'buying journey', 'home purchase'];
+const sp = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues' | 'audience'>): DataPointDefinition => d({ ...x, domain: 'seller-prep', entity: 'PropertySalePrepProfile', cues: SP });
+const sc = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues' | 'audience'>): DataPointDefinition => d({ ...x, domain: 'seller-prep', entity: 'PropertySaleCase', cues: SC });
+const by = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues' | 'audience'>): DataPointDefinition => d({ ...x, domain: 'buyer', entity: 'HomeBuyerChecklist', cues: BY });
+// Catalogue version 3: the parent rows that are one per property (singleton read). Children (sale readiness items, buyer tasks, milestones), financing, loan, contract and title entities are not catalogued; PropertyRecord is deferred (visibility policy).
+const SELL_BUY_POINTS: readonly DataPointDefinition[] = [
+  sp({ id: 'salePrep.paint', field: 'paintCondition', family: 'enum', label: 'The paint condition', aliases: ['paint', 'paint condition'], sentence: 'has a recorded paint condition of', sensitivity: 'HOME' }),
+  sp({ id: 'salePrep.curbAppeal', field: 'curbAppealCondition', family: 'enum', label: 'The curb appeal condition', aliases: ['curb appeal', 'curb appeal condition'], sentence: 'has a recorded curb appeal condition of', sensitivity: 'HOME' }),
+  sp({ id: 'salePrep.flooring', field: 'flooringCondition', family: 'enum', label: 'The flooring condition', aliases: ['flooring', 'floors', 'flooring condition'], sentence: 'has a recorded flooring condition of', sensitivity: 'HOME' }),
+  sp({ id: 'salePrep.kitchen', field: 'kitchenStatus', family: 'enum', label: 'The kitchen update status', aliases: ['kitchen', 'kitchen status'], sentence: 'has a recorded kitchen status of', sensitivity: 'HOME' }),
+  sp({ id: 'salePrep.bathroom', field: 'bathroomStatus', family: 'enum', label: 'The bathroom update status', aliases: ['bathroom', 'bathrooms', 'bathroom status'], sentence: 'has a recorded bathroom status of', sensitivity: 'HOME' }),
+  sp({ id: 'salePrep.staging', field: 'stagingReadiness', family: 'enum', label: 'The staging readiness', aliases: ['staging readiness', 'staged', 'staging'], sentence: 'has a recorded staging readiness of', sensitivity: 'HOME' }),
+  sc({ id: 'saleCase.status', field: 'status', family: 'enum', label: 'The sale status', aliases: ['status', 'sale status', 'where am i'], sentence: 'has status', sensitivity: 'HOME' }),
+  sc({ id: 'saleCase.targetListDate', field: 'targetListDate', family: 'date', label: 'The target list date', aliases: ['target list date', 'list date', 'listing date', 'when do i plan to list', 'when will i list'], sentence: 'has a target list date of', sensitivity: 'HOME' }),
+  sc({ id: 'saleCase.targetCloseDate', field: 'targetCloseDate', family: 'date', label: 'The target close date', aliases: ['target close date', 'close date', 'closing date', 'when do i close', 'when will i close'], sentence: 'has a target close date of', sensitivity: 'HOME' }),
+  by({ id: 'buyer.stage', field: 'stage', family: 'enum', label: 'The buying stage', aliases: ['stage', 'what stage', 'where am i'], sentence: 'is at the stage', sensitivity: 'HOME' }),
+  by({ id: 'buyer.targetCloseDate', field: 'targetCloseDate', family: 'date', label: 'The target close date', aliases: ['target close date', 'close date', 'closing date', 'when do i close', 'when will i close'], sentence: 'has a target close date of', sensitivity: 'HOME' }),
+  by({ id: 'buyer.moveInDate', field: 'moveInDate', family: 'date', label: 'The move-in date', aliases: ['move in date', 'move in', 'moving in', 'when do i move in'], sentence: 'has a move-in date of', sensitivity: 'HOME' }),
+];
+
+export const DATA_POINT_DEFINITIONS: readonly DataPointDefinition[] = Object.freeze([...INVENTORY_POINTS, ...OTHER_DOMAINS, ...RESERVE_COST_POINTS, ...SELL_BUY_POINTS]);
 export const DATA_POINT_BY_ID: ReadonlyMap<string, DataPointDefinition> = new Map(DATA_POINT_DEFINITIONS.map((p) => [p.id, p]));
 /** The only columns the reader may select per entity (FR-DATA-15: the select list is built from this allowlist, never from user text). */
 export const READABLE_FIELDS: Readonly<Record<DataPointEntity, readonly string[]>> = Object.freeze({
@@ -132,13 +158,16 @@ export const READABLE_FIELDS: Readonly<Record<DataPointEntity, readonly string[]
   HomeReserveFund: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'HomeReserveFund').map((p) => p.field),
   PropertyTaxBillRecord: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'PropertyTaxBillRecord').map((p) => p.field),
   PropertyTaxAssessmentRecord: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'PropertyTaxAssessmentRecord').map((p) => p.field),
+  PropertySalePrepProfile: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'PropertySalePrepProfile').map((p) => p.field),
+  PropertySaleCase: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'PropertySaleCase').map((p) => p.field),
+  HomeBuyerChecklist: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'HomeBuyerChecklist').map((p) => p.field),
 });
 export const READABLE_ITEM_FIELDS: readonly string[] = READABLE_FIELDS.InventoryItem;
 
 /** Catalogue version the owner's approval covers. Bump it with any added id or changed audience floor, and re-approve. */
-export const DATA_POINT_CATALOGUE_VERSION = 2;
+export const DATA_POINT_CATALOGUE_VERSION = 3;
 /** Owner approval record (2026-11-12): field audience floors and the domain split (appliances-inventory, warranties, insurance, maintenance; claims is a future domain), version 1 = 33 ids; version 2 adds the 14 reserve-ownership-costs ids (all 14 approved as proposed, tax amounts at CONTRIBUTOR, Expense kept own-profile only, claims deferred). */
-export const DATA_POINT_APPROVAL = Object.freeze({ catalogueVersion: 2, approvedOn: '2026-11-12', scope: 'field audience floors and domain split, exact ids only (33 at v1 + 14 reserve-ownership-costs at v2)' });
+export const DATA_POINT_APPROVAL = Object.freeze({ catalogueVersion: 3, approvedOn: '2026-11-12', scope: 'field audience floors and domain split, exact ids only (33 at v1 + 14 reserve-ownership-costs at v2 + 12 seller-prep/buyer at v3, all CONTRIBUTOR; PropertyRecord deferred)' });
 export const APPROVED_DATA_POINT_IDS: readonly string[] = Object.freeze([
   'item.brand', 'item.manufacturer', 'item.model', 'item.serial', 'item.installedOn', 'item.purchasedOn', 'item.lastServicedOn', 'item.expectedExpiryDate', 'item.condition', 'item.category', 'item.efficiencyRating', 'item.purchaseCost', 'item.replacementCost', 'item.tags',
   'warranty.expiryDate', 'warranty.startDate', 'warranty.provider', 'warranty.coverage', 'warranty.cost',
@@ -147,6 +176,9 @@ export const APPROVED_DATA_POINT_IDS: readonly string[] = Object.freeze([
   'reserve.balance', 'reserve.monthlyContribution', 'reserve.shortfall', 'reserve.posture', 'reserve.horizonYears', 'reserve.lastRecalculated',
   'taxBill.amount', 'taxBill.effectiveRate', 'taxBill.issueDate',
   'taxAssessment.totalAssessedValue', 'taxAssessment.taxableValue', 'taxAssessment.landValue', 'taxAssessment.improvementValue', 'taxAssessment.assessmentDate',
+  'salePrep.paint', 'salePrep.curbAppeal', 'salePrep.flooring', 'salePrep.kitchen', 'salePrep.bathroom', 'salePrep.staging',
+  'saleCase.status', 'saleCase.targetListDate', 'saleCase.targetCloseDate',
+  'buyer.stage', 'buyer.targetCloseDate', 'buyer.moveInDate',
 ]);
 /** Categories the owner presumes owner-only for any FUTURE catalogue entry (not catalogued today): mortgage/equity/financing, bank/payment, full policy or account ids, household identity/access, title/ownership, tax ids. */
 export const FUTURE_OWNER_ONLY_PRESUMPTIONS: readonly string[] = Object.freeze(['mortgage-equity-financing', 'bank-payment', 'full-policy-or-account-ids', 'household-identity-access', 'title-ownership', 'tax-ids']);
