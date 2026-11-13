@@ -93,3 +93,19 @@ test('the "due" cue never takes a buyer deadline or a "what is coming due" list 
   for (const q of ['What is coming due before we close on this home?', 'What is due this week?', 'When is my warranty due?', 'When is my inspection contingency due']) assert.notEqual(resolveDataPoint(q)?.id, 'task.nextDueDate', q);
   assert.notEqual(resolveAskOperation('What is coming due before we close on this home?').operationId, 'DATA_POINT_READ');
 });
+
+// ---- second natural-phrasing probe: tax, closing, move-in, milestones, past claim filing, "most valuable" (2026-11-13) ----
+test('natural tax, buyer, claim and ranking questions no longer fall to the open-ended fallback, and a past filing is not a request to file', () => {
+  const route = (q) => resolveAskOperation(q).operationId;
+  const cases = {
+    'What is my property tax bill?': 'taxBill.amount', 'What is my effective tax rate?': 'taxBill.effectiveRate', 'What is the taxable value of my home?': 'taxAssessment.taxableValue', 'How much is the land worth for tax purposes?': 'taxAssessment.landValue',
+    'When is my closing date?': 'buyer.targetCloseDate', 'When do I close?': 'buyer.targetCloseDate', 'When do I move in?': 'buyer.moveInDate', 'What is the status of my inspection milestone?': 'buyerMilestone.status',
+    'When did I file my water damage claim?': 'claim.submittedDate', 'When is my closing date for selling my house?': 'saleCase.targetCloseDate',
+  };
+  for (const [q, id] of Object.entries(cases)) { assert.equal(resolveDataPoint(q)?.id, id, q); assert.equal(route(q), 'DATA_POINT_READ', q); }
+  // a real request to file still files; the past-tense question does not
+  assert.equal(route('Start a claim for my roof'), 'CLAIM_FILE'); assert.equal(route('File a claim for the water damage'), 'CLAIM_FILE'); assert.notEqual(route('When did I file my water damage claim?'), 'CLAIM_FILE');
+  const { planDataPointQuery } = require('../../src/services/ask/dataPoint/dataPointQueryPlan.ts');
+  assert.equal(planDataPointQuery('What is my most valuable appliance?').reasonCode, 'DATA_POINT_QUERY_MEASURE_REQUIRED', '"valuable" is a ranking; purchase price or replacement cost is asked, not guessed');
+  assert.equal(planDataPointQuery('What is my most valuable appliance by replacement cost?').plan.sort.field, 'replacementCost');
+});

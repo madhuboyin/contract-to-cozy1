@@ -337,7 +337,7 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
   if (stray && !strayConsumed) return { kind: 'NONE' };
 
   // A singular noun names ONE record ("my claim roof hail", "my warranty"): only a superlative ("the oldest appliance", "which warranty expires first") may use it; everything else needs the plural kind.
-  const preSuperlative = /\b(most expensive|priciest|costliest|most costly|least expensive|cheapest|oldest|newest|youngest|largest|highest|lowest|biggest|soonest|earliest|latest|next to expire|expires? (?:first|soonest|next)|expiring (?:first|soonest|next)|due (?:first|soonest|next)|first to expire)\b/.test(text);
+  const preSuperlative = /\b(most expensive|most valuable|priciest|costliest|most costly|least expensive|cheapest|oldest|newest|youngest|largest|highest|lowest|biggest|soonest|earliest|latest|next to expire|expires? (?:first|soonest|next)|expiring (?:first|soonest|next)|due (?:first|soonest|next)|first to expire)\b/.test(text);
   const aggregateWord = /\b(average|mean|typical|total(?! assessed)|sum|combined|altogether)\b/.test(text);
   if (!plural && !preSuperlative && !(template.singularAggregate && aggregateWord)) return { kind: 'NONE' };
 
@@ -347,7 +347,7 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
   // "total assessed value" is a FIELD NAME, not a request to add up: "total" counts as a sum word only when it is not followed by "assessed".
   const sumQ = /\b(total(?! assessed)|sum|combined|altogether|add up)\b/.test(text);
   const avgQ = /\b(average|mean|typical)\b/.test(text);
-  const superlative = /\b(most expensive|priciest|costliest|most costly|least expensive|cheapest|oldest|newest|youngest|largest|highest|lowest|biggest|soonest|earliest|latest|next to expire|expires? (?:first|soonest|next)|expiring (?:first|soonest|next)|due (?:first|soonest|next)|first to expire)\b/.exec(text);
+  const superlative = /\b(most expensive|most valuable|priciest|costliest|most costly|least expensive|cheapest|oldest|newest|youngest|largest|highest|lowest|biggest|soonest|earliest|latest|next to expire|expires? (?:first|soonest|next)|expiring (?:first|soonest|next)|due (?:first|soonest|next)|first to expire)\b/.exec(text);
   const listQ = /\b(list|show|what|which)\b.*\b(?:do i have|have i got|are there|i have|i own)\b|\b(?:list|show) (?:all )?(?:of )?(?:my|our|the)\b/.test(text);
 
   const limitAsk = (() => { const k = /\b(?:top|first|my)?\s*(\d+|three|five|ten)\b\s+(?:most|oldest|newest|cheapest|priciest|costliest)/.exec(text) ?? /\btop (\d+|three|five|ten)\b/.exec(text); return k ? num(k[1]) : null; })();
@@ -386,11 +386,11 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
 
   if (superlative) {
     const word = superlative[1];
-    const dir: 'asc' | 'desc' = /most expensive|priciest|costliest|most costly|largest|highest|biggest|newest|youngest|latest/.test(word) ? 'desc' : 'asc';
+    const dir: 'asc' | 'desc' = /most expensive|most valuable|priciest|costliest|most costly|largest|highest|biggest|newest|youngest|latest/.test(word) ? 'desc' : 'asc';
     let key: string | null = null;
     if (/oldest|newest|youngest/.test(word)) key = template.fields.installedOn ? 'installedOn' : null;
     else if (/soonest|earliest|first|next|latest/.test(word) || /expire|due/.test(word)) key = template.dateField;
-    else if (/expensive|priciest|costliest|costly|cheapest|largest|highest|lowest|biggest/.test(word)) {
+    else if (/expensive|valuable|priciest|costliest|costly|cheapest|largest|highest|lowest|biggest/.test(word)) {
       const named = fieldNamed(template, text, undefined, (x) => x.measure || x.type === 'percent');
       const namedField = named ? template.fields[named] : null;
       if (namedField && (namedField.measure || namedField.type === 'percent')) key = named;
@@ -403,7 +403,7 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
     if (!key || !template.fields[key]?.sortable) return { kind: 'NONE' };
     // "the oldest appliance" ranks by install date; an item with no recorded value is not ranked.
     touched.add(key);
-    const k = limitAsk ?? (plural && !/\bthe (most|oldest|newest|cheapest|priciest)\b/.test(text) ? 5 : 1);
+    const k = limitAsk ?? (plural && !/\bthe (most|oldest|newest|cheapest|priciest)\b|\bmy most valuable\b/.test(text) ? 5 : 1);
     return { kind: 'PLAN', plan: { shape: 'TOP_K', template, predicates, sort: { field: key, dir }, limit: limit(k, 1), aggregate: null, touched: [...touched], showField: key, excludesClosed } };
   }
 

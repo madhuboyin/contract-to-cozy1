@@ -7,7 +7,7 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { humanDate, money } from '../askFormatting';
 import { ensurePropertyAccess } from '../askHandlerSupport';
-import { audienceFloorCopy, resolveDataPoint, roleMayRead, type DataPointDefinition } from '../dataPoint/dataPointCatalogue';
+import { ALTERNATE_POINT, audienceFloorCopy, DATA_POINT_BY_ID, resolveDataPoint, roleMayRead, type DataPointDefinition } from '../dataPoint/dataPointCatalogue';
 import { namedTaxYears, readDataPoint } from '../dataPoint/dataPointReader';
 import { planDataPointQuery, pointOf, type QueryPlan } from '../dataPoint/dataPointQueryPlan';
 import { prisma } from '../../../lib/prisma';
@@ -136,20 +136,25 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
     const copy = audienceFloorCopy(point.audience);
     return notice('DATA_POINT_RESTRICTED', 'data-point-restricted', copy.title, `${point.label} is only shown to ${copy.who}. Ask the home’s owner if you need it.`);
   }
-  const read = await readDataPoint(propertyId, role, point, message);
-  const where = ENTITY_COPY[point.entity];
-  if (read.status === 'AMBIGUOUS' && !read.rows.length) return notice('DATA_POINT_AMBIGUOUS', 'data-point-ambiguous', `Which ${where.singular} do you mean?`, `${read.candidateCount ?? 'More than one'} ${where.plural} could match. Name the one you mean more specifically and I’ll tell you ${point.label.charAt(0).toLowerCase()}${point.label.slice(1)}.`);
-  if (read.status === 'AMBIGUOUS') return notice('DATA_POINT_AMBIGUOUS', 'data-point-ambiguous', `Which ${where.singular} do you mean?`, `You have more than one: ${read.rows.map((r) => r.name).join(', ')}. Name one and I’ll tell you ${point.label.charAt(0).toLowerCase()}${point.label.slice(1)}.`);
+  let readPoint = point;
+  let read = await readDataPoint(propertyId, role, point, message);
+  // "When is my closing date?" is a buyer or a seller question: when the home has no record of the kind the wording leans to, the other kind answers it.
+  const alternateId = ALTERNATE_POINT[point.id]; const alternate = alternateId ? DATA_POINT_BY_ID.get(alternateId) : undefined;
+  if (read.status === 'ITEM_NOT_FOUND' && alternate && roleMayRead(role, alternate)) { const other = await readDataPoint(propertyId, role, alternate, message); if (other.status !== 'ITEM_NOT_FOUND') { read = other; readPoint = alternate; } }
+
+  const where = ENTITY_COPY[readPoint.entity];
+  if (read.status === 'AMBIGUOUS' && !read.rows.length) return notice('DATA_POINT_AMBIGUOUS', 'data-point-ambiguous', `Which ${where.singular} do you mean?`, `${read.candidateCount ?? 'More than one'} ${where.plural} could match. Name the one you mean more specifically and I’ll tell you ${readPoint.label.charAt(0).toLowerCase()}${readPoint.label.slice(1)}.`);
+  if (read.status === 'AMBIGUOUS') return notice('DATA_POINT_AMBIGUOUS', 'data-point-ambiguous', `Which ${where.singular} do you mean?`, `You have more than one: ${read.rows.map((r) => r.name).join(', ')}. Name one and I’ll tell you ${readPoint.label.charAt(0).toLowerCase()}${readPoint.label.slice(1)}.`);
   if (read.status === 'ITEM_NOT_FOUND') return notice('DATA_POINT_NO_INVENTORY', 'data-point-no-inventory', where.none ?? `No ${where.plural} are recorded yet`, where.none ? 'Add it to your home record and I can tell you.' : `Add it to your home record and I can tell you its details.`);
   if (read.status === 'NO_ITEM_NAMED' && namedTaxYears(message).length) return notice('DATA_POINT_ITEM_NOT_FOUND', 'data-point-year-not-found', `No ${namedTaxYears(message)[0]} record`, `I don’t have an active ${where.singular} for that tax year. Ask without a year and I’ll use your latest.`);
-  if (read.status === 'NO_ITEM_NAMED') return notice('DATA_POINT_ITEM_NOT_FOUND', 'data-point-item-not-found', `I don’t see that in your ${where.collection}`, `${point.label} comes from the ${where.singular} record. Name one you have recorded, or add it first.`);
+  if (read.status === 'NO_ITEM_NAMED') return notice('DATA_POINT_ITEM_NOT_FOUND', 'data-point-item-not-found', `I don’t see that in your ${where.collection}`, `${readPoint.label} comes from the ${where.singular} record. Name one you have recorded, or add it first.`);
   const present = read.rows.filter((r) => r.value !== null && r.value !== '' && !(Array.isArray(r.value) && r.value.length === 0));
   if (read.status === 'NOT_RECORDED') {
     const names = read.rows.map((r) => r.name).join(' and ');
-    return notice('DATA_POINT_NOT_RECORDED', 'data-point-not-recorded', `${point.label.replace(/^The /, 'The ')} for your ${names} isn’t recorded`, `Nothing is saved for this yet. You can add it by editing the record, and then I can tell you.`);
+    return notice('DATA_POINT_NOT_RECORDED', 'data-point-not-recorded', `${readPoint.label.replace(/^The /, 'The ')} for your ${names} isn’t recorded`, `Nothing is saved for this yet. You can add it by editing the record, and then I can tell you.`);
   }
   // A cancelled / not-needed child is worded as a recorded past value, never as a current obligation ("is due" is not used for it).
-  const sentences = present.map((r) => (r.historicalStatus ? `Your ${r.name} is ${r.historicalStatus}. Its recorded ${point.family === 'date' ? 'date' : 'value'} was ${formatDataPointValue(point, r.value)}.` : `Your ${r.name} ${point.sentence} ${formatDataPointValue(point, r.value)}.`));
+  const sentences = present.map((r) => (r.historicalStatus ? `Your ${r.name} is ${r.historicalStatus}. Its recorded ${readPoint.family === 'date' ? 'date' : 'value'} was ${formatDataPointValue(readPoint, r.value)}.` : `Your ${r.name} ${readPoint.sentence} ${formatDataPointValue(readPoint, r.value)}.`));
   const missing = read.rows.length - present.length;
   if (missing > 0) sentences.push(`${missing === 1 ? 'One matching item has' : `${missing} matching items have`} nothing recorded for this.`);
   // Provenance/confidence limitation (FR-REC-2): a low-confidence or self-entered record is not stated plainly.
@@ -157,9 +162,9 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
   sentences.push(...limits);
   return {
     status: missing > 0 || limits.length ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: missing > 0 ? 'DATA_POINT_PARTIAL' : limits.length ? 'DATA_POINT_LIMITED_PROVENANCE' : undefined,
-    parameters: { sources: present.map((r) => ({ ...sourceRef((r.sourceType ?? point.entity) as CompositeSourceType, r.id), ...(point.audience !== 'VIEWER' ? { minRole: point.audience } : {}) })) },
+    parameters: { sources: present.map((r) => ({ ...sourceRef((r.sourceType ?? readPoint.entity) as CompositeSourceType, r.id), ...(readPoint.audience !== 'VIEWER' ? { minRole: readPoint.audience } : {}) })) },
     blocks: [
-      { type: 'SUMMARY', id: 'data-point-summary', title: `${point.label}: ${present.map((r) => formatDataPointValue(point, r.value)).join('; ')}`, body: sentences.join(' '), tone: missing > 0 || limits.length ? 'CAUTION' : 'DEFAULT', actions: [] },
+      { type: 'SUMMARY', id: 'data-point-summary', title: `${readPoint.label}: ${present.map((r) => formatDataPointValue(readPoint, r.value)).join('; ')}`, body: sentences.join(' '), tone: missing > 0 || limits.length ? 'CAUTION' : 'DEFAULT', actions: [] },
       { type: 'EVIDENCE', id: 'data-point-evidence', title: 'Where this comes from', items: present.map((r) => ({ label: r.name, source: `${where.record}${r.roomName ? ` (${r.roomName})` : ''}`, observedAt: null })) },
     ] as AskPresentationBlock[],
     suggestions: [],

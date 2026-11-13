@@ -31,6 +31,8 @@ export interface DataPointDefinition {
   readonly specificCue?: boolean;
   /** The point does not apply when any of these words is in the message (it names another kind of record, which owns the question). */
   readonly unlessCues?: readonly string[];
+  /** When a message carries this point's cue and matches NO alias of any point, this is the point ("What is my property tax bill?" asks for the bill amount). Only used when it is the single such candidate. */
+  readonly defaultWhenCueOnly?: boolean;
 }
 
 /** Per-point audience floors (review 2026-11-11). Money, serial numbers, free-form coverage text and tags are not shown to viewers; plain item, date and status facts are. Floors approved by the owner 2026-11-12 for catalogue version 1. */
@@ -125,8 +127,8 @@ const OTHER_DOMAINS: readonly DataPointDefinition[] = [
 ];
 
 const R = ['reserve', 'reserves', 'reserve fund', 'savings fund', 'sinking fund', 'home fund'];
-const B = ['property tax', 'property taxes', 'tax bill', 'tax bills', 'real estate tax'];
-const A = ['assessment', 'assessments', 'assessed', 'assessor'];
+const B = ['property tax', 'property taxes', 'tax bill', 'tax bills', 'real estate tax', 'tax rate', 'effective tax rate'];
+const A = ['assessment', 'assessments', 'assessed', 'assessor', 'taxable value', 'land value', 'tax purposes'];
 const rf = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues' | 'audience'>): DataPointDefinition => d({ ...x, domain: 'reserve-ownership-costs', entity: 'HomeReserveFund', cues: R });
 const tb = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues' | 'audience'>): DataPointDefinition => d({ ...x, domain: 'reserve-ownership-costs', entity: 'PropertyTaxBillRecord', cues: B });
 const ta = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues' | 'audience'>): DataPointDefinition => d({ ...x, domain: 'reserve-ownership-costs', entity: 'PropertyTaxAssessmentRecord', cues: A });
@@ -139,12 +141,12 @@ const RESERVE_COST_POINTS: readonly DataPointDefinition[] = [
   rf({ id: 'reserve.posture', field: 'posture', family: 'enum', label: 'The reserve posture', aliases: ['posture', 'strategy'], sentence: 'is set to the posture', sensitivity: 'HOME' }),
   rf({ id: 'reserve.horizonYears', field: 'horizonYears', family: 'number', label: 'The planning horizon', aliases: ['horizon', 'planning horizon', 'how many years', 'how far ahead'], sentence: 'plans ahead, in years:', sensitivity: 'HOME' }),
   rf({ id: 'reserve.lastRecalculated', field: 'lastRecalculatedAt', family: 'date', label: 'When it was last recalculated', aliases: ['last recalculated', 'recalculated', 'last updated', 'last calculated'], sentence: 'was last recalculated', sensitivity: 'HOME' }),
-  tb({ id: 'taxBill.amount', field: 'billAmount', family: 'dollars', label: 'The property tax bill amount', aliases: ['amount', 'how much', 'owe', 'total', 'pay', 'paying'], sentence: 'shows a bill of', sensitivity: 'FINANCIAL' }),
+  tb({ id: 'taxBill.amount', field: 'billAmount', family: 'dollars', label: 'The property tax bill amount', aliases: ['amount', 'how much', 'owe', 'total', 'pay', 'paying'], defaultWhenCueOnly: true, sentence: 'shows a bill of', sensitivity: 'FINANCIAL' }),
   tb({ id: 'taxBill.effectiveRate', field: 'effectiveTaxRate', family: 'percent', label: 'The effective tax rate', aliases: ['effective rate', 'effective tax rate', 'tax rate', 'rate', 'millage'], sentence: 'shows an effective tax rate of', sensitivity: 'HOME' }),
   tb({ id: 'taxBill.issueDate', field: 'issueDate', family: 'date', label: 'When the bill was issued', aliases: ['issued', 'issue date', 'date issued', 'when was it issued'], sentence: 'was issued', sensitivity: 'HOME' }),
   ta({ id: 'taxAssessment.totalAssessedValue', field: 'totalAssessedValue', family: 'dollars', label: 'The total assessed value', aliases: ['assessed value', 'total assessed value', 'total assessed', 'assessed at', 'assessed', 'assessment value', 'total assessment'], sentence: 'shows a total assessed value of', sensitivity: 'FINANCIAL' }),
   ta({ id: 'taxAssessment.taxableValue', field: 'taxableValue', family: 'dollars', label: 'The taxable value', aliases: ['taxable value', 'taxable'], sentence: 'shows a taxable value of', sensitivity: 'FINANCIAL' }),
-  ta({ id: 'taxAssessment.landValue', field: 'landValue', family: 'dollars', label: 'The land value', aliases: ['land value', 'land'], sentence: 'shows a land value of', sensitivity: 'FINANCIAL' }),
+  ta({ id: 'taxAssessment.landValue', field: 'landValue', family: 'dollars', label: 'The land value', aliases: ['land value', 'land', 'land worth'], sentence: 'shows a land value of', sensitivity: 'FINANCIAL' }),
   ta({ id: 'taxAssessment.improvementValue', field: 'improvementValue', family: 'dollars', label: 'The improvement value', aliases: ['improvement value', 'improvements', 'building value', 'structure value'], sentence: 'shows an improvement value of', sensitivity: 'FINANCIAL' }),
   ta({ id: 'taxAssessment.assessmentDate', field: 'assessmentDate', family: 'date', label: 'The assessment date', aliases: ['assessment date', 'assessed on', 'when was it assessed', 'when was my home assessed', 'when was my house assessed'], sentence: 'was assessed', sensitivity: 'HOME' }),
 ];
@@ -167,8 +169,9 @@ const SELL_BUY_POINTS: readonly DataPointDefinition[] = [
   sc({ id: 'saleCase.targetListDate', field: 'targetListDate', family: 'date', label: 'The target list date', aliases: ['target list date', 'list date', 'listing date', 'when do i plan to list', 'when will i list', 'plan to list', 'when do i list'], sentence: 'has a target list date of', sensitivity: 'HOME' }),
   sc({ id: 'saleCase.targetCloseDate', field: 'targetCloseDate', family: 'date', label: 'The target close date', aliases: ['target close date', 'close date', 'closing date', 'when do i close', 'when will i close', 'plan to close', 'when do i plan to close'], sentence: 'has a target close date of', sensitivity: 'HOME' }),
   by({ id: 'buyer.stage', field: 'stage', family: 'enum', label: 'The buying stage', aliases: ['stage', 'what stage', 'where am i'], sentence: 'is at the stage', sensitivity: 'HOME' }),
-  by({ id: 'buyer.targetCloseDate', field: 'targetCloseDate', family: 'date', label: 'The target close date', aliases: ['target close date', 'close date', 'closing date', 'when do i close', 'when will i close'], sentence: 'has a target close date of', sensitivity: 'HOME' }),
-  by({ id: 'buyer.moveInDate', field: 'moveInDate', family: 'date', label: 'The move-in date', aliases: ['move in date', 'move in', 'moving in', 'when do i move in'], sentence: 'has a move-in date of', sensitivity: 'HOME' }),
+  // "When is my closing date?" names no buyer word. A seller's question about the closing date has its own point (saleCase.targetCloseDate); `ALTERNATE_POINT` below lets either answer when the home has only the other kind of record.
+  d({ id: 'buyer.targetCloseDate', domain: 'buyer', entity: 'HomeBuyerChecklist', cues: [...BY, 'closing date', 'close date', 'when do i close', 'when will i close'], unlessCues: ['sell', 'selling', 'sale', 'seller', 'list', 'listing'], field: 'targetCloseDate', family: 'date', label: 'The target close date', aliases: ['target close date', 'close date', 'closing date', 'when do i close', 'when will i close'], sentence: 'has a target close date of', sensitivity: 'HOME' }),
+  d({ id: 'buyer.moveInDate', domain: 'buyer', entity: 'HomeBuyerChecklist', cues: [...BY, 'when do i move in', 'when can i move in', 'when will i move in', 'move-in date', 'move in date'], field: 'moveInDate', family: 'date', label: 'The move-in date', aliases: ['move in date', 'move in', 'moving in', 'when do i move in', 'move-in date'], sentence: 'has a move-in date of', sensitivity: 'HOME' }),
 ];
 
 const REC = ['home record', 'home records', 'document', 'documents', 'record', 'records'];
@@ -192,7 +195,7 @@ const BUYER_TASK_POINTS: readonly DataPointDefinition[] = [
   bt({ id: 'buyerTask.completedDate', field: 'completedAt', family: 'date', label: 'When the task was completed', aliases: ['completed', 'completed on', 'completion date', 'finished', 'when was it completed', 'when did i complete'], sentence: 'was completed', sensitivity: 'HOME' }),
   bt({ id: 'buyerTask.priority', field: 'priority', family: 'enum', label: 'The task priority', aliases: ['priority', 'how urgent', 'urgent'], sentence: 'has priority', sensitivity: 'HOME' }),
 ];
-const BM = ['buyer milestone', 'buyer milestones', 'buying milestone', 'buying milestones', 'closing milestone', 'closing milestones', 'purchase milestone', 'purchase milestones'];
+const BM = ['inspection milestone', 'appraisal milestone', 'financing milestone', 'buyer milestone', 'buyer milestones', 'buying milestone', 'buying milestones', 'closing milestone', 'closing milestones', 'purchase milestone', 'purchase milestones'];
 const bm = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues' | 'audience' | 'compoundCue'>): DataPointDefinition => d({ ...x, domain: 'buyer', entity: 'BuyerJourneyMilestone', cues: BM, compoundCue: true });
 // Catalogue version 6: milestones, the second relation path (same HomeBuyerChecklist parent). customLabel, notes, responsibleUserId, sourceEntityId and sourceDocumentId are NOT catalogued.
 const BUYER_MILESTONE_POINTS: readonly DataPointDefinition[] = [
@@ -230,7 +233,7 @@ const CLAIM_POINTS: readonly DataPointDefinition[] = [
   cl({ id: 'claim.type', field: 'type', family: 'enum', label: 'The claim type', aliases: ['type', 'what type', 'what kind'], sentence: 'is of type', sensitivity: 'HOME' }),
   cl({ id: 'claim.incidentDate', field: 'incidentAt', family: 'date', label: 'When the incident happened', aliases: ['incident date', 'date of loss', 'when did it happen', 'when did the incident happen', 'loss date'], sentence: 'covers an incident on', sensitivity: 'HOME' }),
   cl({ id: 'claim.openedDate', field: 'openedAt', family: 'date', label: 'When the claim was opened', aliases: ['opened', 'opened on', 'when was it opened', 'when did i open'], sentence: 'was opened', sensitivity: 'HOME' }),
-  cl({ id: 'claim.submittedDate', field: 'submittedAt', family: 'date', label: 'When the claim was submitted', aliases: ['submitted', 'submitted on', 'when was it submitted', 'when did i submit', 'filed', 'when was it filed'], sentence: 'was submitted', sensitivity: 'HOME' }),
+  cl({ id: 'claim.submittedDate', field: 'submittedAt', family: 'date', label: 'When the claim was submitted', aliases: ['submitted', 'submitted on', 'when was it submitted', 'when did i submit', 'filed', 'when was it filed', 'did i file', 'when did i file'], sentence: 'was submitted', sensitivity: 'HOME' }),
   cl({ id: 'claim.closedDate', field: 'closedAt', family: 'date', label: 'When the claim was closed', aliases: ['closed', 'closed on', 'when was it closed', 'when did it close'], sentence: 'was closed', sensitivity: 'HOME' }),
   cl({ id: 'claim.nextFollowUp', field: 'nextFollowUpAt', family: 'date', label: 'The next follow-up date', aliases: ['follow up', 'follow-up', 'next follow up', 'next follow-up', 'when do i follow up'], sentence: 'has its next follow-up on', sensitivity: 'HOME' }),
   cl({ id: 'claim.deductible', field: 'deductibleAmount', family: 'dollars', label: 'The claim deductible', aliases: ['deductible'], sentence: 'has a deductible of', sensitivity: 'FINANCIAL' }),
@@ -337,11 +340,19 @@ export function resolveDataPoint(message: string): DataPointDefinition | null {
     if (!best || weight > best.length) { best = { point, length: weight }; tied = false; }
     else if (weight === best.length && best.point.id !== point.id) tied = true;
   }
-  if (!best || tied) return null;
+  if (!best) {
+    // No alias matched anywhere: a cue-only question falls to the one point that declares itself the default for its cue ("What is my property tax bill?").
+    const defaults = DATA_POINT_DEFINITIONS.filter((p) => p.defaultWhenCueOnly && p.cues?.some((cue) => new RegExp(`\\b${escapeRe(cue)}\\b`).test(text)) && !p.unlessCues?.some((w) => new RegExp(`\\b${escapeRe(w)}\\b`).test(text)));
+    return defaults.length === 1 ? defaults[0] : null;
+  }
+  if (tied) return null;
   // A message that mixes the buyer words with the maintenance word ("buyer maintenance task") is resolved to nothing, deterministically, so the caller asks which; it is never decided by registration order.
   if ((best.point.entity === 'PropertyMaintenanceTask' || best.point.entity === 'HomeBuyerTask') && /\b(?:buyer|buying|closing)\b/.test(text) && /\bmaintenance\b/.test(text)) return null;
   return best.point;
 }
+
+/** Two points that answer the same plain question for a buyer and for a seller ("when is my closing date"): when the home has no record of the first kind the other is read, so a closing-date question is not left unanswered. */
+export const ALTERNATE_POINT: Readonly<Record<string, string>> = Object.freeze({ 'buyer.targetCloseDate': 'saleCase.targetCloseDate', 'saleCase.targetCloseDate': 'buyer.targetCloseDate' });
 
 /** Entities (and claim detail ids) whose single details no dedicated operation answers : a compound-cue question about one of them is read by the data point, not by a list operation that merely shares a word. */
 const DATA_POINT_ONLY_ENTITIES: ReadonlySet<string> = new Set(['PropertyRecord', 'HomeReserveFund', 'InsurancePolicy', 'PropertySaleCase', 'PropertySalePrepProfile', 'HomeBuyerTask', 'BuyerJourneyMilestone', 'SaleReadinessItem', 'PropertyRecordVersion', 'ClaimChecklistItem', 'ClaimTimelineEvent', 'ClaimDocument']);

@@ -276,7 +276,9 @@ test('v4: every seller-prep/buyer point is VIEWER (shared journey facts, owner p
   for (const p of DATA_POINT_DEFINITIONS.filter((x) => x.domain === 'seller-prep' || x.domain === 'buyer')) assert.equal(p.audience, 'VIEWER', p.id);
   const cases = { 'what is the paint condition for my sale prep': 'salePrep.paint', 'what is my curb appeal condition': 'salePrep.curbAppeal', 'what is my staging readiness': 'salePrep.staging', 'what is my target list date for selling': 'saleCase.targetListDate', 'what is my target close date for selling my home': 'saleCase.targetCloseDate', 'what stage is my buyer journey at': 'buyer.stage', 'when is my buyer move in date': 'buyer.moveInDate', 'what is my buyer closing date': 'buyer.targetCloseDate' };
   for (const [m, id] of Object.entries(cases)) assert.equal(resolveDataPoint(m)?.id, id, m);
-  assert.equal(resolveDataPoint('what is my closing date'), null, 'no sale or buyer cue');
+  // "closing date" is itself a cue (owner reachability probe 2026-11-13): a buyer-leaning point that falls back to the sale case, so it no longer resolves to nothing; a bare "date" still picks nothing
+  assert.equal(resolveDataPoint('what is my closing date')?.id, 'buyer.targetCloseDate');
+  assert.equal(resolveDataPoint('what is my date'), null, 'a bare date picks nothing');
 });
 test('v4 reads: singleton, property-scoped, catalogued columns only; inactive buyer journey is flagged; viewers read shared journey facts', async () => {
   const calls = []; sbStub('CONTRIBUTOR', { prep: [{ id: 'sp1', paintCondition: 'FAIR' }], sale: [{ id: 'sc1', targetListDate: new Date('2027-03-01T12:00:00Z') }], buyer: [{ id: 'b1', stage: 'UNDER_CONTRACT', status: 'PAUSED' }] }, calls);
@@ -777,4 +779,19 @@ test('v10 replay: a child is re-checked as THAT child of THAT claim; a document 
   assert.equal(await check('OWNER', 'ClaimDocument', 'c1~rec9~d1'), 'AUTHORIZED', 'owners are not filtered by record visibility');
   db.doc.recVisibility = 'HOUSEHOLD'; db.doc.recActive = false; assert.equal(await check('CONTRIBUTOR', 'ClaimDocument', 'c1~rec9~d1'), 'REDACT_SECTION', 'the record was trashed');
   db.doc.recActive = true; assert.notEqual(await check('VIEWER', 'ClaimDocument', 'c1~rec9~d1'), 'AUTHORIZED', 'below the CONTRIBUTOR floor');
+});
+
+// ---- a closing-date question is answered by whichever kind of record the home has ----
+test('closing date: a buyer-leaning question reads the sale case when the home has no buyer journey, and the reverse', async () => {
+  const { ALTERNATE_POINT } = require('../../src/services/ask/dataPoint/dataPointCatalogue.ts');
+  assert.deepEqual([ALTERNATE_POINT['buyer.targetCloseDate'], ALTERNATE_POINT['saleCase.targetCloseDate']], ['saleCase.targetCloseDate', 'buyer.targetCloseDate']);
+  propertyAccessService.resolvePropertyAccess = async () => ({ propertyId: 'p1', userId: 'u1', role: 'OWNER', isOwner: true });
+  prisma.homeBuyerChecklist = { findMany: async () => [] };
+  prisma.propertySaleCase = { findMany: async () => [{ id: 'sc1', targetCloseDate: new Date('2027-01-15T12:00:00Z') }] };
+  const r = await dataPointReadResult('u1', 'p1', 'When is my closing date?');
+  assert.equal(r.status, 'ANSWERED'); assert.match(r.blocks[0].body, /sale plan has a target close date of .*15/i); assert.deepEqual(r.parameters.sources, [{ sourceType: 'PropertySaleCase', sourceId: 'sc1' }]);
+  prisma.propertySaleCase = { findMany: async () => [] }; prisma.homeBuyerChecklist = { findMany: async () => [{ id: 'cl1', targetCloseDate: new Date('2026-12-20T12:00:00Z') }] };
+  assert.match((await dataPointReadResult('u1', 'p1', 'When is my closing date for selling my house?')).blocks[0].body, /buyer journey has a target close date of .*20/i);
+  prisma.homeBuyerChecklist = { findMany: async () => [] };
+  assert.equal((await dataPointReadResult('u1', 'p1', 'When is my closing date?')).reasonCode, 'DATA_POINT_NO_INVENTORY', 'neither record exists: the usual notice');
 });

@@ -1912,7 +1912,8 @@ export function resolveAskOperation(message: string): AskOperationResolution {
     return resolved('COVERAGE_GAPS', 0.96);
   }
   if (claimTransitionPattern.test(message) && !claimOutcomeQuestionPattern.test(message)) return resolved('CLAIM_TRANSITION', 0.98);
-  if (claimFilePattern.test(message)) return resolved('CLAIM_FILE', 0.98);
+  // "When did I file my water damage claim?" asks about a past filing; it is not a request to file one.
+  if (claimFilePattern.test(message) && !/^\s*(?:when|what|how|who|which)\b.*\b(?:did|have|had) (?:i|we) (?:file|filed|submit|submitted|start|started|open|opened)\b/i.test(message)) return resolved('CLAIM_FILE', 0.98);
   if (incidentContinuationPattern.test(message)) return resolved('INCIDENT_CONTINUATION', 0.97);
   if (incidentClaimStatusPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('INCIDENT_CLAIM_STATUS', 0.95);
