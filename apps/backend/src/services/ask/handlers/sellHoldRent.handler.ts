@@ -674,14 +674,19 @@ async function sellerPrepItemDecisionResult(userId: string, propertyId: string, 
   // RESOLVED items have no further decision to make -- the underlying
   // source itself already cleared, distinct from a homeowner WAIVE/PURSUE
   // decision (see SaleReadinessItem.status's own schema comment).
-  const decidable = overview.readinessItems.filter((item) => item.status !== 'RESOLVED');
+  // Owner audience policy 2026-11-13: a contributor may decide, but free-form detail and cost ranges stay OWNER-only in targets,
+  // confirmation, stored parameters and replay. Role is resolved first; the reduced rows never carry the restricted fields.
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const isOwner = access.role === HouseholdRole.OWNER;
+  const decidable = overview.readinessItems.filter((item) => item.status !== 'RESOLVED')
+    .map((item) => (isOwner ? item : { ...item, detail: null, estimatedCostMinCents: null, estimatedCostMaxCents: null, estimatedValueAddMinCents: null, estimatedValueAddMaxCents: null }));
   const selected = exactEntityMatch(decidable, message, launchContext);
   const action = sellerPrepItemAction(message);
   if (!selected || !action) {
-    const rowActions = sellerPrepItemActions((await ensurePropertyAccess(userId, propertyId)).role);
+    const rowActions = sellerPrepItemActions(access.role);
     const sections = [{
       id: 'items', title: 'Checklist items', count: decidable.length,
-      items: decidable.slice(0, 50).map((item) => ({ id: item.id, title: item.title, entityType: 'SALE_READINESS_ITEM', actions: rowActions, description: item.detail ?? null, meta: [], status: item.status, href: null })),
+      items: decidable.slice(0, 50).map((item) => ({ id: item.id, title: item.title, entityType: 'SALE_READINESS_ITEM', actions: rowActions, description: isOwner ? (item.detail ?? null) : null, meta: isOwner ? [] : [String(item.category), String(item.requirementClass)], status: item.status, href: null })),
     }];
     return {
       status: 'NEEDS_ENTITY',
@@ -690,7 +695,7 @@ async function sellerPrepItemDecisionResult(userId: string, propertyId: string, 
         type: 'GROUPED_LIST', filters: [],
         id: 'seller-prep-item-targets',
         title: 'Choose an item and a decision',
-        description: 'Use the exact item title and say waive, pursue, reopen, or unpursue.',
+        description: isOwner ? 'Use the exact item title and say waive, pursue, reopen, or unpursue.' : 'Use the exact item title and say waive, pursue, reopen, or unpursue. If two items share a title, the property owner needs to choose the item.',
         sections,
         collection: collectionDescriptor({ sourceTotal: decidable.length, fetchedCount: decidable.length, sections, nextPageAvailable: false }),
         actions: [],
@@ -727,7 +732,7 @@ async function sellerPrepItemDecisionResult(userId: string, propertyId: string, 
       confirmationId: `seller-prep-item-${selected.id}-1`,
       version: 1,
       title: `${actionLabel} "${selected.title}"?`,
-      description: selected.detail ?? selected.title,
+      description: isOwner ? (selected.detail ?? selected.title) : selected.title,
       fields: [
         { label: 'Item', value: selected.title },
         { label: 'Decision', value: actionLabel },

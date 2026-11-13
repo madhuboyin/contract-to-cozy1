@@ -100,7 +100,7 @@ function installSale(saleCase, rows) {
   };
   return calls;
 }
-const readSeller = (query) => readSellerRecordsPage('p1', query);
+const readSeller = (query, role = 'OWNER') => readSellerRecordsPage('p1', query, role);
 
 test('seller items list open first by due date, then pursued, waived, resolved, and page without repeats; the read never writes', async () => {
   const rows = [

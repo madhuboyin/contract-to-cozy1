@@ -1555,7 +1555,7 @@ const SELLER_CATEGORIES = ['SAFETY_STRUCTURAL', 'SYSTEMS_MAINTENANCE', 'PERMITS_
  * home's records on every read (a write); the Record index and collection must not write, so this lists the persisted items and says
  * so in `notice`. Open items first, then pursued, waived, and resolved; earliest due first, then oldest first.
  */
-export async function readSellerRecordsPage(propertyId: string, query: AskRecordCollectionQuery): Promise<AskRecordCollectionPage<AskRecordSellerItemRow>> {
+export async function readSellerRecordsPage(propertyId: string, query: AskRecordCollectionQuery, role: HouseholdRole = 'VIEWER' as HouseholdRole): Promise<AskRecordCollectionPage<AskRecordSellerItemRow>> {
   const limit = clampLimit(query.limit);
   const search = cleanSearch(query.search);
   const status = query.filters?.status?.trim() || null;
@@ -1564,11 +1564,16 @@ export async function readSellerRecordsPage(propertyId: string, query: AskRecord
   if (category && !SELLER_CATEGORIES.includes(category)) throw new InvalidCollectionQueryError('category filter is not valid.');
   const after = decodeCursor(query.cursor, KeyCursorSchema);
 
+  // Owner audience policy 2026-11-13: detail and cost ranges are OWNER-only; for others they are neither selected, shown, nor searchable. Role defaults to the lowest (fail closed).
+  const isOwner = role === 'OWNER';
   const saleCase = await prisma.propertySaleCase.findUnique({ where: { propertyId }, select: { id: true } });
-  const items = saleCase
+  const items: Array<Record<string, any>> = saleCase
     ? await prisma.saleReadinessItem.findMany({
       where: { saleCaseId: saleCase.id },
-      select: { id: true, category: true, requirementClass: true, status: true, title: true, detail: true, dueAt: true, createdAt: true, estimatedCostMinCents: true, estimatedCostMaxCents: true },
+      select: {
+        id: true, category: true, requirementClass: true, status: true, title: true, dueAt: true, createdAt: true,
+        ...(isOwner ? { detail: true, estimatedCostMinCents: true, estimatedCostMaxCents: true } : {}),
+      },
     })
     : [];
 
@@ -1719,7 +1724,7 @@ export const ASK_RECORD_COLLECTION_READERS: Readonly<Partial<Record<AskRecordSec
   coverage: (context, query) => readCoveragePoliciesPage(context.propertyId, query),
   'financing-ownership': (context, query) => readFinancingScenariosPage(context.propertyId, query, listScenarios, { role: context.role }),
   'buyer-records': (context, query) => readBuyerRecordsPage(context, query),
-  'seller-records': (context, query) => readSellerRecordsPage(context.propertyId, query),
+  'seller-records': (context, query) => readSellerRecordsPage(context.propertyId, query, context.role),
   'household-access': (context, query) => readHouseholdAccessPage(context, query),
   'projects-renovations': (context, query) => readProjectsPage(context.propertyId, query),
   'incidents-claims': (context, query) => readIncidentsClaimsPage(context.propertyId, query),

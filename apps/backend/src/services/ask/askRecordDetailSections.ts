@@ -455,30 +455,35 @@ async function readBuyerTaskDetail(context: DetailContext, taskId: string): Prom
 
 async function readSellerItemDetail(context: DetailContext, itemId: string): Promise<DetailBody> {
   const saleCase = await prisma.propertySaleCase.findUnique({ where: { propertyId: context.propertyId }, select: { id: true } });
+  // Owner audience policy 2026-11-13: free-form detail, waiver text and cost ranges are OWNER-only. Non-owners never have them selected.
+  const isOwner = context.role === 'OWNER';
   const item = saleCase
     ? await prisma.saleReadinessItem.findFirst({
       where: { id: itemId, saleCaseId: saleCase.id },
-      select: { title: true, detail: true, category: true, requirementClass: true, status: true, sourceEntityType: true, dueAt: true, resolvedAt: true, waivedAt: true, waivedReason: true, pursuedAt: true, estimatedCostMinCents: true, estimatedCostMaxCents: true, createdAt: true, updatedAt: true },
-    })
+      select: {
+        title: true, category: true, requirementClass: true, status: true, sourceEntityType: true, dueAt: true, resolvedAt: true, waivedAt: true, pursuedAt: true, createdAt: true, updatedAt: true,
+        ...(isOwner ? { detail: true, waivedReason: true, estimatedCostMinCents: true, estimatedCostMaxCents: true } : {}),
+      },
+    }) as (Record<string, any> | null)
     : null;
   if (!item) return notFound();
   const cost = item.estimatedCostMinCents != null && item.estimatedCostMaxCents != null ? `${money(item.estimatedCostMinCents)} to ${money(item.estimatedCostMaxCents)}` : null;
   const decisions: AskRecordHistoryEntry[] = [
     ...(item.pursuedAt ? [{ at: item.pursuedAt.toISOString(), label: 'Marked to pursue before listing' }] : []),
-    ...(item.waivedAt ? [{ at: item.waivedAt.toISOString(), label: `Waived${item.waivedReason ? `: ${item.waivedReason}` : ''}` }] : []),
+    ...(item.waivedAt ? [{ at: item.waivedAt.toISOString(), label: `Waived${isOwner && item.waivedReason ? `: ${item.waivedReason}` : ''}` }] : []),
     ...(item.resolvedAt ? [{ at: item.resolvedAt.toISOString(), label: 'Cleared by its source record' }] : []),
   ].sort((left, right) => right.at.localeCompare(left.at));
   return {
     title: item.title,
     facts: [
-      fact('Status', readable(String(item.status))), fact('Category', readable(String(item.category))), fact('Requirement', readable(String(item.requirementClass))), fact('Details', item.detail),
-      fact('Due', day(item.dueAt)), fact('Estimated cost', cost),
+      fact('Status', readable(String(item.status))), fact('Category', readable(String(item.category))), fact('Requirement', readable(String(item.requirementClass))), ...(isOwner ? [fact('Details', item.detail)] : []),
+      fact('Due', day(item.dueAt)), ...(isOwner ? [fact('Estimated cost', cost)] : []),
     ],
     provenance: {
       source: available(`Derived from ${readable(String(item.sourceEntityType))?.toLowerCase()} records`, item.createdAt.toISOString()),
       observed: observedAt('Last updated', item.updatedAt),
       verification: unavailable('Checklist items have no verification state of their own.'),
-      visibility: everyMember('the sale checklist'),
+      visibility: isOwner ? everyMember('the sale checklist') : everyMember('the sale checklist (details and costs are shown to the property owner only)'),
       related: { state: 'UNAVAILABLE', records: [], reason: 'No canonical reader lists the source records behind a checklist item here.' },
       history: decisions.length ? { state: 'AVAILABLE', entries: decisions, reason: null } : { state: 'NOT_RECORDED', entries: [], reason: 'No decision has been recorded for this item.' },
     },

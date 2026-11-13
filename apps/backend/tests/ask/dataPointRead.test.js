@@ -168,15 +168,15 @@ test('source authorization: a restricted source is redacted once the role drops,
   assert.deepEqual(seen.at(-1), ['PropertyMaintenanceTask', { id: 't1', propertyId: 'p1' }]);
 });
 
-test('owner approval (2026-11-12) covers exactly the 71 catalogued ids at catalogue version 6 (33 at v1 + 14 reserve-ownership-costs + 12 seller-prep/buyer + 4 record + 4 buyerTask + 4 buyerMilestone); any unapproved id or version drift fails', () => {
+test('owner approval (2026-11-12) covers exactly the 75 catalogued ids at catalogue version 7 (33 at v1 + 14 reserve-ownership-costs + 12 seller-prep/buyer + 4 record + 4 buyerTask + 4 buyerMilestone + 4 saleItem); any unapproved id or version drift fails', () => {
   assert.equal(DATA_POINT_CATALOGUE_VERSION, DATA_POINT_APPROVAL.catalogueVersion, 'a new catalogue version needs a new approval record');
   const ids = DATA_POINT_DEFINITIONS.map((p) => p.id);
   assert.equal(new Set(ids).size, ids.length, 'ids are unique');
   assert.deepEqual(ids.filter((id) => !APPROVED_DATA_POINT_IDS.includes(id)), [], 'every catalogued id must be owner-approved');
   assert.deepEqual(APPROVED_DATA_POINT_IDS.filter((id) => !ids.includes(id)), [], 'an approved id that is no longer catalogued must be removed from the approval');
-  assert.equal(ids.length, 71); assert.equal(DATA_POINT_CATALOGUE_VERSION, 6);
+  assert.equal(ids.length, 75); assert.equal(DATA_POINT_CATALOGUE_VERSION, 7);
   const by = (d) => DATA_POINT_DEFINITIONS.filter((p) => p.domain === d).length;
-  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance'), by('reserve-ownership-costs'), by('seller-prep'), by('buyer'), by('documents-records')], [14, 5, 7, 7, 14, 9, 11, 4]);
+  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance'), by('reserve-ownership-costs'), by('seller-prep'), by('buyer'), by('documents-records')], [14, 5, 7, 7, 14, 13, 11, 4]);
 });
 test('the restriction copy is generated from the field floor, so it never names a different audience than the check enforces', async () => {
   assert.match(audienceFloorCopy('CONTRIBUTOR').title, /contributors and owners/);
@@ -486,4 +486,61 @@ test('v6 replay: the milestone is re-resolved through its CURRENT property-scope
   assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx(true), [sourceRef('BuyerJourneyMilestone', 'm1')]), 'AUTHORIZED');
   assert.deepEqual(seen.at(-1), ['BuyerJourneyMilestone', { id: 'm1', checklist: { propertyId: 'p1' } }]);
   assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx(false), [sourceRef('BuyerJourneyMilestone', 'm1')]), 'REDACT_SECTION');
+});
+
+// ---- Catalogue v7: sale-readiness items, the third relation path (via the property's sale case) ----
+const SECRET_SALE = ['SECRET-DETAIL', 'SECRET-WAIVER', '999900', 'SECRET-SOURCE'];
+const si = (o) => ({ id: 's1', saleCaseId: 'sc1', title: 'Fix railing', status: 'OPEN', category: 'SAFETY_STRUCTURAL', requirementClass: 'MATERIAL_BLOCKER', dueAt: new Date('2026-12-01T12:00:00Z'), ...o });
+function siStub(role, { cases = [{ id: 'sc1', status: 'PREPARING' }], rows = [] } = {}, calls = []) {
+  propertyAccessService.resolvePropertyAccess = async () => ({ propertyId: 'p1', userId: 'u1', role, isOwner: role === 'OWNER' });
+  prisma.propertySaleCase = { findMany: async (a) => { calls.push(['parent', a]); return cases; } };
+  prisma.saleReadinessItem = { findMany: async (a) => { calls.push(['child', a]); return rows; } };
+}
+test('v7 routing: sale-item compound cues select saleItem.*; a bare "item" never does', () => {
+  for (const cue of ['sale item', 'sale-readiness item', 'sale readiness item', 'seller-prep item', 'seller prep item', 'sale checklist item']) {
+    assert.equal(resolveDataPoint(`what is the status of my ${cue}`)?.id, 'saleItem.status', cue);
+    assert.equal(resolveDataPoint(`when is my ${cue} due`)?.id, 'saleItem.dueDate', cue);
+    assert.equal(resolveDataPoint(`what category is my ${cue}`)?.id, 'saleItem.category', cue);
+    assert.equal(resolveDataPoint(`what is the requirement class of my ${cue}`)?.id, 'saleItem.requirementClass', cue);
+  }
+  assert.ok(!String(resolveDataPoint('what is the status of my item')?.id ?? '').startsWith('saleItem'), 'bare item is not a sale item');
+  const defs = DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'SaleReadinessItem');
+  assert.deepEqual(defs.map((p) => p.field).sort(), ['category', 'dueAt', 'requirementClass', 'status']);
+  assert.ok(defs.every((p) => p.audience === 'VIEWER'));
+  for (const banned of ['title', 'detail', 'estimatedCostMinCents', 'estimatedCostMaxCents', 'estimatedValueAddMinCents', 'waivedReason', 'sourceEntityId', 'canonicalWorkItemId', 'waivedByUserId']) assert.ok(!defs.some((p) => p.field === banned), banned);
+});
+test('v7 read: parent (sale case) first; only structured columns selected; the title selects a row and is never returned', async () => {
+  const calls = []; siStub('VIEWER', { rows: [si({}), si({ id: 's2', title: 'Paint porch', status: 'PURSUING', dueAt: new Date('2026-12-09T12:00:00Z'), detail: 'SECRET-DETAIL', estimatedCostMinCents: 999900 })] }, calls);
+  const r = await dataPointReadResult('u1', 'p1', 'when is my sale item paint porch due');
+  assert.equal(r.status, 'ANSWERED'); assert.match(r.blocks[0].body, /sale-readiness item is due .*9/);
+  assert.deepEqual(calls[0], ['parent', { where: { propertyId: 'p1' }, select: { id: true, status: true }, take: 5 }]);
+  assert.deepEqual(calls[1][1].where, { saleCaseId: { in: ['sc1'] } });
+  assert.deepEqual(Object.keys(calls[1][1].select).sort(), ['dueAt', 'id', 'saleCaseId', 'status', 'title']);
+  const text = JSON.stringify(r); for (const s of SECRET_SALE) assert.ok(!text.includes(s), s); assert.ok(!text.includes('Paint porch'), 'the title is not echoed');
+  assert.deepEqual(r.parameters.sources, [{ sourceType: 'SaleReadinessItem', sourceId: 's2' }]);
+  assert.equal((await dataPointReadResult('u1', 'p1', 'when is my sale item due')).reasonCode, 'DATA_POINT_AMBIGUOUS');
+  siStub('VIEWER', { rows: [si({})] }); assert.equal((await dataPointReadResult('u1', 'p1', 'when is my sale item due')).status, 'ANSWERED', 'a lone item in a live case is the default');
+  siStub('VIEWER', { cases: [] }); assert.equal((await dataPointReadResult('u1', 'p1', 'when is my sale item due')).reasonCode, 'DATA_POINT_NO_INVENTORY');
+});
+test('v7 lifecycle: a closed or cancelled sale case needs a named item and says historical; resolved/waived items answer status plainly and dates as past values; bare words do not leak', async () => {
+  for (const st of ['CLOSED', 'CANCELLED']) {
+    siStub('VIEWER', { cases: [{ id: 'sc1', status: st }], rows: [si({})] });
+    assert.equal((await dataPointReadResult('u1', 'p1', 'when is my sale item due')).reasonCode, 'DATA_POINT_AMBIGUOUS', 'unnamed lone item is not defaulted');
+    assert.match((await dataPointReadResult('u1', 'p1', 'when is my sale item fix railing due')).blocks[0].body, new RegExp(`sale case is ${st.toLowerCase()}, so this value may no longer represent an active obligation`));
+  }
+  for (const st of ['PREPARING', 'LISTED', 'UNDER_CONTRACT']) { siStub('VIEWER', { cases: [{ id: 'sc1', status: st }], rows: [si({})] }); assert.equal((await dataPointReadResult('u1', 'p1', 'when is my sale item due')).status, 'ANSWERED', st); }
+  for (const st of ['RESOLVED', 'WAIVED']) {
+    siStub('VIEWER', { rows: [si({ status: st })] });
+    assert.equal((await dataPointReadResult('u1', 'p1', 'what is the status of my sale item')).status, 'ANSWERED');
+    const due = (await dataPointReadResult('u1', 'p1', 'when is my sale item due')).blocks[0].body;
+    assert.match(due, new RegExp(`is ${st.toLowerCase()}\\. Its recorded date was`)); assert.doesNotMatch(due, /is due/);
+  }
+  for (const st of ['OPEN', 'PURSUING']) { siStub('VIEWER', { rows: [si({ status: st })] }); assert.match((await dataPointReadResult('u1', 'p1', 'when is my sale item due')).blocks[0].body, /is due/); }
+});
+test('v7 replay: the item is re-resolved through its CURRENT property-scoped sale case', async () => {
+  const { COMPOSABLE_SOURCE_AUTHORIZATION: AUTH, sourceRef } = require('../../src/services/ask/composition/sourceAuthorization.ts');
+  const seen = []; const ctx = (present) => ({ userId: 'u1', propertyId: 'p1', role: 'VIEWER', exists: async (m, w) => { seen.push([m, w]); return present; } });
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx(true), [sourceRef('SaleReadinessItem', 's1')]), 'AUTHORIZED');
+  assert.deepEqual(seen.at(-1), ['SaleReadinessItem', { id: 's1', saleCase: { propertyId: 'p1' } }]);
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx(false), [sourceRef('SaleReadinessItem', 's1')]), 'REDACT_SECTION');
 });

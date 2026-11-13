@@ -269,7 +269,7 @@ test('a sale checklist item reads from the property’s own sale case and record
   const restoreCase = stub(prisma, 'propertySaleCase', { findUnique: async () => ({ id: 'sc1' }) });
   const restoreItem = stub(prisma, 'saleReadinessItem', { findFirst: async (args) => { assert.equal(args.where.saleCaseId, 'sc1'); return { title: 'Fix railing', detail: null, category: 'SAFETY', requirementClass: 'REQUIRED', status: 'WAIVED', sourceEntityType: 'INSPECTION_FINDING', dueAt: null, resolvedAt: null, waivedAt: day(-2), waivedReason: 'Disclosed', pursuedAt: day(-6), estimatedCostMinCents: 10000, estimatedCostMaxCents: 20000, createdAt: day(-9), updatedAt: day(-2) }; } });
   try {
-    const detail = await read('seller-records', 'CONTRIBUTOR', 'si1');
+    const detail = await read('seller-records', 'OWNER', 'si1');
     assert.deepEqual(detail.provenance.history.entries.map((e) => e.label), ['Waived: Disclosed', 'Marked to pursue before listing']);
     assert.equal(detail.corrections[0].operationId, 'SELLER_PREP_ITEM_DECISION');
   } finally { restoreCase(); restoreItem(); }

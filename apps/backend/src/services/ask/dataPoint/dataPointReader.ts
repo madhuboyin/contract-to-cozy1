@@ -66,6 +66,9 @@ const ENTITY_SPECS: Readonly<Record<DataPointEntity, EntitySpec>> = {
   HomeBuyerTask: { mode: 'RELATION_CHILD', delegate: 'homeBuyerTask', where: { applicability: { not: 'NOT_APPLICABLE' } }, orderBy: [{ priority: 'asc' }, { dueAt: 'asc' }], inactiveChildStatuses: ['CANCELLED', 'NOT_NEEDED'], extraSelect: { title: true, status: true }, labels: (r) => [r.title], display: () => 'buyer task', listUnnamedUpTo: 1 },
   // Milestones of the same checklist. The STRUCTURED type selects a row and is returned as a value; the free-form customLabel, notes, responsible user and source ids are never selected.
   BuyerJourneyMilestone: { mode: 'RELATION_CHILD', delegate: 'buyerJourneyMilestone', orderBy: [{ dueAt: 'asc' }], inactiveChildStatuses: ['CANCELLED', 'WAIVED'], extraSelect: { type: true, status: true }, labels: (r) => [typeWords(r.type)], display: (r) => `${typeWords(r.type)} milestone`, listUnnamedUpTo: 1 },
+  // Sale-readiness items of the property's sale case. Title selects a row and is never returned; detail, cost/value-add ranges, waiver reason, ids are never selected. RESOLVED/WAIVED items answer their
+  // status plainly; a due date is a recorded past value.
+  SaleReadinessItem: { mode: 'RELATION_CHILD', delegate: 'saleReadinessItem', orderBy: [{ dueAt: 'asc' }], inactiveChildStatuses: ['RESOLVED', 'WAIVED'], extraSelect: { title: true, status: true }, labels: (r) => [r.title], display: () => 'sale-readiness item', listUnnamedUpTo: 1 },
   PropertyRecord: { delegate: 'propertyRecord', extraSelect: { title: true }, roleWhere: (role) => ({ lifecycleStatus: 'ACTIVE', trashedAt: null, ...visibleRecordWhere(role as HouseholdRole) }), labels: (r) => [r.title], display: (r) => String(r.title), listUnnamedUpTo: 0 },
   PropertyTaxBillRecord: { mode: 'LATEST_TAX_YEAR', delegate: 'propertyTaxBillRecord', where: { status: 'ACTIVE', supersededById: null }, orderBy: [{ taxYear: 'desc' }, { observedAt: 'desc' }], extraSelect: { taxYear: true, sourceType: true, confidence: true }, labels: () => [], display: (r) => `${r.taxYear} property tax bill`, listUnnamedUpTo: 0, limitation: taxLimitation },
   // Sale prep, sale case and buyer journey are one row per property (propertyId @unique): singleton reads. A buyer journey that is not ACTIVE says so, so a stale stage is not stated plainly.
@@ -93,7 +96,7 @@ export async function readDataPoint(propertyId: string, role: string, point: Dat
     // Parent first: the property-scoped parent is found by propertyId; children are read ONLY through it. A child id is never trusted.
     const parents: any[] = await (prisma as any)[path.parentDelegate].findMany({ where: { propertyId }, select: { id: true, status: true }, take: DATA_POINT_RELATION_PARENT_CAP });
     if (!parents.length) return { point, status: 'ITEM_NOT_FOUND', rows: [] };
-    const journeyStatus = new Map(parents.map((p) => [String(p.id), String(p.status ?? 'ACTIVE')]));
+    const journeyStatus = new Map(parents.map((p) => [String(p.id), String(p.status ?? path.normalStatuses[0])]));
     const children: any[] = await (prisma as any)[spec.delegate].findMany({ where: { [path.key]: { in: parents.map((p) => String(p.id)) }, ...(spec.where ?? {}) }, select: { ...select, [path.key]: true }, ...(spec.orderBy ? { orderBy: spec.orderBy } : {}), take: DATA_POINT_RELATION_CHILD_CAP });
     if (!children.length) return { point, status: 'ITEM_NOT_FOUND', rows: [] };
     const hit = new Set<string>();
@@ -102,15 +105,15 @@ export async function readDataPoint(propertyId: string, role: string, point: Dat
     // Most specific title wins: "inspection follow up" names the longer task, not also the shorter "inspection". Equal specificity stays ambiguous.
     if (chosen.length > 1) { const specificity = (r: any) => Math.max(...spec.labels(r).map((l: string) => tokens(l).length)); const top = Math.max(...chosen.map(specificity)); chosen = chosen.filter((r) => specificity(r) === top); }
     // A single unnamed row is a safe default only while its journey is ACTIVE or PAUSED; for a cancelled, handed-off or archived journey the row must be named explicitly (historical read).
-    const journeyOf = (r: any) => journeyStatus.get(String(r[path.key])) ?? 'ACTIVE';
-    if (!chosen.length && children.length === 1 && ['ACTIVE', 'PAUSED'].includes(journeyOf(children[0]))) chosen = children;
+    const journeyOf = (r: any) => journeyStatus.get(String(r[path.key])) ?? path.normalStatuses[0];
+    if (!chosen.length && children.length === 1 && [...path.normalStatuses, ...path.pausedStatuses].includes(journeyOf(children[0]))) chosen = children;
     if (!chosen.length) return { point, status: 'AMBIGUOUS', candidateCount: children.length, rows: [] };
     if (chosen.length > 1) return { point, status: 'AMBIGUOUS', candidateCount: chosen.length, rows: [] };
     const row = chosen[0]; const value = row[point.field] ?? null;
     // Lifecycle limitations (owner rules 2026-11-12). Journey: paused says so; any other non-active state is a historical read. Child: a cancelled / not-needed row answers its STATUS plainly, but a date or
     // priority is carried only as a recorded past value, never as an active obligation. The limitation is part of the result, so replay of the stored answer keeps it.
     const js = journeyOf(row); const jw = js.toLowerCase().replace(/_/g, ' ');
-    const journeyLimit = js === 'ACTIVE' ? null : js === 'PAUSED' ? 'This buyer journey is paused.' : `This buyer journey is ${jw}, so this value may no longer represent an active obligation.`;
+    const journeyLimit = path.normalStatuses.includes(js) ? null : path.pausedStatuses.includes(js) ? `This ${path.parentNoun} is ${jw}.` : `This ${path.parentNoun} is ${jw}, so this value may no longer represent an active obligation.`;
     const childStatus = String(row.status ?? ''); const inactive = point.field !== 'status' && (spec.inactiveChildStatuses ?? []).includes(childStatus);
     const childLimit = inactive ? `This ${spec.display(row)} is ${childStatus.toLowerCase().replace(/_/g, ' ')}, so this is a recorded past value, not an active obligation.` : null;
     return { point, status: isPresent(value) ? 'FOUND' : 'NOT_RECORDED', rows: [{ id: String(row.id), name: spec.display(row), value, roomName: null, limitation: [journeyLimit, childLimit].filter(Boolean).join(' ') || null, historicalStatus: inactive ? childStatus.toLowerCase().replace(/_/g, ' ') : null }] };

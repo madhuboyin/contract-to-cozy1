@@ -20,6 +20,7 @@ const ENTITY_COPY: Record<string, { plural: string; singular: string; collection
   PropertySaleCase: { plural: 'sale plans', singular: 'sale plan', collection: 'sale plan', record: 'Sale plan record', none: 'No sale plan is started for this home yet' },
   HomeBuyerChecklist: { plural: 'buyer journeys', singular: 'buyer journey', collection: 'buyer journey', record: 'Buyer journey record', none: 'No buyer journey is started for this home yet' },
   BuyerJourneyMilestone: { plural: 'buyer milestones', singular: 'buyer milestone', collection: 'buyer milestones', record: 'Buyer journey milestone', none: 'No buyer milestone is recorded yet' },
+  SaleReadinessItem: { plural: 'sale-readiness items', singular: 'sale-readiness item', collection: 'sale-readiness items', record: 'Sale-readiness item', none: 'No sale-readiness item is recorded yet' },
   HomeBuyerTask: { plural: 'buyer tasks', singular: 'buyer task', collection: 'buyer tasks', record: 'Buyer plan task', none: 'No buyer task is recorded yet' },
   PropertyRecord: { plural: 'home records', singular: 'home record', collection: 'home records', record: 'Home record' },
   PropertyTaxBillRecord: { plural: 'property tax bills', singular: 'property tax bill', collection: 'property tax bills', record: 'Property tax bill record', none: 'No property tax bill is recorded yet' },

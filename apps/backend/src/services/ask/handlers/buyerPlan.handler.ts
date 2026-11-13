@@ -1281,7 +1281,7 @@ async function buyerFindingDispositionResult(userId: string, propertyId: string,
   }
   const findings = await prisma.inspectionFinding.findMany({
     where: { propertyId, status: { in: ['OPEN', 'ACCEPTED_AS_IS'] }, report: { status: 'CONFIRMED' } },
-    select: { id: true, homeSystem: true, subsystem: true, inspectorDescription: true, severity: true, buyerDisposition: true, buyerDispositionAt: true },
+    select: { id: true, homeSystem: true, subsystem: true, severity: true, buyerDisposition: true, buyerDispositionAt: true, ...(access.role === HouseholdRole.OWNER ? { inspectorDescription: true } : {}) },
   });
   if (!findings.length) {
     return {
@@ -1300,7 +1300,7 @@ async function buyerFindingDispositionResult(userId: string, propertyId: string,
         type: 'GROUPED_LIST', filters: [], id: 'buyer-finding-disposition-select', title: matched ? `How should ${matched.title} be classified?` : 'Choose the finding to classify',
         description: matched ? 'Say negotiation, post-close, verified fact, or dismissed.' : 'Name the finding and the decision: negotiation, post-close, verified fact, or dismissed.',
         sections: [{ id: 'findings', title: 'Open findings', count: findings.length, items: findings.slice(0, 20).map((finding) => ({
-          id: finding.id, title: [finding.homeSystem, finding.subsystem].filter(Boolean).join(' '), description: finding.inspectorDescription?.slice(0, 140) ?? null,
+          id: finding.id, title: [finding.homeSystem, finding.subsystem].filter(Boolean).join(' '), description: access.role === HouseholdRole.OWNER ? ((finding as { inspectorDescription?: string | null }).inspectorDescription?.slice(0, 140) ?? null) : null,
           meta: [finding.severity], status: finding.buyerDisposition, href: null,
         })) }], actions: [],
       }],
