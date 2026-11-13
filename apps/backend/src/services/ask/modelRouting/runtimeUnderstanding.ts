@@ -1,0 +1,41 @@
+import type { AskOperationId } from '../askOperationRegistry';
+import type { ComposedClause, DeferredClause } from '../composition/decompose';
+import { guardedPlan, type UnderstandingProvider } from './understandingProvider';
+import { isUnderstandingStratumCertified } from './calibration';
+
+export interface RuntimeUnderstandingControls {
+  enabled: boolean;
+  providerTermsRecorded: boolean;
+  homeownerTextApproved: boolean;
+}
+export type RuntimeUnderstandingOutcome =
+  | { kind: 'DISABLED'; reason: 'FEATURE_OFF' | 'PROVIDER_TERMS_NOT_RECORDED' | 'HOMEOWNER_TEXT_NOT_APPROVED' | 'STRATUM_NOT_CERTIFIED' }
+  | { kind: 'UNAVAILABLE'; reason: string }
+  | { kind: 'PLAN'; clauses: ComposedClause[]; deferred: DeferredClause[] };
+
+/** Runtime bridge. Only independently executable operation facets are admitted today; dependency-aware merge remains fail-closed. */
+export async function planRuntimeUnderstanding(input: {
+  message: string;
+  eligibleOperationIds: ReadonlySet<AskOperationId>;
+  controls: RuntimeUnderstandingControls;
+  provider: UnderstandingProvider;
+}): Promise<RuntimeUnderstandingOutcome> {
+  if (!input.controls.enabled) return { kind: 'DISABLED', reason: 'FEATURE_OFF' };
+  if (!input.controls.providerTermsRecorded) return { kind: 'DISABLED', reason: 'PROVIDER_TERMS_NOT_RECORDED' };
+  if (!input.controls.homeownerTextApproved) return { kind: 'DISABLED', reason: 'HOMEOWNER_TEXT_NOT_APPROVED' };
+  if (!isUnderstandingStratumCertified('SINGLE_STAGE_READ_PLAN')) return { kind: 'DISABLED', reason: 'STRATUM_NOT_CERTIFIED' };
+  const outcome = await guardedPlan({
+    message: input.message, provider: input.provider, providerTermsRecorded: true,
+    planContext: { eligibleOperationIds: input.eligibleOperationIds },
+  });
+  if (outcome.kind !== 'PLANNED') return { kind: 'UNAVAILABLE', reason: outcome.reason };
+  const accepted = outcome.validation.accepted;
+  const clauses: ComposedClause[] = accepted
+    .filter((facet) => facet.target.kind === 'OPERATION' && facet.dependsOn.length === 0)
+    .map((facet) => ({ clause: facet.span, operationId: facet.target.kind === 'OPERATION' ? facet.target.operationId : 'DATA_POINT_READ', confidence: facet.confidence }));
+  const deferred: DeferredClause[] = [
+    ...accepted.filter((facet) => facet.target.kind === 'DATA_POINT' || facet.dependsOn.length > 0).map((facet) => ({ clause: facet.span, reason: 'NOT_COMPOSABLE' as const, operationId: facet.target.kind === 'OPERATION' ? facet.target.operationId : 'DATA_POINT_READ' as AskOperationId })),
+    ...outcome.validation.dropped.map((facet) => ({ clause: facet.span, reason: facet.reason === 'OVER_LIMIT' ? 'OVER_LIMIT' as const : 'NOT_ROUTED' as const, operationId: null })),
+  ];
+  return clauses.length >= 2 ? { kind: 'PLAN', clauses, deferred } : { kind: 'UNAVAILABLE', reason: 'NO_EXECUTABLE_MULTI_FACET_PLAN' };
+}

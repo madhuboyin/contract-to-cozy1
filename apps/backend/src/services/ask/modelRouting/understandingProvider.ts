@@ -6,6 +6,10 @@
 //      deterministic validation (requestPlan.ts) before anything runs.
 import { minimizePrompt, type KnownName } from '../privacy/promptMinimizer';
 import { validateRequestPlan, type PlanValidation, type PlanContext } from './requestPlan';
+import { ASK_OPERATION_DEFINITIONS } from '../askOperationRegistry';
+import { DATA_POINT_DEFINITIONS } from '../dataPoint/dataPointCatalogue';
+import { isWriteCapableOperation } from '../support/writeCapability';
+import { geminiService } from '../../gemini.service';
 
 export const MODEL_CALL_BUDGET = Object.freeze({ maxTotalCalls: 4, maxTargetCalls: 3, perCallTimeoutMs: 1500, totalBudgetMs: 4000 });
 
@@ -50,4 +54,26 @@ export class ScriptedProvider implements UnderstandingProvider {
   readonly received: string[] = [];
   constructor(private readonly script: (text: string) => unknown | Promise<unknown>) {}
   async plan(input: { text: string; signal: AbortSignal }): Promise<unknown> { this.received.push(input.text); return this.script(input.text); }
+}
+
+/** Real provider adapter. It exposes only reviewed ids and descriptions; no home record values are included. */
+export class GeminiUnderstandingProvider implements UnderstandingProvider {
+  readonly name = 'gemini-structured-understanding';
+  async plan(input: { text: string; signal: AbortSignal }): Promise<unknown> {
+    const operations = Object.values(ASK_OPERATION_DEFINITIONS)
+      .filter((definition) => definition.messageRoutable && definition.composableRead && !isWriteCapableOperation(definition.operationId))
+      .map((definition) => ({ id: definition.operationId, description: definition.semantic.intentDescription }));
+    const dataPoints = DATA_POINT_DEFINITIONS.map((point) => ({ id: point.id, description: point.label, domain: point.domain }));
+    const raw = await geminiService.planAskUnderstanding({ text: input.text, operations, dataPoints, signal: input.signal });
+    if (!raw || typeof raw !== 'object' || !Array.isArray((raw as { facets?: unknown }).facets)) return raw;
+    return { facets: (raw as { facets: Array<Record<string, unknown>> }).facets.map((facet) => ({
+      span: facet.span,
+      target: facet.kind === 'DATA_POINT'
+        ? { kind: 'DATA_POINT', dataPointId: facet.dataPointId }
+        : { kind: 'OPERATION', operationId: facet.operationId },
+      entity: facet.entity ?? null,
+      dependsOn: facet.dependsOn ?? [],
+      confidence: facet.confidence,
+    })) };
+  }
 }

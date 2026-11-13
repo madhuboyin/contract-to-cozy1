@@ -28,6 +28,10 @@ export interface AskOperationalControls {
   resultSynthesisEnabled: boolean;
   /** A model chooses between registered read-only operations for messages the local router could not place. Default off: a new, unmeasured model call. */
   modelRouterEnabled: boolean;
+  /** Reliability FRD Phase 3 planner. Requires separate provider-terms, homeowner-text and calibrated-stratum gates. */
+  understandingPlannerEnabled: boolean;
+  understandingProviderTermsRecorded: boolean;
+  understandingHomeownerTextApproved: boolean;
   askConversationalCaptureEnabled: boolean;
   askGoalCaptureEnabled: boolean;
   askProactiveContinuationEnabled: boolean;
@@ -64,6 +68,10 @@ export function readAskOperationalControls(env: NodeJS.ProcessEnv = process.env)
       && !booleanEnv(env.ASK_SEMANTIC_RESPONSE_VALIDATOR_KILL_SWITCH, false),
     modelRouterEnabled: booleanEnv(env.ASK_MODEL_ROUTER_ENABLED, false)
       && !booleanEnv(env.ASK_MODEL_ROUTER_KILL_SWITCH, false),
+    understandingPlannerEnabled: booleanEnv(env.ASK_UNDERSTANDING_PLANNER_ENABLED, false)
+      && !booleanEnv(env.ASK_UNDERSTANDING_PLANNER_KILL_SWITCH, false),
+    understandingProviderTermsRecorded: booleanEnv(env.ASK_UNDERSTANDING_PROVIDER_TERMS_RECORDED, false),
+    understandingHomeownerTextApproved: booleanEnv(env.ASK_UNDERSTANDING_HOMEOWNER_TEXT_APPROVED, false),
     resultSynthesisEnabled: booleanEnv(env.ASK_RESULT_SYNTHESIS_ENABLED, false)
       && !booleanEnv(env.ASK_RESULT_SYNTHESIS_KILL_SWITCH, false),
     // Ask Cozy Stage 3, Phase 3 (implementation plan §22). Defaults off,

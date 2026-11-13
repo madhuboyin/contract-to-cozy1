@@ -40,6 +40,8 @@ import { recordSuggestedActionCompleted, recordSuggestedActionSelected } from '.
 import { recordSuggestedActionOutcomeAnalytics, recordSuggestedActionSelectedAnalytics } from '../suggestedActions/suggestedActionAnalytics';
 import { decomposeForComposition } from '../composition/decompose';
 import { recoverComposedTurn, runComposedTurn } from '../composition/runComposedTurn';
+import { GeminiUnderstandingProvider } from '../modelRouting/understandingProvider';
+import { planRuntimeUnderstanding } from '../modelRouting/runtimeUnderstanding';
 import { buildAuthorizationView } from '../composition/authorizationView';
 import { resolveSlotFollowUp } from '../composition/slotContext';
 import { extractSlots, sanitizeSlots } from '../composition/slots';
@@ -281,17 +283,42 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
   let declinedComposition: { reason: string; clauseCount: number } | null = null;
   if (!internal.composition && executionPropertyId && !input.launchContext?.operationId && !input.suggestedActionSelection) {
     const decomposition = decomposeForComposition(input.message, { eligibleOperationIds: new Set(eligibleOperationIds) });
-    if (decomposition.kind === 'NOT_COMPOSED') {
+    const plannerRoutingDecision = resolveAskRoutingCascade(input.message);
+    const plannerMayRun = plannerRoutingDecision.stage === 'REMOTE_FALLBACK' || plannerRoutingDecision.stage === 'CLARIFICATION';
+    const modelPlan = !plannerMayRun || decomposition.kind === 'COMPOSE' || decomposition.kind === 'SINGLE' && decomposition.reason === 'FULL_MESSAGE_GATE'
+      ? null
+      : await planRuntimeUnderstanding({
+        message: input.message,
+        eligibleOperationIds: new Set(eligibleOperationIds),
+        controls: {
+          enabled: controls.understandingPlannerEnabled && controls.remoteGenerationEnabled,
+          providerTermsRecorded: controls.understandingProviderTermsRecorded,
+          homeownerTextApproved: controls.understandingHomeownerTextApproved,
+        },
+        provider: new GeminiUnderstandingProvider(),
+      });
+    if (modelPlan?.kind === 'UNAVAILABLE' || modelPlan?.kind === 'DISABLED' && modelPlan.reason !== 'FEATURE_OFF') {
+      await prisma.askExecutionEvent.create({ data: {
+        executionId: execution.id,
+        eventType: 'UNDERSTANDING_PLAN_NOT_USED',
+        // Governance reason only: never persist the prompt or provider payload (D3b).
+        metadataJson: asInputJson({ reason: modelPlan.reason }),
+      } });
+    }
+    const admittedModelPlan = modelPlan?.kind === 'PLAN' ? modelPlan : null;
+    if (decomposition.kind === 'NOT_COMPOSED' && !admittedModelPlan) {
       declinedComposition = { reason: decomposition.reason, clauseCount: decomposition.clauseCount };
       askCompositionTotal.inc({ outcome: `declined_${decomposition.reason.toLowerCase()}` });
       await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'COMPOSITION_DECLINED', metadataJson: asInputJson({ reason: decomposition.reason, clauses: decomposition.clauseCount }) } });
-    } else if (decomposition.kind === 'COMPOSE') {
+    } else if (decomposition.kind === 'COMPOSE' || admittedModelPlan) {
       const composedPropertyId = executionPropertyId;
+      const composedClauses = decomposition.kind === 'COMPOSE' ? decomposition.clauses : admittedModelPlan!.clauses;
+      const composedDeferred = decomposition.kind === 'COMPOSE' ? decomposition.deferred : admittedModelPlan!.deferred;
       let composed: Awaited<ReturnType<typeof runComposedTurn>> | null = null;
       try {
       composed = await runComposedTurn({
         db: prisma as never, userId, accountRole, parent: execution, message: input.message, sessionId: session.id, propertyId: composedPropertyId,
-        clauses: decomposition.clauses, deferred: decomposition.deferred, createChild: createAskExecution, executionTimeoutMs: controls.executionTimeoutMs,
+        clauses: composedClauses, deferred: composedDeferred, createChild: createAskExecution, executionTimeoutMs: controls.executionTimeoutMs,
         loadAuthorizationView: () => buildAuthorizationView(userId, composedPropertyId, controls),
         finalizeResult: (result) => finalizeSuggestedNextActions({
           result, executionId: execution.id, userId, sessionId: session.id, propertyId: composedPropertyId,

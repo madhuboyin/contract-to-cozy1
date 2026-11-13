@@ -3,7 +3,9 @@ const test = require('node:test'); const assert = require('node:assert/strict');
 require('ts-node/register/transpile-only');
 const { routingSuccessProbability, expectedHonor, endToEndHonorRate, AVAILABILITY_SCENARIOS } = require('../../src/services/ask/modelRouting/availabilityModel.ts');
 const { validateRequestPlan, facetId } = require('../../src/services/ask/modelRouting/requestPlan.ts');
-const { guardedPlan, ScriptedProvider, MODEL_CALL_BUDGET } = require('../../src/services/ask/modelRouting/understandingProvider.ts');
+const { guardedPlan, ScriptedProvider, GeminiUnderstandingProvider, MODEL_CALL_BUDGET } = require('../../src/services/ask/modelRouting/understandingProvider.ts');
+const { planRuntimeUnderstanding } = require('../../src/services/ask/modelRouting/runtimeUnderstanding.ts');
+const { geminiService } = require('../../src/services/gemini.service.ts');
 
 const close = (a, b, eps = 1e-9) => assert.ok(Math.abs(a - b) < eps, `${a} vs ${b}`);
 const MSG = 'How old is my water heater, is it under warranty, what would a replacement cost, and should I repair or replace it?';
@@ -92,4 +94,30 @@ test('guard: a timeout, an error and a malformed plan are UNAVAILABLE outcomes, 
   assert.equal(boom.reason, 'PROVIDER_ERROR');
   const bad = await guardedPlan({ message: 'how old is my roof', provider: new ScriptedProvider(() => ({ nope: 1 })), providerTermsRecorded: true, planContext: ctx });
   assert.equal(bad.reason, 'SCHEMA_FAILURE');
+});
+
+test('real Gemini adapter sends only reviewed catalogue metadata and normalizes provider facets into the validated plan schema', async (t) => {
+  const original = geminiService.planAskUnderstanding;
+  let captured;
+  geminiService.planAskUnderstanding = async (input) => {
+    captured = input;
+    return { facets: [{ span: 'how old is my water heater', kind: 'OPERATION', operationId: 'INVENTORY_LOOKUP', entity: 'water heater', dependsOn: [], confidence: 0.91 }] };
+  };
+  t.after(() => { geminiService.planAskUnderstanding = original; });
+  const provider = new GeminiUnderstandingProvider();
+  const raw = await provider.plan({ text: 'how old is my water heater', signal: new AbortController().signal });
+  assert.equal(captured.text, 'how old is my water heater');
+  assert.ok(captured.operations.some((entry) => entry.id === 'INVENTORY_LOOKUP'));
+  assert.ok(captured.dataPoints.some((entry) => entry.id === 'item.installedOn'));
+  assert.deepEqual(raw.facets[0].target, { kind: 'OPERATION', operationId: 'INVENTORY_LOOKUP' });
+});
+
+test('runtime bridge cannot call a provider without every policy gate and a certified calibration stratum', async () => {
+  const provider = new ScriptedProvider(() => { throw new Error('must not be called'); });
+  const common = { message: MSG, eligibleOperationIds: new Set(['INVENTORY_LOOKUP']), provider };
+  assert.equal((await planRuntimeUnderstanding({ ...common, controls: { enabled: false, providerTermsRecorded: false, homeownerTextApproved: false } })).reason, 'FEATURE_OFF');
+  assert.equal((await planRuntimeUnderstanding({ ...common, controls: { enabled: true, providerTermsRecorded: false, homeownerTextApproved: true } })).reason, 'PROVIDER_TERMS_NOT_RECORDED');
+  assert.equal((await planRuntimeUnderstanding({ ...common, controls: { enabled: true, providerTermsRecorded: true, homeownerTextApproved: false } })).reason, 'HOMEOWNER_TEXT_NOT_APPROVED');
+  assert.equal((await planRuntimeUnderstanding({ ...common, controls: { enabled: true, providerTermsRecorded: true, homeownerTextApproved: true } })).reason, 'STRATUM_NOT_CERTIFIED');
+  assert.equal(provider.received.length, 0);
 });
