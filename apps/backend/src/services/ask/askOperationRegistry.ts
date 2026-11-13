@@ -1,4 +1,4 @@
-import { isReserveFactQuestion, isDataPointDetailQuestion, isDataPointOnlyQuestion, isSaleProfileQuestion, resolveDataPoint } from './dataPoint/dataPointCatalogue';
+import { resolveDataPointsMulti, isReserveFactQuestion, isDataPointDetailQuestion, isDataPointOnlyQuestion, isSaleProfileQuestion, resolveDataPoint } from './dataPoint/dataPointCatalogue';
 import { isDataPointComputedQuery, isDataPointQuery } from './dataPoint/dataPointQueryPlan';
 import { isWriteCapableOperation } from './support/writeCapability';
 import { isItemCostMessage, isItemFundingGoalMessage, isItemReserveAllocationMessage } from './support/itemFundingWording';
@@ -2076,7 +2076,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   // Understanding reliability FRD D12 (Phase 1b): a question about ONE recorded detail of a named item ("what did I pay for my dryer", "when was my furnace installed").
   // Last before the fallback so every more specific route above wins; the handler resolves the detail from the reviewed catalogue and the item from the home inventory.
-  if ((dataPointQuestionPattern.test(message) && resolveDataPoint(message)) || isDataPointQuery(message)) {
+  if ((dataPointQuestionPattern.test(message) && (resolveDataPoint(message) || resolveDataPointsMulti(message).length >= 2)) || isDataPointQuery(message)) {
     return resolved('DATA_POINT_READ', 0.9);
   }
   return resolved('GROUNDED_GUIDANCE', 0.55);

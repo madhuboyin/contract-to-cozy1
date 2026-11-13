@@ -7,7 +7,7 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { humanDate, money } from '../askFormatting';
 import { ensurePropertyAccess } from '../askHandlerSupport';
-import { ALTERNATE_POINT, audienceFloorCopy, DATA_POINT_BY_ID, resolveDataPoint, roleMayRead, type DataPointDefinition } from '../dataPoint/dataPointCatalogue';
+import { ALTERNATE_POINT, audienceFloorCopy, DATA_POINT_BY_ID, resolveDataPoint, resolveDataPointsMulti, roleMayRead, type DataPointDefinition } from '../dataPoint/dataPointCatalogue';
 import { namedTaxYears, readDataPoint } from '../dataPoint/dataPointReader';
 import { planDataPointQuery, pointOf, type QueryPlan } from '../dataPoint/dataPointQueryPlan';
 import { prisma } from '../../../lib/prisma';
@@ -122,15 +122,37 @@ async function dataPointQueryResult(propertyId: string, role: string, plan: Quer
   };
 }
 
-export async function dataPointReadResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+/** One summary for a multi-part question: each facet's own answer (value, limitation or notice) in order, with the union of their sources, so no facet is silently dropped. */
+function mergeFacetResults(results: AskOperationResult[]): AskOperationResult {
+  const summaries = results.map((r) => r.blocks.find((b) => (b as { type: string }).type === 'SUMMARY') as { title?: string; body?: string } | undefined);
+  const evidence = results.flatMap((r) => ((r.blocks.find((b) => (b as { type: string }).type === 'EVIDENCE') as { items?: unknown[] } | undefined)?.items ?? []));
+  const sources = results.flatMap((r) => ((r.parameters as { sources?: Array<Record<string, unknown>> } | undefined)?.sources ?? []));
+  const seen = new Set<string>(); const uniqueSources = sources.filter((x) => { const k = JSON.stringify(x); if (seen.has(k)) return false; seen.add(k); return true; });
+  const allAnswered = results.every((r) => r.status === 'ANSWERED');
+  return {
+    status: allAnswered ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: results.find((r) => r.reasonCode)?.reasonCode, parameters: { sources: uniqueSources },
+    blocks: [
+      { type: 'SUMMARY', id: 'data-point-summary', title: summaries.map((x) => x?.title ?? '').filter(Boolean).join(' · '), body: summaries.map((x) => x?.body ?? '').filter(Boolean).join(' '), tone: allAnswered ? 'DEFAULT' : 'CAUTION', actions: [] },
+      { type: 'EVIDENCE', id: 'data-point-evidence', title: 'Where this comes from', items: evidence },
+    ] as AskPresentationBlock[],
+    suggestions: [],
+  };
+}
+
+export async function dataPointReadResult(userId: string, propertyId: string, message: string, forcedPoint?: DataPointDefinition): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const role = String(access.role);
   // The planner is pure: the property's timezone is read here and passed in, so calendar periods (this month, next week) use the property's calendar, not UTC.
   const timeZone = await propertyTimeZone(propertyId);
-  const queryOutcome = planDataPointQuery(message, new Date(), timeZone);
+  const queryOutcome = forcedPoint ? ({ kind: 'NONE' } as const) : planDataPointQuery(message, new Date(), timeZone);
+  // A multi-part question ("what is my deductible and when does my insurance policy expire") has several facets: each is read through the ordinary single-point path and all are answered in one summary.
+  if (!forcedPoint && queryOutcome.kind === 'NONE') {
+    const facets = resolveDataPointsMulti(message);
+    if (facets.length >= 2) return mergeFacetResults(await Promise.all(facets.map((facet) => dataPointReadResult(userId, propertyId, message, facet))));
+  }
   if (queryOutcome.kind === 'CLARIFY') return notice(queryOutcome.reasonCode, 'data-point-query-clarify', queryOutcome.title, queryOutcome.body);
   if (queryOutcome.kind === 'PLAN') return dataPointQueryResult(propertyId, role, queryOutcome.plan);
-  const point = resolveDataPoint(message);
+  const point = forcedPoint ?? resolveDataPoint(message);
   if (!point) return notice('DATA_POINT_NOT_IDENTIFIED', 'data-point-unidentified', 'Which detail do you mean?', 'Tell me the detail and the item, for example “the serial number of my refrigerator” or “when my furnace was installed”.');
   if (!roleMayRead(role, point)) {
     const copy = audienceFloorCopy(point.audience);

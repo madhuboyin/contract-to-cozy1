@@ -326,14 +326,21 @@ export const FUTURE_OWNER_ONLY_PRESUMPTIONS: readonly string[] = Object.freeze([
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** The data point a message asks about, or null when none or more than one distinct point matches (never guess between two). Longest alias wins; ties across points = null. */
-export function resolveDataPoint(message: string): DataPointDefinition | null {
-  const text = ` ${message.toLowerCase().replace(/[^a-z0-9$' ]+/g, ' ').replace(/\s+/g, ' ')} `;
+const normalizeText = (message: string) => ` ${message.toLowerCase().replace(/[^a-z0-9$' ]+/g, ' ').replace(/\s+/g, ' ')} `;
+export function resolveDataPoint(message: string): DataPointDefinition | null { return resolveDataPointIn(message, message); }
+
+/**
+ * The data point a CLAUSE asks about, where the aliases must be in the clause but the entity cue may come from the whole message ("what is my deductible and when does my policy expire": the second
+ * clause names no cue of its own). Same scoring, ties and exclusions as resolveDataPoint.
+ */
+export function resolveDataPointIn(aliasSource: string, cueSource: string): DataPointDefinition | null {
+  const text = normalizeText(aliasSource); const cueText = normalizeText(cueSource);
   let best: { point: DataPointDefinition; length: number } | null = null; let tied = false;
   for (const point of DATA_POINT_DEFINITIONS) for (const alias of point.aliases) {
     // Points of a non-inventory entity need that entity's cue word in the message; the cue also breaks ties against inventory points.
     let cueLength = 0;
-    if (point.unlessCues?.some((w) => new RegExp(`\\b${escapeRe(w)}\\b`).test(text))) continue;
-    if (point.cues) { const hit = point.cues.filter((cue) => new RegExp(`\\b${escapeRe(cue)}\\b`).test(text)); if (!hit.length) continue; cueLength = Math.max(...hit.map((c) => c.length)); }
+    if (point.unlessCues?.some((w) => new RegExp(`\\b${escapeRe(w)}\\b`).test(cueText))) continue;
+    if (point.cues) { const hit = point.cues.filter((cue) => new RegExp(`\\b${escapeRe(cue)}\\b`).test(cueText)); if (!hit.length) continue; cueLength = Math.max(...hit.map((c) => c.length)); }
     if (!new RegExp(`\\b${escapeRe(alias)}\\b`).test(text)) continue;
     // A child entity's cue ("claim checklist step") contains its parent's ("claim"), so its points also score by how specific the matched cue is; this does not change any other entity's scoring.
     const weight = alias.length + (point.cues ? 100 : 0) + (point.compoundCue ? 200 : 0) + (point.specificCue ? cueLength : 0);
@@ -342,13 +349,26 @@ export function resolveDataPoint(message: string): DataPointDefinition | null {
   }
   if (!best) {
     // No alias matched anywhere: a cue-only question falls to the one point that declares itself the default for its cue ("What is my property tax bill?").
-    const defaults = DATA_POINT_DEFINITIONS.filter((p) => p.defaultWhenCueOnly && p.cues?.some((cue) => new RegExp(`\\b${escapeRe(cue)}\\b`).test(text)) && !p.unlessCues?.some((w) => new RegExp(`\\b${escapeRe(w)}\\b`).test(text)));
+    const defaults = DATA_POINT_DEFINITIONS.filter((p) => p.defaultWhenCueOnly && p.cues?.some((cue) => new RegExp(`\\b${escapeRe(cue)}\\b`).test(cueText)) && !p.unlessCues?.some((w) => new RegExp(`\\b${escapeRe(w)}\\b`).test(cueText)));
     return defaults.length === 1 ? defaults[0] : null;
   }
   if (tied) return null;
   // A message that mixes the buyer words with the maintenance word ("buyer maintenance task") is resolved to nothing, deterministically, so the caller asks which; it is never decided by registration order.
-  if ((best.point.entity === 'PropertyMaintenanceTask' || best.point.entity === 'HomeBuyerTask') && /\b(?:buyer|buying|closing)\b/.test(text) && /\bmaintenance\b/.test(text)) return null;
+  if ((best.point.entity === 'PropertyMaintenanceTask' || best.point.entity === 'HomeBuyerTask') && /\b(?:buyer|buying|closing)\b/.test(cueText) && /\bmaintenance\b/.test(cueText)) return null;
   return best.point;
+}
+
+
+/**
+ * Every DISTINCT data point a multi-part question asks about ("what is my deductible and when does my insurance policy expire"): the message is split into clauses, each clause is resolved with the whole
+ * message as its cue context, and two or more distinct points means the question has several facets. Returns [] for a single-facet question (the ordinary resolveDataPoint applies).
+ */
+export function resolveDataPointsMulti(message: string): DataPointDefinition[] {
+  const clauses = message.split(/\s*(?:\band\b|\bplus\b|\balso\b|,|;|\?+)\s*/i).map((c) => c.trim()).filter((c) => c.split(/\s+/).length >= 2);
+  if (clauses.length < 2 || clauses.length > 6) return [];
+  const found = new Map<string, DataPointDefinition>();
+  for (const clause of clauses) { const point = resolveDataPointIn(clause, message); if (point) found.set(point.id, point); }
+  return found.size >= 2 ? [...found.values()] : [];
 }
 
 /** Two points that answer the same plain question for a buyer and for a seller ("when is my closing date"): when the home has no record of the first kind the other is read, so a closing-date question is not left unanswered. */

@@ -795,3 +795,13 @@ test('closing date: a buyer-leaning question reads the sale case when the home h
   prisma.homeBuyerChecklist = { findMany: async () => [] };
   assert.equal((await dataPointReadResult('u1', 'p1', 'When is my closing date?')).reasonCode, 'DATA_POINT_NO_INVENTORY', 'neither record exists: the usual notice');
 });
+
+test('multi-facet question: each facet is answered in one summary, none silently dropped', async () => {
+  const { resolveDataPointsMulti } = require('../../src/services/ask/dataPoint/dataPointCatalogue.ts');
+  assert.deepEqual(resolveDataPointsMulti('what is my deductible and when does my insurance policy expire').map((p) => p.id).sort(), ['policy.deductible', 'policy.expiryDate']);
+  assert.deepEqual(resolveDataPointsMulti('what is the serial number of my fridge'), []);
+  assert.equal(resolveAskOperation('what is my closing date and when do I move in').operationId, 'DATA_POINT_READ');
+  stub([{ id: 'i1', name: 'Furnace', serialNumber: 'SN9', installedOn: new Date('2019-03-01'), room: null }]);
+  const r = await dataPointReadResult('u1', 'p1', 'what is the serial number of my furnace and when was it installed');
+  assert.equal(r.blocks[0].id, 'data-point-summary'); assert.match(r.blocks[0].body, /SN9/); assert.match(r.blocks[0].body, /2019/);
+});
