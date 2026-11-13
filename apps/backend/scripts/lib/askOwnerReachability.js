@@ -9,6 +9,12 @@ const { QUERY_TEMPLATES, planDataPointQuery } = require('../../src/services/ask/
 const SUBJECT = { InventoryItem: 'refrigerator', Warranty: 'dishwasher', InsurancePolicy: 'homeowners', PropertyMaintenanceTask: 'gutter cleaning', PropertyRecord: 'roof permit', Claim: 'basement flood' };
 const NOUN = { Warranty: 'warranty', InsurancePolicy: 'insurance policy', PropertyMaintenanceTask: 'task', PropertyRecord: 'document', InventoryItem: '' };
 
+// Points whose value a dedicated operation DOES state (checked against its handler, not assumed): a phrasing that reaches that operation is answered, though not by DATA_POINT_READ. Everything else must reach the data point.
+const OWNED_BY = {
+  'item.brand': ['INVENTORY_LOOKUP'], 'item.model': ['INVENTORY_LOOKUP'], 'item.condition': ['INVENTORY_LOOKUP'], 'item.purchasedOn': ['INVENTORY_LOOKUP'], 'item.expectedExpiryDate': ['INVENTORY_LOOKUP', 'REPLACEMENT_GUIDANCE'],
+  'item.replacementCost': ['ITEM_REPLACEMENT_COST'], // item.lastServicedOn is NOT listed: whether the item-history read states the recorded date is unverified
+
+};
 function phrasings(point) {
   const out = new Set(); const subject = SUBJECT[point.entity] ?? '';
   const cues = point.cues?.length ? [...point.cues] : [NOUN[point.entity] ?? ''];
@@ -23,17 +29,17 @@ function phrasings(point) {
 const reaches = (message, expectId) => {
   let op; try { op = resolveAskOperation(message).operationId; } catch { return false; }
   // A point read may be taken by a more specific operation that answers the same question (the catalogue points to it, FR-DATA-6): recorded separately, not counted as routed.
-  return resolveDataPoint(message)?.id === expectId ? (op === 'DATA_POINT_READ' ? 'ROUTED' : 'RESOLVES_BUT_OTHER_OPERATION') : false;
+  return resolveDataPoint(message)?.id === expectId ? (op === 'DATA_POINT_READ' ? 'ROUTED' : (OWNED_BY[expectId] ?? []).includes(op) ? 'OWNED' : 'RESOLVES_BUT_OTHER_OPERATION') : false;
 };
 
 function measure(verbose = false) {
   const byDomain = new Map(); const unreachable = [];
   for (const point of DATA_POINT_DEFINITIONS) {
-    const list = phrasings(point); let routed = 0; let resolvesOnly = 0;
-    const d = byDomain.get(point.domain) ?? { points: 0, reachable: 0, resolvesOnlyPoints: 0, phrasings: 0, routed: 0 }; byDomain.set(point.domain, d);
-    for (const m of list) { const r = reaches(m, point.id); d.phrasings += 1; if (r === 'ROUTED') { routed += 1; d.routed += 1; } else if (r === 'RESOLVES_BUT_OTHER_OPERATION') resolvesOnly += 1; }
+    const list = phrasings(point); let routed = 0; let resolvesOnly = 0; let owned = 0;
+    const d = byDomain.get(point.domain) ?? { points: 0, reachable: 0, resolvesOnlyPoints: 0, phrasings: 0, routed: 0, owned: 0 }; byDomain.set(point.domain, d);
+    for (const m of list) { const r = reaches(m, point.id); d.phrasings += 1; if (r === 'ROUTED') { routed += 1; d.routed += 1; } else if (r === 'OWNED') { owned += 1; d.owned += 1; } else if (r === 'RESOLVES_BUT_OTHER_OPERATION') resolvesOnly += 1; }
     d.points += 1;
-    if (routed > 0) d.reachable += 1; else if (resolvesOnly > 0) d.resolvesOnlyPoints += 1; else unreachable.push({ id: point.id, example: list[0] ?? null });
+    if (routed > 0 || owned > 0) d.reachable += 1; else if (resolvesOnly > 0) d.resolvesOnlyPoints += 1; else unreachable.push({ id: point.id, example: list[0] ?? null });
     if (verbose) console.log(`${routed > 0 ? 'OK ' : resolvesOnly > 0 ? 'RES' : 'NO '} ${point.id}  (${routed}/${list.length} routed)  e.g. ${list[0]}`);
   }
   // query shapes 3-6: one canonical owner question per (template, shape, declared field) that must plan to the intended shape

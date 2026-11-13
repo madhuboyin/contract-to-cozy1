@@ -6,10 +6,10 @@ const m = measure();
 test('no catalogued data point is unreachable, and every domain keeps its recorded reachable count (2026-11-13)', () => {
   assert.deepEqual(m.unreachable, [], 'every catalogued id has a phrasing that resolves to it');
   const reachable = Object.fromEntries([...m.byDomain.entries()].map(([d, v]) => [d, v.reachable]));
-  const MIN = { 'appliances-inventory': 12, buyer: 11, claims: 16, 'documents-records': 8, insurance: 7, maintenance: 7, 'reserve-ownership-costs': 14, 'seller-prep': 13, warranties: 5 };
+  const MIN = { 'appliances-inventory': 14, buyer: 11, claims: 16, 'documents-records': 8, insurance: 7, maintenance: 7, 'reserve-ownership-costs': 14, 'seller-prep': 13, warranties: 5 };
   for (const [domain, min] of Object.entries(MIN)) assert.ok((reachable[domain] ?? 0) >= min, `${domain}: ${reachable[domain]} < ${min}`);
   const resolvesOnly = [...m.byDomain.values()].reduce((s, v) => s + v.resolvesOnlyPoints, 0);
-  assert.ok(resolvesOnly <= 2, `points answered only through another operation: ${resolvesOnly}`);
+  assert.ok(resolvesOnly <= 0, `points answered only through another operation that does not state them: ${resolvesOnly}`);
 });
 test('every canonical query-shape question plans to the intended shape for the five templates', () => {
   assert.deepEqual(m.queryRows.filter((r) => !r.ok).map((r) => r.message), []);
@@ -52,4 +52,13 @@ test('warranties and reserve: single-figure questions reach the data point; anal
   assert.notEqual(route('Set my reserve contribution to $500 a month'), 'CAPITAL_RESERVE_PLAN', 'a contribution change is not the read');
   assert.notEqual(route('Set my reserve contribution to $500 a month'), 'DATA_POINT_READ');
   for (const [domain, floor] of [['warranties', 0.8], ['reserve-ownership-costs', 0.95]]) { const d = m.byDomain.get(domain); assert.ok(d.routed / d.phrasings >= floor, `${domain} phrasing honor ${d.routed}/${d.phrasings}`); }
+});
+
+// ---- appliances and inventory phrasing fixes (2026-11-13) ----
+test('inventory: details the inventory card never states go to the data point; the ones it states stay with the lookup', () => {
+  const route = (q) => resolveAskOperation(q).operationId;
+  for (const q of ['When was my refrigerator installed?', 'When did we install the furnace?', 'When did I install my water heater?', 'Who manufactured my dishwasher?', 'What is the serial number of my dryer?', 'What did I pay for my dryer?']) assert.equal(route(q), 'DATA_POINT_READ', q);
+  assert.equal(resolveDataPoint('Who manufactured my dishwasher?')?.id, 'item.manufacturer'); assert.equal(resolveDataPoint('When did we install the furnace?')?.id, 'item.installedOn');
+  for (const q of ['What brand is my washer?', 'What is the model number of my dishwasher?', 'What is the condition of my roof?', 'When was my water heater last serviced']) assert.equal(route(q), 'INVENTORY_LOOKUP', q);
+  const d = m.byDomain.get('appliances-inventory'); assert.ok((d.routed + d.owned) / d.phrasings >= 0.9, `inventory routed-or-owned ${d.routed + d.owned}/${d.phrasings}`);
 });
