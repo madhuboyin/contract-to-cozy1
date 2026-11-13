@@ -40,7 +40,7 @@ export interface DataPointReadResult {
   readonly status: 'FOUND' | 'ITEM_NOT_FOUND' | 'NO_ITEM_NAMED' | 'NOT_RECORDED' | 'AMBIGUOUS';
   /** Ambiguous relation reads: how many children matched, WITHOUT their names (a child's title is never returned as a value). */
   readonly candidateCount?: number;
-  readonly rows: ReadonlyArray<{ id: string; name: string; value: unknown; roomName: string | null; /** Provenance or confidence caveat for this record (FR-REC-2 style); the handler states it instead of giving the value plainly. */ limitation?: string | null; /** Set when the value belongs to a cancelled/not-needed child: the handler words it as a recorded past value, never as a current obligation. */ historicalStatus?: string | null }>;
+  readonly rows: ReadonlyArray<{ id: string; name: string; value: unknown; roomName: string | null; /** Replay source type when it differs from the point's entity (a version selected AS CURRENT must still be current on replay). */ sourceType?: string; /** Provenance or confidence caveat for this record (FR-REC-2 style); the handler states it instead of giving the value plainly. */ limitation?: string | null; /** Set when the value belongs to a cancelled/not-needed child: the handler words it as a recorded past value, never as a current obligation. */ historicalStatus?: string | null }>;
 }
 
 /** Per entity: the Prisma delegate, how a record is named in a question, and whether an unnamed question may list the (few) records. Each query is property-scoped. */
@@ -115,7 +115,8 @@ export async function readDataPoint(propertyId: string, role: string, point: Dat
     if (!chosen) return { point, status: 'NOT_RECORDED', rows: [{ id: String(record.id), name: String(record.title), value: null, roomName: null }] };
     const value = chosen[point.field] ?? null;
     const limitation = current && String(chosen.id) !== String(current.id) ? `This is version ${chosen.versionNumber}, which is not the current version (${current.versionNumber}).` : null;
-    return { point, status: isPresent(value) ? 'FOUND' : 'NOT_RECORDED', rows: [{ id: String(chosen.id), name: point.field === 'versionNumber' ? String(record.title) : `${record.title} version ${chosen.versionNumber}`, value, roomName: null, limitation }] };
+    // Default (unnumbered) and version-number reads select the version AS CURRENT, so replay must still find it current; an explicitly requested historical version needs only membership in the visible record.
+    return { point, status: isPresent(value) ? 'FOUND' : 'NOT_RECORDED', rows: [{ id: String(chosen.id), name: point.field === 'versionNumber' ? String(record.title) : `${record.title} version ${chosen.versionNumber}`, value, roomName: null, limitation, sourceType: wanted === null ? 'CurrentPropertyRecordVersion' : 'PropertyRecordVersion' }] };
   }
   if (spec.mode === 'RELATION_CHILD') {
     const path = RELATION_ENTITIES[point.entity];

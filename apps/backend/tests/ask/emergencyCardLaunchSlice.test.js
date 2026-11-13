@@ -77,15 +77,10 @@ test('a contributor is offered starting a claim in Ask, a viewer is offered noth
     assert.equal(JSON.stringify(result).includes('/dashboard/'), false, role);
     assert.match(result.blocks.find((block) => block.id === 'incident-claim-list').description, /live emergency troubleshooting is not available in Ask/);
   }
-  const raw = await invoke('VIEWER');
-  const viewer = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'incident-claim.continuation', operationId: 'INCIDENT_CONTINUATION', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-24T00:00:00.000Z' }] } } };
-  assert.deepEqual(viewer.blocks.find((block) => block.id === 'incident-claim-summary').actions, []);
-  const viewerList = viewer.blocks.find((block) => block.id === 'incident-claim-list');
-  assert.deepEqual(viewerList.actions, []);
-  const incidentSection = viewerList.sections.find((section) => section.id === 'active-incidents');
-  assert.deepEqual(incidentSection.items[0].actions, []);
-  const checked = validateAskAnswerTrust({ question: 'Follow up on a home emergency', operationId: 'INCIDENT_CONTINUATION', result: viewer, propertyId: 'p1' });
-  assert.deepEqual(checked.result.blocks.map((block) => block.id), viewer.blocks.map((block) => block.id));
+  // Owner audience policy 2026-11-13: the continuation lists claims, so it sits at the claim floor; a viewer gets no incident or claim rows.
+  const viewer = await invoke('VIEWER');
+  assert.equal(viewer.status, 'BLOCKED');
+  assert.equal(viewer.blocks.find((block) => block.id === 'incident-claim-list'), undefined);
 });
 
 test('an immediate-danger message still gets the emergency boundary, with no app link', async () => {

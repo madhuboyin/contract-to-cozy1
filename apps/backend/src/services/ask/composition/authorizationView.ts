@@ -31,8 +31,11 @@ export async function buildAuthorizationView(userId: string, propertyId: string,
 }
 
 /** One bounded existence check against the live table for a source type (`select: { id }` only; no record content is read). */
+/** A source type that is a constrained view of a table (not a Prisma model of its own) names the model it reads. */
+const SOURCE_TYPE_MODEL: Readonly<Partial<Record<CompositeSourceType, string>>> = { CurrentPropertyRecordVersion: 'PropertyRecordVersion' };
+export const delegateNameForSourceType = (model: CompositeSourceType): string => { const name = SOURCE_TYPE_MODEL[model] ?? model; return `${name.charAt(0).toLowerCase()}${name.slice(1)}`; };
 async function recordExists(model: CompositeSourceType, where: Record<string, unknown>): Promise<boolean> {
-  const delegate = (prisma as unknown as Record<string, { findFirst(args: { where: Record<string, unknown>; select: { id: true } }): Promise<unknown> }>)[`${model.charAt(0).toLowerCase()}${model.slice(1)}`];
+  const delegate = (prisma as unknown as Record<string, { findFirst(args: { where: Record<string, unknown>; select: { id: true } }): Promise<unknown> }>)[delegateNameForSourceType(model)];
   if (!delegate) throw new Error(`no delegate for ${model}`);
   return Boolean(await delegate.findFirst({ where, select: { id: true } }));
 }

@@ -1,7 +1,7 @@
 // DATA_POINT_READ (reliability FRD D12, Phase 1b): "what is the serial number of my fridge", "when was my furnace installed", "what did I pay for my dryer".
 // A STANDARD, read-only fact read through the one allowlisted template in dataPoint/dataPointReader.ts. No side effects; a value that is not recorded is said plainly,
 // with the authorised way to add it, and never guessed (FR-REC-2 MISSING_RECORD_DATA).
-import { sourceRef } from '../composition/sourceAuthorization';
+import { sourceRef, type CompositeSourceType } from '../composition/sourceAuthorization';
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
@@ -75,7 +75,7 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
   sentences.push(...limits);
   return {
     status: missing > 0 || limits.length ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: missing > 0 ? 'DATA_POINT_PARTIAL' : limits.length ? 'DATA_POINT_LIMITED_PROVENANCE' : undefined,
-    parameters: { sources: present.map((r) => ({ ...sourceRef(point.entity, r.id), ...(point.audience !== 'VIEWER' ? { minRole: point.audience } : {}) })) },
+    parameters: { sources: present.map((r) => ({ ...sourceRef((r.sourceType ?? point.entity) as CompositeSourceType, r.id), ...(point.audience !== 'VIEWER' ? { minRole: point.audience } : {}) })) },
     blocks: [
       { type: 'SUMMARY', id: 'data-point-summary', title: `${point.label}: ${present.map((r) => formatDataPointValue(point, r.value)).join('; ')}`, body: sentences.join(' '), tone: missing > 0 || limits.length ? 'CAUTION' : 'DEFAULT', actions: [] },
       { type: 'EVIDENCE', id: 'data-point-evidence', title: 'Where this comes from', items: present.map((r) => ({ label: r.name, source: `${where.record}${r.roomName ? ` (${r.roomName})` : ''}`, observedAt: null })) },

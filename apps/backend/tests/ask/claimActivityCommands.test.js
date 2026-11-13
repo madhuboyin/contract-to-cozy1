@@ -57,14 +57,24 @@ function install(role, item = { id: ITEM, claimId: CLAIM, title: 'Photos of the 
 const launch = (kind, entityId, over = {}) => ({ operationId: OP, surface: 'ASK_PAGE', entityId, entityType: command.claimActivityEntityType(kind), ...over });
 const invoke = (message, launchContext, op = OP) => capabilityInvoke(op, { userId: 'u1', propertyId: 'prop-1', message, launchContext });
 
-test('the checklist is read for any member; steps are offered to contributors; the read needs a claim to open', async () => {
+test('the checklist is read by contributors and owners (owner audience policy 2026-11-13: viewers are blocked; titles and descriptions are OWNER-only); the read needs a claim to open', async () => {
   for (const message of [...Object.values(M), command.CLAIM_CHECKLIST_MESSAGE]) assert.notEqual(resolveAskRoutingCascade(message, { localRoutingEnabled: true }).operation?.operationId, OP, message);
   let w = install('VIEWER');
   try {
     const viewer = await invoke(command.CLAIM_CHECKLIST_MESSAGE, { operationId: 'CLAIM_CHECKLIST_VIEW', surface: 'ASK_PAGE', entityType: 'CLAIM', entityId: CLAIM }, 'CLAIM_CHECKLIST_VIEW');
-    assert.equal(viewer.status, 'ANSWERED');
-    assert.equal(viewer.blocks[0].title, '1 of 2 checklist items done');
-    assert.deepEqual(viewer.blocks[1].sections[0].items.flatMap((i) => i.actions), []);
+    assert.equal(viewer.status, 'BLOCKED', 'a viewer cannot open a claim checklist');
+    assert.ok(!JSON.stringify(viewer).includes('Photos of the damage'));
+    w.restore(); w = install('CONTRIBUTOR');
+    const contributor = await invoke(command.CLAIM_CHECKLIST_MESSAGE, { operationId: 'CLAIM_CHECKLIST_VIEW', surface: 'ASK_PAGE', entityType: 'CLAIM', entityId: CLAIM }, 'CLAIM_CHECKLIST_VIEW');
+    assert.equal(contributor.status, 'ANSWERED'); assert.equal(contributor.blocks[0].title, '1 of 2 checklist items done');
+    const cText = JSON.stringify(contributor);
+    for (const hidden of ['Photos of the damage', 'Repair estimate', 'Wide and close']) assert.ok(!cText.includes(hidden), `contributor saw ${hidden}`);
+    assert.deepEqual(contributor.blocks[1].sections[0].items.map((i) => i.title), ['Checklist step 1', 'Checklist step 2'], 'a stable structured label replaces the title');
+    assert.deepEqual(contributor.blocks[1].sections[0].items.map((i) => i.id), [ITEM, 'i2']);
+    assert.ok(contributor.blocks[1].sections[0].items[0].actions.length > 0, 'row actions stay: the structured label identifies the row');
+    w.restore(); w = install('OWNER');
+    const owner = await invoke(command.CLAIM_CHECKLIST_MESSAGE, { operationId: 'CLAIM_CHECKLIST_VIEW', surface: 'ASK_PAGE', entityType: 'CLAIM', entityId: CLAIM }, 'CLAIM_CHECKLIST_VIEW');
+    assert.match(JSON.stringify(owner), /Photos of the damage/); assert.match(JSON.stringify(owner), /Wide and close/);
     const bare = await invoke(command.CLAIM_CHECKLIST_MESSAGE, undefined, 'CLAIM_CHECKLIST_VIEW');
     assert.equal(bare.reasonCode, 'CLAIM_CHECKLIST_TARGET_REQUIRED');
   } finally { w.restore(); }
@@ -83,12 +93,15 @@ test('declared-action only, a contributor command; viewers refused; an item alre
     assert.equal((await invoke(M.DONE, launch('DONE', ITEM, { surface: 'ASK_REFRESH' }))).reasonCode, 'ASK_CLAIM_ACTIVITY_NOT_DIRECTLY_ROUTABLE');
     const review = await invoke(M.DONE, launch('DONE', ITEM));
     assert.equal(review.status, 'NEEDS_CONFIRMATION');
-    assert.deepEqual(review.confirmation.fields.map((f) => f.value), ['Storm damage', 'Photos of the damage', 'To do → Done']);
+    assert.deepEqual(review.confirmation.fields.map((f) => f.value), ['Storm damage', 'Checklist step 1', 'To do → Done'], 'a contributor sees the structured step label, never the free-form title');
+    assert.ok(!JSON.stringify(review).includes('Photos of the damage'));
     assert.equal((await invoke(M.REOPEN, launch('REOPEN', ITEM))).reasonCode, 'CLAIM_CHECKLIST_STEP_NOT_AVAILABLE');
     const form = await invoke(M.NOTE, launch('NOTE', CLAIM));
     assert.equal(form.status, 'NEEDS_CONTEXT');
     assert.equal(w.calls.length, 0);
   } finally { w.restore(); }
+  w = install('OWNER');
+  try { assert.deepEqual((await invoke(M.DONE, launch('DONE', ITEM))).confirmation.fields.map((f) => f.value), ['Storm damage', 'Photos of the damage', 'To do → Done']); } finally { w.restore(); }
 });
 
 const ctx = (parameters) => ({ userId: 'u1', execution: { id: 'exec-1', propertyId: 'prop-1', createdAt: new Date() }, access: { role: 'CONTRIBUTOR' }, parameters, command: getAskDomainCommandByOperation(OP) });

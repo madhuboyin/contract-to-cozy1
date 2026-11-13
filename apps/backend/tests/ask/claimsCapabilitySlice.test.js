@@ -63,7 +63,7 @@ test.beforeEach(install);
 test.afterEach(restore);
 
 const execution = () => ({ id: 'exec-1', propertyId: 'p1', sessionId: 's1', userId: 'u1', operationId: 'CLAIM_TRANSITION', createdAt: new Date('2026-09-22T00:00:00.000Z') });
-const confirm = (parameters) => confirmCapabilityInvoke('CLAIM_TRANSITION', { userId: 'u1', execution: execution(), parameters, access: { role: 'CONTRIBUTOR' }, command: getAskDomainCommandByOperation('CLAIM_TRANSITION') });
+const confirm = (parameters, role = 'CONTRIBUTOR') => confirmCapabilityInvoke('CLAIM_TRANSITION', { userId: 'u1', execution: execution(), parameters, access: { role }, command: getAskDomainCommandByOperation('CLAIM_TRANSITION') });
 
 test('every declared claim action\'s canned message proposes exactly its own status for the launched claim', async () => {
   for (const action of CLAIM_TRANSITION_ACTIONS) {
@@ -92,9 +92,9 @@ test('claim rows carry CLAIM identity and every transition action for contributo
     assert.equal(row.href, null, 'Ask links to no desktop claim page; the row opens its own inline detail');
   }
   accessRole = 'VIEWER';
-  const viewer = await list();
-  // A viewer reads the checklist and changes nothing.
-  assert.ok(viewer.sections.flatMap((section) => section.items).every((row) => row.actions.length === 1 && row.actions[0].id === 'claim-checklist'));
+  // Owner audience policy 2026-11-13: claim status and dates are CONTRIBUTOR-floor, so the claims read itself is blocked for a viewer (no rows, no counts).
+  const blocked = await capabilityInvoke('INCIDENT_CLAIM_STATUS', { userId: 'u1', propertyId: 'p1', message: 'Show my claims' });
+  assert.equal(blocked.status, 'BLOCKED'); assert.equal(blocked.blocks.find((block) => block.id === 'incident-claim-list'), undefined);
   assert.deepEqual(claimItemActions('VIEWER').map((action) => action.id), ['claim-checklist']);
 });
 
@@ -114,8 +114,13 @@ test('a submit blocked by the checklist names the blocking items instead of fail
   const version = require('node:crypto').createHash('sha256').update(`claim-draft:DRAFT:${UPDATED_AT.toISOString()}`).digest('hex');
   await assert.rejects(confirm({ claimId: 'claim-draft', claimToStatus: 'SUBMITTED', claimContextVersion: version }), (error) => {
     assert.equal(error.code, 'CLAIM_SUBMIT_BLOCKED');
-    assert.match(error.message, /Photos of the damage \(missing 2 documents\); Call the adjuster \(not done\)/);
+    assert.doesNotMatch(error.message, /Photos of the damage|Call the adjuster/, 'a contributor is not told the free-form checklist titles');
+    assert.match(error.message, /2 checklist items need attention/);
     assert.match(error.message, /Nothing was changed/);
+    return true;
+  });
+  await assert.rejects(confirm({ claimId: 'claim-draft', claimToStatus: 'SUBMITTED', claimContextVersion: version }, 'OWNER'), (error) => {
+    assert.match(error.message, /Photos of the damage \(missing 2 documents\); Call the adjuster \(not done\)/);
     return true;
   });
   // Any other failure is not rewritten.

@@ -30,11 +30,14 @@ const unavailable = (reasonCode: string, title: string, body: string): AskOperat
 async function loadClaim(propertyId: string, claimId: string) {
   return database.claim.findFirst({ where: { id: claimId, propertyId }, select: { id: true, title: true, status: true, lastActivityAt: true } }) as Promise<{ id: string; title: string; status: string; lastActivityAt: Date | null } | null>;
 }
-async function loadItem(propertyId: string, itemId: string) {
-  return database.claimChecklistItem.findFirst({
+// Owner audience policy 2026-11-13: a checklist item's title is free-form and OWNER-only. Non-owners get a stable structured label ("Checklist step 3") and the title is not selected.
+const stepLabel = (orderIndex: number | null | undefined) => `Checklist step ${(orderIndex ?? 0) + 1}`;
+async function loadItem(propertyId: string, itemId: string, isOwner = false) {
+  const row = await database.claimChecklistItem.findFirst({
     where: { id: itemId, claim: { propertyId } },
-    select: { id: true, claimId: true, title: true, status: true, completedAt: true, claim: { select: { title: true } } },
-  }) as Promise<{ id: string; claimId: string; title: string; status: string; completedAt: Date | null; claim: { title: string } } | null>;
+    select: { id: true, claimId: true, orderIndex: true, status: true, completedAt: true, claim: { select: { title: true } }, ...(isOwner ? { title: true } : {}) },
+  }) as ({ id: string; claimId: string; orderIndex: number; title?: string; status: string; completedAt: Date | null; claim: { title: string } }) | null;
+  return row ? { ...row, title: isOwner && row.title ? row.title : stepLabel(row.orderIndex) } : null;
 }
 const itemVersion = (kind: ClaimActivityKind, item: { id: string; status: string; completedAt: Date | null }) => sha(`claim-item:${kind}:${item.id}:${item.status}:${item.completedAt?.toISOString() ?? ''}`);
 const noteVersion = (claim: { id: string; lastActivityAt: Date | null }) => sha(`claim-note:${claim.id}:${claim.lastActivityAt?.toISOString() ?? ''}`);
@@ -84,12 +87,16 @@ registerCapabilityHandler('claim-checklist.view', async (envelope, deps) => {
   const access = await (deps.propertyAccess ?? ensurePropertyAccess(envelope.userId, envelope.propertyId!));
   const claim = await loadClaim(envelope.propertyId!, launch.entityId);
   if (!claim) return unavailable('CLAIM_NOT_FOUND', 'That claim is no longer available', 'Ask could not find that claim.');
-  const [items, sourceTotal] = await Promise.all([
+  const isOwner = access.role === HouseholdRole.OWNER;
+  const [rows, sourceTotal] = await Promise.all([
     database.claimChecklistItem.findMany({
-      where: { claimId: claim.id }, orderBy: { orderIndex: 'asc' }, take: 50, select: { id: true, title: true, description: true, required: true, status: true },
+      where: { claimId: claim.id }, orderBy: { orderIndex: 'asc' }, take: 50,
+      select: { id: true, orderIndex: true, required: true, status: true, ...(isOwner ? { title: true, description: true } : {}) },
     }),
     database.claimChecklistItem.count({ where: { claimId: claim.id } }),
   ]);
+  const items = (rows as Array<{ id: string; orderIndex: number; required: boolean; status: string; title?: string; description?: string | null }>)
+    .map((row) => ({ id: row.id, required: row.required, status: row.status, title: isOwner && row.title ? row.title : stepLabel(row.orderIndex), description: isOwner ? (row.description ?? null) : null }));
   return claimChecklistFromRows(claim, items, access.role !== HouseholdRole.VIEWER, sourceTotal);
 });
 
@@ -135,7 +142,7 @@ export async function claimActivityResult(userId: string, propertyId: string, la
       captureRequests: [noteCapture(contextVersion, claim.title, supplied)], suggestions: [],
     };
   }
-  const item = await loadItem(propertyId, launch.entityId);
+  const item = await loadItem(propertyId, launch.entityId, access.role === HouseholdRole.OWNER);
   if (!item) return unavailable('CLAIM_CHECKLIST_ITEM_NOT_FOUND', 'That item is no longer on the checklist', 'Ask could not find that checklist item. Nothing has changed.');
   if (!claimChecklistKinds(item.status).includes(kind)) return unavailable('CLAIM_CHECKLIST_STEP_NOT_AVAILABLE', 'That is already how it is', 'Nothing has changed.');
   const contextVersion = itemVersion(kind, item);

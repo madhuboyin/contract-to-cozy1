@@ -46,7 +46,7 @@ function install(role, row = finding()) {
 }
 const launch = (operationId, entityType, entityId, over = {}) => ({ operationId, surface: 'ASK_PAGE', entityType, entityId, ...over });
 const invoke = (operationId, message, launchContext) => capabilityInvoke(operationId, { userId: 'u1', propertyId: 'prop-1', message, launchContext });
-const ctx = (parameters) => ({ userId: 'u1', execution: { id: 'exec-1', propertyId: 'prop-1', createdAt: new Date() }, access: { role: 'CONTRIBUTOR' }, parameters, command: getAskDomainCommandByOperation(CMD) });
+const ctx = (parameters, role = 'CONTRIBUTOR') => ({ userId: 'u1', execution: { id: 'exec-1', propertyId: 'prop-1', createdAt: new Date() }, access: { role }, parameters, command: getAskDomainCommandByOperation(CMD) });
 const p = (kind, version2, entityId = 'f1') => ({ inspectionFindingDecisionCommand: { kind, entityId }, inspectionFindingDecisionContextVersion: version2 });
 
 test('which decisions a finding allows: monitor when open and not yet accepted or monitored; a plan only on a pre-listing report with no notes of its own', () => {
@@ -253,7 +253,7 @@ const pending = { status: 'REVIEW_PENDING', reportType: 'PRE_PURCHASE' };
 const reviewEdit = (kind, answer) => inspectionFindingDecisionResult('u1', 'prop-1', { kind, entityId: 'f1', sourceExecutionId: null }, answer);
 
 test('edit and correct: a seeded form of the page\'s edit sheet, a review of exactly what changes, and the cents the service stores', async () => {
-  let w = install('CONTRIBUTOR', finding({ report: pending }));
+  let w = install('OWNER', finding({ report: pending }));
   try {
     const form = await invoke(CMD, M.EDIT, launch(CMD, 'INSPECTION_FINDING', 'f1'));
     assert.equal(form.status, 'NEEDS_CONTEXT');
@@ -279,9 +279,9 @@ test('edit and correct: a seeded form of the page\'s edit sheet, a review of exa
 
 test('confirming an edit calls the page\'s own update with only what changed; a correction also marks it correction requested, and says so if that mark fails', async () => {
   const f = finding({ report: pending });
-  let w = install('CONTRIBUTOR', f);
+  let w = install('OWNER', f);
   try {
-    await confirmCapabilityInvoke(CMD, { ...ctx(p('EDIT', version('EDIT', f))), parameters: { ...p('EDIT', version('EDIT', f)), inspectionFindingEditForm: { severity: 'SAFETY', costLow: '600', aiInterpretation: '' } } });
+    await confirmCapabilityInvoke(CMD, { ...ctx(p('EDIT', version('EDIT', f)), 'OWNER'), parameters: { ...p('EDIT', version('EDIT', f)), inspectionFindingEditForm: { severity: 'SAFETY', costLow: '600', aiInterpretation: '' } } });
     assert.deepEqual(w.calls, [['edit', 'f1', 'r1', 'prop-1', { severity: 'SAFETY', estimatedCostCentsLow: 60000 }]]);
     await assert.rejects(() => confirmCapabilityInvoke(CMD, { ...ctx(p('EDIT', 'old')), parameters: { ...p('EDIT', 'old'), inspectionFindingEditForm: { severity: 'SAFETY' } } }), (e) => e.code === 'ASK_CONTEXT_VERSION_CONFLICT');
     assert.equal(w.calls.length, 1);

@@ -575,8 +575,9 @@ test('v8 read: the record is named and role-filtered first; only metadata column
   assert.deepEqual(calls[1][1].where, { recordId: 'r1' });
   assert.deepEqual(Object.keys(calls[1][1].select).sort(), ['id', 'scanStatus', 'versionNumber']);
   for (const banned of ['storageKey', 'originalFileName', 'sha256', 'extractedText', 'uploadedByUserId']) assert.ok(!(banned in calls[1][1].select), banned);
-  assert.deepEqual(r.parameters.sources, [{ sourceType: 'PropertyRecordVersion', sourceId: 'v2' }]);
+  assert.deepEqual(r.parameters.sources, [{ sourceType: 'CurrentPropertyRecordVersion', sourceId: 'v2' }], 'a default read selected the version AS CURRENT');
   const old = await dataPointReadResult('u1', 'p1', 'what is the scan status of my roof inspection record version 1');
+  assert.deepEqual(old.parameters.sources, [{ sourceType: 'PropertyRecordVersion', sourceId: 'v1' }], 'an explicit historical version needs only membership, not currency');
   assert.match(old.blocks[0].body, /version 1 has scan status pending/i); assert.match(old.blocks[0].body, /not the current version \(2\)/); assert.equal(old.status, 'READY_WITH_LIMITATIONS');
   const num = await dataPointReadResult('u1', 'p1', 'what is the current record version of my roof inspection version 1');
   assert.match(num.blocks[0].body, /Roof inspection is at version 2/, 'the number point always reports the current version');
@@ -667,3 +668,31 @@ test('v9 lifecycle and ambiguity: a closed or denied claim carries its follow-up
   assert.notEqual(await AUTH.DATA_POINT_READ.authorizeSources(ctx('CONTRIBUTOR', true), [ref]), 'AUTHORIZED', 'an OWNER-floor source is redacted once the role drops');
   assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx('OWNER', false), [ref]), 'REDACT_SECTION');
 });
+test('v8 replay (P1 fix): a version selected as current stops authorizing once another version becomes current; an explicit historical version stays valid', async () => {
+  const { COMPOSABLE_SOURCE_AUTHORIZATION: AUTH, sourceRef } = require('../../src/services/ask/composition/sourceAuthorization.ts');
+  const { delegateNameForSourceType } = require('../../src/services/ask/composition/authorizationView.ts');
+  assert.equal(delegateNameForSourceType('CurrentPropertyRecordVersion'), 'propertyRecordVersion', 'the constrained view reads the real table');
+  assert.equal(delegateNameForSourceType('PropertyRecordVersion'), 'propertyRecordVersion');
+  // a tiny fake of the table: v3 was current when the answer was stored; v4 has since become current
+  const state = { currentId: 'v3', visibility: 'HOUSEHOLD' };
+  const exists = (role) => async (model, where) => {
+    assert.equal(delegateNameForSourceType(model), 'propertyRecordVersion');
+    if (where.currentForRecord) {
+      const c = where.currentForRecord.is; if (c.propertyId !== 'p1' || c.lifecycleStatus !== 'ACTIVE' || c.trashedAt !== null) return false;
+      if (c.visibility && c.visibility !== state.visibility) return false;
+      return where.id === state.currentId;
+    }
+    return ['v1', 'v2', 'v3', 'v4'].includes(where.id) && where.record.propertyId === 'p1' && (!where.record.visibility || where.record.visibility === state.visibility);
+  };
+  const ctx = (role) => ({ userId: 'u1', propertyId: 'p1', role, exists: exists(role) });
+  const asCurrent = sourceRef('CurrentPropertyRecordVersion', 'v3'); const historical = sourceRef('PropertyRecordVersion', 'v3');
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx('VIEWER'), [asCurrent]), 'AUTHORIZED', 'still current');
+  state.currentId = 'v4';
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx('VIEWER'), [asCurrent]), 'REDACT_SECTION', 'no longer current: the stored "current" answer is not replayed');
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx('VIEWER'), [historical]), 'AUTHORIZED', 'an explicit "version 3" request stays valid');
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx('VIEWER'), [sourceRef('CurrentPropertyRecordVersion', 'v4')]), 'AUTHORIZED');
+  state.visibility = 'OWNER_ONLY';
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx('CONTRIBUTOR'), [sourceRef('CurrentPropertyRecordVersion', 'v4')]), 'REDACT_SECTION', 'role visibility still applies to the current-version check');
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx('OWNER'), [sourceRef('CurrentPropertyRecordVersion', 'v4')]), 'AUTHORIZED');
+});
+

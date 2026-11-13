@@ -216,8 +216,13 @@ async function confirmClaimTransition(ctx: ConfirmCapabilityContext): Promise<Co
       // The same checklist gate the traditional Claims page reports (ClaimQuickActions): name what blocks submitting.
       const blocked = error as { code?: string; details?: { blocking?: Array<{ title: string; missingDocs?: number }> } };
       if (blocked?.code !== 'CLAIM_SUBMIT_BLOCKED') throw error;
-      const items = (blocked.details?.blocking ?? []).slice(0, 3).map((item) => item.missingDocs ? `${item.title} (missing ${item.missingDocs} document${item.missingDocs === 1 ? '' : 's'})` : `${item.title} (not done)`);
-      throw Object.assign(new Error(`This claim cannot be submitted yet. Finish its checklist first${items.length ? `: ${items.join('; ')}` : ''}. Nothing was changed.`), { code: 'CLAIM_SUBMIT_BLOCKED' });
+      const blocking = blocked.details?.blocking ?? [];
+      // Owner audience policy 2026-11-13: checklist titles are free-form and OWNER-only; a contributor is told how many items block, not what they are called.
+      const items = access.role === 'OWNER'
+        ? blocking.slice(0, 3).map((item) => item.missingDocs ? `${item.title} (missing ${item.missingDocs} document${item.missingDocs === 1 ? '' : 's'})` : `${item.title} (not done)`)
+        : [];
+      const countOnly = access.role !== 'OWNER' && blocking.length ? ` (${blocking.length} checklist item${blocking.length === 1 ? ' needs' : 's need'} attention)` : '';
+      throw Object.assign(new Error(`This claim cannot be submitted yet. Finish its checklist first${items.length ? `: ${items.join('; ')}` : ''}${countOnly}. Nothing was changed.`), { code: 'CLAIM_SUBMIT_BLOCKED' });
     }
     artifactType = 'CLAIM'; artifactId = claim.id;
     result = { status: 'COMPLETED', reasonCode: 'CLAIM_STATUS_UPDATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `claim-updated-${claim.id}`, title: 'Claim status updated', status: 'COMPLETED', description: 'The canonical claim lifecycle and linked Operational Work/outcome reconciliation were updated through the Claims service.', details: [{ label: 'Claim', value: updated.title }, { label: 'Status', value: String(updated.status).toLowerCase().replace(/_/g, ' ') }], actions: [receiptFollowUpAction('CLAIMS')] }], suggestions: [] };

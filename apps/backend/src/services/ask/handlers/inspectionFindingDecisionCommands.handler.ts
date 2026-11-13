@@ -33,12 +33,28 @@ interface FindingWithReport {
   id: string; reportId: string; homeSystem: string; subsystem: string | null; inspectorDescription: string; status: string; workDisposition: string; severity: string; aiInterpretation: string | null;
   estimatedCostCentsLow: number | null; estimatedCostCentsHigh: number | null; resolutionNotes: string | null; updatedAt: Date; report: { status: string; reportType: string };
 }
-async function loadFinding(propertyId: string, findingId: string) {
-  return (prisma as any).inspectionFinding.findFirst({
+// Owner audience policy 2026-11-13: a contributor may decide on and structurally edit a finding (system, severity, status, disposition), but the inspector's description, the interpretation text and the
+// cost figures are OWNER-only. For non-owners those columns are not selected, so they cannot reach a review, confirmation, stored parameter, retry or completion. resolutionNotes is selected only
+// for the context version and the fix/disclose decision label; it is never displayed.
+async function loadFinding(propertyId: string, findingId: string, isOwner = false) {
+  const row = await (prisma as any).inspectionFinding.findFirst({
     where: { id: findingId, propertyId },
-    select: { id: true, reportId: true, homeSystem: true, subsystem: true, inspectorDescription: true, status: true, workDisposition: true, severity: true, aiInterpretation: true, estimatedCostCentsLow: true, estimatedCostCentsHigh: true, resolutionNotes: true, updatedAt: true, report: { select: { status: true, reportType: true } } },
-  }) as Promise<FindingWithReport | null>;
+    select: {
+      id: true, reportId: true, homeSystem: true, subsystem: true, status: true, workDisposition: true, severity: true, resolutionNotes: true, updatedAt: true, report: { select: { status: true, reportType: true } },
+      ...(isOwner ? { inspectorDescription: true, aiInterpretation: true, estimatedCostCentsLow: true, estimatedCostCentsHigh: true } : {}),
+    },
+  });
+  const blank = { inspectorDescription: '', aiInterpretation: null, estimatedCostCentsLow: null, estimatedCostCentsHigh: null };
+  // Defence in depth: even if a caller's row carries the owner-only columns, they are overwritten for non-owners.
+  return (row ? { ...blank, ...row, ...(isOwner ? {} : blank) } : null) as FindingWithReport | null;
 }
+/** The owner-only part of an edit answer is dropped for everyone else, before any comparison, review, parameter or save. */
+function structuralEditAnswer<T extends { aiInterpretation?: unknown; costLow?: unknown; costHigh?: unknown }>(answer: T, isOwner: boolean): T {
+  if (isOwner) return answer;
+  const { aiInterpretation: _a, costLow: _l, costHigh: _h, ...rest } = answer;
+  return rest as T;
+}
+const ownerBody = (finding: { inspectorDescription: string }, isOwner: boolean, tail: string) => (isOwner && finding.inspectorDescription ? `${finding.inspectorDescription} ${tail}` : tail);
 const findingVersion = (kind: InspectionFindingDecisionKind, f: FindingWithReport) =>
   sha(`inspection-finding-decision:${kind}:${f.id}:${f.status}:${f.workDisposition}:${f.updatedAt.toISOString()}:${sha(f.resolutionNotes ?? '')}:${f.report.status}`);
 const CLOSING_COPY = {
@@ -68,7 +84,12 @@ function editChanges(finding: FindingWithReport, answer: { severity?: string; ho
 }
 const centsToDollars = (cents: number | null) => (cents == null ? undefined : cents / 100);
 
-function editCapture(finding: FindingWithReport, contextVersion: string, entered?: Record<string, unknown>): AskCaptureRequest {
+function editCapture(finding: FindingWithReport, contextVersion: string, entered: Record<string, unknown> | undefined, isOwner: boolean): AskCaptureRequest {
+  const ownerFields = [
+      { key: 'aiInterpretation', label: 'Interpretation', required: false, inputSchema: { type: 'LONG_TEXT', maxLength: 2000 } },
+      { key: 'costLow', label: 'Estimated cost, low ($)', required: false, inputSchema: { type: 'NUMBER', min: 0, max: 10_000_000 } },
+      { key: 'costHigh', label: 'Estimated cost, high ($)', required: false, inputSchema: { type: 'NUMBER', min: 0, max: 10_000_000 } },
+  ];
   return {
     requirementId: 'inspection-finding-edit-inputs', captureKey: INSPECTION_FINDING_EDIT_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
     title: `Edit: ${titleOf(finding)}`, question: 'What should this finding say?',
@@ -76,37 +97,35 @@ function editCapture(finding: FindingWithReport, contextVersion: string, entered
     inputSchema: { type: 'GROUP', fields: [
       { key: 'severity', label: 'Severity', required: false, inputSchema: { type: 'SINGLE_SELECT', options: INSPECTION_SEVERITIES.map((value) => ({ label: INSPECTION_SEVERITY_LABELS[value], value })) } },
       { key: 'homeSystem', label: 'Home system', required: false, inputSchema: { type: 'SINGLE_SELECT', options: INSPECTION_HOME_SYSTEMS.map((value) => ({ label: INSPECTION_HOME_SYSTEM_LABELS[value], value })) } },
-      { key: 'aiInterpretation', label: 'Interpretation', required: false, inputSchema: { type: 'LONG_TEXT', maxLength: 2000 } },
-      { key: 'costLow', label: 'Estimated cost, low ($)', required: false, inputSchema: { type: 'NUMBER', min: 0, max: 10_000_000 } },
-      { key: 'costHigh', label: 'Estimated cost, high ($)', required: false, inputSchema: { type: 'NUMBER', min: 0, max: 10_000_000 } },
+      ...(isOwner ? ownerFields : []),
     ] } as unknown as AskCaptureRequest['inputSchema'],
-    currentAnswer: Object.fromEntries(Object.entries(entered ?? {
+    currentAnswer: Object.fromEntries(Object.entries(structuralEditAnswer(entered ?? {
       severity: finding.severity, homeSystem: finding.homeSystem, aiInterpretation: finding.aiInterpretation ?? undefined,
       costLow: centsToDollars(finding.estimatedCostCentsLow), costHigh: centsToDollars(finding.estimatedCostCentsHigh),
-    }).filter(([, v]) => v !== undefined && v !== null && v !== '')),
+    }, isOwner)).filter(([, v]) => v !== undefined && v !== null && v !== '')),
     allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used to prepare this change; nothing is saved until you confirm', confirmationText: null, expectedContextVersion: contextVersion,
   };
 }
 
-function editResult(finding: FindingWithReport, kind: 'EDIT' | 'CORRECT', contextVersion: string, expiresAt: Date, launch: { entityId: string; sourceExecutionId: string | null }, supplied?: Record<string, unknown>): AskOperationResult {
+function editResult(finding: FindingWithReport, kind: 'EDIT' | 'CORRECT', contextVersion: string, expiresAt: Date, launch: { entityId: string; sourceExecutionId: string | null }, supplied: Record<string, unknown> | undefined, isOwner: boolean): AskOperationResult {
   if (!supplied) {
     return {
       status: 'NEEDS_CONTEXT', reasonCode: `INSPECTION_FINDING_${kind}_INPUT_REQUIRED`, contextVersion,
       parameters: { inspectionFindingDecisionLaunch: { kind, entityId: finding.id, sourceExecutionId: launch.sourceExecutionId } },
-      blocks: [{ type: 'SUMMARY', id: 'inspection-finding-edit-input', title: titleOf(finding), body: `${finding.inspectorDescription} Nothing has been saved yet.`, tone: 'DEFAULT', actions: [] }],
-      captureRequests: [editCapture(finding, contextVersion)], suggestions: [],
+      blocks: [{ type: 'SUMMARY', id: 'inspection-finding-edit-input', title: titleOf(finding), body: ownerBody(finding, isOwner, 'Nothing has been saved yet.'), tone: 'DEFAULT', actions: [] }],
+      captureRequests: [editCapture(finding, contextVersion, undefined, isOwner)], suggestions: [],
     };
   }
   const parsed = InspectionFindingEditSchema.safeParse(supplied);
   if (!parsed.success) return unavailable('INSPECTION_FINDING_EDIT_INPUT_INVALID', 'Check the details', 'Fill in what changes. Nothing has changed.');
-  const { patch, rows, rangeInverted } = editChanges(finding, parsed.data);
+  const { patch, rows, rangeInverted } = editChanges(finding, structuralEditAnswer(parsed.data, isOwner));
   if (rangeInverted) return unavailable('INSPECTION_FINDING_EDIT_RANGE_INVERTED', 'The low cost is higher than the high cost', 'Check the range. Nothing has changed.');
   if (!Object.keys(patch).length) return unavailable('INSPECTION_FINDING_EDIT_UNCHANGED', 'Nothing would change', 'That is already what is saved. Nothing has changed.');
   const marks = kind === 'CORRECT' && finding.workDisposition === 'PENDING_REVIEW';
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: `INSPECTION_FINDING_${kind}_CONFIRMATION_REQUIRED`, contextVersion,
     parameters: {
-      inspectionFindingDecisionCommand: { kind, entityId: finding.id }, inspectionFindingDecisionContextVersion: contextVersion, inspectionFindingEditForm: supplied,
+      inspectionFindingDecisionCommand: { kind, entityId: finding.id }, inspectionFindingDecisionContextVersion: contextVersion, inspectionFindingEditForm: structuralEditAnswer(supplied, isOwner),
       sourceExecutionId: launch.sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
     },
     blocks: [{ type: 'SUMMARY', id: 'inspection-finding-edit-review', title: titleOf(finding), body: 'Nothing is saved until you confirm.', tone: 'DEFAULT', actions: [] }],
@@ -117,7 +136,7 @@ function editResult(finding: FindingWithReport, kind: 'EDIT' | 'CORRECT', contex
       fields: rows, editableFields: [], confirmLabel: kind === 'EDIT' ? 'Save changes' : 'Save correction',
       consentText: 'I authorize this change to the shared inspection record.', expiresAt: expiresAt.toISOString(),
     },
-    captureRequests: [editCapture(finding, contextVersion, supplied)], suggestions: [],
+    captureRequests: [editCapture(finding, contextVersion, supplied, isOwner)], suggestions: [],
   };
 }
 
@@ -142,14 +161,14 @@ function duplicateCapture(finding: FindingWithReport, contextVersion: string, ch
     currentAnswer: {}, allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used to prepare this change; nothing is saved until you confirm', confirmationText: null, expectedContextVersion: contextVersion,
   };
 }
-async function duplicateResult(propertyId: string, finding: FindingWithReport, contextVersion: string, expiresAt: Date, launch: { entityId: string; sourceExecutionId: string | null }, supplied?: Record<string, unknown>): Promise<AskOperationResult> {
+async function duplicateResult(propertyId: string, finding: FindingWithReport, contextVersion: string, expiresAt: Date, launch: { entityId: string; sourceExecutionId: string | null }, supplied: Record<string, unknown> | undefined, isOwner: boolean): Promise<AskOperationResult> {
   const choices = await duplicateChoices(propertyId, finding.id);
   if (!choices.length) return unavailable('INSPECTION_FINDING_DUPLICATE_NO_CHOICES', 'No other work to choose from', 'There is no other open work item this could repeat. Nothing has changed.');
   if (!supplied) {
     return {
       status: 'NEEDS_CONTEXT', reasonCode: 'INSPECTION_FINDING_DUPLICATE_INPUT_REQUIRED', contextVersion,
       parameters: { inspectionFindingDecisionLaunch: { kind: 'DUPLICATE', entityId: finding.id, sourceExecutionId: launch.sourceExecutionId } },
-      blocks: [{ type: 'SUMMARY', id: 'inspection-finding-duplicate-input', title: titleOf(finding), body: `${finding.inspectorDescription} Nothing has been saved yet.`, tone: 'DEFAULT', actions: [] }],
+      blocks: [{ type: 'SUMMARY', id: 'inspection-finding-duplicate-input', title: titleOf(finding), body: ownerBody(finding, isOwner, 'Nothing has been saved yet.'), tone: 'DEFAULT', actions: [] }],
       captureRequests: [duplicateCapture(finding, contextVersion, choices)], suggestions: [],
     };
   }
@@ -179,7 +198,8 @@ export async function inspectionFindingDecisionResult(userId: string, propertyId
   if (access.role === HouseholdRole.VIEWER) {
     return { status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED', blocks: [{ type: 'SUMMARY', id: 'inspection-finding-decision-permission', title: 'A contributor or owner can decide on a finding', body: 'Your role can view this home but not change it. Nothing has changed.', tone: 'CAUTION', actions: [] }], suggestions: [] };
   }
-  const finding = await loadFinding(propertyId, launch.entityId);
+  const isOwner = access.role === HouseholdRole.OWNER;
+  const finding = await loadFinding(propertyId, launch.entityId, isOwner);
   if (!finding) return unavailable('INSPECTION_FINDING_NOT_FOUND', 'That finding is no longer available', 'Ask could not find that inspection finding. Nothing has changed.');
   const kind = launch.kind;
   if (!inspectionFindingDecisionKinds(finding.report, finding).includes(kind)) {
@@ -187,8 +207,8 @@ export async function inspectionFindingDecisionResult(userId: string, propertyId
   }
   const contextVersion = findingVersion(kind, finding);
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
-  if (isInspectionFindingEditKind(kind)) return editResult(finding, kind, contextVersion, expiresAt, launch, supplied);
-  if (kind === 'DUPLICATE') return duplicateResult(propertyId, finding, contextVersion, expiresAt, launch, supplied);
+  if (isInspectionFindingEditKind(kind)) return editResult(finding, kind, contextVersion, expiresAt, launch, supplied, isOwner);
+  if (kind === 'DUPLICATE') return duplicateResult(propertyId, finding, contextVersion, expiresAt, launch, supplied, isOwner);
   const plan = parseFixDisclosure(finding.resolutionNotes);
   const isMonitor = kind === 'MONITOR';
   const closing = kind === 'ALREADY_RESOLVED' || kind === 'NOT_APPLICABLE';
@@ -199,7 +219,7 @@ export async function inspectionFindingDecisionResult(userId: string, propertyId
         inspectionFindingDecisionCommand: { kind, entityId: finding.id }, inspectionFindingDecisionContextVersion: contextVersion,
         sourceExecutionId: launch.sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
       },
-      blocks: [{ type: 'SUMMARY', id: 'inspection-finding-dismiss-review', title: titleOf(finding), body: `${finding.inspectorDescription} Nothing changes until you confirm.`, tone: 'DEFAULT', actions: [] }],
+      blocks: [{ type: 'SUMMARY', id: 'inspection-finding-dismiss-review', title: titleOf(finding), body: ownerBody(finding, isOwner, 'Nothing changes until you confirm.'), tone: 'DEFAULT', actions: [] }],
       confirmation: {
         confirmationId: `inspection-finding-decision-dismiss-${sha(finding.id).slice(0, 12)}-1`, version: 1, title: 'Dismiss this finding?',
         description: 'This removes the finding from the report you are reviewing, as the page’s Dismiss does, and closes any work item for it. It records the change on the inspection record only and contacts no one.',
@@ -215,7 +235,7 @@ export async function inspectionFindingDecisionResult(userId: string, propertyId
       inspectionFindingDecisionCommand: { kind, entityId: finding.id }, inspectionFindingDecisionContextVersion: contextVersion,
       sourceExecutionId: launch.sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
     },
-    blocks: [{ type: 'SUMMARY', id: 'inspection-finding-decision-review', title: titleOf(finding), body: `${finding.inspectorDescription} Nothing changes until you confirm.`, tone: 'DEFAULT', actions: [] }],
+    blocks: [{ type: 'SUMMARY', id: 'inspection-finding-decision-review', title: titleOf(finding), body: ownerBody(finding, isOwner, 'Nothing changes until you confirm.'), tone: 'DEFAULT', actions: [] }],
     confirmation: {
       confirmationId: `inspection-finding-decision-${kind.toLowerCase()}-${sha(finding.id).slice(0, 12)}-1`, version: 1,
       title: isMonitor ? 'Keep an eye on this finding?' : closing ? CLOSING_COPY[kind].title : `${INSPECTION_FIX_DISCLOSE_LABELS[kind]} for this finding?`,
@@ -256,7 +276,8 @@ async function confirmInspectionFindingDecision(ctx: ConfirmCapabilityContext): 
   const propertyId = execution.propertyId;
   let markFailed = false;
   try {
-    const finding = await loadFinding(propertyId, command.entityId);
+    const isOwner = ctx.access.role === HouseholdRole.OWNER;
+    const finding = await loadFinding(propertyId, command.entityId, isOwner);
     if (!finding) throw stale('That finding is no longer available.');
     if (parameters.inspectionFindingDecisionContextVersion !== findingVersion(kind, finding)) throw stale('This finding changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
     if (!inspectionFindingDecisionKinds(finding.report, finding).includes(kind)) throw stale('That decision is not available for this finding now.');
@@ -272,6 +293,7 @@ async function confirmInspectionFindingDecision(ctx: ConfirmCapabilityContext): 
       await hubService.dispositionFindingAsWork(finding.id, finding.reportId, propertyId, userId, { disposition: 'DUPLICATE', duplicateOfWorkItemId: targetId });
     } else if (isInspectionFindingEditKind(kind)) {
       const answer = InspectionFindingEditSchema.safeParse(parameters.inspectionFindingEditForm);
+      if (answer.success) answer.data = structuralEditAnswer(answer.data, isOwner) as typeof answer.data; // a stored form from before a role change never saves owner-only fields for a non-owner
       if (!answer.success) throw stale('The details to save are invalid.');
       const { patch, rangeInverted } = editChanges(finding, answer.data);
       if (rangeInverted || !Object.keys(patch).length) throw stale('There is nothing valid to save.');

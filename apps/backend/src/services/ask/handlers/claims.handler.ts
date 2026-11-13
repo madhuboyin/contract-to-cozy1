@@ -327,7 +327,9 @@ async function incidentClaimStatusResult(
   const incidentWhere = (open: boolean) => ({ propertyId, isSuppressed: false, status: open ? { in: OPEN_INCIDENT_STATUSES as never } : { notIn: OPEN_INCIDENT_STATUSES as never } });
   const claimWhere = (open: boolean) => ({ propertyId, status: open ? { in: OPEN_CLAIM_STATUSES as never } : { notIn: OPEN_CLAIM_STATUSES as never } });
   const incidentSelect = { id: true, title: true, summary: true, status: true, severity: true, openedAt: true, resolvedAt: true, typeKey: true } as const;
-  const claimSelect = { id: true, title: true, status: true, type: true, sourceType: true, providerName: true, incidentAt: true, openedAt: true, closedAt: true } as const;
+  // Owner audience policy 2026-11-13: the provider name is not a contributor-readable claim field (not catalogued); it is not even selected for non-owners.
+  const isOwnerRole = access.role === HouseholdRole.OWNER;
+  const claimSelect = { id: true, title: true, status: true, type: true, sourceType: true, incidentAt: true, openedAt: true, closedAt: true, ...(isOwnerRole ? { providerName: true } : {}) } as { id: true; title: true; status: true; type: true; sourceType: true; providerName?: true; incidentAt: true; openedAt: true; closedAt: true };
   const readIncidents = (open: boolean, take: number) => Promise.all([
     prisma.incident.findMany({ where: incidentWhere(open), orderBy: [{ openedAt: 'desc' }], take, select: incidentSelect }),
     prisma.incident.count({ where: incidentWhere(open) }),
@@ -358,7 +360,7 @@ async function incidentClaimStatusResult(
   });
   const claimRow = (claim: (typeof activeClaims)[number], dateLabel: string, date: Date | null) => ({
     id: claim.id, title: claim.title,
-    description: [claim.providerName, humanizeEnum(claim.type)].filter(Boolean).join(' · ') || humanizeEnum(claim.type),
+    description: [(claim as { providerName?: string | null }).providerName, humanizeEnum(claim.type)].filter(Boolean).join(' · ') || humanizeEnum(claim.type),
     meta: [humanizeEnum(claim.status), humanDate(date) ? `${dateLabel} ${humanDate(date)}` : null].filter((value): value is string => Boolean(value)),
     status: claim.status, href: null, entityType: 'CLAIM', actions: claimActions,
   });
