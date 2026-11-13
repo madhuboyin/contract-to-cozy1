@@ -12,8 +12,16 @@ export const RawFacetSchema = z.object({
   /** The words of the message this facet answers (FR-FACET-13 span); validated to occur in the message. */
   span: z.string().min(1).max(300),
   target: z.discriminatedUnion('kind', [
-    z.object({ kind: z.literal('OPERATION'), operationId: z.string().min(1).max(80) }),
-    z.object({ kind: z.literal('DATA_POINT'), dataPointId: z.string().min(1).max(80) }),
+    z.object({
+      kind: z.literal('OPERATION'), operationId: z.string().min(1).max(80),
+      evidence: z.object({ jobMatch: z.enum(['DIRECT', 'PARTIAL', 'NONE']), itemNamed: z.boolean() }).strict().optional(),
+    }).strict(),
+    z.object({
+      kind: z.literal('DATA_POINT'), dataPointId: z.string().min(1).max(80), entityRef: z.string().max(80).nullish(),
+      parameters: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).default({}),
+      requiredSlots: z.array(z.string().min(1).max(80)).max(12).default([]),
+      evidence: z.object({ jobMatch: z.enum(['DIRECT', 'PARTIAL', 'NONE']), itemNamed: z.boolean() }).strict().optional(),
+    }).strict(),
   ]),
   /** The recorded thing the facet is about ("water heater"); shared across facets (FR-FACET-5). */
   entity: z.string().max(80).nullish(),
@@ -25,8 +33,13 @@ export const RawPlanSchema = z.object({ facets: z.array(RawFacetSchema).max(32) 
 export type RawPlan = z.infer<typeof RawPlanSchema>;
 
 export type DropReason = 'UNKNOWN_TARGET' | 'NOT_ELIGIBLE' | 'WRITE_NOT_COMPOSABLE' | 'NOT_A_COMPOSABLE_READ' | 'SPAN_NOT_IN_MESSAGE' | 'DUPLICATE' | 'BAD_DEPENDENCY' | 'DEPENDS_ON_DROPPED' | 'OVER_LIMIT';
-export interface ValidFacet { readonly id: string; readonly span: string; readonly target: { kind: 'OPERATION'; operationId: AskOperationId } | { kind: 'DATA_POINT'; dataPointId: string }; readonly entity: string | null; readonly dependsOn: readonly string[]; readonly confidence: number }
-export interface DroppedFacet { readonly index: number; readonly span: string; readonly reason: DropReason }
+export interface ValidFacet {
+  readonly id: string; readonly span: string;
+  readonly target: { kind: 'OPERATION'; operationId: AskOperationId; evidence?: { jobMatch: 'DIRECT' | 'PARTIAL' | 'NONE'; itemNamed: boolean } }
+    | { kind: 'DATA_POINT'; dataPointId: string; entityRef: string | null; parameters: Readonly<Record<string, string | number | boolean | null>>; requiredSlots: readonly string[]; evidence?: { jobMatch: 'DIRECT' | 'PARTIAL' | 'NONE'; itemNamed: boolean } };
+  readonly entity: string | null; readonly dependsOn: readonly string[]; readonly confidence: number;
+}
+export interface DroppedFacet { readonly index: number; readonly span: string; readonly reason: DropReason; readonly operationId?: AskOperationId }
 export interface PlanValidation { readonly accepted: readonly ValidFacet[]; readonly dropped: readonly DroppedFacet[]; readonly overflow: number }
 
 export interface PlanContext {
@@ -46,23 +59,27 @@ export function validateRequestPlan(raw: unknown, ctx: PlanContext): PlanValidat
   const limit = ctx.maxFacets ?? DEFAULT_MAX_FACETS; const message = norm(ctx.message);
   const accepted: ValidFacet[] = []; const dropped: DroppedFacet[] = []; const indexToId = new Map<number, string>(); const seen = new Set<string>(); let overflow = 0;
   parsed.data.facets.forEach((facet, index) => {
-    const drop = (reason: DropReason) => { dropped.push({ index, span: facet.span, reason }); };
+    const drop = (reason: DropReason, operationId?: AskOperationId) => { dropped.push({ index, span: facet.span, reason, ...(operationId ? { operationId } : {}) }); };
     if (!message.includes(norm(facet.span))) return drop('SPAN_NOT_IN_MESSAGE');
     let target: ValidFacet['target']; let key: string;
     if (facet.target.kind === 'DATA_POINT') {
       if (!DATA_POINT_BY_ID.has(facet.target.dataPointId)) return drop('UNKNOWN_TARGET');
       if (ctx.eligibleDataPointIds && !ctx.eligibleDataPointIds.has(facet.target.dataPointId)) return drop('NOT_ELIGIBLE');
-      target = { kind: 'DATA_POINT', dataPointId: facet.target.dataPointId }; key = `DP:${facet.target.dataPointId}`;
+      target = {
+        kind: 'DATA_POINT', dataPointId: facet.target.dataPointId, entityRef: facet.target.entityRef ?? null,
+        parameters: facet.target.parameters, requiredSlots: facet.target.requiredSlots,
+        ...(facet.target.evidence ? { evidence: facet.target.evidence } : {}),
+      }; key = `DP:${facet.target.dataPointId}`;
     } else {
       const requested = facet.target.operationId as AskOperationId; let def: ReturnType<typeof getAskOperationDefinition>;
       try { def = getAskOperationDefinition(requested); } catch { return drop('UNKNOWN_TARGET'); }
       if (!def) return drop('UNKNOWN_TARGET');
       // A write is never composed (FR-DEC-0); a persisting decision runs as its pure variant (D17) or not at all.
       const runs = COMPOSITION_PURE_VARIANTS[requested] ?? requested;
-      if (isWriteCapableOperation(runs)) return drop('WRITE_NOT_COMPOSABLE');
+      if (isWriteCapableOperation(runs)) return drop('WRITE_NOT_COMPOSABLE', requested);
       if (ctx.eligibleOperationIds && !ctx.eligibleOperationIds.has(requested)) return drop('NOT_ELIGIBLE');
       if (!getAskOperationDefinition(runs).composableRead) return drop('NOT_A_COMPOSABLE_READ');
-      target = { kind: 'OPERATION', operationId: runs }; key = `OP:${runs}`;
+      target = { kind: 'OPERATION', operationId: runs, ...(facet.target.evidence ? { evidence: facet.target.evidence } : {}) }; key = `OP:${runs}`;
     }
     const id = facetId(key, facet.entity ?? null);
     if (seen.has(id)) return drop('DUPLICATE');

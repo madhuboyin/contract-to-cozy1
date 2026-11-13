@@ -215,6 +215,9 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
         launchContext: {
           surface: 'ASK_COMPOSED_COMPONENT', operationId: run.clause.operationId,
           ...(run.clause.dataPointId ? { dataPointId: run.clause.dataPointId } : {}),
+          ...(run.clause.dataPointParameters ? { dataPointParameters: run.clause.dataPointParameters } : {}),
+          ...(run.clause.requiredSlots?.length ? { dataPointRequiredSlots: run.clause.requiredSlots } : {}),
+          ...(run.clause.entityRef !== undefined ? { dataPointEntityRef: run.clause.entityRef } : {}),
         },
       } as CreateAskExecutionRequest, input.accountRole, { composition: { parentExecutionId: parent.id, expiresAt: parent.expiresAt } });
       return { executionId: response.executionId, status: response.status };

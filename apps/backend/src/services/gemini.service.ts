@@ -232,55 +232,6 @@ class GeminiService {
   }
 
   /**
-   * Chooses ONE of the supplied operations for a homeowner's message (or NONE). The reply is an enum of the candidate ids plus a confidence,
-   * so the model cannot return an operation that was not offered, prose, or anything about the home. No property data is sent.
-   */
-  public async selectAskOperation(input: {
-    purpose: 'ASK_COZY_OPERATION_ROUTING';
-    question: string;
-    candidates: readonly { operationId: string; description: string }[];
-  }): Promise<unknown> {
-    const model = resolveGovernedAIModel('FAST');
-    const response = await geminiChatCircuit.execute(async () =>
-      withTimeout(
-        async () => executeGovernedAIRequest({
-          routeId: 'ai:ask',
-          model,
-          structuredOutputRequired: true,
-          structuredOutputConfigured: true,
-          maxAttempts: 1,
-          work: () => this.getAI().models.generateContent({
-            model,
-            contents: JSON.stringify({
-              purpose: input.purpose,
-              question: minimizeAskQuestion(input.question),
-              instruction: 'A homeowner asked a question about their own home. Choose the ONE operation whose purpose matches what they are asking about, or NONE if no operation clearly matches. Use HIGH only when the question is clearly about that operation\'s purpose, MEDIUM when it is plausible, LOW otherwise. Do not answer the question and do not add text.',
-              operations: input.candidates,
-            }),
-            config: {
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: 'object',
-                properties: {
-                  operationId: { type: 'string', enum: [...input.candidates.map((candidate) => candidate.operationId), 'NONE'] },
-                  confidence: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
-                },
-                required: ['operationId', 'confidence'],
-              },
-              temperature: 0,
-              maxOutputTokens: 60,
-            },
-          }),
-        }),
-        // The homeowner is waiting on this turn: a slow routing call is worth less than the fallback it would delay.
-        { timeoutMs: Math.min(GEMINI_CHAT_TIMEOUT_MS, 4000), operation: 'ask_operation_routing' },
-      ),
-    );
-    if (!response.text) throw new APIError('AI operation routing returned an empty response.', 502, 'AI_EMPTY_RESPONSE');
-    return JSON.parse(response.text);
-  }
-
-  /**
    * Reliability FRD Phase 2/3 understanding planner. The caller supplies only
    * minimised text and a policy-filtered catalogue. The provider can propose
    * catalogue ids, but requestPlan.ts remains the authority that admits them.
@@ -336,10 +287,14 @@ class GeminiService {
                     operationId: { type: 'string', enum: operationIds },
                     dataPointId: { type: 'string', enum: dataPointIds },
                     entity: { type: 'string', nullable: true },
+                    entityRef: { type: 'string', nullable: true },
+                    parameters: { type: 'object', additionalProperties: true },
+                    requiredSlots: { type: 'array', items: { type: 'string' }, maxItems: 12 },
+                    evidence: { type: 'object', properties: { jobMatch: { type: 'string', enum: ['DIRECT', 'PARTIAL', 'NONE'] }, itemNamed: { type: 'boolean' } }, required: ['jobMatch', 'itemNamed'], additionalProperties: false },
                     dependsOn: { type: 'array', items: { type: 'integer' }, maxItems: 8 },
                     confidence: { type: 'number', minimum: 0, maximum: 1 },
                   },
-                  required: ['span', 'kind', 'dependsOn', 'confidence'], additionalProperties: false,
+                  required: ['span', 'kind', 'parameters', 'requiredSlots', 'evidence', 'dependsOn', 'confidence'], additionalProperties: false,
                 },
                 },
               }, required: ['facets'], additionalProperties: false },

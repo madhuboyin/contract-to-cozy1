@@ -88,37 +88,4 @@ function compareToBaseline(result, baseline) {
   return { lost, newMisroutes };
 }
 
-/**
- * The same corpus with the model-assisted router in front of the generic fallback and clarification, using a real model provider.
- * Needs network and a working GEMINI_API_KEY; counts how often the model was unavailable so a dead key is not mistaken for a bad model.
- */
-async function runModelSweep(corpus, { provider, only = [], limit = Infinity }) {
-  const { resolveAskRoutingCascade } = require(path.join(BACKEND, 'src/services/ask/askRoutingCascade.ts'));
-  const { ASK_OPERATION_DEFINITIONS } = require(path.join(BACKEND, 'src/services/ask/askOperationRegistry.ts'));
-  const { refineAskRoutingWithModel } = require(path.join(BACKEND, 'src/services/ask/askModelRouter.ts'));
-  const eligible = Object.values(ASK_OPERATION_DEFINITIONS).filter((definition) => !definition.safetyClass.endsWith('_BOUNDARY')).map((definition) => definition.operationId);
-  const local = { hit: 0, mis: 0, fb: 0, clar: 0, n: 0 }; const withModel = { hit: 0, mis: 0, fb: 0, clar: 0, n: 0 };
-  const modelOutcomes = {}; const changed = []; let calls = 0;
-  for (const [operationId, prompts] of Object.entries(corpus)) {
-    if (only.length && !only.includes(operationId)) continue;
-    if (!ASK_OPERATION_DEFINITIONS[operationId]) continue;
-    const acceptable = new Set([operationId, ...(EQUIVALENT[operationId] ?? [])]);
-    for (const message of prompts) {
-      const options = { localRoutingEnabled: true, classifierEnabled: true, embeddingRetrievalEnabled: true, propertyId: 'sweep-property' };
-      const decision = resolveAskRoutingCascade(message, options);
-      const before = classifyDecision(decision, acceptable).outcome;
-      let after = before; let refined = decision;
-      if ((decision.stage === 'REMOTE_FALLBACK' || decision.stage === 'CLARIFICATION') && calls < limit) {
-        calls += 1;
-        refined = await refineAskRoutingWithModel(decision, { enabled: true, message, provider, eligibleOperationIds: eligible, onOutcome: (outcome) => { modelOutcomes[outcome] = (modelOutcomes[outcome] ?? 0) + 1; } });
-        after = classifyDecision(refined, acceptable).outcome;
-      }
-      const bucket = (outcome) => (outcome === 'clarOk' || outcome === 'clarBad' ? 'clar' : outcome);
-      local.n += 1; local[bucket(before)] += 1; withModel.n += 1; withModel[bucket(after)] += 1;
-      if (before !== after) changed.push({ operationId, message, before, after, got: classifyDecision(refined, acceptable).got });
-    }
-  }
-  return { local, withModel, modelOutcomes, changed, modelCalls: calls };
-}
-
-module.exports = { BACKEND, BASELINE_PATH, EQUIVALENT, classifyDecision, runSweep, runModelSweep, baselineFrom, compareToBaseline };
+module.exports = { BACKEND, BASELINE_PATH, EQUIVALENT, classifyDecision, runSweep, baselineFrom, compareToBaseline };

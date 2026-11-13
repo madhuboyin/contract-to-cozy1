@@ -45,9 +45,14 @@ export async function planRuntimeUnderstanding(input: {
     facetId: facet.id,
     dependsOn: facet.dependsOn,
     ...(facet.target.kind === 'DATA_POINT' ? { dataPointId: facet.target.dataPointId } : {}),
+    ...(facet.target.kind === 'DATA_POINT' ? { dataPointParameters: facet.target.parameters, requiredSlots: facet.target.requiredSlots, entityRef: facet.target.entityRef } : {}),
   }));
   const deferred: DeferredClause[] = [
-    ...outcome.validation.dropped.map((facet) => ({ clause: facet.span, reason: facet.reason === 'OVER_LIMIT' ? 'OVER_LIMIT' as const : 'NOT_ROUTED' as const, operationId: null })),
+    ...outcome.validation.dropped.map((facet) => ({
+      clause: facet.span,
+      reason: facet.reason === 'OVER_LIMIT' ? 'OVER_LIMIT' as const : facet.reason === 'WRITE_NOT_COMPOSABLE' ? 'NOT_COMPOSABLE' as const : 'NOT_ROUTED' as const,
+      operationId: facet.operationId ?? null,
+    })),
   ];
   return clauses.length ? { kind: 'PLAN', clauses, deferred } : { kind: 'UNAVAILABLE', reason: 'NO_EXECUTABLE_PLAN' };
 }

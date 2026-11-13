@@ -12,7 +12,7 @@ export const ASK_LLM_PURPOSE_CONTRACTS = Object.freeze({
     structuredOutputRequired: true,
     maxOutputClaims: 6,
   },
-  // Chooses one registered, read-only operation for a message the local router could not place (askModelRouter.ts). Output is an enum of the
+  // The governed understanding planner may select a registered operation for a message the local router could not place. Output is constrained by the
   // candidate ids plus a confidence; it never carries prose or home data.
   ASK_COZY_OPERATION_ROUTING: {
     purpose: 'ASK_COZY_OPERATION_ROUTING' as const,

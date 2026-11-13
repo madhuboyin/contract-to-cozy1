@@ -283,13 +283,6 @@ export const askRoutingDecisionsTotal = new Counter({
   registers: [register],
 });
 
-export const askModelRouterTotal = new Counter({
-  name: 'ask_model_router_total',
-  help: 'Model-assisted routing outcomes for messages the local router could not place',
-  labelNames: ['outcome'] as const,
-  registers: [register],
-});
-
 /** FR-UND-12 / FR-REC-2: every non-answer outcome under its own code (never folded into another), so reports can separate them. */
 export const askRecoveryOutcomeTotal = new Counter({
   name: 'ask_recovery_outcome_total', help: 'Ask non-answer outcomes by recovery code (OUT_OF_DOMAIN, MODEL_NONE_FITS, MISSING_RECORD_DATA, ...).', labelNames: ['code'] as const, registers: [register],

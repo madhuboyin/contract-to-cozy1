@@ -1542,6 +1542,9 @@ export const CreateAskExecutionRequestSchema = z.object({
     // DATA_POINT_READ handler revalidates this id against the reviewed
     // catalogue and applies its ordinary role/property authorization.
     dataPointId: z.string().trim().max(120).nullable().optional(),
+    dataPointParameters: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
+    dataPointRequiredSlots: z.array(z.string().trim().min(1).max(80)).max(12).optional(),
+    dataPointEntityRef: z.string().trim().max(80).nullable().optional(),
     // SUGGESTED_NEXT_ACTIONS: the registered outcome of a selected Suggested Next Action. Set by the server from the stored offer, so an
     // operation that needs more than free text to pick a field (inventory correction) never re-parses its own message.
     outcomeKey: z.string().trim().max(80).nullable().optional(),

@@ -13,10 +13,6 @@
 //                                                            routes to a wrong operation (the same rule tests/ask/routingSweepRatchet.test.js enforces)
 //   node scripts/ask-routing-sweep.js --write-baseline       record today's results as the new baseline (tests/fixtures/askRoutingSweepBaseline.json);
 //                                                            refuses when that would record a regression, unless --force is given
-//   node scripts/ask-routing-sweep.js --model                also run the model-assisted router (askModelRouter.ts) on every prompt the local router
-//                                                            leaves to the fallback or a clarification, with the REAL model, and compare. Needs network
-//                                                            and GEMINI_API_KEY in the environment; --model-limit=N caps the number of model calls.
-//                                                            This is the evidence to read before setting ASK_MODEL_ROUTER_ENABLED=true.
 //
 // Outcomes: hit (expected or equivalent op), clarOk (clarification that offered the right op), clarBad (clarification without it),
 // fb (REMOTE_FALLBACK, the dead end), mis (routed to a different op). Not modelled: buyer-mode eligibility gating, launch context,
@@ -29,7 +25,7 @@ process.env.TS_NODE_TRANSPILE_ONLY = process.env.TS_NODE_TRANSPILE_ONLY || 'true
 process.env.TS_NODE_PROJECT = process.env.TS_NODE_PROJECT || path.join(BACKEND, 'tsconfig.test-cache.json');
 require(path.join(BACKEND, 'node_modules/ts-node/register'));
 
-const { BASELINE_PATH, runSweep, runModelSweep, baselineFrom, compareToBaseline } = require('./lib/askRoutingSweep');
+const { BASELINE_PATH, runSweep, baselineFrom, compareToBaseline } = require('./lib/askRoutingSweep');
 
 const args = process.argv.slice(2);
 const flag = (name) => args.find((arg) => arg === `--${name}` || arg.startsWith(`--${name}=`));
@@ -83,22 +79,4 @@ if (flag('check') || flag('write-baseline')) {
     fs.writeFileSync(BASELINE_PATH, `${JSON.stringify(baselineFrom(result), null, 1)}\n`);
     console.log(`\nBaseline written: ${path.relative(BACKEND, BASELINE_PATH)}`);
   }
-}
-
-if (flag('model')) {
-  if (!process.env.GEMINI_API_KEY) { console.error('\n--model needs GEMINI_API_KEY in the environment (for example: set -a; source ../../.env.local; set +a).'); process.exit(1); }
-  const { geminiService } = require(path.join(BACKEND, 'src/services/gemini.service.ts'));
-  const limit = Number(value('model-limit') ?? Infinity);
-  runModelSweep(corpus, { provider: { select: (request) => geminiService.selectAskOperation(request) }, only, limit }).then((model) => {
-    const share = (count, n) => `${count} (${((100 * count) / Math.max(1, n)).toFixed(1)}%)`;
-    console.log(`\nModel-assisted router: ${model.modelCalls} model calls`);
-    console.log(`  local only : hit ${share(model.local.hit, model.local.n)}  clarification ${model.local.clar}  fallback ${model.local.fb}  misroute ${model.local.mis}`);
-    console.log(`  with model : hit ${share(model.withModel.hit, model.withModel.n)}  clarification ${model.withModel.clar}  fallback ${model.withModel.fb}  misroute ${model.withModel.mis}`);
-    console.log(`  model outcomes: ${Object.entries(model.modelOutcomes).map(([name, count]) => `${name} ${count}`).join('  ') || 'none'}`);
-    if ((model.modelOutcomes.UNAVAILABLE ?? 0) > model.modelCalls / 2) console.error('  Most calls were UNAVAILABLE: the key may be invalid or the model unreachable, so these numbers say nothing about the router.');
-    const worse = model.changed.filter((entry) => entry.after === 'mis' || (entry.before === 'hit' && entry.after !== 'hit'));
-    console.log(`  changed ${model.changed.length} prompts; ${worse.length} became misroutes or lost a hit${worse.length ? ':' : ''}`);
-    for (const entry of worse) console.log(`    [${entry.operationId}] ${entry.message}  ${entry.before} -> ${entry.after}  (${entry.got})`);
-    if (flag('misses')) for (const entry of model.changed.filter((item) => !worse.includes(item))) console.log(`    changed [${entry.operationId}] ${entry.message}  ${entry.before} -> ${entry.after}  (${entry.got})`);
-  }).catch((error) => { console.error(`\nModel sweep failed: ${error.message}`); process.exitCode = 1; });
 }

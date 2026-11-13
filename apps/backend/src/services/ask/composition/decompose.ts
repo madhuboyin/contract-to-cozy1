@@ -18,6 +18,9 @@ export interface ComposedClause {
   confidence: number;
   /** Present only for a validated model-selected DATA_POINT target. */
   dataPointId?: string;
+  dataPointParameters?: Readonly<Record<string, string | number | boolean | null>>;
+  requiredSlots?: readonly string[];
+  entityRef?: string | null;
   /** Stable facet ids of earlier clauses this clause depends on. */
   facetId?: string;
   dependsOn?: readonly string[];

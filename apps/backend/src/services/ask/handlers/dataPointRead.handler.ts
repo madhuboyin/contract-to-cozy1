@@ -266,5 +266,11 @@ registerCapabilityHandler('data-point-read.read', async (envelope) => {
   // A server-authored launch id that is no longer catalogued fails closed; it
   // is never silently reinterpreted from message text.
   if (requestedId && !forcedPoint) return notice('DATA_POINT_NOT_IDENTIFIED', 'data-point-unidentified', 'That home detail is not available', 'Ask for the detail again and I’ll use the current home-data catalogue.');
+  const requiredSlots = envelope.launchContext?.dataPointRequiredSlots ?? [];
+  if (requiredSlots.length) return notice('DATA_POINT_REQUIRED_SLOT_MISSING', 'data-point-required-slot', 'I need one more detail', `Tell me ${requiredSlots.join(' and ')} so I can read the right home record.`);
+  // Parameters are advisory until a reviewed query template validates them.
+  // Point/record reads require none; silently accepting arbitrary model keys
+  // would recreate the raw-predicate path FR-DATA-15 forbids.
+  if (Object.keys(envelope.launchContext?.dataPointParameters ?? {}).length) return notice('DATA_POINT_PARAMETERS_UNSUPPORTED', 'data-point-parameters-unsupported', 'I need a simpler question', 'Ask for the recorded detail directly. Filtered and grouped questions use only reviewed query templates.');
   return dataPointReadResult(envelope.userId, envelope.propertyId!, envelope.message, forcedPoint);
 });
