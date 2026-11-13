@@ -31,3 +31,12 @@ test('cross-entity: both sides property-scoped, a floor for EVERY participating 
   assert.ok(r.validateCrossEntity([{ ...ok, maxJoinedRows: 1000 }]).some((i) => /bounded/.test(i)));
   assert.ok(r.validateCrossEntity([{ ...ok, propertyScopedBothSides: false }]).some((i) => /property-scoped/.test(i)));
 });
+
+test('an absence declaration takes its audience floor from the catalogue point, and a declaration that disagrees fails validation', () => {
+  const { DATA_POINT_BY_ID } = require('../../src/services/ask/dataPoint/dataPointCatalogue.ts');
+  for (const e of r.ABSENCE_REQUIREMENT_REGISTRY) assert.equal(e.audienceFloor, DATA_POINT_BY_ID.get(e.dataPointId).audience, e.dataPointId);
+  assert.equal(r.ABSENCE_REQUIREMENT_REGISTRY.find((e) => e.dataPointId === 'item.serial').audienceFloor, 'CONTRIBUTOR');
+  const serial = r.ABSENCE_REQUIREMENT_REGISTRY.find((e) => e.dataPointId === 'item.serial');
+  assert.ok(r.validateAbsence([{ ...serial, audienceFloor: 'VIEWER' }]).some((i) => /disagrees with the catalogue/.test(i)));
+  assert.deepEqual(r.validateAbsence(), []);
+});

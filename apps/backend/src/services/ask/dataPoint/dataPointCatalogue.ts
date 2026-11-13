@@ -1,7 +1,8 @@
-// Proposed data-point catalogue (reliability FRD FR-DATA-1..5, D11, D12, D13). The Prisma schema says what exists; this file says what the homeowner may be shown and
-// how they ask for it. FAIL CLOSED: a field not listed here cannot be read through DATA_POINT_READ, whatever the schema contains. The catalogue holds 33 PROPOSED data
-// points (inventory 14, warranties 5, insurance 7, maintenance 7) plus 14 reserve and ownership-cost points (catalogue version 2). The owner approved the field floors and the
-// domain split for exactly these 71 ids (33 at version 1, 14 at version 2, 12 at version 3, 4 at version 4, 4 at version 5, 4 at version 6; all 2026-11-12); see APPROVED_DATA_POINT_IDS below. Any other id, or any change of a floor, needs a new approval and a new version.
+// Data-point catalogue (reliability FRD FR-DATA-1..5, D11, D12, D13). The Prisma schema says what exists; this file says what the homeowner may be shown and how they ask for it. FAIL CLOSED: a field not listed here
+// cannot be read through DATA_POINT_READ, whatever the schema contains. Version 11 holds 106 owner-approved ids: inventory 14, warranties 5, insurance 7, maintenance 7 and the reserve and ownership-cost points (the first
+// 47, approved 2026-11-12 at versions 1 and 2), then seller prep and buyer, home records and record versions, buyer tasks and milestones, sale items, claims and claim children, and the 11 home-profile points added at
+// version 11 (2026-11-13). The id list, the per-version approval and the count are APPROVED_DATA_POINT_IDS and DATA_POINT_APPROVAL below, and tests/ask/dataPointRead.test.js pins the count and the version, so this
+// comment cannot drift without a test failing. Any other id, or any change of a floor, needs a new approval and a new version.
 export type DataPointFamily = 'text' | 'date' | 'money' | 'dollars' | 'enum' | 'tags' | 'flag' | 'percent' | 'number';
 export type DataPointEntity = 'InventoryItem' | 'Warranty' | 'InsurancePolicy' | 'PropertyMaintenanceTask' | 'HomeReserveFund' | 'PropertyTaxBillRecord' | 'PropertyTaxAssessmentRecord' | 'PropertySalePrepProfile' | 'PropertySaleCase' | 'HomeBuyerChecklist' | 'PropertyRecord' | 'HomeBuyerTask' | 'BuyerJourneyMilestone' | 'SaleReadinessItem' | 'PropertyRecordVersion' | 'Claim' | 'ClaimChecklistItem' | 'ClaimTimelineEvent' | 'ClaimDocument' | 'Property';
 export type DataPointDomain = 'appliances-inventory' | 'warranties' | 'insurance' | 'maintenance' | 'reserve-ownership-costs' | 'seller-prep' | 'buyer' | 'documents-records' | 'claims' | 'home-profile';
