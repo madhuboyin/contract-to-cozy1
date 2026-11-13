@@ -39,6 +39,8 @@ export interface FindingRow {
 
 export function inspectionReportFindingsFromRows(
   report: { reportType: string; status: string; inspectionDate: Date }, findings: FindingRow[], canChange: boolean, sourceTotal = findings.length,
+  // Owner audience policy 2026-11-13: the inspector's description, the planned fix cost and the cost estimate are OWNER-only. Fail closed: absent means not the owner.
+  isOwner = false,
 ): AskOperationResult {
   const type = INSPECTION_REPORT_TYPE_LABELS[report.reportType] ?? 'Inspection';
   const when = humanDate(report.inspectionDate) ?? 'undated';
@@ -51,11 +53,11 @@ export function inspectionReportFindingsFromRows(
   const row = (finding: FindingRow) => {
     const plan = parseFixDisclosure(finding.resolutionNotes);
     const description = [
-      finding.inspectorDescription,
-      plan ? `Plan: ${INSPECTION_FIX_DISCLOSE_LABELS[plan.decision] ?? plan.decision}${plan.estimatedFixCostCents ? `, about ${dollars(plan.estimatedFixCostCents)} to fix` : ''}.` : null,
+      isOwner ? finding.inspectorDescription : null,
+      plan ? `Plan: ${INSPECTION_FIX_DISCLOSE_LABELS[plan.decision] ?? plan.decision}${isOwner && plan.estimatedFixCostCents ? `, about ${dollars(plan.estimatedFixCostCents)} to fix` : ''}.` : null,
     ].filter(Boolean).join(' ');
-    const low = finding.estimatedCostCentsLow;
-    const high = finding.estimatedCostCentsHigh;
+    const low = isOwner ? finding.estimatedCostCentsLow : null;
+    const high = isOwner ? finding.estimatedCostCentsHigh : null;
     const cost = low != null && high != null ? (low === high ? `Est. ${dollars(low)}` : `Est. ${dollars(low)} to ${dollars(high)}`) : null;
     const meta = [SEVERITY_LABELS[finding.severity] ?? finding.severity, cost, DISPOSITION_LABELS[finding.workDisposition] ?? null].filter((value): value is string => Boolean(value));
     return {
@@ -102,9 +104,9 @@ registerCapabilityHandler('inspection-report-findings.view', async (envelope, de
   const [findings, sourceTotal] = await Promise.all([
     (prisma as any).inspectionFinding.findMany({
       where, orderBy: [{ severity: 'asc' }, { updatedAt: 'desc' }], take: 50,
-      select: { id: true, homeSystem: true, subsystem: true, severity: true, inspectorDescription: true, status: true, workDisposition: true, resolutionNotes: true, estimatedCostCentsLow: true, estimatedCostCentsHigh: true },
+      select: { id: true, homeSystem: true, subsystem: true, severity: true, status: true, workDisposition: true, resolutionNotes: true, ...(access.role === HouseholdRole.OWNER ? { inspectorDescription: true, estimatedCostCentsLow: true, estimatedCostCentsHigh: true } : {}) },
     }),
     (prisma as any).inspectionFinding.count({ where }),
   ]);
-  return inspectionReportFindingsFromRows(report, findings as FindingRow[], access.role !== HouseholdRole.VIEWER, sourceTotal);
+  return inspectionReportFindingsFromRows(report, findings as FindingRow[], access.role !== HouseholdRole.VIEWER, sourceTotal, access.role === HouseholdRole.OWNER);
 });

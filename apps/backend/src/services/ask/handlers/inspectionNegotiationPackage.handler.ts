@@ -24,12 +24,13 @@ const stop = (status: 'BLOCKED' | 'NOT_APPLICABLE', reasonCode: string, title: s
 const dollars = (cents: number) => `$${Math.round(cents / 100).toLocaleString('en-US')}`;
 const clip = (text: string, n = 90) => (text.length > n ? `${text.slice(0, n - 1)}…` : text);
 
-interface OpenFinding { id: string; homeSystem: string; subsystem: string | null; severity: string; inspectorDescription: string; updatedAt: Date }
+interface OpenFinding { id: string; homeSystem: string; subsystem: string | null; severity: string; inspectorDescription?: string; updatedAt: Date }
 
 export const negotiationVersion = (reportId: string, findings: ReadonlyArray<{ id: string; updatedAt: Date }>) =>
   sha(`inspection-negotiation:${reportId}:${findings.map((f) => `${f.id}:${f.updatedAt.toISOString()}`).join('|')}`);
 
-function captureRequest(contextVersion: string, findings: OpenFinding[], entered?: Record<string, unknown>): AskCaptureRequest {
+// Owner audience policy 2026-11-13: the inspector's description and every cost figure (per finding and the credit total) are OWNER-only. A contributor still decides each finding and gets the structured package.
+function captureRequest(contextVersion: string, findings: OpenFinding[], entered: Record<string, unknown> | undefined, isOwner: boolean): AskCaptureRequest {
   const options = NEGOTIATION_DECISIONS.map((value) => ({ label: NEGOTIATION_DECISION_LABELS[value], value }));
   return {
     requirementId: 'inspection-negotiation-inputs', captureKey: NEGOTIATION_PACKAGE_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
@@ -38,7 +39,7 @@ function captureRequest(contextVersion: string, findings: OpenFinding[], entered
     inputSchema: {
       type: 'GROUP',
       fields: findings.map((finding, index) => ({
-        key: negotiationFieldKey(index), label: `${finding.severity.toLowerCase()}: ${finding.homeSystem}${finding.subsystem ? ` / ${finding.subsystem}` : ''} — ${clip(finding.inspectorDescription)}`,
+        key: negotiationFieldKey(index), label: `${finding.severity.toLowerCase()}: ${finding.homeSystem}${finding.subsystem ? ` / ${finding.subsystem}` : ''}${isOwner && finding.inspectorDescription ? ` — ${clip(finding.inspectorDescription)}` : ` (finding ${index + 1})`}`,
         required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options },
       })),
     } as unknown as AskCaptureRequest['inputSchema'],
@@ -63,13 +64,14 @@ export async function negotiationPackageResult(
   const [findings, sourceTotal] = await Promise.all([
     (prisma as any).inspectionFinding.findMany({
       where, orderBy: [{ severity: 'asc' }, { createdAt: 'desc' }], take: NEGOTIATION_MAX_FINDINGS,
-      select: { id: true, homeSystem: true, subsystem: true, severity: true, inspectorDescription: true, updatedAt: true },
+      select: { id: true, homeSystem: true, subsystem: true, severity: true, updatedAt: true, ...(access.role === HouseholdRole.OWNER ? { inspectorDescription: true } : {}) },
     }) as Promise<OpenFinding[]>,
     (prisma as any).inspectionFinding.count({ where }),
   ]);
   if (findings.length === 0) {
     return { status: 'ANSWERED', reasonCode: 'INSPECTION_NEGOTIATION_NO_OPEN_FINDINGS', blocks: [{ type: 'EMPTY_STATE', id: 'inspection-negotiation-empty', title: 'No open findings to negotiate', body: 'Every finding in this report has been decided. Nothing has changed.', actions: [reportsAction] }], suggestions: [] };
   }
+  const isOwner = access.role === HouseholdRole.OWNER;
   const contextVersion = negotiationVersion(report.id, findings);
   const formResult = (note?: string, entered?: Record<string, unknown>): AskOperationResult => ({
     status: 'NEEDS_CONTEXT', reasonCode: 'INSPECTION_NEGOTIATION_INPUT_REQUIRED', contextVersion,
@@ -78,7 +80,7 @@ export async function negotiationPackageResult(
       type: 'SUMMARY', id: 'inspection-negotiation-input', title: `Negotiation package, ${humanDate(report.inspectionDate) ?? 'undated'}`,
       body: note ?? `${sourceTotal} open finding${sourceTotal === 1 ? '' : 's'}${sourceTotal > findings.length ? ` (showing the ${findings.length} most serious)` : ''}. Nothing is saved or sent.`, tone: note ? 'CAUTION' : 'DEFAULT', actions: [],
     }],
-    captureRequests: [captureRequest(contextVersion, findings, entered)], suggestions: [],
+    captureRequests: [captureRequest(contextVersion, findings, entered, isOwner)], suggestions: [],
   });
   if (!submitted) return formResult();
   if (submitted.expectedContextVersion !== contextVersion || submitted.findingIds.join('|') !== findings.map((f) => f.id).join('|')) {
@@ -91,15 +93,15 @@ export async function negotiationPackageResult(
   const pkg = await hubService.generateNegotiationPackage(report.id, propertyId, findings.map((f) => f.id), decisions);
   type Item = { findingId: string; homeSystem: string; subsystem: string | null; severity: string; inspectorDescription: string; estimatedCostCentsLow: number | null; estimatedCostCentsHigh: number | null };
   const row = (item: Item, status: string) => {
-    const low = item.estimatedCostCentsLow; const high = item.estimatedCostCentsHigh;
+    const low = isOwner ? item.estimatedCostCentsLow : null; const high = isOwner ? item.estimatedCostCentsHigh : null;
     const cost = low != null && high != null ? (low === high ? `Est. ${dollars(low)}` : `Est. ${dollars(low)} to ${dollars(high)}`) : null;
-    return { id: item.findingId, title: `${item.homeSystem}${item.subsystem ? `: ${item.subsystem}` : ''}`, description: item.inspectorDescription, meta: [item.severity.toLowerCase(), cost].filter((v): v is string => Boolean(v)), status, href: null, entityType: 'INSPECTION_FINDING', actions: [] as never[] };
+    return { id: item.findingId, title: `${item.homeSystem}${item.subsystem ? `: ${item.subsystem}` : ''}`, description: isOwner ? item.inspectorDescription : null, meta: [item.severity.toLowerCase(), cost].filter((v): v is string => Boolean(v)), status, href: null, entityType: 'INSPECTION_FINDING', actions: [] as never[] };
   };
   const credit = pkg.negotiateCredit as Item[]; const repair = pkg.requestRepair as Item[]; const asIs = pkg.acceptAsIs as Item[];
   const section = (id: string, title: string, items: Item[], status: string) => (items.length ? [{ id, title, count: items.length, items: items.map((i) => row(i, status)) }] : []);
   const blocks: AskPresentationBlock[] = [{
-    type: 'SUMMARY', id: 'inspection-negotiation-summary', title: `Credit to ask for: about ${dollars(pkg.requestedCreditTotalCents)}`,
-    body: `${credit.length} finding${credit.length === 1 ? '' : 's'} for a credit (the middle of each estimate), ${repair.length} for repair, ${asIs.length} accepted as is. This is a summary for your own negotiation. Nothing was saved or sent, and an estimate is not a quote.`,
+    type: 'SUMMARY', id: 'inspection-negotiation-summary', title: isOwner ? `Credit to ask for: about ${dollars(pkg.requestedCreditTotalCents)}` : 'Your negotiation package',
+    body: isOwner ? `${credit.length} finding${credit.length === 1 ? '' : 's'} for a credit (the middle of each estimate), ${repair.length} for repair, ${asIs.length} accepted as is. This is a summary for your own negotiation. Nothing was saved or sent, and an estimate is not a quote.` : `${credit.length} finding${credit.length === 1 ? '' : 's'} for a credit, ${repair.length} for repair, ${asIs.length} accepted as is. Cost estimates and the credit total are shown to the property owner. Nothing was saved or sent.`,
     tone: 'DEFAULT', actions: [reportsAction],
   }];
   const sections = [...section('credit', 'Ask for a credit', credit, 'Credit'), ...section('repair', 'Request a repair', repair, 'Repair'), ...section('as-is', 'Accept as is', asIs, 'As is')];

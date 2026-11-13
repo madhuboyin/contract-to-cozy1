@@ -1,6 +1,8 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { findingLabel, isFindingOwner } from '../support/inspectionOwnerOnly';
+import { resolvePropertyAccess } from '../../propertyAccess.service';
 import { AskExecution, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, RefinanceRateMonitorProduct } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { prisma } from '../../../lib/prisma';
@@ -43,7 +45,7 @@ export async function editInspectionFindingResolveConfirmation(
   input: EditAskConfirmation,
   userId: string,
 ): Promise<AskExecutionResponse> {
-  void userId;
+  const isOwner = isFindingOwner((await resolvePropertyAccess(userId, execution.propertyId!))?.role);
   const existing = InspectionResolutionSchema.safeParse(parameters.inspectionResolution);
   if (parameters.inspectionFindingAction !== 'RESOLVE' || !existing.success) throw Object.assign(new Error('Editing is not available for this proposal.'), { code: 'ASK_EDIT_NOT_SUPPORTED' });
   const unknownField = Object.keys(input.edits).find((key) => !['method', 'notes', 'costCents'].includes(key));
@@ -65,12 +67,12 @@ export async function editInspectionFindingResolveConfirmation(
   }
   const resolution = InspectionResolutionSchema.parse(next);
   const findingId = typeof parameters.inspectionFindingId === 'string' ? parameters.inspectionFindingId : '';
-  const finding = await prisma.inspectionFinding.findFirst({ where: { id: findingId, propertyId: execution.propertyId! }, select: { id: true, homeSystem: true, severity: true, inspectorDescription: true } });
+  const finding = await prisma.inspectionFinding.findFirst({ where: { id: findingId, propertyId: execution.propertyId! }, select: { id: true, homeSystem: true, subsystem: true, severity: true, ...(isOwner ? { inspectorDescription: true } : {}) } }) as { id: string; homeSystem: string; subsystem?: string | null; severity: string; inspectorDescription?: string } | null;
   if (!finding) throw Object.assign(new Error('This inspection finding is no longer available.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
   const nextVersion = input.confirmationVersion + 1;
   const expiresAt = new Date(Date.now() + 30 * 60_000);
   const newConfirmation = {
-    confirmationId: `inspection-finding-${finding.id}-${nextVersion}`, version: nextVersion, title: 'Resolve this finding?', description: finding.inspectorDescription,
+    confirmationId: `inspection-finding-${finding.id}-${nextVersion}`, version: nextVersion, title: 'Resolve this finding?', description: isOwner && finding.inspectorDescription ? finding.inspectorDescription : findingLabel(finding, false),
     fields: [{ label: 'System', value: finding.homeSystem }, { label: 'Severity', value: String(finding.severity).toLowerCase() }, { label: 'Action', value: 'resolve' }],
     editableFields: inspectionResolutionEditableFields(resolution), confirmLabel: 'Resolve finding',
     consentText: 'I reviewed this inspection finding and authorize updating its canonical disposition.', expiresAt: expiresAt.toISOString(),
@@ -244,6 +246,7 @@ async function confirmClaimTransition(ctx: ConfirmCapabilityContext): Promise<Co
 // as done). The writes are not one transaction, so the receipt says what happened to each finding.
 async function confirmInspectionFindingBatch(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters } = ctx;
+  const isOwner = isFindingOwner(ctx.access.role);
   const entries = (Array.isArray(parameters.inspectionFindingBatch) ? parameters.inspectionFindingBatch : []) as Array<Record<string, unknown>>;
   const valid = entries.filter((entry) => typeof entry.findingId === 'string' && typeof entry.reportId === 'string' && (entry.action === 'ACCEPT' || entry.action === 'DISMISS'));
   if (!valid.length || valid.length !== entries.length) throw Object.assign(new Error('The inspection finding decisions are invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
@@ -252,9 +255,9 @@ async function confirmInspectionFindingBatch(ctx: ConfirmCapabilityContext): Pro
     const findingId = entry.findingId as string;
     const reportId = entry.reportId as string;
     const action = entry.action as 'ACCEPT' | 'DISMISS';
-    const finding = await prisma.inspectionFinding.findFirst({ where: { id: findingId, reportId, propertyId: execution.propertyId }, select: { id: true, homeSystem: true, inspectorDescription: true, status: true, workDisposition: true, updatedAt: true } });
+    const finding = await prisma.inspectionFinding.findFirst({ where: { id: findingId, reportId, propertyId: execution.propertyId }, select: { id: true, homeSystem: true, subsystem: true, severity: true, status: true, workDisposition: true, updatedAt: true, ...(isOwner ? { inspectorDescription: true } : {}) } }) as { id: string; homeSystem: string; subsystem?: string | null; severity?: string; inspectorDescription?: string; status: string; workDisposition: string; updatedAt: Date } | null;
     if (!finding) { outcomes.push({ id: findingId, title: 'A finding', outcome: 'GONE', action }); continue; }
-    const title = `${finding.homeSystem}: ${finding.inspectorDescription}`;
+    const title = findingLabel(finding, isOwner);
     const alreadyApplied = (action === 'ACCEPT' && finding.workDisposition === 'ACCEPTED') || (action === 'DISMISS' && finding.status === 'DISMISSED');
     if (alreadyApplied) { outcomes.push({ id: finding.id, title, outcome: 'ALREADY', action }); continue; }
     if (entry.contextVersion !== inspectionFindingVersion(finding)) { outcomes.push({ id: finding.id, title, outcome: 'CHANGED', action }); continue; }

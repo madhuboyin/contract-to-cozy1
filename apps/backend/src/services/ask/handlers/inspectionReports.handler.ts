@@ -95,22 +95,23 @@ registerCapabilityHandler('inspection-reports.list', async (envelope, deps) => {
 
 // ── compare ─────────────────────────────────────────────────────────────────────────────────────────────────────
 type Finding = { id: string; homeSystem: string; subsystem: string | null; severity: string; inspectorDescription: string };
-const findingRow = (finding: Finding, status: string) => ({
-  id: finding.id, title: `${finding.homeSystem}${finding.subsystem ? `: ${finding.subsystem}` : ''}`, description: finding.inspectorDescription, meta: [finding.severity.toLowerCase()],
+// Owner audience policy 2026-11-13: the inspector's description is OWNER-only; the comparison keeps the structured finding (system, subsystem, severity) for everyone else.
+const findingRow = (finding: Finding, status: string, isOwner: boolean) => ({
+  id: finding.id, title: `${finding.homeSystem}${finding.subsystem ? `: ${finding.subsystem}` : ''}`, description: isOwner ? finding.inspectorDescription : null, meta: [finding.severity.toLowerCase()],
   status, href: null, entityType: 'INSPECTION_FINDING', actions: [] as never[],
 });
 
 export function inspectionComparisonResult(comparison: {
   reportA: { reportType: string; inspectionDate: Date }; reportB: { reportType: string; inspectionDate: Date };
   resolved: Finding[]; persisted: Finding[]; newFindings: Finding[]; worsened: Array<{ a: Finding; b: Finding }>;
-}): AskOperationResult {
+}, isOwner = false): AskOperationResult {
   const label = (r: { reportType: string; inspectionDate: Date }) => `${INSPECTION_REPORT_TYPE_LABELS[r.reportType] ?? 'Inspection'}, ${dateOf(r.inspectionDate) ?? 'undated'}`;
   const section = (id: string, title: string, rows: ReturnType<typeof findingRow>[]) => (rows.length ? [{ id, title, count: rows.length, items: rows }] : []);
   const sections = [
-    ...section('worsened', 'Got worse', comparison.worsened.map(({ b }) => findingRow(b, 'Worse'))),
-    ...section('new', 'New since the earlier report', comparison.newFindings.map((f) => findingRow(f, 'New'))),
-    ...section('persisted', 'Still open', comparison.persisted.map((f) => findingRow(f, 'Open'))),
-    ...section('resolved', 'Resolved', comparison.resolved.map((f) => findingRow(f, 'Resolved'))),
+    ...section('worsened', 'Got worse', comparison.worsened.map(({ b }) => findingRow(b, 'Worse', isOwner))),
+    ...section('new', 'New since the earlier report', comparison.newFindings.map((f) => findingRow(f, 'New', isOwner))),
+    ...section('persisted', 'Still open', comparison.persisted.map((f) => findingRow(f, 'Open', isOwner))),
+    ...section('resolved', 'Resolved', comparison.resolved.map((f) => findingRow(f, 'Resolved', isOwner))),
   ];
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'inspection-comparison-summary', title: 'What changed between the two reports',
@@ -127,10 +128,10 @@ registerCapabilityHandler('inspection-report-compare.view', async (envelope) => 
     return unavailable('INSPECTION_REPORT_TARGET_REQUIRED', 'Choose a report first', 'A comparison is opened from a report in your inspection reports. Nothing has changed.');
   }
   const propertyId = envelope.propertyId!;
-  await ensurePropertyAccess(envelope.userId, propertyId);
+  const compareAccess = await ensurePropertyAccess(envelope.userId, propertyId);
   const reports = await (prisma as any).inspectionReport.findMany({ where: { propertyId, status: 'CONFIRMED' }, select: { id: true, status: true, inspectionDate: true } });
   const earlier = previousConfirmedReportId(reports, launch.entityId);
   if (!earlier) return unavailable('INSPECTION_REPORT_NO_EARLIER_REPORT', 'There is no earlier confirmed report to compare with', 'A comparison needs two confirmed reports. Nothing has changed.');
   const comparison = await hubService.compareReports(propertyId, earlier, launch.entityId);
-  return inspectionComparisonResult(comparison as never);
+  return inspectionComparisonResult(comparison as never, compareAccess.role === 'OWNER');
 });

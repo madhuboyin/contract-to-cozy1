@@ -335,14 +335,19 @@ async function readIncidentClaimDetail(context: DetailContext, compositeId: stri
     };
   }
   if (!compositeId.startsWith(CLAIM_PREFIX)) return notFound();
+  // Owner audience policy 2026-11-13: claim status and dates are CONTRIBUTOR-floor, so a viewer's claim id is indistinguishable from one that does not exist (the claim is not even queried). The description,
+  // provider, claim number and amounts are OWNER-only: for anyone else they are not selected.
+  if (context.role === 'VIEWER') return notFound();
+  const isOwner = context.role === 'OWNER';
   const claim = await prisma.claim.findFirst({
     where: { id: compositeId.slice(CLAIM_PREFIX.length), propertyId: context.propertyId },
     select: {
-      title: true, description: true, type: true, status: true, sourceType: true, providerName: true, incidentAt: true, openedAt: true, submittedAt: true, closedAt: true, lastActivityAt: true,
-      nextFollowUpAt: true, createdAt: true, updatedAt: true, claimNumber: true, deductibleAmount: true, estimatedLossAmount: true, settlementAmount: true,
+      title: true, type: true, status: true, sourceType: true, incidentAt: true, openedAt: true, submittedAt: true, closedAt: true, lastActivityAt: true,
+      nextFollowUpAt: true, createdAt: true, updatedAt: true,
       insurancePolicy: { select: { carrierName: true } }, warranty: { select: { providerName: true } },
+      ...(isOwner ? { description: true, providerName: true, claimNumber: true, deductibleAmount: true, estimatedLossAmount: true, settlementAmount: true } : {}),
     },
-  });
+  }) as (Record<string, any> | null);
   if (!claim) return notFound();
   const related: AskRecordRelated[] = [
     ...(claim.insurancePolicy ? [{ label: claim.insurancePolicy.carrierName, kindLabel: 'Insurance policy', broken: null }] : []),
@@ -353,9 +358,9 @@ async function readIncidentClaimDetail(context: DetailContext, compositeId: stri
   return {
     title: claim.title,
     facts: [
-      fact('Kind', 'Claim'), fact('Status', `${readable(claim.status)}${open ? ' (open)' : ''}`), fact('Type', readable(claim.type)), fact('Provider', claim.providerName), fact('Details', claim.description),
+      fact('Kind', 'Claim'), fact('Status', `${readable(claim.status)}${open ? ' (open)' : ''}`), fact('Type', readable(claim.type)), ...(isOwner ? [fact('Provider', claim.providerName), fact('Details', claim.description)] : []),
       fact('Incident date', day(claim.incidentAt)), fact('Opened', day(claim.openedAt)), fact('Submitted', day(claim.submittedAt)), fact('Closed', day(claim.closedAt)), fact('Next follow-up', day(claim.nextFollowUpAt)),
-      presence('Claim number', claim.claimNumber), presence('Deductible', claim.deductibleAmount), presence('Estimated loss', claim.estimatedLossAmount), presence('Settlement', claim.settlementAmount),
+      ...(isOwner ? [presence('Claim number', claim.claimNumber), presence('Deductible', claim.deductibleAmount), presence('Estimated loss', claim.estimatedLossAmount), presence('Settlement', claim.settlementAmount)] : []),
     ],
     provenance: {
       source: available(`${readable(claim.sourceType)} claim`, claim.createdAt.toISOString()),

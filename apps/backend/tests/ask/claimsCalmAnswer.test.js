@@ -36,6 +36,7 @@ const run = (message = 'What is the status of my insurance claim?') => capabilit
 const summary = (result) => result.blocks.find((block) => block.id === 'incident-claim-summary');
 const list = (result) => result.blocks.find((block) => block.id === 'incident-claim-list');
 
+const visibleText = (r) => JSON.stringify(r, (k, v) => ['id', 'reasonCode', 'operationId', 'entityType', 'entityId', 'actionId'].includes(k) ? undefined : v);
 test('the headline says what is open in one sentence, and never anything about approval, coverage or eligibility', () => {
   const copy = (overrides) => claimsCalmCopy({ focus: 'BOTH', activeIncidents: 0, resolvedIncidents: 0, openClaims: 0, closedClaims: 0, truncated: false, ...overrides });
   assert.equal(copy({ activeIncidents: 2, openClaims: 1 }).headline, '2 active incidents and 1 open claim.');
@@ -91,9 +92,10 @@ test('no list carries a page link or a filled action, and claim rows still carry
   const incidentItem = list(result).sections.flatMap((section) => section.items).find((item) => item.id === 'i1');
   assert.equal(incidentItem.actions, undefined);
   role = 'VIEWER';
-  // Owner audience policy 2026-11-13: claim status/dates are CONTRIBUTOR-floor, so a viewer gets no rows and no counts at all.
+  // Owner audience policy 2026-11-13: claim status/dates are CONTRIBUTOR-floor, so a viewer gets the INCIDENTS only: no claim rows, counts, chips or wording.
   const viewer = await run('Show my incidents and claims');
-  assert.equal(viewer.status, 'BLOCKED'); assert.equal(JSON.stringify(viewer).includes('c1'), false);
+  assert.equal(viewer.status, 'ANSWERED'); assert.ok(list(viewer).sections.flatMap((section) => section.items).some((item) => item.id === 'i1'));
+  assert.equal(JSON.stringify(viewer).includes('c1'), false); assert.doesNotMatch(visibleText(viewer), /claim/i, 'nothing a viewer reads mentions claims');
   role = 'CONTRIBUTOR';
   const claimsOnly = await run('Show my claims');
   assert.deepEqual(list(claimsOnly).actions, [], 'a claims question links no page either');
@@ -123,7 +125,7 @@ test('an empty claims answer offers starting a claim to a contributor and nothin
   assert.equal(isAskActionApplicable({ action: empty.actions[0], operationId: 'INCIDENT_CLAIM_STATUS', propertyId: 'p1', householdRole: 'CONTRIBUTOR', authoritativeSourceAvailable: true }), true);
   role = 'VIEWER';
   const viewer = await run('Show my claims');
-  assert.equal(viewer.status, 'BLOCKED', 'a viewer cannot read the claims list at all (owner audience policy 2026-11-13)');
+  assert.equal(viewer.reasonCode, 'DATA_POINT_RESTRICTED', 'a viewer\'s claims-only question gets a neutral restriction notice (owner audience policy 2026-11-13)'); assert.equal(viewer.blocks.find((block) => block.id === 'incident-claim-list'), undefined);
 });
 
 test('a filter that matches nothing and a populated answer carry no page link', async () => {

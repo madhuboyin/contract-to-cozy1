@@ -1138,7 +1138,9 @@ const humanizeCode = (value: string | null | undefined) => (value ? value.toLowe
  * each bucket with a small fixed limit and no continuation; the Record lists every one. Incidents and claims are separate tables, so
  * the rows are merged in memory (a home has a handful of each).
  */
-export async function readIncidentsClaimsPage(propertyId: string, query: AskRecordCollectionQuery): Promise<AskRecordCollectionPage<AskRecordIncidentClaimRow>> {
+export async function readIncidentsClaimsPage(propertyId: string, query: AskRecordCollectionQuery, role: HouseholdRole = 'VIEWER' as HouseholdRole): Promise<AskRecordCollectionPage<AskRecordIncidentClaimRow>> {
+  // Owner audience policy 2026-11-13: claims are CONTRIBUTOR-floor and the provider name is OWNER-only. A viewer's page is incidents only: the claim table is not queried, no claim filter is offered, and a claim filter simply matches nothing.
+  const claimsAllowed = role !== 'VIEWER'; const isOwner = role === 'OWNER';
   const limit = clampLimit(query.limit);
   const search = cleanSearch(query.search);
   const kind = query.filters?.kind?.trim() || null;
@@ -1149,7 +1151,7 @@ export async function readIncidentsClaimsPage(propertyId: string, query: AskReco
 
   const [incidents, claims] = await Promise.all([
     prisma.incident.findMany({ where: { propertyId, isSuppressed: false }, select: { id: true, title: true, summary: true, status: true, severity: true, openedAt: true, resolvedAt: true, typeKey: true } }),
-    prisma.claim.findMany({ where: { propertyId }, select: { id: true, title: true, status: true, type: true, providerName: true, incidentAt: true, openedAt: true, closedAt: true, updatedAt: true } }),
+    claimsAllowed ? prisma.claim.findMany({ where: { propertyId }, select: { id: true, title: true, status: true, type: true, incidentAt: true, openedAt: true, closedAt: true, updatedAt: true, ...(isOwner ? { providerName: true } : {}) } as { id: true; title: true; status: true; type: true; providerName?: true; incidentAt: true; openedAt: true; closedAt: true; updatedAt: true } }) : Promise.resolve([] as Array<{ id: string; title: string; status: any; type: any; providerName?: string | null; incidentAt: Date | null; openedAt: Date | null; closedAt: Date | null; updatedAt: Date }>),
   ]);
   const entries = [
     ...incidents.map((incident) => {
@@ -1195,7 +1197,7 @@ export async function readIncidentsClaimsPage(propertyId: string, query: AskReco
     sort: { key: 'openedAt', label: 'Most recent first' },
     query: { search, filters: Object.fromEntries(Object.entries({ kind, state }).filter(([, value]) => value)) as Record<string, string> },
     filterOptions: [
-      { key: 'kind', label: 'Kind', options: [{ value: 'INCIDENT', label: 'Incidents' }, { value: 'CLAIM', label: 'Claims' }] },
+      ...(claimsAllowed ? [{ key: 'kind', label: 'Kind', options: [{ value: 'INCIDENT', label: 'Incidents' }, { value: 'CLAIM', label: 'Claims' }] }] : []),
       { key: 'state', label: 'State', options: [{ value: 'open', label: 'Open' }, { value: 'closed', label: 'Closed' }] },
     ],
     rows: page.map((entry) => entry.row),
@@ -1727,7 +1729,7 @@ export const ASK_RECORD_COLLECTION_READERS: Readonly<Partial<Record<AskRecordSec
   'seller-records': (context, query) => readSellerRecordsPage(context.propertyId, query, context.role),
   'household-access': (context, query) => readHouseholdAccessPage(context, query),
   'projects-renovations': (context, query) => readProjectsPage(context.propertyId, query),
-  'incidents-claims': (context, query) => readIncidentsClaimsPage(context.propertyId, query),
+  'incidents-claims': (context, query) => readIncidentsClaimsPage(context.propertyId, query, context.role),
   warranties: (context, query) => readWarrantiesPage(context.propertyId, query),
 });
 

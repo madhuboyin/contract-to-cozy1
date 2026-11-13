@@ -60,15 +60,17 @@ type FindingRow = {
     outcome: string; agreedCreditCents: number | null; outcomeNotes: string | null; outcomeDocumentId?: string | null; updatedAt: Date;
   }>;
 };
-async function loadFinding(propertyId: string, findingId: string): Promise<FindingRow | null> {
-  return database.inspectionFinding.findFirst({
+// Owner audience policy 2026-11-13: the inspector's description is OWNER-only, so it is selected only when the caller is the owner.
+async function loadFinding(propertyId: string, findingId: string, isOwner = false): Promise<FindingRow | null> {
+  const row = await database.inspectionFinding.findFirst({
     where: { id: findingId, propertyId },
     select: {
-      id: true, homeSystem: true, inspectorDescription: true, severity: true, status: true, buyerDisposition: true, buyerTaskId: true, updatedAt: true,
+      id: true, homeSystem: true, severity: true, status: true, buyerDisposition: true, buyerTaskId: true, updatedAt: true, ...(isOwner ? { inspectorDescription: true } : {}),
       report: { select: { status: true } },
       negotiationCaseLinks: { select: { id: true, caseId: true, requestType: true, requestedCreditCents: true, sellerResponse: true, sellerResponseNotes: true, outcome: true, agreedCreditCents: true, outcomeNotes: true, outcomeDocumentId: true, updatedAt: true } },
     },
   });
+  return row ? { ...row, inspectorDescription: isOwner ? row.inspectorDescription ?? null : null } : null;
 }
 const systemLabel = (finding: FindingRow) => finding.homeSystem.toLowerCase().replace(/_/g, ' ');
 /** Bound to the finding's last change and its negotiation link, so a confirmation opened before either changed is refused as out of date. */
@@ -125,7 +127,7 @@ function formCapture(kind: BuyerNegotiationKind, contextVersion: string, finding
 export async function buyerNegotiationResult(userId: string, propertyId: string, launch: BuyerNegotiationLaunch, supplied?: BuyerNegotiationFormData): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   if (access.role === HouseholdRole.VIEWER) return permissionBlocked();
-  const finding = await loadFinding(propertyId, launch.entityId);
+  const finding = await loadFinding(propertyId, launch.entityId, access.role === HouseholdRole.OWNER);
   if (!finding) return unavailable('BUYER_FINDING_NOT_FOUND', 'That finding is no longer available', 'Ask could not find that inspection finding for this home. Nothing has changed.');
   const kind = launch.kind;
   const link = finding.negotiationCaseLinks[0] ?? null;

@@ -152,7 +152,7 @@ function installIC(incidents, claims) {
   prisma.claim = { findMany: async (a) => { args.claim.push(a); return claims.filter((row) => row.propertyId === a.where.propertyId); } };
   return args;
 }
-const readIC = (query) => readIncidentsClaimsPage('p1', query);
+const readIC = (query, role = 'OWNER') => readIncidentsClaimsPage('p1', query, role);
 
 test('incidents and claims interleave newest first, exclude suppressed incidents, and page without collisions between the two tables', async () => {
   const args = installIC(

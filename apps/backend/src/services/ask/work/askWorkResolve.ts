@@ -2,7 +2,7 @@ import { prisma } from '../../../lib/prisma';
 import { repairBookingWhere } from './repairs.reader';
 import { loadOperatingMode } from '../askRecordContext';
 import type { AskAccountRole } from '../askAccountEligibility';
-import { ASK_WORK_PROVIDER_REGISTRY, evaluateWorkProviderApplicability, type AskWorkProviderDefinition, type AskWorkProviderId } from '../governance/askWorkProviderRegistry';
+import { ASK_WORK_PROVIDER_REGISTRY, evaluateWorkProviderApplicability, workSourceReadAllowed, type AskWorkProviderDefinition, type AskWorkProviderId } from '../governance/askWorkProviderRegistry';
 import {
   ASK_WORK_CONTRACT_VERSION, type AskWorkProviderReader, type AskWorkResolution, type AskWorkResumeOutcome, type AskWorkRow,
 } from '../askWork.contract';
@@ -197,6 +197,11 @@ export async function resolveAskWork(
   const parsed = parseAskWorkKey(workKey);
   if (!parsed) return { ...base, outcome: 'DELETED', message: 'This work could not be found.' };
 
+  // A claim follow-up is a CONTRIBUTOR-floor source: below that floor the key is indistinguishable from one that does not exist (the claim is not probed, and no hand-over to the claim is offered).
+  if (parsed.kind === 'followUpClaim') {
+    const owner = registry.find((entry) => entry.id === parsed.provider);
+    if (owner && !workSourceReadAllowed(owner, 'claim', role)) return { ...base, outcome: 'DELETED', message: 'This work could not be found.' };
+  }
   const probed = await probe(parsed.kind, parsed.entityId, userId, propertyId, registry);
   if (probed.state === 'MISSING') return { ...base, outcome: 'DELETED', message: 'This work was removed.' };
   if (probed.state === 'OUTCOME') return { ...base, outcome: probed.outcome, supersededBy: probed.supersededBy ?? null, message: probed.message };

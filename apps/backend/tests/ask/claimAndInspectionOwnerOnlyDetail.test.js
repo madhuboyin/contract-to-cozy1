@@ -18,8 +18,10 @@ const insp = require('../../src/services/ask/support/inspectionFindingDecisionCo
 const sha = (t) => require('node:crypto').createHash('sha256').update(t).digest('hex');
 const dump = (r) => JSON.stringify(r);
 
-test('claim reads sit at the CONTRIBUTOR floor in the registry; the claim commands stay CONTRIBUTOR', () => {
-  for (const id of ['INCIDENT_CLAIM_STATUS', 'INCIDENT_CONTINUATION', 'CLAIM_CHECKLIST_VIEW']) assert.equal(getAskOperationDefinition(id).propertyRoleFloor, 'CONTRIBUTOR', id);
+const visibleText = (r) => JSON.stringify(r, (k, v) => ['id', 'reasonCode', 'operationId', 'entityType', 'entityId', 'actionId'].includes(k) ? undefined : v);
+test('the claim checklist read is CONTRIBUTOR-floor; the incident reads stay VIEWER but withhold claims from viewers; the claim commands stay CONTRIBUTOR', () => {
+  assert.equal(getAskOperationDefinition('CLAIM_CHECKLIST_VIEW').propertyRoleFloor, 'CONTRIBUTOR');
+  for (const id of ['INCIDENT_CLAIM_STATUS', 'INCIDENT_CONTINUATION']) assert.equal(getAskOperationDefinition(id).propertyRoleFloor, 'VIEWER', id);
   for (const id of ['CLAIM_FILE', 'CLAIM_TRANSITION', 'CLAIM_ACTIVITY_COMMAND']) assert.equal(getAskOperationDefinition(id).propertyRoleFloor, 'CONTRIBUTOR', id);
 });
 
@@ -31,12 +33,19 @@ function installClaims(role) {
   const row = { id: 'c1', title: 'Basement flood', status: 'SUBMITTED', type: 'WATER_DAMAGE', sourceType: 'INSURANCE', providerName: 'SECRET-PROVIDER', description: 'SECRET-DESC', claimNumber: 'CLM-SECRET', settlementAmount: 987654, incidentAt: new Date('2026-08-01T12:00:00Z'), openedAt: new Date('2026-08-02T12:00:00Z'), closedAt: null, updatedAt: new Date('2026-09-01T12:00:00Z') };
   const project = (a) => Object.fromEntries(Object.keys(a.select).filter((k) => a.select[k]).map((k) => [k, row[k]]));
   prisma.claim = { findMany: async (a) => { selects.push(a.select); return [project(a)]; }, count: async () => 1, findFirst: async (a) => project({ select: a.select ?? { id: true, title: true, status: true, updatedAt: true } }) };
-  prisma.incident = { findMany: async () => [], count: async () => 0 };
+  prisma.incident = { findMany: async (a) => (a.where.status?.in ? [{ id: 'i1', title: 'Pipe burst', summary: null, status: 'ACTIVE', severity: 'HIGH', openedAt: new Date('2026-08-01T12:00:00Z'), resolvedAt: null, typeKey: 'WATER' }] : []), count: async (a) => (a.where.status?.in ? 1 : 0) };
   return { selects, restore() { propertyAccess.resolvePropertyAccess = saved.a; prisma.claim = saved.c; prisma.incident = saved.i; } };
 }
 test('INCIDENT_CLAIM_STATUS: a viewer is blocked with no rows or counts; a contributor gets no provider name (not even selected); the owner does', async () => {
   let w = installClaims('VIEWER');
-  try { const r = await capabilityInvoke('INCIDENT_CLAIM_STATUS', { userId: 'u1', propertyId: 'p1', message: 'Show my claims' }); assert.equal(r.status, 'BLOCKED'); assert.ok(!dump(r).includes('Basement flood')); assert.ok(!/\b1 recorded claim/.test(dump(r))); } finally { w.restore(); }
+  try {
+    for (const message of ['Show my claims', 'Show my incidents and claims']) {
+      w.selects.length = 0; const r = await capabilityInvoke('INCIDENT_CLAIM_STATUS', { userId: 'u1', propertyId: 'p1', message });
+      assert.ok(!dump(r).includes('Basement flood'));
+      if (message !== 'Show my claims') assert.doesNotMatch(visibleText(r), /claim/i, 'no visible wording mentions claims');
+      assert.equal(w.selects.length, 0, `${message}: the claim table is never queried for a viewer`);
+    }
+  } finally { w.restore(); }
   w = installClaims('CONTRIBUTOR');
   try {
     const r = await capabilityInvoke('INCIDENT_CLAIM_STATUS', { userId: 'u1', propertyId: 'p1', message: 'Show my claims' });
@@ -120,4 +129,41 @@ test('inspection finding commands: the owner keeps description, interpretation a
     assert.match(dump(input), /SECRET-INSPECTOR/);
     const review = await prep('EDIT', { costLow: '700' }); assert.match(dump(review), /\$700/);
   } finally { w.restore(); }
+});
+
+// ---- the viewer-safe incident result, the record section and the claim detail ----
+test('INCIDENT_CONTINUATION and the refinements for a viewer: incidents only, state chips only, no claim query, no Start-a-claim; a contributor still gets claims', async () => {
+  let w = installClaims('VIEWER');
+  try {
+    const cont = await capabilityInvoke('INCIDENT_CONTINUATION', { userId: 'u1', propertyId: 'p1', message: 'Follow up on a home emergency' });
+    assert.equal(cont.status, 'ANSWERED'); assert.doesNotMatch(visibleText(cont), /claim/i); assert.equal(w.selects.length, 0, 'the claim table is not queried');
+    const chips = cont.blocks.find((b) => b.id === 'incident-claim-list').filters.map((c) => c.id);
+    assert.ok(chips.length && chips.every((id) => id.startsWith('state-')), `viewer chips: ${chips}`);
+    const filtered = await capabilityInvoke('INCIDENT_CLAIM_STATUS', { userId: 'u1', propertyId: 'p1', message: 'Only show claims' });
+    assert.equal(filtered.reasonCode, 'DATA_POINT_RESTRICTED'); assert.equal(w.selects.length, 0);
+  } finally { w.restore(); }
+  w = installClaims('CONTRIBUTOR');
+  try { const r = await capabilityInvoke('INCIDENT_CLAIM_STATUS', { userId: 'u1', propertyId: 'p1', message: 'Show my claims' }); assert.match(visibleText(r), /Basement flood/); } finally { w.restore(); }
+});
+test('record section incidents-claims: a viewer gets incidents only (claim table untouched, no claim filter), a contributor claims without the provider, the owner everything; a claim detail is not found for a viewer', async () => {
+  const { readIncidentsClaimsPage } = require('../../src/services/ask/askRecordCollections.service.ts');
+  const { MORE_RECORD_DETAIL_READERS } = require('../../src/services/ask/askRecordDetailSections.ts');
+  const saved = { c: prisma.claim, i: prisma.incident }; const claimSelects = [];
+  const row = { id: 'c1', title: 'Basement flood', status: 'SUBMITTED', type: 'WATER_DAMAGE', providerName: 'SECRET-PROVIDER', description: 'SECRET-DESC', claimNumber: 'CLM-SECRET', settlementAmount: 987654, incidentAt: null, openedAt: new Date('2026-08-02T12:00:00Z'), closedAt: null, updatedAt: new Date('2026-09-01T12:00:00Z'), createdAt: new Date('2026-08-02T12:00:00Z'), lastActivityAt: new Date('2026-09-01T12:00:00Z'), nextFollowUpAt: null, submittedAt: null, sourceType: 'INSURANCE', insurancePolicy: null, warranty: null };
+  const pick = (a) => Object.fromEntries(Object.keys(a.select).filter((k) => a.select[k]).map((k) => [k, row[k]]));
+  prisma.claim = { findMany: async (a) => { claimSelects.push(a.select); return [pick(a)]; }, findFirst: async (a) => { claimSelects.push(a.select); return pick(a); } };
+  prisma.incident = { findMany: async () => [{ id: 'i1', title: 'Pipe burst', summary: null, status: 'ACTIVE', severity: 'HIGH', openedAt: new Date('2026-08-01T12:00:00Z'), resolvedAt: null, typeKey: 'WATER' }], findFirst: async () => null };
+  try {
+    const viewer = await readIncidentsClaimsPage('p1', {}, 'VIEWER');
+    assert.equal(claimSelects.length, 0); assert.deepEqual(viewer.rows.map((r) => r.kind), ['INCIDENT']); assert.ok(!viewer.filterOptions.some((f) => f.key === 'kind')); assert.ok(!dump(viewer).includes('Basement'));
+    assert.equal((await readIncidentsClaimsPage('p1', { filters: { kind: 'CLAIM' } }, 'VIEWER')).total, 0, 'a claim filter matches nothing for a viewer');
+    assert.equal((await readIncidentsClaimsPage('p1', {})).rows.length, 1, 'the role defaults to the lowest');
+    claimSelects.length = 0;
+    const contributor = await readIncidentsClaimsPage('p1', {}, 'CONTRIBUTOR'); assert.equal(contributor.rows.length, 2); assert.ok(!dump(contributor).includes('SECRET-PROVIDER')); assert.ok(!('providerName' in claimSelects[0]));
+    assert.match(dump(await readIncidentsClaimsPage('p1', {}, 'OWNER')), /SECRET-PROVIDER/);
+    const detail = (role) => MORE_RECORD_DETAIL_READERS['incidents-claims']({ propertyId: 'p1', userId: 'u1', role, now: new Date() }, 'claim:c1');
+    claimSelects.length = 0; await assert.rejects(() => detail('VIEWER'), /not.?found|NotFound/i); assert.equal(claimSelects.length, 0, 'a viewer\'s claim id is not even queried');
+    const c = await detail('CONTRIBUTOR'); for (const s of ['SECRET-PROVIDER', 'SECRET-DESC', 'CLM-SECRET', '987654']) assert.ok(!dump(c).includes(s), `contributor saw ${s}`);
+    const ownerText = dump(await detail('OWNER')); assert.ok(['SECRET-PROVIDER', 'SECRET-DESC'].every((s) => ownerText.includes(s)));
+  } finally { prisma.claim = saved.c; prisma.incident = saved.i; }
 });

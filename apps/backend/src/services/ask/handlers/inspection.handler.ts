@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { findingLabel, isFindingOwner, reduceFindingRow } from '../support/inspectionOwnerOnly';
 import { HouseholdRole, Prisma } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { prisma } from '../../../lib/prisma';
@@ -73,13 +74,16 @@ async function inspectionFindingsResult(userId: string, propertyId: string, mess
       propertyId, status: { in: ['OPEN', 'ACCEPTED_AS_IS'] }, report: { status: 'CONFIRMED' },
       ...(filters.severity ? { severity: filters.severity as never } : {}), ...(filters.homeSystem ? { homeSystem: filters.homeSystem as never } : {}),
   };
-  const [findings, sourceTotal] = await Promise.all([
+  const isOwner = isFindingOwner(access.role);
+  const [rawFindings, sourceTotal] = await Promise.all([
     prisma.inspectionFinding.findMany({
       where, orderBy: [{ severity: 'asc' }, { updatedAt: 'desc' }], take: 50,
       include: { report: { select: { inspectionDate: true, inspectorName: true } } },
     }),
     prisma.inspectionFinding.count({ where }),
   ]);
+  // Owner audience policy 2026-11-13: description, interpretation, recommendation, notes and cost figures are blanked for non-owners before any row, label or amount is built.
+  const findings = rawFindings.map((finding) => reduceFindingRow(finding, isOwner));
   const findingActions = inspectionFindingItemActions(access.role);
   // Contributors and owners can add a report (the upload endpoint needs CONTRIBUTOR); viewers get no upload action.
   const uploadActions = access.role === HouseholdRole.VIEWER ? [] : [{ id: 'inspection-report-upload', label: 'Upload inspection report', interactionType: 'OPEN_FILE_INTAKE' as const, style: 'PRIMARY' as const }];
@@ -119,7 +123,7 @@ async function inspectionFindingsResult(userId: string, propertyId: string, mess
   }
   return {
     status: 'ANSWERED', reasonCode: 'INSPECTION_FINDINGS_FOUND',
-    blocks: [{ type: 'GROUPED_LIST', filters: [], ...(findingActions.length ? { presentation: INSPECTION_FINDING_DECK_PRESENTATION } : {}), id: 'inspection-findings', title: filters.label ? `Open ${filters.label} inspection findings` : 'Open inspection findings', description: 'These findings come only from confirmed inspection reports. Open a finding to accept it as work, dismiss it, or mark it resolved.', sections: [{ id: 'open', title: 'Needs review', count: sourceTotal, items: findings.map((finding) => ({ id: finding.id, title: `${finding.homeSystem}: ${finding.inspectorDescription}`, description: `${String(finding.severity).toLowerCase()} · ${finding.report.inspectorName ?? 'Inspector'} · ${humanDate(finding.report.inspectionDate) ?? 'date unavailable'}`, meta: [`Disposition: ${String(finding.workDisposition).toLowerCase().replace(/_/g, ' ')}`], status: String(finding.status), href: null, entityType: 'INSPECTION_FINDING', parentId: finding.reportId, actions: inspectionFindingItemActionsFor(access.role, finding), ...inspectionFindingDeckFacts(finding, humanDate(finding.report.inspectionDate) ?? null) })) }], collection: collectionDescriptor({ sourceTotal, fetchedCount: findings.length, sections: [{ items: findings }], nextPageAvailable: false }), actions: uploadActions.map((action) => ({ ...action, style: 'SECONDARY' as const })) }],
+    blocks: [{ type: 'GROUPED_LIST', filters: [], ...(findingActions.length ? { presentation: INSPECTION_FINDING_DECK_PRESENTATION } : {}), id: 'inspection-findings', title: filters.label ? `Open ${filters.label} inspection findings` : 'Open inspection findings', description: 'These findings come only from confirmed inspection reports. Open a finding to accept it as work, dismiss it, or mark it resolved.', sections: [{ id: 'open', title: 'Needs review', count: sourceTotal, items: findings.map((finding) => ({ id: finding.id, title: findingLabel(finding, isOwner), description: `${String(finding.severity).toLowerCase()} · ${finding.report.inspectorName ?? 'Inspector'} · ${humanDate(finding.report.inspectionDate) ?? 'date unavailable'}`, meta: [`Disposition: ${String(finding.workDisposition).toLowerCase().replace(/_/g, ' ')}`], status: String(finding.status), href: null, entityType: 'INSPECTION_FINDING', parentId: finding.reportId, actions: inspectionFindingItemActionsFor(access.role, finding), ...inspectionFindingDeckFacts(finding, humanDate(finding.report.inspectionDate) ?? null) })) }], collection: collectionDescriptor({ sourceTotal, fetchedCount: findings.length, sections: [{ items: findings }], nextPageAvailable: false }), actions: uploadActions.map((action) => ({ ...action, style: 'SECONDARY' as const })) }],
     // No chips: the deck's own Accept / Dismiss / Resolve controls are the actions, and a chip here showed a raw finding id and reached viewers.
     suggestions: [],
   };
@@ -160,12 +164,12 @@ export const inspectionFindingVersion = (finding: { id: string; status: string; 
 // IW-PRES-015 (FRD v1.75): the card deck's collected decisions, proposed together for ONE confirmation. Only Accept as
 // work and Dismiss can be batched. A decision whose finding is gone, closed or not in an allowed state is left out and
 // named; nothing is written here.
-async function inspectionFindingBatchProposal(propertyId: string, decisions: Array<{ entityId: string; actionId: string }>): Promise<AskOperationResult> {
+async function inspectionFindingBatchProposal(propertyId: string, decisions: Array<{ entityId: string; actionId: string }>, isOwner: boolean): Promise<AskOperationResult> {
   const latest = new Map<string, string>();
   decisions.forEach((decision) => latest.set(decision.entityId, decision.actionId));
   const findings = await prisma.inspectionFinding.findMany({
     where: { propertyId, id: { in: [...latest.keys()] }, status: { in: ['OPEN', 'ACCEPTED_AS_IS'] }, report: { status: 'CONFIRMED' } },
-    select: { id: true, reportId: true, homeSystem: true, inspectorDescription: true, status: true, workDisposition: true, updatedAt: true },
+    select: { id: true, reportId: true, homeSystem: true, subsystem: true, severity: true, status: true, workDisposition: true, updatedAt: true, ...(isOwner ? { inspectorDescription: true } : {}) },
   });
   const byId = new Map(findings.map((finding) => [finding.id, finding]));
   const included: Array<{ finding: typeof findings[number]; action: 'ACCEPT' | 'DISMISS' }> = [];
@@ -173,7 +177,7 @@ async function inspectionFindingBatchProposal(propertyId: string, decisions: Arr
   latest.forEach((actionId, findingId) => {
     const finding = byId.get(findingId);
     const action = INSPECTION_FINDING_BATCH_ACTIONS[actionId];
-    const title = finding ? `${finding.homeSystem}: ${finding.inspectorDescription}` : 'A finding';
+    const title = finding ? findingLabel(finding as never, isOwner) : 'A finding';
     if (!finding) leftOut.push(`${title} is no longer open, or is no longer on a confirmed report for this home.`);
     else if (!action) leftOut.push(`${title}: that action needs its own confirmation.`);
     else if (!inspectionFindingActionAllowed(action, finding)) leftOut.push(`${title} can no longer be ${action === 'ACCEPT' ? 'accepted as work' : 'dismissed'}.`);
@@ -190,7 +194,7 @@ async function inspectionFindingBatchProposal(propertyId: string, decisions: Arr
   const accepts = included.filter((entry) => entry.action === 'ACCEPT');
   const dismissals = included.filter((entry) => entry.action === 'DISMISS');
   const count = (n: number) => `${n} finding${n === 1 ? '' : 's'}`;
-  const reviewItem = ({ finding }: typeof included[number]) => ({ id: finding.id, title: `${finding.homeSystem}: ${finding.inspectorDescription}`, description: null, meta: [], status: String(finding.status), href: null, entityType: 'INSPECTION_FINDING', parentId: finding.reportId });
+  const reviewItem = ({ finding }: typeof included[number]) => ({ id: finding.id, title: findingLabel(finding as never, isOwner), description: null, meta: [], status: String(finding.status), href: null, entityType: 'INSPECTION_FINDING', parentId: finding.reportId });
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'INSPECTION_FINDING_BATCH_CONFIRMATION_REQUIRED', contextVersion,
     parameters: { inspectionFindingBatch: entries },
@@ -220,18 +224,19 @@ async function inspectionFindingBatchProposal(propertyId: string, decisions: Arr
   };
 }
 
-async function inspectionFindingUpdateResult(propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
-  if (launchContext?.batchDecisions?.length) return inspectionFindingBatchProposal(propertyId, launchContext.batchDecisions);
+async function inspectionFindingUpdateResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
+  const isOwner = isFindingOwner((await ensurePropertyAccess(userId, propertyId)).role);
+  if (launchContext?.batchDecisions?.length) return inspectionFindingBatchProposal(propertyId, launchContext.batchDecisions, isOwner);
   const where: Prisma.InspectionFindingWhereInput = { propertyId, status: { in: ['OPEN', 'ACCEPTED_AS_IS'] }, report: { status: 'CONFIRMED' } };
   const [findings, sourceTotal] = await Promise.all([
-    prisma.inspectionFinding.findMany({ where, orderBy: { updatedAt: 'desc' }, take: 50, select: { id: true, reportId: true, homeSystem: true, inspectorDescription: true, severity: true, status: true, workDisposition: true, updatedAt: true } }),
+    prisma.inspectionFinding.findMany({ where, orderBy: { updatedAt: 'desc' }, take: 50, select: { id: true, reportId: true, homeSystem: true, subsystem: true, severity: true, status: true, workDisposition: true, updatedAt: true, ...(isOwner ? { inspectorDescription: true } : {}) } }),
     prisma.inspectionFinding.count({ where }),
   ]);
-  const selected = exactEntityMatch(findings.map((finding) => ({ ...finding, title: `${finding.homeSystem}: ${finding.inspectorDescription}` })), message, launchContext);
+  const selected = exactEntityMatch(findings.map((finding) => ({ ...finding, title: findingLabel(finding as never, isOwner) })), message, launchContext);
   const action = inspectionFindingAction(message);
   if (!selected || !action) return {
     status: 'NEEDS_ENTITY', reasonCode: 'INSPECTION_FINDING_TARGET_REQUIRED',
-    blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'inspection-finding-targets', title: 'Choose a finding and action', description: 'Use the finding id or exact system/description and say accept, dismiss, or resolve.', sections: [{ id: 'findings', title: 'Open confirmed findings', count: sourceTotal, items: findings.map((finding) => ({ id: finding.id, title: `${finding.homeSystem}: ${finding.inspectorDescription}`, description: String(finding.severity).toLowerCase(), meta: [], status: String(finding.status), href: null })) }], collection: collectionDescriptor({ sourceTotal, fetchedCount: findings.length, sections: [{ items: findings }], nextPageAvailable: false }), actions: [] }], suggestions: [],
+    blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'inspection-finding-targets', title: 'Choose a finding and action', description: 'Use the finding id or exact system/description and say accept, dismiss, or resolve.', sections: [{ id: 'findings', title: 'Open confirmed findings', count: sourceTotal, items: findings.map((finding) => ({ id: finding.id, title: findingLabel(finding as never, isOwner), description: String(finding.severity).toLowerCase(), meta: [], status: String(finding.status), href: null })) }], collection: collectionDescriptor({ sourceTotal, fetchedCount: findings.length, sections: [{ items: findings }], nextPageAvailable: false }), actions: [] }], suggestions: [],
   };
   const contextVersion = createHash('sha256').update(`${selected.id}:${selected.status}:${selected.workDisposition}:${selected.updatedAt.toISOString()}`).digest('hex');
   const expiresAt = new Date(Date.now() + 30 * 60_000);
@@ -239,10 +244,10 @@ async function inspectionFindingUpdateResult(propertyId: string, message: string
     status: 'NEEDS_CONFIRMATION', reasonCode: 'INSPECTION_FINDING_CONFIRMATION_REQUIRED', contextVersion,
     parameters: { inspectionFindingId: selected.id, inspectionReportId: selected.reportId, inspectionFindingAction: action, inspectionFindingContextVersion: contextVersion, ...(action === 'RESOLVE' ? { inspectionResolution: INSPECTION_RESOLUTION_DEFAULT } : {}), confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
     blocks: [{ type: 'SUMMARY', id: 'inspection-finding-review', title: `Review ${action.toLowerCase()} action`, body: action === 'ACCEPT' ? 'Accepting creates or reuses canonical Operational Work and routes it to the appropriate maintenance, guidance, or project workflow.' : action === 'DISMISS' ? 'Dismissing marks this canonical finding not active and reconciles linked work.' : 'Resolving records a homeowner-confirmed outcome on this canonical finding.', tone: 'CAUTION', actions: [] }],
-    confirmation: { confirmationId: `inspection-finding-${selected.id}-1`, version: 1, title: `${action[0]}${action.slice(1).toLowerCase()} this finding?`, description: selected.inspectorDescription, fields: [{ label: 'System', value: selected.homeSystem }, { label: 'Severity', value: String(selected.severity).toLowerCase() }, { label: 'Action', value: action.toLowerCase() }], editableFields: action === 'RESOLVE' ? inspectionResolutionEditableFields(INSPECTION_RESOLUTION_DEFAULT) : [], confirmLabel: `${action[0]}${action.slice(1).toLowerCase()} finding`, consentText: 'I reviewed this inspection finding and authorize updating its canonical disposition.', expiresAt: expiresAt.toISOString() }, suggestions: [],
+    confirmation: { confirmationId: `inspection-finding-${selected.id}-1`, version: 1, title: `${action[0]}${action.slice(1).toLowerCase()} this finding?`, description: isOwner ? ((selected as { inspectorDescription?: string }).inspectorDescription ?? findingLabel(selected as never, false)) : findingLabel(selected as never, false), fields: [{ label: 'System', value: selected.homeSystem }, { label: 'Severity', value: String(selected.severity).toLowerCase() }, { label: 'Action', value: action.toLowerCase() }], editableFields: action === 'RESOLVE' ? inspectionResolutionEditableFields(INSPECTION_RESOLUTION_DEFAULT) : [], confirmLabel: `${action[0]}${action.slice(1).toLowerCase()} finding`, consentText: 'I reviewed this inspection finding and authorize updating its canonical disposition.', expiresAt: expiresAt.toISOString() }, suggestions: [],
   };
 }
 
 registerCapabilityHandler('inspection-findings.review', async (envelope) => inspectionFindingsResult(envelope.userId, envelope.propertyId!, envelope.message));
 
-registerCapabilityHandler('inspection-findings.update', async (envelope) => inspectionFindingUpdateResult(envelope.propertyId!, envelope.message, envelope.launchContext));
+registerCapabilityHandler('inspection-findings.update', async (envelope) => inspectionFindingUpdateResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));

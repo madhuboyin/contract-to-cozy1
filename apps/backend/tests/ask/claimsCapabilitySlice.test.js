@@ -92,9 +92,12 @@ test('claim rows carry CLAIM identity and every transition action for contributo
     assert.equal(row.href, null, 'Ask links to no desktop claim page; the row opens its own inline detail');
   }
   accessRole = 'VIEWER';
-  // Owner audience policy 2026-11-13: claim status and dates are CONTRIBUTOR-floor, so the claims read itself is blocked for a viewer (no rows, no counts).
-  const blocked = await capabilityInvoke('INCIDENT_CLAIM_STATUS', { userId: 'u1', propertyId: 'p1', message: 'Show my claims' });
-  assert.equal(blocked.status, 'BLOCKED'); assert.equal(blocked.blocks.find((block) => block.id === 'incident-claim-list'), undefined);
+  // Owner audience policy 2026-11-13: claim status and dates are CONTRIBUTOR-floor. A viewer's claims-only question gets a neutral restriction notice (no rows, no counts, nothing about whether a claim exists)...
+  const restricted = await capabilityInvoke('INCIDENT_CLAIM_STATUS', { userId: 'u1', propertyId: 'p1', message: 'Show my claims' });
+  assert.equal(restricted.reasonCode, 'DATA_POINT_RESTRICTED'); assert.equal(restricted.blocks.find((block) => block.id === 'incident-claim-list'), undefined);
+  // ...and the combined question returns the incidents only.
+  const combined = await capabilityInvoke('INCIDENT_CLAIM_STATUS', { userId: 'u1', propertyId: 'p1', message: 'Show my incidents and claims' });
+  assert.ok(!combined.blocks.flatMap((b) => (b.sections ?? []).flatMap((sec) => sec.items)).some((row) => row.entityType === 'CLAIM'));
   assert.deepEqual(claimItemActions('VIEWER').map((action) => action.id), ['claim-checklist']);
 });
 

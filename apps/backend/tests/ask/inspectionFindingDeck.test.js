@@ -117,8 +117,14 @@ test('the findings answer declares the deck with its batch for a contributor, an
   const items = Object.fromEntries(list.sections[0].items.map((item) => [item.id, item]));
   assert.deepEqual(items.toilet.actions.map((action) => action.id), ['finding-dismiss', 'finding-resolve']);
   assert.equal(items.breaker.badgeLabel, 'Safety');
-  assert.equal(items.breaker.amountLabel, 'Est. $150–$300');
+  assert.equal(items.breaker.amountLabel, null, 'the cost estimate is OWNER-only (owner audience policy 2026-11-13): a contributor gets no amount');
+  assert.ok(!JSON.stringify(list).includes('Finding breaker'), 'nor the inspector description');
+  assert.equal(items.breaker.title, 'ELECTRICAL (safety)');
   AskPresentationBlockSchema.parse(list);
+  accessRole = 'OWNER';
+  const ownerItems = Object.fromEntries((await listFindings()).blocks.find((block) => block.id === 'inspection-findings').sections[0].items.map((item) => [item.id, item]));
+  assert.equal(ownerItems.breaker.amountLabel, 'Est. $150–$300'); assert.equal(ownerItems.breaker.title, 'ELECTRICAL: Finding breaker');
+  accessRole = 'CONTRIBUTOR';
   accessRole = 'VIEWER';
   const viewer = (await listFindings()).blocks.find((block) => block.id === 'inspection-findings');
   assert.equal('presentation' in viewer, false);
@@ -146,7 +152,11 @@ test('a batch is proposed for one confirmation; nothing is written, and left-out
   assert.deepEqual(review.sections.map((section) => [section.title, section.items.map((item) => item.id)]), [['Accept as work', ['breaker']], ['Dismiss', ['crack']]]);
   const leftOut = result.blocks.find((block) => block.id === 'inspection-finding-batch-left-out');
   assert.equal(leftOut.title, '2 decisions were left out');
-  assert.match(leftOut.body, /PLUMBING: Finding toilet: that action needs its own confirmation\./);
+  assert.match(leftOut.body, /PLUMBING \(major\): that action needs its own confirmation\./, 'a contributor reads the structured label, never the inspector description');
+  assert.ok(!JSON.stringify(result).includes('Finding '), 'no inspector description anywhere in the batch proposal');
+  accessRole = 'OWNER';
+  assert.match((await proposeBatch([{ entityId: 'toilet', actionId: 'finding-resolve' }])).blocks.map((b) => b.body ?? '').join(' '), /PLUMBING: Finding toilet/);
+  accessRole = 'CONTRIBUTOR';
   assert.match(leftOut.body, /A finding is no longer open/);
   for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
 });
@@ -195,7 +205,8 @@ test('a finding that changed while the confirmation was open is left untouched a
   ] });
   assert.deepEqual(calls.dismiss, []);
   assert.equal(calls.accept.length, 1);
-  assert.deepEqual(outcome.result.blocks[0].details.map((detail) => [detail.label, detail.value]), [['ELECTRICAL: Finding breaker', 'Accepted as work'], ['STRUCTURE: Finding crack', 'Not changed']]);
+  assert.deepEqual(outcome.result.blocks[0].details.map((detail) => [detail.label, detail.value]), [['ELECTRICAL (safety)', 'Accepted as work'], ['STRUCTURE (monitor)', 'Not changed']]);
+  assert.ok(!JSON.stringify(outcome.result).includes('Finding '), 'no inspector description in the completion receipt');
   assert.match(outcome.result.blocks.find((block) => block.id === 'inspection-finding-batch-not-changed').body, /changed while the confirmation was open/);
 });
 

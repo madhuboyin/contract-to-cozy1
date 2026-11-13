@@ -43,6 +43,11 @@ export interface AskWorkProviderDefinition {
   owner: string;
   /** Existing Ask reads for the provider's rows; the READ floor is the strictest of these. */
   readOperationIds: readonly AskOperationId[];
+  /**
+   * Explicit read authority PER SOURCE for a provider that merges several sources into one presentation (for example the scheduled follow-ups of claims, projects and savings). Each source is authorized
+   * by its own operation's floor; a caller below a source's floor gets no rows, no count and no hint from that source, and the provider's own read floor is derived from `readOperationIds` only.
+   */
+  sourceReads?: Readonly<Record<string, AskOperationId>>;
   /** Existing Ask commands that act on the provider's work. Each has its own action floor; they never lower the read floor. */
   commandOperationIds: readonly AskOperationId[];
   readAuthority: AskWorkReadAuthority;
@@ -177,8 +182,10 @@ export const ASK_WORK_PROVIDER_REGISTRY: readonly AskWorkProviderDefinition[] = 
   }),
   provider({
     id: 'SCHEDULED_FOLLOW_UPS', label: 'Scheduled follow-ups', workType: 'SCHEDULED_FOLLOW_UP', owner: 'follow-ups',
-    readOperationIds: ['INCIDENT_CLAIM_STATUS', 'PROJECT_TRACKER_PROJECTS', 'SAVINGS_OPPORTUNITIES'], commandOperationIds: ['CLAIM_ACTIVITY_COMMAND', 'PROJECT_TRACKER_COMMAND', 'SAVINGS_BENEFIT_COMMAND'],
-    readAuthority: 'OPERATION_FLOOR', lifecycleOperationId: 'INCIDENT_CLAIM_STATUS',
+    // The claim follow-up source is CONTRIBUTOR-floor (claim status and dates), so it is authorized separately (`sourceReads.claim`) instead of raising the whole provider: projects and savings stay readable on their own floors.
+    readOperationIds: ['PROJECT_TRACKER_PROJECTS', 'SAVINGS_OPPORTUNITIES'], commandOperationIds: ['CLAIM_ACTIVITY_COMMAND', 'PROJECT_TRACKER_COMMAND', 'SAVINGS_BENEFIT_COMMAND'],
+    sourceReads: { claim: 'CLAIM_CHECKLIST_VIEW', project: 'PROJECT_TRACKER_PROJECTS', savings: 'SAVINGS_OPPORTUNITIES' },
+    readAuthority: 'OPERATION_FLOOR', lifecycleOperationId: 'PROJECT_TRACKER_PROJECTS',
     reader: CONNECTED,
     precedence: 20, fallbackProjection: false, sourceAliasKinds: ['followUp'], views: ['SCHEDULED'], statusOptions: [], requiredForExit: true, freshnessSource: 'Follow-up schedule',
   }),
@@ -195,6 +202,14 @@ export function workProviderReadFloor(definition: AskWorkProviderDefinition): As
     if (floor && (strictest === null || FLOOR_RANK[floor] > FLOOR_RANK[strictest])) strictest = floor;
   }
   return strictest;
+}
+
+/** True when the household role meets the read floor of ONE source of a merged provider. A source with no declared read operation is governed by the provider's own floor. */
+export function workSourceReadAllowed(definition: AskWorkProviderDefinition, source: string, role: HouseholdRole): boolean {
+  const operationId = definition.sourceReads?.[source];
+  if (!operationId) return true;
+  const floor = ASK_OPERATION_DEFINITIONS[operationId]?.propertyRoleFloor ?? null;
+  return !floor || ROLE_RANK[role] >= FLOOR_RANK[floor];
 }
 
 /** Each command's own floor. Derived per operation: a provider may mix CONTRIBUTOR and OWNER commands. */
@@ -244,7 +259,7 @@ export function validateAskWorkProviderRegistry(
     if (!entry.freshnessSource.trim()) issues.push(`${entry.id} has no freshness source`);
     if (!entry.views.length) issues.push(`${entry.id} serves no lifecycle view`);
     if (entry.sourceAliasKinds.length === 0) issues.push(`${entry.id} declares no source alias kind`);
-    for (const operationId of [...entry.readOperationIds, ...entry.commandOperationIds]) {
+    for (const operationId of [...entry.readOperationIds, ...entry.commandOperationIds, ...Object.values(entry.sourceReads ?? {})]) {
       if (!ASK_OPERATION_DEFINITIONS[operationId]) issues.push(`${entry.id} references unregistered operation ${operationId}`);
     }
     for (const operationId of entry.commandOperationIds) {

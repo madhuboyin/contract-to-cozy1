@@ -4,6 +4,8 @@ import { prisma } from '../../../lib/prisma';
 import { compareAskWorkRows, type AskWorkProviderReader, type AskWorkRow } from '../askWork.contract';
 import { PROJECT_STATUS_LABELS } from '../handlers/projectTracker.handler';
 import { afterBoundaryWhere, truncateTitle, workLaunch } from './askWorkRowSupport';
+import { ASK_WORK_PROVIDER_REGISTRY, workSourceReadAllowed } from '../governance/askWorkProviderRegistry';
+import type { HouseholdRole } from '@prisma/client';
 
 const CLAIM_PREFIX = 'followUp:claim:';
 const PROJECT_PREFIX = 'followUp:project:';
@@ -110,18 +112,21 @@ export const readScheduledFollowUpWork: AskWorkProviderReader = async (context, 
   const now = new Date();
   const claimInView: Prisma.ClaimWhereInput = { propertyId: context.propertyId, status: { in: OPEN_CLAIM_STATUSES }, nextFollowUpAt: { gt: now }, ...(query.entityId ? { id: query.entityId } : {}), ...(query.search ? { title: { contains: query.search, mode: 'insensitive' as const } } : {}) };
   const projectInView: Prisma.ProjectRecordWhereInput = { propertyId: context.propertyId, status: { notIn: ['CANCELLED'] }, followUpDueAt: { gt: now }, followUpCompletedAt: null, ...(query.entityId ? { id: query.entityId } : {}), ...(query.search ? { name: { contains: query.search, mode: 'insensitive' as const } } : {}) };
+  // Each source is authorized by its own operation floor: a caller below the claim floor gets no claim rows and no claim count (the claim table is not even queried), and nothing says they were withheld.
+  const definition = ASK_WORK_PROVIDER_REGISTRY.find((entry) => entry.id === 'SCHEDULED_FOLLOW_UPS')!;
+  const claimsOn = workSourceReadAllowed(definition, 'claim', context.role as HouseholdRole);
   const needle = (query.search ?? '').toLowerCase();
   // A savings action has no title of its own, so text finds it only by the words that name it.
   const savingsNamed = !needle || ['savings', 'benefit', 'follow up', 'follow-up'].some((word) => word.includes(needle) || needle.includes(word));
   const savingsOn = savingsNamed && await savingsFollowUpsApplicable(context);
   const savingsInView: Prisma.SavingsBenefitActionWhereInput = { propertyId: context.propertyId, state: 'STARTED', followUpAt: { gt: now }, ...(query.entityId ? { id: query.entityId } : {}) };
   const [claims, projects, savings, claimTotal, projectTotal, savingsTotal] = await Promise.all([
-    prisma.claim.findMany({
+    claimsOn ? prisma.claim.findMany({
       where: afterBoundaryWhere(claimInView, query.after, CLAIM_PREFIX),
       select: { id: true, propertyId: true, title: true, status: true, nextFollowUpAt: true, updatedAt: true },
       orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
       take: query.limit,
-    }),
+    }) : Promise.resolve([] as ClaimFollowUp[]),
     prisma.projectRecord.findMany({
       where: afterBoundaryWhere(projectInView, query.after, PROJECT_PREFIX),
       select: { id: true, propertyId: true, name: true, status: true, followUpDueAt: true, updatedAt: true },
@@ -136,7 +141,7 @@ export const readScheduledFollowUpWork: AskWorkProviderReader = async (context, 
         take: query.limit,
       })
       : Promise.resolve([]),
-    prisma.claim.count({ where: claimInView }),
+    claimsOn ? prisma.claim.count({ where: claimInView }) : Promise.resolve(0),
     prisma.projectRecord.count({ where: projectInView }),
     savingsOn ? prisma.savingsBenefitAction.count({ where: savingsInView }) : Promise.resolve(0),
   ]);

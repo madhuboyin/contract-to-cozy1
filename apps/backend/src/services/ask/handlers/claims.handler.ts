@@ -239,6 +239,12 @@ const CLAIM_STATUS_BOUNDARY: AskPresentationBlock = {
   severity: 'INFO', suggestions: [],
 };
 
+const INCIDENT_ONLY_BOUNDARY: AskPresentationBlock = {
+  type: 'BOUNDARY', id: 'claim-status-boundary', title: 'Recorded information only',
+  body: 'This shows the incident records in your Home Record. It does not decide whether anything will be covered.',
+  severity: 'INFO', suggestions: [],
+};
+
 // Claims C-2 (FRD v1.128): the status read's filters are a governed refinement, the same continuity model as Maintenance, Buyer Deadlines,
 // Inventory and Warranties. Two independent dimensions: a scope (incidents and claims, claims only, incidents only) and a state (all, open,
 // closed). A declared chip is a fresh authoritative query: every bucket is read with its own filter and its own exact count, never the
@@ -315,7 +321,18 @@ async function incidentClaimStatusResult(
   const emergencyFollowUp = options.emergencyFollowUp === true;
   const claimActions = claimItemActions(access.role);
   const refinement = resolveClaimsRefinement(message, priorViewState);
-  const scope: ClaimsScope = refinement ? refinement.scope : claimsScopeFromWords(message);
+  // Owner audience policy 2026-11-13: claim status and dates are CONTRIBUTOR-floor, but incident guidance must stay available to a viewer. A viewer gets an INCIDENT-ONLY result: the claim table is never
+  // queried or counted, no wording or chip mentions claims, and a claims-only question gets a neutral restriction notice that says nothing about whether any claim exists.
+  const claimsAllowed = access.role !== HouseholdRole.VIEWER;
+  const askedScope: ClaimsScope = refinement ? refinement.scope : claimsScopeFromWords(message);
+  if (!claimsAllowed && askedScope === 'CLAIMS') {
+    return {
+      status: 'READY_WITH_LIMITATIONS', reasonCode: 'DATA_POINT_RESTRICTED', parameters: { sources: [] },
+      blocks: [{ type: 'SUMMARY', id: 'claim-details-restricted', title: 'That detail is shown to contributors and owners', body: 'Ask a household member who can edit this home for those records. I can still show the incidents recorded for this home.', tone: 'CAUTION', actions: [] }],
+      suggestions: [],
+    };
+  }
+  const scope: ClaimsScope = claimsAllowed ? askedScope : 'INCIDENTS';
   const state: ClaimsState = refinement ? refinement.state : 'ALL';
   const claimFocus = scope === 'CLAIMS';
   const incidentFocus = scope === 'INCIDENTS';
@@ -372,7 +389,8 @@ async function incidentClaimStatusResult(
   const totalActive = activeIncidentTotal + openClaimTotal;
   const totalRecords = activeIncidentTotal + resolvedIncidentTotal + openClaimTotal + closedClaimTotal;
   const viewState = buildClaimsViewState(priorViewState, scope, state);
-  const chips = claimsFilterChips(scope, state);
+  // A viewer's chips are the state chips only: no scope chip and no clear-all (which restores the claims scope) is offered.
+  const chips = claimsAllowed ? claimsFilterChips(scope, state) : claimsFilterChips(scope, state).filter((chip) => chip.id.startsWith('state-'));
   // Ordinary status stays calm. Emergency follow-up promotes the governed draft-claim workflow beside the record heading.
   const listActions: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>['actions'] = emergencyFollowUp && canStartClaim
     ? [{ ...CLAIM_FILE_START_ACTION, style: 'PRIMARY' as const }]
@@ -384,9 +402,9 @@ async function incidentClaimStatusResult(
       status: 'ANSWERED', reasonCode: 'INCIDENT_CLAIM_FILTER_NO_MATCH', parameters: { viewState },
       blocks: [{
         type: 'SUMMARY', id: 'incident-claim-summary', title: 'No recorded items match these filters', headline: 'Nothing matches these filters.',
-        supportLine: 'Widen or clear a filter to see the records on file.', body: 'No incidents or claims match the selected filters.', tone: 'DEFAULT', actions: [],
-      }, { type: 'GROUPED_LIST', filters: chips, id: 'incident-claim-list', title: 'Incidents and claims', sections: [],
-        collection: collectionDescriptor({ sourceTotal: 0, fetchedCount: 0, sections: [], nextPageAvailable: false }), actions: listActions }, CLAIM_STATUS_BOUNDARY],
+        supportLine: 'Widen or clear a filter to see the records on file.', body: claimsAllowed ? 'No incidents or claims match the selected filters.' : 'No incidents match the selected filters.', tone: 'DEFAULT', actions: [],
+      }, { type: 'GROUPED_LIST', filters: chips, id: 'incident-claim-list', title: claimsAllowed ? 'Incidents and claims' : 'Incidents', sections: [],
+        collection: collectionDescriptor({ sourceTotal: 0, fetchedCount: 0, sections: [], nextPageAvailable: false }), actions: listActions }, claimsAllowed ? CLAIM_STATUS_BOUNDARY : INCIDENT_ONLY_BOUNDARY],
       suggestions: [],
     };
   }
@@ -399,7 +417,7 @@ async function incidentClaimStatusResult(
         title: claimFocus ? 'No claims are recorded for this home' : incidentFocus ? 'No incidents are recorded for this home' : 'No incidents or claims are recorded for this home',
         body: 'This reflects what has been logged in the home record; it is not confirmation that nothing has ever happened at this property.',
         actions: canStartClaim ? [{ ...CLAIM_FILE_START_ACTION, style: 'PRIMARY' as const }] : [],
-      }, CLAIM_STATUS_BOUNDARY],
+      }, claimsAllowed ? CLAIM_STATUS_BOUNDARY : INCIDENT_ONLY_BOUNDARY],
       suggestions: [],
     };
   }
@@ -413,15 +431,15 @@ async function incidentClaimStatusResult(
       ...(emergencyFollowUp ? [INCIDENT_CONTINUATION_BOUNDARY] : []),
       {
         type: 'SUMMARY', id: 'incident-claim-summary',
-        title: emergencyFollowUp ? 'Continue from a recorded incident or claim' : totalActive > 0 ? `${totalActive} active ${totalActive === 1 ? 'item needs' : 'items need'} attention` : 'No active incidents or claims right now',
-        body: `${totals.incidents} recorded incident${totals.incidents === 1 ? '' : 's'} and ${totals.claims} recorded claim${totals.claims === 1 ? '' : 's'} match this request.`,
+        title: emergencyFollowUp ? (claimsAllowed ? 'Continue from a recorded incident or claim' : 'Continue from a recorded incident') : totalActive > 0 ? `${totalActive} active ${totalActive === 1 ? 'item needs' : 'items need'} attention` : (claimsAllowed ? 'No active incidents or claims right now' : 'No active incidents right now'),
+        body: claimsAllowed ? `${totals.incidents} recorded incident${totals.incidents === 1 ? '' : 's'} and ${totals.claims} recorded claim${totals.claims === 1 ? '' : 's'} match this request.` : `${totals.incidents} recorded incident${totals.incidents === 1 ? '' : 's'} match this request.`,
         tone: totalActive > 0 ? 'CAUTION' : 'DEFAULT',
         ...claimsCalmCopy({ focus: scope, activeIncidents: activeIncidentTotal, resolvedIncidents: resolvedIncidentTotal, openClaims: openClaimTotal, closedClaims: closedClaimTotal, truncated }),
         actions: emergencyFollowUp && canStartClaim ? [{ ...CLAIM_FILE_START_ACTION, style: 'PRIMARY' as const }] : [],
       },
       // Status changes remain row actions behind confirmation. Emergency follow-up alone promotes Start a claim in the list header.
       // There are no links to the Claims or Incidents pages.
-      { type: 'GROUPED_LIST', filters: chips, id: 'incident-claim-list', title: emergencyFollowUp ? 'Recorded incident and claim follow-up' : claimFocus ? 'Claims' : incidentFocus ? 'Incidents' : 'Incidents and claims',
+      { type: 'GROUPED_LIST', filters: chips, id: 'incident-claim-list', title: emergencyFollowUp ? (claimsAllowed ? 'Recorded incident and claim follow-up' : 'Recorded incident follow-up') : claimFocus ? 'Claims' : incidentFocus ? 'Incidents' : 'Incidents and claims',
         description: emergencyFollowUp ? 'Select a record to review its details and available next steps. Filing with an insurer remains a separate provider action; live emergency troubleshooting is not available in Ask.' : undefined,
         sections,
         collection: collectionDescriptor({ sourceTotal: totalRecords, fetchedCount: activeIncidents.length + resolvedIncidents.length + activeClaims.length + closedClaims.length, sections, nextPageAvailable: false }), actions: listActions },
@@ -432,7 +450,7 @@ async function incidentClaimStatusResult(
           ...activeClaims.concat(closedClaims).slice(0, 10).map((claim) => ({ label: claim.title, source: claim.sourceType ? `Canonical Claim record · ${humanizeEnum(claim.sourceType)}` : 'Canonical Claim record', observedAt: (claim.openedAt ?? claim.incidentAt)?.toISOString() ?? new Date(0).toISOString() })),
         ],
       },
-      CLAIM_STATUS_BOUNDARY,
+      claimsAllowed ? CLAIM_STATUS_BOUNDARY : INCIDENT_ONLY_BOUNDARY,
     ],
     suggestions: [],
   };

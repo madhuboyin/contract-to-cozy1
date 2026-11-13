@@ -79,12 +79,14 @@ test('the report row offers its findings once confirmed; the findings list shows
       const out = await invoke('INSPECTION_REPORT_FINDINGS', command.INSPECTION_FINDINGS_OF_REPORT_MESSAGE, launch('INSPECTION_REPORT_FINDINGS', 'INSPECTION_REPORT', 'r1'));
       assert.equal(out.reasonCode, 'INSPECTION_REPORT_FINDINGS_FOUND');
       const item = out.blocks[1].sections[0].items[0];
-      assert.match(item.description, /Plan: Plan to fix, about \$1,200 to fix\./);
+      if (role === 'OWNER') assert.match(item.description, /Plan: Plan to fix, about \$1,200 to fix\./);
+      else { assert.equal(item.description, 'Plan: Plan to fix.'); assert.ok(!JSON.stringify(out).includes('1,200') && !JSON.stringify(out).includes('Roofer quoted') && !JSON.stringify(out).includes('Flashing is lifting')); assert.ok(!/Est\./.test(JSON.stringify(out))); }
       return item.actions.map((a) => a.id);
     } finally { w.restore(); }
   };
   assert.deepEqual(await ids('CONTRIBUTOR'), ['inspection-finding-monitor', 'inspection-finding-duplicate', 'inspection-finding-disclose-price', 'inspection-finding-disclose-credit', 'inspection-finding-correct']);
   assert.deepEqual(await ids('VIEWER'), []);
+  await ids('OWNER');
 });
 
 test('review is declared-action only, contributor-only, shows the plan before and after, and writes nothing', async () => {
@@ -199,12 +201,20 @@ test('the negotiation package opens a one-choice-per-finding form, then calculat
     assert.equal(done.status, 'ANSWERED');
     assert.deepEqual(done.blocks.find((block) => block.id === 'inspection-negotiation-lists').collection, { sourceTotal: 2, fetchedCount: 2, deliveredCount: 2, nextPageAvailable: false, deliveryTruncated: false });
     assert.deepEqual(w.calls[0], ['r1', 'prop-1', ['n1', 'n2'], { n1: 'negotiate_credit', n2: 'accept_as_is' }]);
-    assert.match(done.blocks[0].title, /\$1,500/);
+    assert.equal(done.blocks[0].title, 'Your negotiation package', 'the credit total is OWNER-only (owner audience policy 2026-11-13)');
+    assert.ok(!/\$1,500|\$1,000|\$2,000|Est\./.test(JSON.stringify(done)) && !JSON.stringify(done).includes('Flashing'), 'no cost figure or inspector description reaches a contributor');
+    assert.ok(!JSON.stringify(form).includes('Flashing') && !JSON.stringify(form).includes('Filter'));
     const staleForm = await negotiationPackageResult('u1', 'prop-1', { entityId: 'r1', sourceExecutionId: null }, { answer: { f0: 'negotiate_credit', f1: 'accept_as_is' }, expectedContextVersion: 'old', findingIds: ['n1', 'n2'] });
     assert.equal(staleForm.status, 'NEEDS_CONTEXT');
     const incomplete = await negotiationPackageResult('u1', 'prop-1', { entityId: 'r1', sourceExecutionId: null }, { answer: { f0: 'negotiate_credit' }, expectedContextVersion: version2, findingIds: ['n1', 'n2'] });
     assert.equal(incomplete.status, 'NEEDS_CONTEXT');
     assert.equal(w.calls.length, 1, 'stale or incomplete answers do not calculate');
+  } finally { w.restore(); }
+  w = installNeg('OWNER');
+  try {
+    const ownerForm = await invoke(NEG, report.NEGOTIATION_PACKAGE_MESSAGE, negLaunch()); assert.match(JSON.stringify(ownerForm), /Flashing/);
+    const ownerDone = await negotiationPackageResult('u1', 'prop-1', { entityId: 'r1', sourceExecutionId: null }, { answer: { f0: 'negotiate_credit', f1: 'accept_as_is' }, expectedContextVersion: negotiationVersion('r1', negFindings), findingIds: ['n1', 'n2'] });
+    assert.match(ownerDone.blocks[0].title, /\$1,500/);
   } finally { w.restore(); }
   for (const opts of [{ reportType: 'PRE_LISTING' }, { status: 'REVIEW_PENDING' }]) {
     w = installNeg('CONTRIBUTOR', opts);

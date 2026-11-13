@@ -38,6 +38,7 @@ test.afterEach(() => { prismaModule.prisma = original; });
 
 const invoke = (role = 'VIEWER') => capabilityInvoke('INCIDENT_CONTINUATION', { userId: 'u1', propertyId: 'p1', message: 'Follow up on a home emergency' }, { propertyAccess: { role, userId: 'u1', propertyId: 'p1' } });
 
+const visibleText = (r) => JSON.stringify(r, (k, v) => ['id', 'reasonCode', 'operationId', 'entityType', 'entityId', 'actionId'].includes(k) ? undefined : v);
 test('the Emergency Help card launches the incident and claim follow-up read', () => {
   const launch = capabilityCardLaunch('emergency').inlineLaunch;
   assert.equal(launch.operationId, 'INCIDENT_CONTINUATION');
@@ -77,10 +78,11 @@ test('a contributor is offered starting a claim in Ask, a viewer is offered noth
     assert.equal(JSON.stringify(result).includes('/dashboard/'), false, role);
     assert.match(result.blocks.find((block) => block.id === 'incident-claim-list').description, /live emergency troubleshooting is not available in Ask/);
   }
-  // Owner audience policy 2026-11-13: the continuation lists claims, so it sits at the claim floor; a viewer gets no incident or claim rows.
+  // Owner audience policy 2026-11-13: a viewer keeps the incident follow-up (emergency guidance is not blocked by claim privacy) but sees no claim rows, counts, wording or Start-a-claim action.
   const viewer = await invoke('VIEWER');
-  assert.equal(viewer.status, 'BLOCKED');
-  assert.equal(viewer.blocks.find((block) => block.id === 'incident-claim-list'), undefined);
+  assert.equal(viewer.status, 'ANSWERED');
+  assert.ok(viewer.blocks.find((block) => block.id === 'incident-claim-list').sections.some((section) => section.id === 'active-incidents'));
+  assert.doesNotMatch(visibleText(viewer), /claim/i); assert.deepEqual(viewer.blocks.find((block) => block.id === 'incident-claim-summary').actions, []);
 });
 
 test('an immediate-danger message still gets the emergency boundary, with no app link', async () => {
