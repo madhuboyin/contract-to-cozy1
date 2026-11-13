@@ -124,7 +124,7 @@ const roleStub = (role, items) => {
 test('every data point has an explicit audience floor, free-form item notes are not catalogued, and domains no longer claim claims', () => {
   for (const p of DATA_POINT_DEFINITIONS) assert.ok(['VIEWER', 'CONTRIBUTOR', 'OWNER'].includes(p.audience), p.id);
   assert.equal(DATA_POINT_DEFINITIONS.some((p) => p.field === 'notes'), false);
-  assert.deepEqual([...new Set(DATA_POINT_DEFINITIONS.map((p) => p.domain))].sort(), ['appliances-inventory', 'insurance', 'maintenance', 'warranties']);
+  assert.deepEqual([...new Set(DATA_POINT_DEFINITIONS.map((p) => p.domain))].sort(), ['appliances-inventory', 'insurance', 'maintenance', 'reserve-ownership-costs', 'warranties']);
   for (const p of DATA_POINT_DEFINITIONS.filter((x) => x.sensitivity === 'FINANCIAL')) assert.notEqual(p.audience, 'VIEWER', `${p.id}: money is not shown to viewers`);
 });
 test('a viewer is refused a restricted field by the handler AND by the reader; a contributor is not', async () => {
@@ -163,15 +163,15 @@ test('source authorization: a restricted source is redacted once the role drops,
   assert.deepEqual(seen.at(-1), ['PropertyMaintenanceTask', { id: 't1', propertyId: 'p1' }]);
 });
 
-test('owner approval (2026-11-12) covers exactly the 33 catalogued ids at catalogue version 1; any unapproved id or version drift fails', () => {
+test('owner approval (2026-11-12) covers exactly the 47 catalogued ids at catalogue version 2 (33 at v1 + 14 reserve-ownership-costs); any unapproved id or version drift fails', () => {
   assert.equal(DATA_POINT_CATALOGUE_VERSION, DATA_POINT_APPROVAL.catalogueVersion, 'a new catalogue version needs a new approval record');
   const ids = DATA_POINT_DEFINITIONS.map((p) => p.id);
   assert.equal(new Set(ids).size, ids.length, 'ids are unique');
   assert.deepEqual(ids.filter((id) => !APPROVED_DATA_POINT_IDS.includes(id)), [], 'every catalogued id must be owner-approved');
   assert.deepEqual(APPROVED_DATA_POINT_IDS.filter((id) => !ids.includes(id)), [], 'an approved id that is no longer catalogued must be removed from the approval');
-  assert.equal(ids.length, 33);
+  assert.equal(ids.length, 47); assert.equal(DATA_POINT_CATALOGUE_VERSION, 2);
   const by = (d) => DATA_POINT_DEFINITIONS.filter((p) => p.domain === d).length;
-  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance')], [14, 5, 7, 7]);
+  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance'), by('reserve-ownership-costs')], [14, 5, 7, 7, 14]);
 });
 test('the restriction copy is generated from the field floor, so it never names a different audience than the check enforces', async () => {
   assert.match(audienceFloorCopy('CONTRIBUTOR').title, /contributors and owners/);
@@ -180,4 +180,65 @@ test('the restriction copy is generated from the field floor, so it never names 
   roleStub('VIEWER', [{ id: 'i1', name: 'Furnace', serialNumber: 'SN9', room: null }]);
   const denied = await dataPointReadResult('u1', 'p1', 'what is the serial number of my furnace');
   assert.equal(denied.blocks[0].title, audienceFloorCopy('CONTRIBUTOR').title);
+});
+
+// ---- Catalogue v2: reserve and ownership costs (singleton + latest-tax-year reader modes) ----
+const taxRow = (o) => ({ id: 'tb1', taxYear: 2025, sourceType: 'DOCUMENT', confidence: 'HIGH', billAmount: { toNumber: () => 6200 }, effectiveTaxRate: { toNumber: () => 0.0125 }, issueDate: new Date('2025-09-01T12:00:00Z'), ...o });
+function taxStub(role, { bills = [], assess = [], funds = [] } = {}, calls = []) {
+  propertyAccessService.resolvePropertyAccess = async () => ({ propertyId: 'p1', userId: 'u1', role, isOwner: role === 'OWNER' });
+  prisma.propertyTaxBillRecord = { findMany: async (a) => { calls.push(['bill', a]); return bills; } };
+  prisma.propertyTaxAssessmentRecord = { findMany: async (a) => { calls.push(['assess', a]); return assess; } };
+  prisma.homeReserveFund = { findMany: async (a) => { calls.push(['fund', a]); return funds; } };
+}
+test('v2 cues: reserve, tax bill and assessment resolve by cue; bare detail or mixed cues never pick', () => {
+  const cases = { 'what is my reserve fund balance': 'reserve.balance', 'what is my recommended monthly contribution to the reserve fund': 'reserve.monthlyContribution', 'what is my reserve shortfall': 'reserve.shortfall', 'what is the amount of my property tax bill': 'taxBill.amount', 'what is my effective tax rate on my property tax bill': 'taxBill.effectiveRate', 'what is the taxable value on my assessment': 'taxAssessment.taxableValue', 'what is my assessed value': 'taxAssessment.totalAssessedValue', 'when was my home assessed': 'taxAssessment.assessmentDate', 'what is the land value on my assessment': 'taxAssessment.landValue' };
+  for (const [m, id] of Object.entries(cases)) assert.equal(resolveDataPoint(m)?.id, id, m);
+  assert.equal(resolveDataPoint('what is the balance'), null, 'a bare balance never picks the reserve');
+});
+test('singleton read: one row, property-scoped, catalogued columns only; never recalculated is flagged', async () => {
+  const calls = []; taxStub('OWNER', { funds: [{ id: 'f1', currentBalanceCents: 0, lastRecalculatedAt: null }] }, calls);
+  const r = await dataPointReadResult('u1', 'p1', 'what is my reserve fund balance');
+  assert.equal(r.reasonCode, 'DATA_POINT_LIMITED_PROVENANCE');
+  assert.match(r.blocks[0].body, /never been recalculated/); assert.match(r.blocks[0].body, /\$0/);
+  assert.deepEqual(calls[0][1].where, { propertyId: 'p1' }); assert.equal(calls[0][1].take, 1);
+  assert.deepEqual(Object.keys(calls[0][1].select).sort(), ['currentBalanceCents', 'id', 'lastRecalculatedAt']);
+  assert.deepEqual(r.parameters.sources, [{ sourceType: 'HomeReserveFund', sourceId: 'f1', minRole: 'CONTRIBUTOR' }]);
+  taxStub('OWNER', { funds: [{ id: 'f1', currentBalanceCents: 250000, lastRecalculatedAt: new Date('2026-10-01T12:00:00Z') }] });
+  const ok = await dataPointReadResult('u1', 'p1', 'what is my reserve fund balance');
+  assert.equal(ok.status, 'ANSWERED'); assert.match(ok.blocks[0].body, /\$2,500/);
+  taxStub('OWNER', {}); assert.equal((await dataPointReadResult('u1', 'p1', 'what is my reserve fund balance')).reasonCode, 'DATA_POINT_NO_INVENTORY');
+});
+test('tax read: only ACTIVE non-superseded rows, newest year first, year named in the message wins, the year used is stated', async () => {
+  const calls = []; taxStub('OWNER', { bills: [taxRow({ id: 'tb2', taxYear: 2025 }), taxRow({ id: 'tb1', taxYear: 2024, billAmount: { toNumber: () => 5900 } })] }, calls);
+  const latest = await dataPointReadResult('u1', 'p1', 'how much is my property tax bill');
+  assert.equal(latest.status, 'ANSWERED'); assert.match(latest.blocks[0].body, /2025 property tax bill shows a bill of \$6,200/);
+  assert.deepEqual(calls[0][1].where, { propertyId: 'p1', status: 'ACTIVE', supersededById: null });
+  assert.deepEqual(calls[0][1].orderBy, [{ taxYear: 'desc' }, { observedAt: 'desc' }]);
+  assert.match((await dataPointReadResult('u1', 'p1', 'what was my 2024 property tax bill amount')).blocks[0].body, /2024 property tax bill.*\$5,900/);
+  const missing = await dataPointReadResult('u1', 'p1', 'what was my 2019 property tax bill amount');
+  assert.equal(missing.reasonCode, 'DATA_POINT_ITEM_NOT_FOUND'); assert.doesNotMatch(JSON.stringify(missing), /6,200|5,900/, 'no silent fallback to another year');
+  const rate = await dataPointReadResult('u1', 'p1', 'what is my effective tax rate on my property tax bill');
+  assert.match(rate.blocks[0].body, /1\.250%/);
+});
+test('tax provenance: low confidence or self-entered records carry a limitation instead of a plain statement', async () => {
+  taxStub('OWNER', { bills: [taxRow({ confidence: 'LOW' })] });
+  const low = await dataPointReadResult('u1', 'p1', 'how much is my property tax bill');
+  assert.equal(low.status, 'READY_WITH_LIMITATIONS'); assert.match(low.blocks[0].body, /low confidence/);
+  taxStub('OWNER', { bills: [taxRow({ sourceType: 'HOMEOWNER_REPORTED', confidence: 'MEDIUM' })] });
+  assert.match((await dataPointReadResult('u1', 'p1', 'how much is my property tax bill')).blocks[0].body, /entered by you/);
+  taxStub('OWNER', { bills: [taxRow({ sourceType: 'OFFICIAL_SOURCE', confidence: 'VERIFIED' })] });
+  assert.equal((await dataPointReadResult('u1', 'p1', 'how much is my property tax bill')).status, 'ANSWERED');
+});
+test('v2 floors: a viewer is refused tax amounts and reserve money but reads dates, rate and posture', async () => {
+  taxStub('VIEWER', { bills: [taxRow({})], assess: [{ id: 'ta1', taxYear: 2025, sourceType: 'DOCUMENT', confidence: 'HIGH', totalAssessedValue: 400000 }], funds: [{ id: 'f1', posture: 'MODERATE', lastRecalculatedAt: new Date('2026-10-01T12:00:00Z') }] });
+  for (const q of ['how much is my property tax bill', 'what is my assessed value', 'what is my reserve fund balance']) assert.equal((await dataPointReadResult('u1', 'p1', q)).reasonCode, 'DATA_POINT_RESTRICTED', q);
+  assert.equal((await dataPointReadResult('u1', 'p1', 'what is my effective tax rate on my property tax bill')).status, 'ANSWERED');
+  assert.match((await dataPointReadResult('u1', 'p1', 'what is my reserve fund posture')).blocks[0].body, /moderate/);
+});
+test('v2 sources are authorised against live ACTIVE non-superseded tax rows', async () => {
+  const { COMPOSABLE_SOURCE_AUTHORIZATION: AUTH, sourceRef } = require('../../src/services/ask/composition/sourceAuthorization.ts');
+  const seen = [];
+  const ctx = { userId: 'u1', propertyId: 'p1', role: 'OWNER', exists: async (m, w) => { seen.push([m, w]); return false; } };
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx, [sourceRef('PropertyTaxBillRecord', 'tb1')]), 'REDACT_SECTION');
+  assert.deepEqual(seen.at(-1), ['PropertyTaxBillRecord', { id: 'tb1', propertyId: 'p1', status: 'ACTIVE', supersededById: null }]);
 });

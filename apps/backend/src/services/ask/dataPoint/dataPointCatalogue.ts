@@ -1,10 +1,10 @@
 // Proposed data-point catalogue (reliability FRD FR-DATA-1..5, D11, D12, D13). The Prisma schema says what exists; this file says what the homeowner may be shown and
 // how they ask for it. FAIL CLOSED: a field not listed here cannot be read through DATA_POINT_READ, whatever the schema contains. The catalogue holds 33 PROPOSED data
-// points (inventory 14, warranties 5, insurance 7, maintenance 7). The owner approved the field floors and the four-domain split for exactly these 33 ids at catalogue
-// version 1 (2026-11-12); see APPROVED_DATA_POINT_IDS below. Any other id, or any change of a floor, needs a new approval and a new version.
-export type DataPointFamily = 'text' | 'date' | 'money' | 'dollars' | 'enum' | 'tags' | 'flag';
-export type DataPointEntity = 'InventoryItem' | 'Warranty' | 'InsurancePolicy' | 'PropertyMaintenanceTask';
-export type DataPointDomain = 'appliances-inventory' | 'warranties' | 'insurance' | 'maintenance';
+// points (inventory 14, warranties 5, insurance 7, maintenance 7) plus 14 reserve and ownership-cost points (catalogue version 2). The owner approved the field floors and the
+// domain split for exactly these 47 ids (33 at version 1, 14 more at version 2, both 2026-11-12); see APPROVED_DATA_POINT_IDS below. Any other id, or any change of a floor, needs a new approval and a new version.
+export type DataPointFamily = 'text' | 'date' | 'money' | 'dollars' | 'enum' | 'tags' | 'flag' | 'percent' | 'number';
+export type DataPointEntity = 'InventoryItem' | 'Warranty' | 'InsurancePolicy' | 'PropertyMaintenanceTask' | 'HomeReserveFund' | 'PropertyTaxBillRecord' | 'PropertyTaxAssessmentRecord';
+export type DataPointDomain = 'appliances-inventory' | 'warranties' | 'insurance' | 'maintenance' | 'reserve-ownership-costs';
 export type AudienceFloor = 'VIEWER' | 'CONTRIBUTOR' | 'OWNER';
 export interface DataPointDefinition {
   /** Stable id used by plans, fixtures and tests (never a column name). */
@@ -37,6 +37,10 @@ const FIELD_AUDIENCE: Readonly<Record<string, AudienceFloor>> = Object.freeze({
   'policy.coverageType': 'VIEWER', 'policy.personalPropertyLimit': 'CONTRIBUTOR',
   'task.nextDueDate': 'VIEWER', 'task.lastCompletedDate': 'VIEWER', 'task.status': 'VIEWER', 'task.priority': 'VIEWER', 'task.frequency': 'VIEWER',
   'task.estimatedCost': 'CONTRIBUTOR', 'task.actualCost': 'CONTRIBUTOR',
+  // Catalogue version 2 (owner-approved 2026-11-12): money and tax figures contributor and up, plain dates/status/rate viewer.
+  'reserve.balance': 'CONTRIBUTOR', 'reserve.monthlyContribution': 'CONTRIBUTOR', 'reserve.shortfall': 'CONTRIBUTOR', 'reserve.posture': 'VIEWER', 'reserve.horizonYears': 'VIEWER', 'reserve.lastRecalculated': 'VIEWER',
+  'taxBill.amount': 'CONTRIBUTOR', 'taxBill.effectiveRate': 'VIEWER', 'taxBill.issueDate': 'VIEWER',
+  'taxAssessment.totalAssessedValue': 'CONTRIBUTOR', 'taxAssessment.taxableValue': 'CONTRIBUTOR', 'taxAssessment.landValue': 'CONTRIBUTOR', 'taxAssessment.improvementValue': 'CONTRIBUTOR', 'taxAssessment.assessmentDate': 'VIEWER',
 });
 const d = (x: Omit<DataPointDefinition, 'audience'>): DataPointDefinition => {
   const audience = FIELD_AUDIENCE[x.id];
@@ -92,7 +96,32 @@ const OTHER_DOMAINS: readonly DataPointDefinition[] = [
   mt({ id: 'task.actualCost', field: 'actualCost', family: 'dollars', label: 'What it actually cost', aliases: ['actual cost', 'actually cost', 'how much did', 'cost me', 'what did it cost'], sentence: 'actually cost', sensitivity: 'FINANCIAL' }),
 ];
 
-export const DATA_POINT_DEFINITIONS: readonly DataPointDefinition[] = Object.freeze([...INVENTORY_POINTS, ...OTHER_DOMAINS]);
+const R = ['reserve', 'reserves', 'reserve fund', 'savings fund', 'sinking fund', 'home fund'];
+const B = ['property tax', 'property taxes', 'tax bill', 'tax bills', 'real estate tax'];
+const A = ['assessment', 'assessments', 'assessed', 'assessor'];
+const rf = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues' | 'audience'>): DataPointDefinition => d({ ...x, domain: 'reserve-ownership-costs', entity: 'HomeReserveFund', cues: R });
+const tb = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues' | 'audience'>): DataPointDefinition => d({ ...x, domain: 'reserve-ownership-costs', entity: 'PropertyTaxBillRecord', cues: B });
+const ta = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues' | 'audience'>): DataPointDefinition => d({ ...x, domain: 'reserve-ownership-costs', entity: 'PropertyTaxAssessmentRecord', cues: A });
+// Reserve and ownership costs (catalogue version 2). The reserve fund is one row per property (singleton read); tax bills and assessments are read as the latest ACTIVE,
+// non-superseded record for the named (or latest) tax year. Expense stays an Ask command (own-profile only) and is deliberately not catalogued; claims wait for a relation-read design.
+const RESERVE_COST_POINTS: readonly DataPointDefinition[] = [
+  rf({ id: 'reserve.balance', field: 'currentBalanceCents', family: 'money', label: 'The reserve fund balance', aliases: ['balance', 'how much is in', 'how much have i saved', 'saved'], sentence: 'has a recorded balance of', sensitivity: 'FINANCIAL' }),
+  rf({ id: 'reserve.monthlyContribution', field: 'recommendedMonthlyContributionCents', family: 'money', label: 'The recommended monthly contribution', aliases: ['monthly contribution', 'recommended contribution', 'contribution', 'set aside', 'put aside', 'contribute'], sentence: 'has a recommended monthly contribution of', sensitivity: 'FINANCIAL' }),
+  rf({ id: 'reserve.shortfall', field: 'currentShortfallCents', family: 'money', label: 'The reserve shortfall', aliases: ['shortfall', 'how short', 'gap'], sentence: 'has a recorded shortfall of', sensitivity: 'FINANCIAL' }),
+  rf({ id: 'reserve.posture', field: 'posture', family: 'enum', label: 'The reserve posture', aliases: ['posture', 'strategy'], sentence: 'is set to the posture', sensitivity: 'HOME' }),
+  rf({ id: 'reserve.horizonYears', field: 'horizonYears', family: 'number', label: 'The planning horizon', aliases: ['horizon', 'planning horizon', 'how many years', 'how far ahead'], sentence: 'plans ahead, in years:', sensitivity: 'HOME' }),
+  rf({ id: 'reserve.lastRecalculated', field: 'lastRecalculatedAt', family: 'date', label: 'When it was last recalculated', aliases: ['last recalculated', 'recalculated', 'last updated', 'last calculated'], sentence: 'was last recalculated', sensitivity: 'HOME' }),
+  tb({ id: 'taxBill.amount', field: 'billAmount', family: 'dollars', label: 'The property tax bill amount', aliases: ['amount', 'how much', 'owe', 'total', 'pay', 'paying'], sentence: 'shows a bill of', sensitivity: 'FINANCIAL' }),
+  tb({ id: 'taxBill.effectiveRate', field: 'effectiveTaxRate', family: 'percent', label: 'The effective tax rate', aliases: ['effective rate', 'effective tax rate', 'tax rate', 'rate', 'millage'], sentence: 'shows an effective tax rate of', sensitivity: 'HOME' }),
+  tb({ id: 'taxBill.issueDate', field: 'issueDate', family: 'date', label: 'When the bill was issued', aliases: ['issued', 'issue date', 'date issued', 'when was it issued'], sentence: 'was issued', sensitivity: 'HOME' }),
+  ta({ id: 'taxAssessment.totalAssessedValue', field: 'totalAssessedValue', family: 'dollars', label: 'The total assessed value', aliases: ['assessed value', 'total assessed value', 'total assessed', 'assessed at', 'assessed', 'assessment value', 'total assessment'], sentence: 'shows a total assessed value of', sensitivity: 'FINANCIAL' }),
+  ta({ id: 'taxAssessment.taxableValue', field: 'taxableValue', family: 'dollars', label: 'The taxable value', aliases: ['taxable value', 'taxable'], sentence: 'shows a taxable value of', sensitivity: 'FINANCIAL' }),
+  ta({ id: 'taxAssessment.landValue', field: 'landValue', family: 'dollars', label: 'The land value', aliases: ['land value', 'land'], sentence: 'shows a land value of', sensitivity: 'FINANCIAL' }),
+  ta({ id: 'taxAssessment.improvementValue', field: 'improvementValue', family: 'dollars', label: 'The improvement value', aliases: ['improvement value', 'improvements', 'building value', 'structure value'], sentence: 'shows an improvement value of', sensitivity: 'FINANCIAL' }),
+  ta({ id: 'taxAssessment.assessmentDate', field: 'assessmentDate', family: 'date', label: 'The assessment date', aliases: ['assessment date', 'assessed on', 'when was it assessed', 'when was my home assessed', 'when was my house assessed'], sentence: 'was assessed', sensitivity: 'HOME' }),
+];
+
+export const DATA_POINT_DEFINITIONS: readonly DataPointDefinition[] = Object.freeze([...INVENTORY_POINTS, ...OTHER_DOMAINS, ...RESERVE_COST_POINTS]);
 export const DATA_POINT_BY_ID: ReadonlyMap<string, DataPointDefinition> = new Map(DATA_POINT_DEFINITIONS.map((p) => [p.id, p]));
 /** The only columns the reader may select per entity (FR-DATA-15: the select list is built from this allowlist, never from user text). */
 export const READABLE_FIELDS: Readonly<Record<DataPointEntity, readonly string[]>> = Object.freeze({
@@ -100,18 +129,24 @@ export const READABLE_FIELDS: Readonly<Record<DataPointEntity, readonly string[]
   Warranty: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'Warranty').map((p) => p.field),
   InsurancePolicy: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'InsurancePolicy').map((p) => p.field),
   PropertyMaintenanceTask: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'PropertyMaintenanceTask').map((p) => p.field),
+  HomeReserveFund: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'HomeReserveFund').map((p) => p.field),
+  PropertyTaxBillRecord: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'PropertyTaxBillRecord').map((p) => p.field),
+  PropertyTaxAssessmentRecord: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'PropertyTaxAssessmentRecord').map((p) => p.field),
 });
 export const READABLE_ITEM_FIELDS: readonly string[] = READABLE_FIELDS.InventoryItem;
 
 /** Catalogue version the owner's approval covers. Bump it with any added id or changed audience floor, and re-approve. */
-export const DATA_POINT_CATALOGUE_VERSION = 1;
-/** Owner approval record (2026-11-12): field audience floors and the 4-domain split (appliances-inventory, warranties, insurance, maintenance; claims is a future domain), for these exact ids at catalogue version 1 only. */
-export const DATA_POINT_APPROVAL = Object.freeze({ catalogueVersion: 1, approvedOn: '2026-11-12', scope: 'field audience floors and four-domain split, exact ids only' });
+export const DATA_POINT_CATALOGUE_VERSION = 2;
+/** Owner approval record (2026-11-12): field audience floors and the domain split (appliances-inventory, warranties, insurance, maintenance; claims is a future domain), version 1 = 33 ids; version 2 adds the 14 reserve-ownership-costs ids (all 14 approved as proposed, tax amounts at CONTRIBUTOR, Expense kept own-profile only, claims deferred). */
+export const DATA_POINT_APPROVAL = Object.freeze({ catalogueVersion: 2, approvedOn: '2026-11-12', scope: 'field audience floors and domain split, exact ids only (33 at v1 + 14 reserve-ownership-costs at v2)' });
 export const APPROVED_DATA_POINT_IDS: readonly string[] = Object.freeze([
   'item.brand', 'item.manufacturer', 'item.model', 'item.serial', 'item.installedOn', 'item.purchasedOn', 'item.lastServicedOn', 'item.expectedExpiryDate', 'item.condition', 'item.category', 'item.efficiencyRating', 'item.purchaseCost', 'item.replacementCost', 'item.tags',
   'warranty.expiryDate', 'warranty.startDate', 'warranty.provider', 'warranty.coverage', 'warranty.cost',
   'policy.carrier', 'policy.expiryDate', 'policy.startDate', 'policy.deductible', 'policy.premium', 'policy.coverageType', 'policy.personalPropertyLimit',
   'task.nextDueDate', 'task.lastCompletedDate', 'task.status', 'task.priority', 'task.frequency', 'task.estimatedCost', 'task.actualCost',
+  'reserve.balance', 'reserve.monthlyContribution', 'reserve.shortfall', 'reserve.posture', 'reserve.horizonYears', 'reserve.lastRecalculated',
+  'taxBill.amount', 'taxBill.effectiveRate', 'taxBill.issueDate',
+  'taxAssessment.totalAssessedValue', 'taxAssessment.taxableValue', 'taxAssessment.landValue', 'taxAssessment.improvementValue', 'taxAssessment.assessmentDate',
 ]);
 /** Categories the owner presumes owner-only for any FUTURE catalogue entry (not catalogued today): mortgage/equity/financing, bank/payment, full policy or account ids, household identity/access, title/ownership, tax ids. */
 export const FUTURE_OWNER_ONLY_PRESUMPTIONS: readonly string[] = Object.freeze(['mortgage-equity-financing', 'bank-payment', 'full-policy-or-account-ids', 'household-identity-access', 'title-ownership', 'tax-ids']);

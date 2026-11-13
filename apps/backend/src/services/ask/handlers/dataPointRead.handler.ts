@@ -10,11 +10,14 @@ import { ensurePropertyAccess } from '../askHandlerSupport';
 import { audienceFloorCopy, resolveDataPoint, roleMayRead, type DataPointDefinition } from '../dataPoint/dataPointCatalogue';
 import { readDataPoint } from '../dataPoint/dataPointReader';
 
-const ENTITY_COPY: Record<string, { plural: string; singular: string; collection: string; record: string }> = {
+const ENTITY_COPY: Record<string, { plural: string; singular: string; collection: string; record: string; none?: string }> = {
   InventoryItem: { plural: 'items', singular: 'inventory', collection: 'inventory', record: 'Home inventory record' },
   Warranty: { plural: 'warranties', singular: 'warranty', collection: 'warranties', record: 'Warranty record' },
   InsurancePolicy: { plural: 'insurance policies', singular: 'insurance policy', collection: 'insurance policies', record: 'Insurance policy record' },
   PropertyMaintenanceTask: { plural: 'maintenance tasks', singular: 'maintenance task', collection: 'maintenance tasks', record: 'Maintenance task record' },
+  HomeReserveFund: { plural: 'reserve funds', singular: 'reserve fund', collection: 'reserve fund', record: 'Home reserve fund record', none: 'No reserve fund is set up for this home yet' },
+  PropertyTaxBillRecord: { plural: 'property tax bills', singular: 'property tax bill', collection: 'property tax bills', record: 'Property tax bill record', none: 'No property tax bill is recorded yet' },
+  PropertyTaxAssessmentRecord: { plural: 'property tax assessments', singular: 'property tax assessment', collection: 'property tax assessments', record: 'Property tax assessment record', none: 'No property tax assessment is recorded yet' },
 };
 const words = (v: unknown) => String(v).toLowerCase().replace(/_/g, ' ');
 export function formatDataPointValue(point: DataPointDefinition, value: unknown): string {
@@ -23,6 +26,8 @@ export function formatDataPointValue(point: DataPointDefinition, value: unknown)
     case 'money': return money(Math.round(Number(value) / 100));
     case 'dollars': return money(Math.round(Number(typeof value === 'object' && value && 'toNumber' in value ? (value as { toNumber(): number }).toNumber() : value)));
     case 'enum': return words(value);
+    case 'percent': return `${(Number(typeof value === 'object' && value && 'toNumber' in value ? (value as { toNumber(): number }).toNumber() : value) * 100).toFixed(3)}%`;
+    case 'number': return String(value);
     case 'tags': return (value as unknown[]).map(String).join(', ');
     default: return String(value);
   }
@@ -43,7 +48,8 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
   const read = await readDataPoint(propertyId, role, point, message);
   const where = ENTITY_COPY[point.entity];
   if (read.status === 'AMBIGUOUS') return notice('DATA_POINT_AMBIGUOUS', 'data-point-ambiguous', `Which ${where.singular} do you mean?`, `You have more than one: ${read.rows.map((r) => r.name).join(', ')}. Name one and I’ll tell you ${point.label.charAt(0).toLowerCase()}${point.label.slice(1)}.`);
-  if (read.status === 'ITEM_NOT_FOUND') return notice('DATA_POINT_NO_INVENTORY', 'data-point-no-inventory', `No ${where.plural} are recorded yet`, `Add it to your home record and I can tell you its details.`);
+  if (read.status === 'ITEM_NOT_FOUND') return notice('DATA_POINT_NO_INVENTORY', 'data-point-no-inventory', where.none ?? `No ${where.plural} are recorded yet`, where.none ? 'Add it to your home record and I can tell you.' : `Add it to your home record and I can tell you its details.`);
+  if (read.status === 'NO_ITEM_NAMED' && /\b20\d\d\b/.test(message)) return notice('DATA_POINT_ITEM_NOT_FOUND', 'data-point-year-not-found', `No ${/\b20\d\d\b/.exec(message)![0]} record`, `I don’t have an active ${where.singular} for that tax year. Ask without a year and I’ll use your latest.`);
   if (read.status === 'NO_ITEM_NAMED') return notice('DATA_POINT_ITEM_NOT_FOUND', 'data-point-item-not-found', `I don’t see that in your ${where.collection}`, `${point.label} comes from the ${where.singular} record. Name one you have recorded, or add it first.`);
   const present = read.rows.filter((r) => r.value !== null && r.value !== '' && !(Array.isArray(r.value) && r.value.length === 0));
   if (read.status === 'NOT_RECORDED') {
@@ -53,11 +59,14 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
   const sentences = present.map((r) => `Your ${r.name} ${point.sentence} ${formatDataPointValue(point, r.value)}.`);
   const missing = read.rows.length - present.length;
   if (missing > 0) sentences.push(`${missing === 1 ? 'One matching item has' : `${missing} matching items have`} nothing recorded for this.`);
+  // Provenance/confidence limitation (FR-REC-2): a low-confidence or self-entered record is not stated plainly.
+  const limits = [...new Set(present.map((r) => r.limitation).filter((x): x is string => Boolean(x)))];
+  sentences.push(...limits);
   return {
-    status: missing > 0 ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: missing > 0 ? 'DATA_POINT_PARTIAL' : undefined,
+    status: missing > 0 || limits.length ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: missing > 0 ? 'DATA_POINT_PARTIAL' : limits.length ? 'DATA_POINT_LIMITED_PROVENANCE' : undefined,
     parameters: { sources: present.map((r) => ({ ...sourceRef(point.entity, r.id), ...(point.audience !== 'VIEWER' ? { minRole: point.audience } : {}) })) },
     blocks: [
-      { type: 'SUMMARY', id: 'data-point-summary', title: `${point.label}: ${present.map((r) => formatDataPointValue(point, r.value)).join('; ')}`, body: sentences.join(' '), tone: missing > 0 ? 'CAUTION' : 'DEFAULT', actions: [] },
+      { type: 'SUMMARY', id: 'data-point-summary', title: `${point.label}: ${present.map((r) => formatDataPointValue(point, r.value)).join('; ')}`, body: sentences.join(' '), tone: missing > 0 || limits.length ? 'CAUTION' : 'DEFAULT', actions: [] },
       { type: 'EVIDENCE', id: 'data-point-evidence', title: 'Where this comes from', items: present.map((r) => ({ label: r.name, source: `${where.record}${r.roomName ? ` (${r.roomName})` : ''}`, observedAt: null })) },
     ] as AskPresentationBlock[],
     suggestions: [],
