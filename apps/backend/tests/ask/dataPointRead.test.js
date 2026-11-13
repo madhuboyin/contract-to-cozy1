@@ -168,15 +168,15 @@ test('source authorization: a restricted source is redacted once the role drops,
   assert.deepEqual(seen.at(-1), ['PropertyMaintenanceTask', { id: 't1', propertyId: 'p1' }]);
 });
 
-test('owner approval (2026-11-12) covers exactly the 75 catalogued ids at catalogue version 7 (33 at v1 + 14 reserve-ownership-costs + 12 seller-prep/buyer + 4 record + 4 buyerTask + 4 buyerMilestone + 4 saleItem); any unapproved id or version drift fails', () => {
+test('owner approval (2026-11-12) covers exactly the 79 catalogued ids at catalogue version 8 (33 at v1 + 14 reserve-ownership-costs + 12 seller-prep/buyer + 4 record + 4 buyerTask + 4 buyerMilestone + 4 saleItem + 4 recordVersion); any unapproved id or version drift fails', () => {
   assert.equal(DATA_POINT_CATALOGUE_VERSION, DATA_POINT_APPROVAL.catalogueVersion, 'a new catalogue version needs a new approval record');
   const ids = DATA_POINT_DEFINITIONS.map((p) => p.id);
   assert.equal(new Set(ids).size, ids.length, 'ids are unique');
   assert.deepEqual(ids.filter((id) => !APPROVED_DATA_POINT_IDS.includes(id)), [], 'every catalogued id must be owner-approved');
   assert.deepEqual(APPROVED_DATA_POINT_IDS.filter((id) => !ids.includes(id)), [], 'an approved id that is no longer catalogued must be removed from the approval');
-  assert.equal(ids.length, 75); assert.equal(DATA_POINT_CATALOGUE_VERSION, 7);
+  assert.equal(ids.length, 79); assert.equal(DATA_POINT_CATALOGUE_VERSION, 8);
   const by = (d) => DATA_POINT_DEFINITIONS.filter((p) => p.domain === d).length;
-  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance'), by('reserve-ownership-costs'), by('seller-prep'), by('buyer'), by('documents-records')], [14, 5, 7, 7, 14, 13, 11, 4]);
+  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance'), by('reserve-ownership-costs'), by('seller-prep'), by('buyer'), by('documents-records')], [14, 5, 7, 7, 14, 13, 11, 8]);
 });
 test('the restriction copy is generated from the field floor, so it never names a different audience than the check enforces', async () => {
   assert.match(audienceFloorCopy('CONTRIBUTOR').title, /contributors and owners/);
@@ -543,4 +543,68 @@ test('v7 replay: the item is re-resolved through its CURRENT property-scoped sal
   assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx(true), [sourceRef('SaleReadinessItem', 's1')]), 'AUTHORIZED');
   assert.deepEqual(seen.at(-1), ['SaleReadinessItem', { id: 's1', saleCase: { propertyId: 'p1' } }]);
   assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx(false), [sourceRef('SaleReadinessItem', 's1')]), 'REDACT_SECTION');
+});
+
+// ---- Catalogue v8: record versions, through a NAMED record visible to the caller's role ----
+const rvRec = (o) => ({ id: 'r1', title: 'Roof inspection', currentVersionId: 'v2', ...o });
+const rvVer = (o) => ({ id: 'v2', recordId: 'r1', versionNumber: 2, createdAt: new Date('2026-10-05T12:00:00Z'), scanStatus: 'CLEAN', integrityStatus: 'VERIFIED', ...o });
+function rvStub(role, { records = [rvRec({})], versions = [rvVer({}), rvVer({ id: 'v1', versionNumber: 1, scanStatus: 'PENDING', createdAt: new Date('2026-09-01T12:00:00Z') })] } = {}, calls = []) {
+  propertyAccessService.resolvePropertyAccess = async () => ({ propertyId: 'p1', userId: 'u1', role, isOwner: role === 'OWNER' });
+  // honours the visibility filter the reader sends, like the database would
+  prisma.propertyRecord = { findMany: async (a) => { calls.push(['record', a]); return records.filter((r) => !a.where.visibility || (r.visibility ?? 'HOUSEHOLD') === a.where.visibility); } };
+  prisma.propertyRecordVersion = { findMany: async (a) => { calls.push(['version', a]); return versions.filter((v) => v.recordId === a.where.recordId); } };
+}
+test('v8 routing: version compound cues select recordVersion.*; bare "version" and the record.* points are unchanged', () => {
+  for (const cue of ['record version', 'document version', 'file version', 'home record version']) {
+    assert.equal(resolveDataPoint(`what is the scan status of the ${cue}`)?.id, 'recordVersion.scanStatus', cue);
+    assert.equal(resolveDataPoint(`what is the integrity status of the ${cue}`)?.id, 'recordVersion.integrityStatus', cue);
+    assert.equal(resolveDataPoint(`when was the ${cue} uploaded`)?.id, 'recordVersion.uploadedDate', cue);
+    assert.equal(resolveDataPoint(`what is the current ${cue}`)?.id, 'recordVersion.number', cue);
+  }
+  assert.equal(resolveDataPoint('what is the scan status'), null, 'no cue, no point');
+  assert.equal(resolveDataPoint('is my roof inspection document verified')?.id, 'record.verification', 'record verification is untouched');
+  const defs = DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'PropertyRecordVersion');
+  assert.deepEqual(defs.map((p) => p.field).sort(), ['createdAt', 'integrityStatus', 'scanStatus', 'versionNumber']);
+  for (const banned of ['storageKey', 'originalFileName', 'mimeType', 'fileSizeBytes', 'sha256', 'storageEtag', 'extractedText', 'ocrQualityScore', 'uploadedByUserId', 'supersedesVersionId']) assert.ok(!defs.some((p) => p.field === banned), banned);
+});
+test('v8 read: the record is named and role-filtered first; only metadata columns are selected; current version by default, "version 1" on request', async () => {
+  const calls = []; rvStub('VIEWER', {}, calls);
+  const r = await dataPointReadResult('u1', 'p1', 'what is the scan status of my roof inspection record version');
+  assert.equal(r.status, 'ANSWERED'); assert.match(r.blocks[0].body, /Roof inspection version 2 has scan status clean/i);
+  assert.equal(calls[0][1].where.visibility, 'HOUSEHOLD'); assert.equal(calls[0][1].where.lifecycleStatus, 'ACTIVE'); assert.equal(calls[0][1].where.trashedAt, null); assert.equal(calls[0][1].where.propertyId, 'p1');
+  assert.deepEqual(calls[1][1].where, { recordId: 'r1' });
+  assert.deepEqual(Object.keys(calls[1][1].select).sort(), ['id', 'scanStatus', 'versionNumber']);
+  for (const banned of ['storageKey', 'originalFileName', 'sha256', 'extractedText', 'uploadedByUserId']) assert.ok(!(banned in calls[1][1].select), banned);
+  assert.deepEqual(r.parameters.sources, [{ sourceType: 'PropertyRecordVersion', sourceId: 'v2' }]);
+  const old = await dataPointReadResult('u1', 'p1', 'what is the scan status of my roof inspection record version 1');
+  assert.match(old.blocks[0].body, /version 1 has scan status pending/i); assert.match(old.blocks[0].body, /not the current version \(2\)/); assert.equal(old.status, 'READY_WITH_LIMITATIONS');
+  const num = await dataPointReadResult('u1', 'p1', 'what is the current record version of my roof inspection version 1');
+  assert.match(num.blocks[0].body, /Roof inspection is at version 2/, 'the number point always reports the current version');
+  assert.equal((await dataPointReadResult('u1', 'p1', 'what is the scan status of my roof inspection record version 9')).reasonCode, 'DATA_POINT_ITEM_NOT_FOUND');
+  assert.equal((await dataPointReadResult('u1', 'p1', 'what is the scan status of the record version')).reasonCode, 'DATA_POINT_ITEM_NOT_FOUND', 'no record named, nothing is defaulted');
+});
+test('v8 visibility: a record the role cannot see is indistinguishable from one that does not exist; owners read it', async () => {
+  const restricted = [rvRec({ visibility: 'OWNER_ONLY' })];
+  rvStub('CONTRIBUTOR', { records: restricted });
+  assert.equal((await dataPointReadResult('u1', 'p1', 'when was my roof inspection record version uploaded')).reasonCode, 'DATA_POINT_NO_INVENTORY');
+  rvStub('OWNER', { records: restricted });
+  assert.equal((await dataPointReadResult('u1', 'p1', 'when was my roof inspection record version uploaded')).status, 'ANSWERED');
+});
+test('v8 edge cases: two records of the same name are ambiguous without titles; a record with no current version is not recorded; the most specific title wins', async () => {
+  rvStub('VIEWER', { records: [rvRec({}), rvRec({ id: 'r2', title: 'Roof inspection' })], versions: [rvVer({})] });
+  const amb = await dataPointReadResult('u1', 'p1', 'what is the scan status of my roof inspection record version');
+  assert.equal(amb.reasonCode, 'DATA_POINT_AMBIGUOUS'); assert.doesNotMatch(JSON.stringify(amb), /Roof inspection/);
+  rvStub('VIEWER', { records: [rvRec({ currentVersionId: null })] });
+  assert.equal((await dataPointReadResult('u1', 'p1', 'what is the scan status of my roof inspection record version')).reasonCode, 'DATA_POINT_NOT_RECORDED');
+  rvStub('VIEWER', { records: [rvRec({ id: 'r1', title: 'Roof' }), rvRec({ id: 'r2', title: 'Roof inspection', currentVersionId: 'v9' })], versions: [rvVer({ id: 'v9', recordId: 'r2', versionNumber: 4, scanStatus: 'QUARANTINED' })] });
+  assert.match((await dataPointReadResult('u1', 'p1', 'what is the scan status of my roof inspection record version')).blocks[0].body, /version 4 has scan status quarantined/i);
+});
+test('v8 replay: the version is re-resolved through its CURRENT, visible, active, untrashed record for this role', async () => {
+  const { COMPOSABLE_SOURCE_AUTHORIZATION: AUTH, sourceRef } = require('../../src/services/ask/composition/sourceAuthorization.ts');
+  const seen = []; const ctx = (role, present) => ({ userId: 'u1', propertyId: 'p1', role, exists: async (m, w) => { seen.push([m, w]); return present; } });
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx('VIEWER', true), [sourceRef('PropertyRecordVersion', 'v2')]), 'AUTHORIZED');
+  assert.deepEqual(seen.at(-1), ['PropertyRecordVersion', { id: 'v2', record: { propertyId: 'p1', lifecycleStatus: 'ACTIVE', trashedAt: null, visibility: 'HOUSEHOLD' } }]);
+  await AUTH.DATA_POINT_READ.authorizeSources(ctx('OWNER', true), [sourceRef('PropertyRecordVersion', 'v2')]);
+  assert.equal(seen.at(-1)[1].record.visibility, undefined, 'owners are not filtered');
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx('VIEWER', false), [sourceRef('PropertyRecordVersion', 'v2')]), 'REDACT_SECTION');
 });

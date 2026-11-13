@@ -51,7 +51,7 @@ function taxLimitation(r: any): string | null {
   if (r.sourceType === 'HOMEOWNER_REPORTED' && r.confidence !== 'VERIFIED') return `This ${r.taxYear} figure was entered by you and has not been matched to an official source.`;
   return null;
 }
-interface EntitySpec { readonly mode?: 'NAMED' | 'SINGLETON' | 'LATEST_TAX_YEAR' | 'RELATION_CHILD'; /** Relation children: statuses at which a date/priority is not an active obligation (the status itself is still answered plainly). */ readonly inactiveChildStatuses?: readonly string[]; readonly where?: Record<string, unknown>; readonly roleWhere?: (role: string) => Record<string, unknown>; readonly orderBy?: unknown; readonly limitation?: (row: any) => string | null; readonly delegate: string; readonly extraSelect: Record<string, unknown>; readonly labels: (row: any) => string[]; readonly display: (row: any) => string; readonly listUnnamedUpTo: number; readonly roomName?: (row: any) => string | null }
+interface EntitySpec { readonly mode?: 'NAMED' | 'SINGLETON' | 'LATEST_TAX_YEAR' | 'RELATION_CHILD' | 'RECORD_VERSION'; /** Relation children: statuses at which a date/priority is not an active obligation (the status itself is still answered plainly). */ readonly inactiveChildStatuses?: readonly string[]; readonly where?: Record<string, unknown>; readonly roleWhere?: (role: string) => Record<string, unknown>; readonly orderBy?: unknown; readonly limitation?: (row: any) => string | null; readonly delegate: string; readonly extraSelect: Record<string, unknown>; readonly labels: (row: any) => string[]; readonly display: (row: any) => string; readonly listUnnamedUpTo: number; readonly roomName?: (row: any) => string | null }
 const ENTITY_SPECS: Readonly<Record<DataPointEntity, EntitySpec>> = {
   InventoryItem: { delegate: 'inventoryItem', extraSelect: { name: true, room: { select: { name: true } } }, labels: (r) => [r.name], display: (r) => r.name, listUnnamedUpTo: 0, roomName: (r) => r.room?.name ?? null },
   Warranty: { delegate: 'warranty', extraSelect: { providerName: true, category: true, inventoryItem: { select: { name: true } } }, labels: (r) => [r.inventoryItem?.name, r.providerName, String(r.category ?? '').replace(/_/g, ' ')].filter(Boolean), display: (r) => (r.inventoryItem?.name ? `${r.inventoryItem.name} warranty` : r.providerName ? `${r.providerName} warranty` : 'warranty'), listUnnamedUpTo: 1 },
@@ -69,6 +69,8 @@ const ENTITY_SPECS: Readonly<Record<DataPointEntity, EntitySpec>> = {
   // Sale-readiness items of the property's sale case. Title selects a row and is never returned; detail, cost/value-add ranges, waiver reason, ids are never selected. RESOLVED/WAIVED items answer their
   // status plainly; a due date is a recorded past value.
   SaleReadinessItem: { mode: 'RELATION_CHILD', delegate: 'saleReadinessItem', orderBy: [{ dueAt: 'asc' }], inactiveChildStatuses: ['RESOLVED', 'WAIVED'], extraSelect: { title: true, status: true }, labels: (r) => [r.title], display: () => 'sale-readiness item', listUnnamedUpTo: 1 },
+  // Record versions: the PARENT record must be named and visible to this role (visibleRecordWhere, ACTIVE, not trashed); only then are its versions read. Metadata columns only.
+  PropertyRecordVersion: { mode: 'RECORD_VERSION', delegate: 'propertyRecordVersion', extraSelect: { versionNumber: true }, labels: () => [], display: () => 'record version', listUnnamedUpTo: 0 },
   PropertyRecord: { delegate: 'propertyRecord', extraSelect: { title: true }, roleWhere: (role) => ({ lifecycleStatus: 'ACTIVE', trashedAt: null, ...visibleRecordWhere(role as HouseholdRole) }), labels: (r) => [r.title], display: (r) => String(r.title), listUnnamedUpTo: 0 },
   PropertyTaxBillRecord: { mode: 'LATEST_TAX_YEAR', delegate: 'propertyTaxBillRecord', where: { status: 'ACTIVE', supersededById: null }, orderBy: [{ taxYear: 'desc' }, { observedAt: 'desc' }], extraSelect: { taxYear: true, sourceType: true, confidence: true }, labels: () => [], display: (r) => `${r.taxYear} property tax bill`, listUnnamedUpTo: 0, limitation: taxLimitation },
   // Sale prep, sale case and buyer journey are one row per property (propertyId @unique): singleton reads. A buyer journey that is not ACTIVE says so, so a stale stage is not stated plainly.
@@ -90,6 +92,28 @@ export async function readDataPoint(propertyId: string, role: string, point: Dat
   if (!allowed?.includes(point.field) || !DATA_POINT_DEFINITIONS.includes(point)) throw new Error(`data point ${point.id} is not in the reviewed catalogue`);
   const spec = ENTITY_SPECS[point.entity];
   const select: Record<string, unknown> = { id: true, ...spec.extraSelect, [point.field]: true };
+  if (spec.mode === 'RECORD_VERSION') {
+    const parentSpec = ENTITY_SPECS.PropertyRecord;
+    const records: any[] = await (prisma as any)[parentSpec.delegate].findMany({ where: { propertyId, ...(parentSpec.roleWhere?.(role) ?? {}) }, select: { id: true, title: true, currentVersionId: true }, take: DATA_POINT_ITEM_ROW_CAP });
+    if (!records.length) return { point, status: 'ITEM_NOT_FOUND', rows: [] };
+    const hitIds = new Set(matchItemsByName(message, records.map((r) => ({ id: String(r.id), name: String(r.title) }))).map((m) => m.id));
+    let named = records.filter((r) => hitIds.has(String(r.id)));
+    if (named.length > 1) { const specificity = (r: any) => tokens(String(r.title)).length; const top = Math.max(...named.map(specificity)); named = named.filter((r) => specificity(r) === top); }
+    if (!named.length) return { point, status: 'NO_ITEM_NAMED', rows: [] };
+    if (named.length > 1) return { point, status: 'AMBIGUOUS', candidateCount: named.length, rows: [] };
+    const record = named[0];
+    const versions: any[] = await (prisma as any)[spec.delegate].findMany({ where: { recordId: record.id }, select, orderBy: [{ versionNumber: 'desc' }], take: 50 });
+    const current = versions.find((v) => String(v.id) === String(record.currentVersionId)) ?? null;
+    // "version 2" picks that version for the date/scan/integrity points; the version-number point always reports the CURRENT version.
+    const asked = point.field === 'versionNumber' ? null : /\bversion\s+(\d{1,3})\b|\bv(\d{1,3})\b/i.exec(message);
+    const wanted = asked ? Number(asked[1] ?? asked[2]) : null;
+    const chosen = wanted !== null ? versions.find((v) => v.versionNumber === wanted) ?? null : current;
+    if (wanted !== null && !chosen) return { point, status: 'NO_ITEM_NAMED', rows: [] };
+    if (!chosen) return { point, status: 'NOT_RECORDED', rows: [{ id: String(record.id), name: String(record.title), value: null, roomName: null }] };
+    const value = chosen[point.field] ?? null;
+    const limitation = current && String(chosen.id) !== String(current.id) ? `This is version ${chosen.versionNumber}, which is not the current version (${current.versionNumber}).` : null;
+    return { point, status: isPresent(value) ? 'FOUND' : 'NOT_RECORDED', rows: [{ id: String(chosen.id), name: point.field === 'versionNumber' ? String(record.title) : `${record.title} version ${chosen.versionNumber}`, value, roomName: null, limitation }] };
+  }
   if (spec.mode === 'RELATION_CHILD') {
     const path = RELATION_ENTITIES[point.entity];
     if (!path) throw new Error(`no relation path declared for ${point.entity}`);
