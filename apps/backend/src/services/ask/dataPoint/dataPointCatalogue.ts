@@ -149,7 +149,7 @@ const RESERVE_COST_POINTS: readonly DataPointDefinition[] = [
 ];
 
 const SP = ['sale prep', 'seller prep', 'selling', 'prepare to sell', 'curb appeal', 'staging'];
-const SC = ['sale case', 'sale plan', 'selling', 'sell my home', 'sell my house', 'listing'];
+const SC = ['sale case', 'sale plan', 'selling', 'sell my home', 'sell my house', 'listing', 'home sale', 'the sale', 'my sale'];
 const BY = ['buyer', 'buying', 'buyer journey', 'buying journey', 'home purchase'];
 const sp = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues' | 'audience'>): DataPointDefinition => d({ ...x, domain: 'seller-prep', entity: 'PropertySalePrepProfile', cues: SP });
 const sc = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues' | 'audience'>): DataPointDefinition => d({ ...x, domain: 'seller-prep', entity: 'PropertySaleCase', cues: SC });
@@ -343,7 +343,7 @@ export function resolveDataPoint(message: string): DataPointDefinition | null {
 }
 
 /** Entities (and claim detail ids) whose single details no dedicated operation answers : a compound-cue question about one of them is read by the data point, not by a list operation that merely shares a word. */
-const DATA_POINT_ONLY_ENTITIES: ReadonlySet<string> = new Set(['HomeBuyerTask', 'BuyerJourneyMilestone', 'SaleReadinessItem', 'PropertyRecordVersion', 'ClaimChecklistItem', 'ClaimTimelineEvent', 'ClaimDocument']);
+const DATA_POINT_ONLY_ENTITIES: ReadonlySet<string> = new Set(['InsurancePolicy', 'PropertySaleCase', 'PropertySalePrepProfile', 'HomeBuyerTask', 'BuyerJourneyMilestone', 'SaleReadinessItem', 'PropertyRecordVersion', 'ClaimChecklistItem', 'ClaimTimelineEvent', 'ClaimDocument']);
 // Inventory details the inventory lookup does NOT state (it shows the item's name, brand and model, and its condition and history, but never its serial number or what it cost). The other inventory points stay with INVENTORY_LOOKUP, which owns them in the routing ratchets.
 const INVENTORY_ONLY_IDS: ReadonlySet<string> = new Set(['item.serial', 'item.purchaseCost', 'item.replacementCost', 'item.efficiencyRating']);
 // Maintenance-task details the maintenance status read does not state (it lists a task with its due date and status, never its priority, repeat interval, cost or when it was last done).
@@ -352,6 +352,12 @@ const CLAIM_DETAIL_IDS: ReadonlySet<string> = new Set(['claim.deductible', 'clai
 export function isDataPointOnlyQuestion(message: string): boolean {
   const point = resolveDataPoint(message);
   return Boolean(point && (DATA_POINT_ONLY_ENTITIES.has(point.entity) || CLAIM_DETAIL_IDS.has(point.id) || INVENTORY_ONLY_IDS.has(point.id) || TASK_ONLY_IDS.has(point.id)));
+}
+
+/** A question about one value of the home's sale prep profile or sale case (paint, staging, target list date), which the checklist and sell-or-hold reads do not state. */
+export function isSaleProfileQuestion(message: string): boolean {
+  const point = resolveDataPoint(message);
+  return Boolean(point && (point.entity === 'PropertySalePrepProfile' || point.entity === 'PropertySaleCase'));
 }
 
 /** Who a floor is shown to, in homeowner words. Generated from the point's actual floor so the restriction message never states a different audience than the check enforces. */

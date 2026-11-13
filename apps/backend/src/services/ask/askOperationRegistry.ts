@@ -1,4 +1,4 @@
-import { isDataPointOnlyQuestion, resolveDataPoint } from './dataPoint/dataPointCatalogue';
+import { isDataPointOnlyQuestion, isSaleProfileQuestion, resolveDataPoint } from './dataPoint/dataPointCatalogue';
 import { isDataPointComputedQuery, isDataPointQuery } from './dataPoint/dataPointQueryPlan';
 import { isWriteCapableOperation } from './support/writeCapability';
 import { isItemCostMessage, isItemFundingGoalMessage, isItemReserveAllocationMessage } from './support/itemFundingWording';
@@ -1870,7 +1870,8 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (sellerPrepItemDecisionPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('SELLER_PREP_ITEM_DECISION', 0.97);
   }
-  if (sellerPrepChecklistPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+  // A single recorded detail of the sale prep profile ("what condition is the paint in for my seller prep") is a data point; the checklist read lists items and never states the profile's own values.
+  if (sellerPrepChecklistPattern.test(message) && !explicitCapabilityPattern.test(message) && !(dataPointQuestionPattern.test(message) && isSaleProfileQuestion(message))) {
     return resolved('SELLER_PREP_CHECKLIST', 0.97);
   }
   if (sellUpgradeValuePattern.test(message) && sellWordPattern.test(message) && !holdOrRentWordPattern.test(message) && !itemAttributeWriteIntentPattern.test(message.replace(/\badd(?:s|ed)? (?:the )?(?:most |more )?value\b/gi, '')) && !explicitCapabilityPattern.test(message)) {

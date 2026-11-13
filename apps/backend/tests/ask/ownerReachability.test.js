@@ -30,3 +30,14 @@ test('maintenance: natural owner questions about a named task reach the data poi
   assert.equal(route('What is the status of my gutter cleaning task?'), 'MAINTENANCE_STATUS', 'status and due date of a task stay with the maintenance status read');
   const d = m.byDomain.get('maintenance'); assert.ok(d.routed / d.phrasings >= 0.8, `maintenance phrasing honor ${d.routed}/${d.phrasings}`);
 });
+
+// ---- seller-prep and insurance phrasing fixes (2026-11-13) ----
+test('insurance and seller prep: natural owner questions reach the data point; checklist and readiness questions keep their operations', () => {
+  const route = (q) => resolveAskOperation(q).operationId;
+  for (const q of ['Who is my insurance carrier?', 'What is my homeowners policy deductible?', 'How much is my insurance premium?', 'When does my insurance policy expire?', 'Tell me the deductible for my insurance policy.',
+    'What is my target list date for the sale?', 'When is my target close date for selling?', 'What is the status of my sale case?', 'What condition is the paint in for my seller prep?', 'What is my staging readiness for selling?', 'What is the status of my sale items?']) assert.equal(route(q), 'DATA_POINT_READ', q);
+  for (const q of ['Am I ready to sell my home?', 'Check my seller prep checklist', 'What is the status of my sale readiness item?']) assert.equal(route(q), 'SELLER_PREP_CHECKLIST', q);
+  assert.equal(resolveDataPoint('What is my target list date for the sale?')?.id, 'saleCase.targetListDate', 'the sale needs no "case" or "plan" word');
+  assert.equal(resolveDataPoint('What is the status of my sale items?')?.id, 'saleItem.status', 'the more specific "sale items" cue beats the sale cue');
+  for (const [domain, floor] of [['insurance', 0.85], ['seller-prep', 0.8]]) { const d = m.byDomain.get(domain); assert.ok(d.routed / d.phrasings >= floor, `${domain} phrasing honor ${d.routed}/${d.phrasings}`); }
+});
