@@ -25,7 +25,8 @@ test('every catalogued field exists on its Prisma model, and every entity is pro
       assert.ok(model.fields.some((f) => f.name === rel.key && f.kind === 'scalar'), `${p.entity}.${rel.key}`);
       const parent = Prisma.dmmf.datamodel.models.find((m) => m.name === rel.parent);
       assert.ok(parent.fields.some((f) => f.name === 'propertyId' && f.kind === 'scalar'), `${rel.parent} has no propertyId`);
-    } else assert.ok(model.fields.some((f) => f.name === 'propertyId' && f.kind === 'scalar'), `${p.entity} has no propertyId`);
+    } else if (p.entity === 'Property') assert.ok(model.fields.some((f) => f.name === 'id' && f.kind === 'scalar'), 'Property is the property row itself, keyed by id'); // the one entity with no propertyId column: it IS the property
+    else assert.ok(model.fields.some((f) => f.name === 'propertyId' && f.kind === 'scalar'), `${p.entity} has no propertyId`);
     assert.equal(/password|token|secret|apiKey|credential/i.test(p.field), false);
   }
 });
@@ -129,7 +130,7 @@ const roleStub = (role, items) => {
 test('every data point has an explicit audience floor, free-form item notes are not catalogued, and claims is now its own domain', () => {
   for (const p of DATA_POINT_DEFINITIONS) assert.ok(['VIEWER', 'CONTRIBUTOR', 'OWNER'].includes(p.audience), p.id);
   assert.equal(DATA_POINT_DEFINITIONS.some((p) => p.field === 'notes'), false);
-  assert.deepEqual([...new Set(DATA_POINT_DEFINITIONS.map((p) => p.domain))].sort(), ['appliances-inventory', 'buyer', 'claims', 'documents-records', 'insurance', 'maintenance', 'reserve-ownership-costs', 'seller-prep', 'warranties']);
+  assert.deepEqual([...new Set(DATA_POINT_DEFINITIONS.map((p) => p.domain))].sort(), ['appliances-inventory', 'buyer', 'claims', 'documents-records', 'home-profile', 'insurance', 'maintenance', 'reserve-ownership-costs', 'seller-prep', 'warranties']);
   for (const p of DATA_POINT_DEFINITIONS.filter((x) => x.sensitivity === 'FINANCIAL')) assert.notEqual(p.audience, 'VIEWER', `${p.id}: money is not shown to viewers`);
 });
 test('a viewer is refused a restricted field by the handler AND by the reader; a contributor is not', async () => {
@@ -168,15 +169,15 @@ test('source authorization: a restricted source is redacted once the role drops,
   assert.deepEqual(seen.at(-1), ['PropertyMaintenanceTask', { id: 't1', propertyId: 'p1' }]);
 });
 
-test('owner approval (2026-11-12) covers exactly the 95 catalogued ids at catalogue version 10 (33 at v1 + 14 reserve-ownership-costs + 12 seller-prep/buyer + 4 record + 4 buyerTask + 4 buyerMilestone + 4 saleItem + 4 recordVersion + 11 claim + 5 claim-child); any unapproved id or version drift fails', () => {
+test('owner approval (2026-11-12) covers exactly the 106 catalogued ids at catalogue version 11 (33 at v1 + 14 reserve-ownership-costs + 12 seller-prep/buyer + 4 record + 4 buyerTask + 4 buyerMilestone + 4 saleItem + 4 recordVersion + 11 claim + 5 claim-child + 11 home-profile); any unapproved id or version drift fails', () => {
   assert.equal(DATA_POINT_CATALOGUE_VERSION, DATA_POINT_APPROVAL.catalogueVersion, 'a new catalogue version needs a new approval record');
   const ids = DATA_POINT_DEFINITIONS.map((p) => p.id);
   assert.equal(new Set(ids).size, ids.length, 'ids are unique');
   assert.deepEqual(ids.filter((id) => !APPROVED_DATA_POINT_IDS.includes(id)), [], 'every catalogued id must be owner-approved');
   assert.deepEqual(APPROVED_DATA_POINT_IDS.filter((id) => !ids.includes(id)), [], 'an approved id that is no longer catalogued must be removed from the approval');
-  assert.equal(ids.length, 95); assert.equal(DATA_POINT_CATALOGUE_VERSION, 10);
+  assert.equal(ids.length, 106); assert.equal(DATA_POINT_CATALOGUE_VERSION, 11);
   const by = (d) => DATA_POINT_DEFINITIONS.filter((p) => p.domain === d).length;
-  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance'), by('reserve-ownership-costs'), by('seller-prep'), by('buyer'), by('documents-records'), by('claims')], [14, 5, 7, 7, 14, 13, 11, 8, 16]);
+  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance'), by('reserve-ownership-costs'), by('seller-prep'), by('buyer'), by('documents-records'), by('claims'), by('home-profile')], [14, 5, 7, 7, 14, 13, 11, 8, 16, 11]);
 });
 test('the restriction copy is generated from the field floor, so it never names a different audience than the check enforces', async () => {
   assert.match(audienceFloorCopy('CONTRIBUTOR').title, /contributors and owners/);
@@ -804,4 +805,29 @@ test('multi-facet question: each facet is answered in one summary, none silently
   stub([{ id: 'i1', name: 'Furnace', serialNumber: 'SN9', installedOn: new Date('2019-03-01'), room: null }]);
   const r = await dataPointReadResult('u1', 'p1', 'what is the serial number of my furnace and when was it installed');
   assert.equal(r.blocks[0].id, 'data-point-summary'); assert.match(r.blocks[0].body, /SN9/); assert.match(r.blocks[0].body, /2019/);
+});
+
+test('home profile (catalogue v11): the home\'s own facts resolve and route, and home questions never borrow an inventory point', () => {
+  const ids = (m) => resolveDataPoint(m)?.id ?? null;
+  const cases = { 'what year was my house built': 'home.yearBuilt', 'how big is my home': 'home.livingArea', 'what is the square footage of my house': 'home.livingArea', 'how many bedrooms does my house have': 'home.bedrooms', 'how many bathrooms do I have': 'home.bathrooms', 'what is my property address': 'home.address', 'what type of home do I own': 'home.type', 'what is my roof type': 'home.roofType', 'what kind of heating system do I have': 'home.heatingType', 'what kind of cooling system do I have': 'home.coolingType', 'what is my zip code': 'home.zipCode', 'what county am I in': 'home.county', 'what is the age of my home': 'home.yearBuilt' };
+  for (const [m, id] of Object.entries(cases)) { assert.equal(ids(m), id, m); assert.equal(resolveAskOperation(m).operationId, 'DATA_POINT_READ', m); }
+  // appliance, tax, warranty and lot wording is not the home
+  assert.equal(ids('when was my heating system installed'), 'item.installedOn'); assert.equal(ids('what condition is my heating system in'), 'item.condition');
+  assert.equal(ids('how many square feet is my lot'), null); assert.equal(ids('what did I pay for my house'), null); assert.equal(ids('what type of foundation does my house have'), null);
+  assert.equal(ids('what is my home warranty expiry date'), 'warranty.expiryDate');
+  assert.equal(ids('what is my property tax bill'), 'taxBill.amount');
+  assert.equal(ids('what is the serial number of my fridge'), 'item.serial'); assert.equal(ids('what type is my dishwasher'), 'item.category');
+});
+test('home profile handler: reads the one property row (keyed by its id), formats units, says not recorded, never leaks another home', async () => {
+  propertyAccessService.resolvePropertyAccess = async () => ({ propertyId: 'p1', userId: 'u1', role: 'VIEWER', isOwner: false });
+  let args;
+  prisma.property = { findMany: async (a) => { args = a; return [{ id: 'p1', yearBuilt: 1998, propertySize: 1800, bedrooms: 3, bathrooms: 2.5, roofType: 'ASPHALT_SHINGLE', heatingType: null, county: 'Cook' }]; } };
+  const built = await dataPointReadResult('u1', 'p1', 'what year was my house built');
+  assert.match(built.blocks[0].body, /Your home was built in 1998\./); assert.deepEqual(args.where, { id: 'p1' }); assert.deepEqual(Object.keys(args.select).sort(), ['id', 'yearBuilt']);
+  assert.match((await dataPointReadResult('u1', 'p1', 'how big is my home')).blocks[0].body, /1,800 sq ft/);
+  assert.match((await dataPointReadResult('u1', 'p1', 'how many bedrooms does my house have')).blocks[0].body, /3 bedrooms/);
+  assert.match((await dataPointReadResult('u1', 'p1', 'how many bathrooms do I have')).blocks[0].body, /2\.5 bathrooms/);
+  assert.match((await dataPointReadResult('u1', 'p1', 'what is my roof type')).blocks[0].body, /asphalt shingle/i);
+  assert.equal((await dataPointReadResult('u1', 'p1', 'what kind of heating system do I have')).reasonCode, 'DATA_POINT_NOT_RECORDED');
+  assert.deepEqual(built.parameters.sources[0].sourceType, 'Property');
 });

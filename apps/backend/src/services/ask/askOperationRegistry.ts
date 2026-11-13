@@ -1626,7 +1626,7 @@ const explicitCapabilityPattern = /\b(?:tool|something (?:available|to help)|any
 const capabilityPattern = /\b(tool|something available|what can help|do you have|help me (?:with|plan)|refinanc|sell.*rent|compare.{0,40}(?:quotes?|bids?|proposals?|estimates?)|organize.{0,40}(?:records?|documents?|paperwork)|track.{0,40}(?:permits?|projects?)|plan.{0,40}(?:renovation|remodel|replacement)|savings?|rebates?|monitor)\b/i;
 
 /** A question frame (what/when/who/which/how much/how old/tell me) about "my"/"the" something; the detail itself is decided by the reviewed catalogue, not by this pattern. */
-const dataPointQuestionPattern = /^\s*(?:what(?:'s|s)?|when(?:'s)?|who|which|how (?:much|old|long)|tell me|show me)\b.*\b(?:my|our|the|i|we)\b/i;
+const dataPointQuestionPattern = /^\s*(?:what(?:'s|s)?|when(?:'s)?|who|which|how (?:much|old|long|many|big|large)|tell me|show me)\b.*\b(?:my|our|the|i|we)\b/i;
 
 export function resolveAskOperation(message: string): AskOperationResolution {
   const resolved = (operationId: AskOperationId, confidence: number): AskOperationResolution => ({

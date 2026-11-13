@@ -20,6 +20,7 @@ const ENTITY_COPY: Record<string, { plural: string; singular: string; collection
   Warranty: { plural: 'warranties', singular: 'warranty', collection: 'warranties', record: 'Warranty record' },
   InsurancePolicy: { plural: 'insurance policies', singular: 'insurance policy', collection: 'insurance policies', record: 'Insurance policy record' },
   PropertyMaintenanceTask: { plural: 'maintenance tasks', singular: 'maintenance task', collection: 'maintenance tasks', record: 'Maintenance task record' },
+  Property: { plural: 'homes', singular: 'home', collection: 'home profile', record: 'Home profile', none: 'No home profile is recorded yet' },
   HomeReserveFund: { plural: 'reserve funds', singular: 'reserve fund', collection: 'reserve fund', record: 'Home reserve fund record', none: 'No reserve fund is set up for this home yet' },
   PropertySalePrepProfile: { plural: 'sale prep profiles', singular: 'sale prep profile', collection: 'sale prep profile', record: 'Sale prep profile', none: 'No sale prep profile is recorded yet' },
   PropertySaleCase: { plural: 'sale plans', singular: 'sale plan', collection: 'sale plan', record: 'Sale plan record', none: 'No sale plan is started for this home yet' },
@@ -44,7 +45,13 @@ export function formatDataPointValue(point: DataPointDefinition, value: unknown)
     case 'dollars': return money(Math.round(Number(typeof value === 'object' && value && 'toNumber' in value ? (value as { toNumber(): number }).toNumber() : value)));
     case 'enum': return words(value);
     case 'percent': return `${(Number(typeof value === 'object' && value && 'toNumber' in value ? (value as { toNumber(): number }).toNumber() : value) * 100).toFixed(3)}%`;
-    case 'number': return String(value);
+    case 'number': {
+      const n = Number(value);
+      if (point.id === 'home.livingArea') return `${n.toLocaleString('en-US')} sq ft`;
+      if (point.id === 'home.bedrooms') return `${n} ${n === 1 ? 'bedroom' : 'bedrooms'}`;
+      if (point.id === 'home.bathrooms') return `${n} ${n === 1 ? 'bathroom' : 'bathrooms'}`;
+      return String(value);
+    }
     case 'flag': return value === true ? 'yes' : value === false ? 'no' : String(value);
     case 'tags': return (value as unknown[]).map(String).join(', ');
     default: return String(value);
