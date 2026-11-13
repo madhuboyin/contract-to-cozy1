@@ -1,4 +1,4 @@
-import { isDataPointOnlyQuestion, isSaleProfileQuestion, resolveDataPoint } from './dataPoint/dataPointCatalogue';
+import { isReserveFactQuestion, isDataPointDetailQuestion, isDataPointOnlyQuestion, isSaleProfileQuestion, resolveDataPoint } from './dataPoint/dataPointCatalogue';
 import { isDataPointComputedQuery, isDataPointQuery } from './dataPoint/dataPointQueryPlan';
 import { isWriteCapableOperation } from './support/writeCapability';
 import { isItemCostMessage, isItemFundingGoalMessage, isItemReserveAllocationMessage } from './support/itemFundingWording';
@@ -1272,7 +1272,7 @@ const quoteComparisonCreatePattern = /\b(?:create|start|open|set up|new)\b.{0,50
 const quoteReviewOtherOwnerPattern = /\b(?:hvac|furnace|a\/c|ac|air conditioner|heat pump|boiler)\b|\bfinali[sz]ed\b|\b(?:insurance|policy|policies|coverage)\b/i;
 const quoteComparisonReviewPattern = /\b(?:compare|review|show|evaluate|which)\b.{0,70}\b(?:quotes?|bids?|proposals?|estimates?)\b|\b(?:quotes?|bids?|proposals?)\b.{0,70}\b(?:compare|comparison|best|cheapest|differences?|review)\b/i;
 const homeDeadlineMonitorPattern = /\b(?:notify|alert|remind|monitor|tell me)\b.{0,80}\b(?:(?:important\s+)?home deadlines?|maintenance|task|warranty|insurance|policy|coverage)\b(?:.{0,50}\b(?:due|expire|expires|expiring|renewal)\b)?|\b(?:warranty|insurance|policy|coverage)\b.{0,50}\b(?:expire|expires|expiring|renewal)\b.{0,80}\b(?:notify|alert|remind|monitor|tell me)\b/i;
-const capitalReservePattern = /\b(?:long[- ]term (?:home )?savings plan|save for (?:replacing|replacement of) (?:my |the )?(?:hvac|roof|furnace|water heater)|capital reserves?(?: (?:plan|outlook|forecast|status|fund|projection))?|reserve (?:plan|outlook|forecast)|reserve fund|sinking fund|capital timeline|capital plan|major replacements?|future home expenses?|how much should i save|how much should i (?:reserve|set aside).{0,60}(?:replace|replacement)|budget for (?:my )?(?:roof|hvac|systems?|replacements?))\b/i;
+const capitalReservePattern = /\b(?:long[- ]term (?:home )?savings plan|save for (?:replacing|replacement of) (?:my |the )?(?:hvac|roof|furnace|water heater)|capital reserves?(?: (?:plan|outlook|forecast|status|fund|projection))?|reserve (?:plan|outlook|forecast)|reserve fund|sinking fund|capital timeline|capital plan|reserve (?:contribution|balance|shortfall|posture)s?|monthly reserve|major replacements?|future home expenses?|how much should i save|how much should i (?:reserve|set aside).{0,60}(?:replace|replacement)|budget for (?:my )?(?:roof|hvac|systems?|replacements?))\b/i;
 const propertyTaxAppealPattern = /\b(?:property tax|assessment|assessed value|tax class|tax exemption)\b.{0,80}\b(?:appeal|contest|challenge|readiness|overassessed|too high|evidence|deadline)\b|\b(?:appeal|contest|challenge)\b.{0,60}\b(?:property tax|assessment|assessed value|tax class|exemption)\b/i;
 const renovationPermitPattern = /\b(?:renovation|remodel|addition|project|permit|inspection|hoa)\b.{0,80}\b(?:ready|readiness|start|require|needed|block|blocking|blockers?|compliance|status)\b|\b(?:can i start|am i ready|what is blocking|what are the blockers?)\b.{0,60}\b(?:renovation|remodel|project|work)\b/i;
 // Phase 7 (implementation plan §13; FRD §31 "Seller Prep — expose now").
@@ -1814,7 +1814,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
     return resolved('QUOTE_COMPARISON_REVIEW', 0.97);
   }
   // "Tell me the priority of my gutter task" asks for a detail; it is not a request to be notified about a deadline.
-  if (homeDeadlineMonitorPattern.test(message) && !(dataPointQuestionPattern.test(message) && isDataPointOnlyQuestion(message))) {
+  if (homeDeadlineMonitorPattern.test(message) && !(dataPointQuestionPattern.test(message) && isDataPointDetailQuestion(message))) {
     return resolved('HOME_DEADLINE_MONITOR', 0.97);
   }
   if (propertyTaxAppealPattern.test(message) && !explicitCapabilityPattern.test(message)) {
@@ -1834,7 +1834,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (isItemCostMessage(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('ITEM_REPLACEMENT_COST', 0.95);
   }
-  if (capitalReservePattern.test(message) && !explicitCapabilityPattern.test(message)) {
+  // One recorded figure of the reserve fund ("what is my reserve shortfall") is a data point; the reserve plan is the analysis (how much to save, whether to raise the contribution).
+  if (capitalReservePattern.test(message) && !explicitCapabilityPattern.test(message) && !(dataPointQuestionPattern.test(message) && isReserveFactQuestion(message))
+    && !/\b(?:set|change|update|edit|adjust|raise|lower)\b.{0,30}\breserve (?:contribution|balance)/i.test(message)) {
     return resolved('CAPITAL_RESERVE_PLAN', 0.97);
   }
   if (applianceFailureRiskPattern.test(message) && !applianceFailureRiskOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {

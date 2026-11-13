@@ -41,3 +41,15 @@ test('insurance and seller prep: natural owner questions reach the data point; c
   assert.equal(resolveDataPoint('What is the status of my sale items?')?.id, 'saleItem.status', 'the more specific "sale items" cue beats the sale cue');
   for (const [domain, floor] of [['insurance', 0.85], ['seller-prep', 0.8]]) { const d = m.byDomain.get(domain); assert.ok(d.routed / d.phrasings >= floor, `${domain} phrasing honor ${d.routed}/${d.phrasings}`); }
 });
+
+// ---- warranties and reserve phrasing fixes (2026-11-13) ----
+test('warranties and reserve: single-figure questions reach the data point; analysis, writes and the warranty lookup keep their routes', () => {
+  const route = (q) => resolveAskOperation(q).operationId;
+  for (const q of ['How much does my dishwasher warranty cost?', 'Tell me the cost for my dishwasher warranty.', 'Who is my dishwasher warranty with?', 'When did my dishwasher warranty start?',
+    'What is my reserve fund balance?', 'How much is in my reserve fund?', 'What is my reserve shortfall?', 'When was my reserve fund last recalculated?', 'What is my recommended monthly reserve contribution?', 'What is the balance of my savings fund?']) assert.equal(route(q), 'DATA_POINT_READ', q);
+  assert.equal(route('When does my dishwasher warranty expire?'), 'WARRANTY_LOOKUP'); assert.equal(route('What does my warranty cover?'), 'WARRANTY_LOOKUP');
+  for (const q of ['Should I increase my reserve contribution?', 'Am I behind on my reserve fund?', 'How much should I put into my reserve fund each month?']) assert.equal(route(q), 'CAPITAL_RESERVE_PLAN', q);
+  assert.notEqual(route('Set my reserve contribution to $500 a month'), 'CAPITAL_RESERVE_PLAN', 'a contribution change is not the read');
+  assert.notEqual(route('Set my reserve contribution to $500 a month'), 'DATA_POINT_READ');
+  for (const [domain, floor] of [['warranties', 0.8], ['reserve-ownership-costs', 0.95]]) { const d = m.byDomain.get(domain); assert.ok(d.routed / d.phrasings >= floor, `${domain} phrasing honor ${d.routed}/${d.phrasings}`); }
+});

@@ -343,16 +343,24 @@ export function resolveDataPoint(message: string): DataPointDefinition | null {
 }
 
 /** Entities (and claim detail ids) whose single details no dedicated operation answers : a compound-cue question about one of them is read by the data point, not by a list operation that merely shares a word. */
-const DATA_POINT_ONLY_ENTITIES: ReadonlySet<string> = new Set(['InsurancePolicy', 'PropertySaleCase', 'PropertySalePrepProfile', 'HomeBuyerTask', 'BuyerJourneyMilestone', 'SaleReadinessItem', 'PropertyRecordVersion', 'ClaimChecklistItem', 'ClaimTimelineEvent', 'ClaimDocument']);
+const DATA_POINT_ONLY_ENTITIES: ReadonlySet<string> = new Set(['HomeReserveFund', 'InsurancePolicy', 'PropertySaleCase', 'PropertySalePrepProfile', 'HomeBuyerTask', 'BuyerJourneyMilestone', 'SaleReadinessItem', 'PropertyRecordVersion', 'ClaimChecklistItem', 'ClaimTimelineEvent', 'ClaimDocument']);
 // Inventory details the inventory lookup does NOT state (it shows the item's name, brand and model, and its condition and history, but never its serial number or what it cost). The other inventory points stay with INVENTORY_LOOKUP, which owns them in the routing ratchets.
 const INVENTORY_ONLY_IDS: ReadonlySet<string> = new Set(['item.serial', 'item.purchaseCost', 'item.replacementCost', 'item.efficiencyRating']);
 // Maintenance-task details the maintenance status read does not state (it lists a task with its due date and status, never its priority, repeat interval, cost or when it was last done).
+// Warranty details the warranty lookup does not state (it lists a warranty with its provider, dates and what it covers, never its cost).
+const WARRANTY_ONLY_IDS: ReadonlySet<string> = new Set(['warranty.cost']);
 const TASK_ONLY_IDS: ReadonlySet<string> = new Set(['task.priority', 'task.frequency', 'task.estimatedCost', 'task.actualCost', 'task.lastCompletedDate']);
 const CLAIM_DETAIL_IDS: ReadonlySet<string> = new Set(['claim.deductible', 'claim.estimatedLoss', 'claim.settlement', 'claim.claimNumber', 'claim.incidentDate', 'claim.openedDate', 'claim.submittedDate', 'claim.closedDate', 'claim.nextFollowUp']);
 export function isDataPointOnlyQuestion(message: string): boolean {
   const point = resolveDataPoint(message);
-  return Boolean(point && (DATA_POINT_ONLY_ENTITIES.has(point.entity) || CLAIM_DETAIL_IDS.has(point.id) || INVENTORY_ONLY_IDS.has(point.id) || TASK_ONLY_IDS.has(point.id)));
+  return Boolean(point && (DATA_POINT_ONLY_ENTITIES.has(point.entity) || CLAIM_DETAIL_IDS.has(point.id) || INVENTORY_ONLY_IDS.has(point.id) || TASK_ONLY_IDS.has(point.id) || WARRANTY_ONLY_IDS.has(point.id)));
 }
+
+/** Any question that resolves to a catalogued data point: a detail question, never a request to be notified about a deadline (used to keep the deadline monitor from taking "tell me the cost of my warranty"). */
+export function isDataPointDetailQuestion(message: string): boolean { return resolveDataPoint(message) !== null; }
+
+/** A question about one recorded figure of the home's reserve fund (balance, shortfall, monthly contribution), which the reserve plan analysis does not state as a recorded value. */
+export function isReserveFactQuestion(message: string): boolean { return resolveDataPoint(message)?.entity === 'HomeReserveFund'; }
 
 /** A question about one value of the home's sale prep profile or sale case (paint, staging, target list date), which the checklist and sell-or-hold reads do not state. */
 export function isSaleProfileQuestion(message: string): boolean {
