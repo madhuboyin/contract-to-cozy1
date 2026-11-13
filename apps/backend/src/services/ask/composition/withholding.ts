@@ -9,12 +9,14 @@ export type WithholdingReason = 'WAITING_FOR_CLARIFICATION' | 'PREDECESSOR_FAILE
  * `stateOf(key)` is the settled state of a run that has run, or null when it has not run. A run that has NOT run is withheld when any facet it names in `dependsOn` is clarifying, failed or itself withheld.
  * Returns the withheld run keys with the reason (a clarification outranks a failure so the homeowner is told what to answer).
  */
-export function withheldRuns(runs: readonly WithholdingRun[], stateOf: (key: string) => ComponentState | null): Map<string, WithholdingReason> {
+export function withheldRuns(runs: readonly WithholdingRun[], stateOf: (key: string) => ComponentState | null, unresolvedFacetIds: ReadonlySet<string> = new Set()): Map<string, WithholdingReason> {
   const byFacet = new Map(runs.filter((run) => run.facetId).map((run) => [run.facetId!, run]));
   const withheld = new Map<string, WithholdingReason>();
   const blockerOf = (run: WithholdingRun): WithholdingReason | null => {
     let reason: WithholdingReason | null = null;
     for (const dependency of run.dependsOn ?? []) {
+      // A facet that was not run at all because it is waiting on a clarification (an inline question was asked for it) holds its dependents back the same way.
+      if (unresolvedFacetIds.has(dependency)) return 'WAITING_FOR_CLARIFICATION';
       const predecessor = byFacet.get(dependency); if (!predecessor) continue;
       const state = stateOf(predecessor.key);
       const inherited = withheld.get(predecessor.key) ?? null;

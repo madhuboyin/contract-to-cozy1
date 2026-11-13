@@ -28,7 +28,9 @@ export interface ComposedClause {
 /** FR-DEC-4a: a part that was NOT run. It is named in the answer with the reason, never dropped and never guessed. */
 export interface ClarificationOption { operationId: AskOperationId; label: string }
 /** `NEEDS_CLARIFICATION` (FR-FACET-9b): the part is plausibly more than one thing, so it is asked about inline (one question, up to three options) beside the parts that were answered, instead of being dropped. */
-export interface DeferredClause { clause: string; reason: 'NOT_ROUTED' | 'LOW_CONFIDENCE' | 'NOT_ELIGIBLE' | 'NOT_COMPOSABLE' | 'OVER_LIMIT' | 'NEEDS_CLARIFICATION'; operationId: AskOperationId | null; options?: readonly ClarificationOption[] }
+export interface DeferredClause { clause: string; reason: 'NOT_ROUTED' | 'LOW_CONFIDENCE' | 'NOT_ELIGIBLE' | 'NOT_COMPOSABLE' | 'OVER_LIMIT' | 'NEEDS_CLARIFICATION'; operationId: AskOperationId | null; options?: readonly ClarificationOption[];
+  /** The facet id a clarified part will carry when it runs, so facets that depend on it wait for the clarification (FR-FACET-9c) and run once it is resolved (FR-FACET-9d). */
+  facetId?: string }
 
 const MAX_CLARIFICATION_OPTIONS = 3;
 /** The read operations a clause could plausibly mean, when the router itself could not choose between two or more (never fewer than two, never a write, never an operation this home cannot run). */
@@ -38,7 +40,9 @@ function clarificationOptionsFor(clause: string, eligible: ReadonlySet<AskOperat
   const options: ClarificationOption[] = [];
   for (const candidate of decision.candidates) {
     const id = candidate.operationId as AskOperationId;
-    if (id === 'GROUNDED_GUIDANCE' || (eligible && !eligible.has(id)) || !isReadOnlyOperation(id) || options.some((o) => o.operationId === id)) continue;
+    // An option must be something this composed answer can run once it is chosen: an eligible read that is a composable read (or has a pure composition variant).
+    const runnable = COMPOSITION_PURE_VARIANTS[id] ?? id;
+    if (id === 'GROUNDED_GUIDANCE' || (eligible && !eligible.has(id)) || !isReadOnlyOperation(id) || !getAskOperationDefinition(runnable).composableRead || options.some((o) => o.operationId === id)) continue;
     options.push({ operationId: id, label: clarificationLabelFor(id) });
     if (options.length === MAX_CLARIFICATION_OPTIONS) break;
   }

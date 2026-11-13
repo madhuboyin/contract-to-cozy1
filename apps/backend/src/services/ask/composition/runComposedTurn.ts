@@ -5,7 +5,7 @@
 import type { AskExecution } from '@prisma/client';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type AskPresentationBlock, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import type { AskAccountRole } from '../askAccountEligibility';
-import type { AskOperationResult } from '../askOperationRegistry';
+import { COMPOSITION_PURE_VARIANTS, getAskOperationDefinition, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
 import { parseTargetDate } from '../support/targetDate';
 import {
   askCompositionContradictionsTotal, askCompositionDurationSeconds, askCompositionResultTotal, askCompositionTimeoutsTotal, askCompositionTotal,
@@ -163,6 +163,32 @@ export async function recoverComposedTurn(input: Omit<ComposedTurnInput, 'clause
   return driveComposite({ ...input, parent: row, clauses }, 'RECOVER');
 }
 
+/**
+ * FR-FACET-9(d): the follow-up that answers an inline clarification is MERGED into the stored parent turn. The chosen operation runs for the clarified part as one more component of the SAME parent, the facets that were
+ * waiting on it run now, the part leaves the deferred list, and the composite is reassembled (the answered components keep their attempts and are not run again). Returns null when nothing is pending for this
+ * clause and operation (already merged, never asked, or not a read this composed answer can run), when the parent is still running, or when it has expired; the caller then answers the click as an ordinary turn.
+ */
+export async function resumeClarifiedComposedTurn(input: Omit<ComposedTurnInput, 'clauses' | 'deferred'> & { clause: string; selectedOperationId: AskOperationId }): Promise<AskExecution | null> {
+  const row = (await input.db.askExecution.findUnique({ where: { id: input.parent.id } })) ?? input.parent;
+  const now = (input.now ?? (() => new Date()))();
+  if (row.status === 'RUNNING' || row.status === 'RECEIVED' || (row.expiresAt && row.expiresAt.getTime() <= now.getTime())) return null;
+  const deferred = storedDeferredOf(row);
+  const wanted = normalizeClause(input.clause);
+  const pending = deferred.find((part) => part.reason === 'NEEDS_CLARIFICATION' && normalizeClause(part.clause) === wanted && part.options?.some((option) => option.operationId === input.selectedOperationId));
+  if (!pending) return null;
+  const operationId = COMPOSITION_PURE_VARIANTS[input.selectedOperationId] ?? input.selectedOperationId;
+  if (!getAskOperationDefinition(operationId).composableRead) return null;
+  const clauses = [...storedClausesOf(row), { clause: pending.clause, operationId, confidence: 0.9, ...(pending.facetId ? { facetId: pending.facetId } : {}) } as ComposedClause];
+  const remaining = deferred.filter((part) => part !== pending);
+  const internal = row.parametersJson && typeof row.parametersJson === 'object' && !Array.isArray(row.parametersJson) ? row.parametersJson as Record<string, unknown> : {};
+  const composition = (internal.composition && typeof internal.composition === 'object' ? internal.composition : {}) as Record<string, unknown>;
+  const { deferred: _old, ...compositionRest } = composition;
+  const updated = await input.db.askExecution.update({ where: { id: row.id }, data: { status: 'RUNNING', completedAt: null, parametersJson: json({ ...internal, composition: { ...compositionRest, clauses, ...(remaining.length ? { deferred: remaining } : {}) } }) } });
+  await input.db.askExecutionEvent.create({ data: { executionId: row.id, eventType: 'COMPOSED_TURN_CLARIFIED', metadataJson: json({ operationId, resumedFacets: clauses.filter((c) => (c.dependsOn ?? []).includes(pending.facetId ?? '')).length }) } });
+  askCompositionTotal.inc({ outcome: 'clarified' });
+  return driveComposite({ ...input, parent: updated, clauses, deferred: remaining }, 'RECOVER');
+}
+
 /** Components of a stored composite that ended retryable-failed after the automatic retry (no successful or terminal attempt is selected for them). */
 export function exhaustedComponentKeys(row: AskExecution): string[] {
   const clauses = storedClausesOf(row);
@@ -259,12 +285,14 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   const pending = new Set(runs);
   const settledFacetIds = new Set<string>();
   // FR-FACET-9(c): the settled state of a run that has run, from its latest attempt; null when it has not run (so a dependent of a clarifying or failed facet is held back, not run on a guess).
+  // Facets of parts that are waiting on an inline clarification (FR-FACET-9b): they were not run, so a facet that depends on one is held back until the clarification is resolved (9d).
+  const unresolvedFacetIds = (): ReadonlySet<string> => new Set((input.deferred ?? storedDeferredOf(input.parent)).filter((part) => part.reason === 'NEEDS_CLARIFICATION' && part.facetId).map((part) => part.facetId!));
   const settledStateOf = async (): Promise<(key: string) => ComponentState | null> => {
     const stored = storedOf((await db.askExecution.findUnique({ where: { id: parent.id } }))!).attempts;
     return (key) => { const mine = stored.filter((a) => a.componentKey === key); const latest = latestOf(mine); return latest ? componentStateOf(latest.status, true) : null; };
   };
   while (pending.size) {
-    const held = withheldRuns(runs.map((run) => ({ key: run.key, facetId: run.clause.facetId, dependsOn: run.clause.dependsOn })), await settledStateOf());
+    const held = withheldRuns(runs.map((run) => ({ key: run.key, facetId: run.clause.facetId, dependsOn: run.clause.dependsOn })), await settledStateOf(), unresolvedFacetIds());
     for (const run of [...pending]) if (held.has(run.key)) { pending.delete(run); if (run.clause.facetId) settledFacetIds.add(run.clause.facetId); }
     if (!pending.size) break;
     const ready = [...pending].filter((run) => (run.clause.dependsOn ?? []).every((dependency) => settledFacetIds.has(dependency)));
@@ -301,7 +329,7 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   const withheldNow = withheldRuns(runs.map((run) => ({ key: run.key, facetId: run.clause.facetId, dependsOn: run.clause.dependsOn })), (key) => {
     const mine = attempts.filter((a) => a.componentKey === key); const latest = [...mine].sort((a, b) => b.number - a.number)[0];
     return latest ? componentStateOf(latest.status, true) : null;
-  });
+  }, unresolvedFacetIds());
   const states = selections.map(({ run, selection }) => (selection.attempt ? componentStateOf(selection.attempt.status, true) : withheldNow.has(run.key) ? 'WITHHELD' as const : 'FAILED' as const));
   const decision = decideStatus(states);
   // FR-PER-15(f): for EVERY component, the selected attempt and selection reason when a genuinely selectable attempt exists (LOWEST_SUCCESSFUL,

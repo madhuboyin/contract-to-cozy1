@@ -37,7 +37,8 @@ import { suggestedNextActionSemanticKeyHash } from '../suggestedActions/suggeste
 import { recordSuggestedActionCompleted, recordSuggestedActionSelected } from '../suggestedActions/askSuggestedActionLifecycle.service';
 import { recordSuggestedActionOutcomeAnalytics, recordSuggestedActionSelectedAnalytics } from '../suggestedActions/suggestedActionAnalytics';
 import { decomposeForComposition } from '../composition/decompose';
-import { recoverComposedTurn, runComposedTurn } from '../composition/runComposedTurn';
+import { recoverComposedTurn, resumeClarifiedComposedTurn, runComposedTurn } from '../composition/runComposedTurn';
+import { findPendingComposedParent } from '../composition/resumeClarification';
 import { GeminiUnderstandingProvider } from '../modelRouting/understandingProvider';
 import { planRuntimeUnderstanding } from '../modelRouting/runtimeUnderstanding';
 import { loadKnownNames } from '../privacy/knownNames';
@@ -283,6 +284,36 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
   // Composition FRD Phase 2b: a typed two-part question whose parts are both composable reads is answered as ONE response made of two component turns. Only an
   // ordinary typed question qualifies (no declared operation, no selected suggestion, not itself a component); every other turn is unchanged. A message the
   // decomposer does not compose (one part, a safety phrase, a part that is not a composable read) takes the single-operation path below.
+  // FR-FACET-9(d): a click on an option of an inline clarification belongs to the composed turn that asked it. The chosen operation runs for that part as one more component of the SAME parent, the facets waiting on it run
+  // now, and the merged composite is what this request returns; the click's own row records that it continued the parent. Anything that does not match a still-pending clarification falls through to the ordinary path.
+  if (!internal.composition && executionPropertyId && input.launchContext?.operationId && !input.suggestedActionSelection && input.launchContext.surface !== 'ASK_COMPOSED_COMPONENT') {
+    const waiting = await findPendingComposedParent(prisma as never, { userId, sessionId: session.id, propertyId: executionPropertyId, message: input.message, operationId: input.launchContext.operationId });
+    if (waiting) {
+      let merged: Awaited<ReturnType<typeof resumeClarifiedComposedTurn>> = null;
+      try {
+        merged = await resumeClarifiedComposedTurn({
+          db: prisma as never, userId, accountRole, parent: waiting, message: input.message, sessionId: session.id, propertyId: executionPropertyId,
+          clause: input.message, selectedOperationId: input.launchContext.operationId as AskOperationId, createChild: createAskExecution, executionTimeoutMs: controls.executionTimeoutMs,
+          loadAuthorizationView: () => buildAuthorizationView(userId, executionPropertyId, controls),
+          finalizeResult: (result) => finalizeSuggestedNextActions({ result, executionId: waiting.id, userId, sessionId: session.id, propertyId: executionPropertyId, operationId: null, message: input.message }),
+        });
+      } catch (error) {
+        logger.warn({ error, executionId: waiting.id }, '[ask-composition] clarification merge failed; answering the click as an ordinary turn');
+      }
+      if (merged) {
+        const stored = merged.resultJson && typeof merged.resultJson === 'object' && !Array.isArray(merged.resultJson) ? merged.resultJson as Record<string, unknown> : {};
+        const settled = await prisma.askExecution.update({
+          where: { id: execution.id },
+          data: {
+            status: 'ANSWERED', reasonCode: 'COMPOSED_CLARIFICATION_MERGED', completedAt: new Date(),
+            resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: Array.isArray(stored.blocks) ? stored.blocks : [], captureRequests: [], confirmation: null, clarification: null, suggestions: [], suggestedNextActionsGoverned: false, suggestedNextActions: [], skillHandoff: null, continuesExecutionId: waiting.id, originalResponse: null }),
+          },
+        });
+        await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'COMPOSED_CLARIFICATION_MERGED', metadataJson: asInputJson({ parentExecutionId: waiting.id }) } }).catch(() => undefined);
+        return mapPersistedExecution(settled, await propertySummary(executionPropertyId));
+      }
+    }
+  }
   let declinedComposition: { reason: string; clauseCount: number } | null = null;
   // FR-GATE-3 c1: set only when deterministic decomposition positively certified that every clause of the full message routes to the one operation answering it.
   let segmentationCertified = false;

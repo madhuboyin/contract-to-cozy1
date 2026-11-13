@@ -101,9 +101,15 @@ test('a part that writes is not run inside the composed answer; it gets its own 
   assert.ok(!JSON.stringify(parent.resultJson.blocks.filter((b) => b.id.startsWith('s'))).includes('MAINTENANCE_TASK_CREATE'), 'no write offer inside a delivered section');
 });
 test('deterministic decomposition turns an ambiguous part into an inline clarification with at least two read options', () => {
-  const outcome = decomposeForComposition('how old is my roof, what would a new one cost, and what is going on with the house', {});
+  const outcome = decomposeForComposition('how old is my roof, what would a new one cost, and what about the water heater situation', {});
   assert.equal(outcome.kind, 'COMPOSE');
   const part = outcome.deferred.find((d) => d.reason === 'NEEDS_CLARIFICATION');
   assert.ok(part && part.options.length >= 2 && part.options.length <= 3);
   assert.ok(new Set(part.options.map((o) => o.operationId)).size === part.options.length);
+  // an option must be something the composed answer can run once it is chosen: a candidate that is not a composable read is never offered
+  const { getAskOperationDefinition } = require('../../src/services/ask/askOperationRegistry.ts');
+  for (const option of part.options) assert.equal(getAskOperationDefinition(option.operationId).composableRead, true, option.operationId);
+  // an ambiguous part whose candidates cannot run inside a composed answer is not asked about inline (it is named as not answered, as before)
+  const unrunnable = decomposeForComposition('how old is my roof, what would a new one cost, and what is going on with the house', {});
+  assert.ok(!(unrunnable.deferred ?? []).some((d) => d.reason === 'NEEDS_CLARIFICATION'));
 });
