@@ -23,6 +23,8 @@ const REVIEWED_SUPPLEMENTAL_HIGHER_FLOOR_EDGES = {
   'DO_NOTHING_SCENARIO_COMMAND>DO_NOTHING_SIMULATION': 'owner-only simulation follows a contributor scenario command',
   'DO_NOTHING_SIMULATION_RUN>DO_NOTHING_SIMULATION': 'owner-only simulation review follows a run',
   'HIRING_GUIDE>SERVICE_PRICE_CHECKS': 'owner-only; the viewer-floor quote comparison recipe is the baseline',
+  'BUYER_FINANCING_READINESS>BUYER_LOAN_ESTIMATES': 'owner-only (rates, APR, payments, cash to close; owner policy 2026-11-12); the lender-condition and readiness recipes remain for other roles',
+  'BUYER_LOAN_ESTIMATE_COMMAND>BUYER_LOAN_ESTIMATES': 'owner-only comparison follows a contributor recording a Loan Estimate; the gate hides it from non-owners',
 };
 
 const edges = () => Object.entries(OPERATION_SPECIFIC_CONTINUATION_RECIPES).flatMap(([source, recipes]) => recipes

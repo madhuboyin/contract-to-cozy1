@@ -20,7 +20,12 @@ test('every catalogued field exists on its Prisma model, and every entity is pro
   for (const p of DATA_POINT_DEFINITIONS) {
     const model = Prisma.dmmf.datamodel.models.find((m) => m.name === p.entity);
     assert.ok(model.fields.some((f) => f.name === p.field), `${p.entity}.${p.field}`);
-    assert.ok(model.fields.some((f) => f.name === 'propertyId' && f.kind === 'scalar'), `${p.entity} has no propertyId`);
+    const rel = require('../../src/services/ask/dataPoint/dataPointCatalogue.ts').RELATION_ENTITIES[p.entity];
+    if (rel) { // a declared relation child: no plain propertyId, but its parent path must be allowlisted and the parent property-scoped
+      assert.ok(model.fields.some((f) => f.name === rel.key && f.kind === 'scalar'), `${p.entity}.${rel.key}`);
+      const parent = Prisma.dmmf.datamodel.models.find((m) => m.name === rel.parent);
+      assert.ok(parent.fields.some((f) => f.name === 'propertyId' && f.kind === 'scalar'), `${rel.parent} has no propertyId`);
+    } else assert.ok(model.fields.some((f) => f.name === 'propertyId' && f.kind === 'scalar'), `${p.entity} has no propertyId`);
     assert.equal(/password|token|secret|apiKey|credential/i.test(p.field), false);
   }
 });
@@ -163,15 +168,15 @@ test('source authorization: a restricted source is redacted once the role drops,
   assert.deepEqual(seen.at(-1), ['PropertyMaintenanceTask', { id: 't1', propertyId: 'p1' }]);
 });
 
-test('owner approval (2026-11-12) covers exactly the 63 catalogued ids at catalogue version 4 (33 at v1 + 14 reserve-ownership-costs + 12 seller-prep/buyer + 4 record); any unapproved id or version drift fails', () => {
+test('owner approval (2026-11-12) covers exactly the 67 catalogued ids at catalogue version 5 (33 at v1 + 14 reserve-ownership-costs + 12 seller-prep/buyer + 4 record + 4 buyerTask); any unapproved id or version drift fails', () => {
   assert.equal(DATA_POINT_CATALOGUE_VERSION, DATA_POINT_APPROVAL.catalogueVersion, 'a new catalogue version needs a new approval record');
   const ids = DATA_POINT_DEFINITIONS.map((p) => p.id);
   assert.equal(new Set(ids).size, ids.length, 'ids are unique');
   assert.deepEqual(ids.filter((id) => !APPROVED_DATA_POINT_IDS.includes(id)), [], 'every catalogued id must be owner-approved');
   assert.deepEqual(APPROVED_DATA_POINT_IDS.filter((id) => !ids.includes(id)), [], 'an approved id that is no longer catalogued must be removed from the approval');
-  assert.equal(ids.length, 63); assert.equal(DATA_POINT_CATALOGUE_VERSION, 4);
+  assert.equal(ids.length, 67); assert.equal(DATA_POINT_CATALOGUE_VERSION, 5);
   const by = (d) => DATA_POINT_DEFINITIONS.filter((p) => p.domain === d).length;
-  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance'), by('reserve-ownership-costs'), by('seller-prep'), by('buyer'), by('documents-records')], [14, 5, 7, 7, 14, 9, 3, 4]);
+  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance'), by('reserve-ownership-costs'), by('seller-prep'), by('buyer'), by('documents-records')], [14, 5, 7, 7, 14, 9, 7, 4]);
 });
 test('the restriction copy is generated from the field floor, so it never names a different audience than the check enforces', async () => {
   assert.match(audienceFloorCopy('CONTRIBUTOR').title, /contributors and owners/);
@@ -333,4 +338,60 @@ test('v4 record sources replay with the current role: an owner-only record redac
   assert.deepEqual(seen.at(-1), ['PropertyRecord', { id: 'r1', propertyId: 'p1', lifecycleStatus: 'ACTIVE', trashedAt: null, visibility: 'HOUSEHOLD' }]);
   await AUTH.DATA_POINT_READ.authorizeSources(ctx('OWNER'), [sourceRef('PropertyRecord', 'r1')]);
   assert.deepEqual(seen.at(-1)[1], { id: 'r1', propertyId: 'p1', lifecycleStatus: 'ACTIVE', trashedAt: null });
+});
+
+// ---- Catalogue v5: buyer tasks, the first relation read ----
+function taskStub(role, { checklists = [{ id: 'cl1' }], tasks = [] } = {}, calls = []) {
+  propertyAccessService.resolvePropertyAccess = async () => ({ propertyId: 'p1', userId: 'u1', role, isOwner: role === 'OWNER' });
+  prisma.homeBuyerChecklist = { findMany: async (a) => { calls.push(['parent', a]); return checklists; } };
+  prisma.homeBuyerTask = { findMany: async (a) => { calls.push(['child', a]); return tasks; } };
+  prisma.propertyMaintenanceTask = { findMany: async () => [{ id: 'm1', title: 'Clean gutters', status: 'PENDING', nextDueDate: new Date('2026-12-01T12:00:00Z') }] };
+}
+const bTask = (o) => ({ id: 'bt1', title: 'Order inspection', status: 'IN_PROGRESS', dueAt: new Date('2026-11-20T12:00:00Z'), completedAt: null, priority: 'NOW', ...o });
+test('v5 routing: each compound cue selects buyerTask.*, bare "task" stays maintenance, mixed wording resolves deterministically to nothing', () => {
+  for (const cue of ['buyer task', 'buying task', 'closing task']) {
+    assert.equal(resolveDataPoint(`what is the status of my ${cue}`)?.id, 'buyerTask.status', cue);
+    assert.equal(resolveDataPoint(`when is my ${cue} due`)?.id, 'buyerTask.dueDate', cue);
+    assert.equal(resolveDataPoint(`when did I complete my ${cue}`)?.id, 'buyerTask.completedDate', cue);
+    assert.equal(resolveDataPoint(`what is the priority of my ${cue}`)?.id, 'buyerTask.priority', cue);
+  }
+  assert.equal(resolveDataPoint('when is the gutter cleaning task due')?.id, 'task.nextDueDate', 'bare task keeps maintenance');
+  assert.equal(resolveDataPoint('what is the status of my task')?.id, 'task.status');
+  assert.equal(resolveDataPoint('what is the priority of my task')?.id, 'task.priority');
+  for (const m of ['when is my buyer maintenance task due', 'what is the status of my closing maintenance task']) assert.equal(resolveDataPoint(m), null, m);
+  assert.deepEqual(DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'HomeBuyerTask').map((p) => p.audience), ['VIEWER', 'VIEWER', 'VIEWER', 'VIEWER']);
+  assert.equal(DATA_POINT_DEFINITIONS.some((p) => p.entity === 'HomeBuyerTask' && /title|description|notes|statusReason|estimatedCost|bookingId|completionEvidence/i.test(p.field)), false);
+});
+test('v5 read: parent first (property-scoped), child only through it, capped; the title selects a row and is never returned', async () => {
+  const calls = []; taskStub('VIEWER', { tasks: [bTask({}), bTask({ id: 'bt2', title: 'Book movers', dueAt: null, status: 'PENDING' })] }, calls);
+  const r = await dataPointReadResult('u1', 'p1', 'when is my buyer task order inspection due');
+  assert.equal(r.status, 'ANSWERED'); assert.match(r.blocks[0].body, /Your buyer task is due /);
+  assert.deepEqual(calls[0], ['parent', { where: { propertyId: 'p1' }, select: { id: true }, take: 5 }]);
+  assert.deepEqual(calls[1][1].where, { checklistId: { in: ['cl1'] }, applicability: { not: 'NOT_APPLICABLE' } }); assert.equal(calls[1][1].take, 50);
+  assert.deepEqual(Object.keys(calls[1][1].select).sort(), ['dueAt', 'id', 'title']);
+  assert.ok(!JSON.stringify(r).includes('Order inspection') && !JSON.stringify(r).includes('Book movers'), 'the title is not a returned value');
+  // asking for another field about a titled task does not echo the title either
+  const pr = await dataPointReadResult('u1', 'p1', 'what is the priority of my buyer task book movers');
+  assert.match(pr.blocks[0].body, /priority now|priority pending|has priority/); assert.ok(!JSON.stringify(pr).includes('Book movers'));
+  assert.deepEqual(r.parameters.sources, [{ sourceType: 'HomeBuyerTask', sourceId: 'bt1' }]);
+});
+test('v5 ambiguity: several buyer tasks and none named asks which, without listing their titles; one task answers directly', async () => {
+  taskStub('OWNER', { tasks: [bTask({}), bTask({ id: 'bt2', title: 'Book movers' })] });
+  const amb = await dataPointReadResult('u1', 'p1', 'when is my buyer task due');
+  assert.equal(amb.reasonCode, 'DATA_POINT_AMBIGUOUS'); assert.match(amb.blocks[0].body, /2 buyer tasks could match/); assert.ok(!JSON.stringify(amb).includes('Order inspection'));
+  taskStub('OWNER', { tasks: [bTask({ title: 'Inspection' }), bTask({ id: 'bt2', title: 'Inspection follow up' })] });
+  assert.equal((await dataPointReadResult('u1', 'p1', 'when is my buyer task inspection follow up due')).status, 'ANSWERED');
+  assert.equal((await dataPointReadResult('u1', 'p1', 'when is my buyer task inspection due')).status, 'ANSWERED', 'only the shorter title is named');
+  taskStub('OWNER', { tasks: [bTask({}), bTask({ id: 'bt2' })] });
+  assert.equal((await dataPointReadResult('u1', 'p1', 'when is my buyer task order inspection due')).reasonCode, 'DATA_POINT_AMBIGUOUS', 'two tasks with the same title stay ambiguous');
+  taskStub('OWNER', { tasks: [bTask({})] }); assert.equal((await dataPointReadResult('u1', 'p1', 'what is the status of my buying task')).status, 'ANSWERED');
+  taskStub('OWNER', { checklists: [] }); assert.equal((await dataPointReadResult('u1', 'p1', 'what is the status of my buying task')).reasonCode, 'DATA_POINT_NO_INVENTORY');
+  taskStub('OWNER', { tasks: [bTask({})] }); assert.equal((await dataPointReadResult('u1', 'p1', 'when did I complete my closing task')).reasonCode, 'DATA_POINT_NOT_RECORDED');
+});
+test('v5 replay: the task is re-resolved through its CURRENT property-scoped checklist and a moved or not-applicable task is redacted', async () => {
+  const { COMPOSABLE_SOURCE_AUTHORIZATION: AUTH, sourceRef } = require('../../src/services/ask/composition/sourceAuthorization.ts');
+  const seen = []; const ctx = (present) => ({ userId: 'u1', propertyId: 'p1', role: 'VIEWER', exists: async (m, w) => { seen.push([m, w]); return present; } });
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx(true), [sourceRef('HomeBuyerTask', 'bt1')]), 'AUTHORIZED');
+  assert.deepEqual(seen.at(-1), ['HomeBuyerTask', { id: 'bt1', checklist: { propertyId: 'p1' }, applicability: { not: 'NOT_APPLICABLE' } }]);
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx(false), [sourceRef('HomeBuyerTask', 'bt1')]), 'REDACT_SECTION');
 });

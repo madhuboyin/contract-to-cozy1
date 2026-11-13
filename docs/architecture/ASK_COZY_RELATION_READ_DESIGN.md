@@ -1,6 +1,6 @@
 # Relation-read design for DATA_POINT_READ (design only; nothing built)
 
-**Status: DESIGN for owner review, 2026-11-12. No code, no query run.** Needed by claims, sale readiness items (`SaleReadinessItem` by `saleCaseId`), buyer tasks and milestones (by `checklistId`), record versions/links (by `recordId`) and any child without a plain `propertyId`. One mechanism, so there are no one-off readers.
+**Status (updated 2026-11-12): slice 1 BUILT (buyer checklist -> tasks, catalogue v5); everything else still design only.** Original status: DESIGN for owner review.  Needed by claims, sale readiness items (`SaleReadinessItem` by `saleCaseId`), buyer tasks and milestones (by `checklistId`), record versions/links (by `recordId`) and any child without a plain `propertyId`. One mechanism, so there are no one-off readers.
 
 ## Contract
 1. **Allowlisted relation paths only.** A path is declared in code: `{ child, parent, parentKey, depth: 1 }`, e.g. `HomeBuyerTask -> HomeBuyerChecklist (checklistId)`. No path, relation or field name comes from the message or from a model; the plan carries a path id, never a name. Depth is 1 (parent to child); deeper chains need a new reviewed path.
@@ -24,3 +24,6 @@ Finish and review the parent/singleton slices first (done for v1-v3 except `Prop
 
 ## Open questions for the owner
 Which child fields are wanted first (task status/due date, milestone due date, claim status)? Whether claim amounts and settlement figures are CONTRIBUTOR or OWNER?
+
+## Slice 1 as built (catalogue v5, owner-approved ids 2026-11-12)
+`RELATION_ENTITIES` allowlists `HomeBuyerTask -> HomeBuyerChecklist (checklistId)`; the reader mode `RELATION_CHILD` finds the property-scoped parent (`take: 5`), then children ONLY via `checklistId IN parents` with `applicability != NOT_APPLICABLE` (`take: 50`, ordered by priority then due date). Ids (all VIEWER): `buyerTask.status`, `buyerTask.dueDate` (`dueAt`), `buyerTask.completedDate` (`completedAt`), `buyerTask.priority`. The task title only selects a row (most specific title wins; equal specificity is ambiguous) and is never returned as a value; ambiguity answers with a count and no titles. Routing: compound cues (`buyer task`, `buying task`, `closing task`) outrank the generic `task`; bare `task` stays maintenance; a message mixing buyer words with `maintenance` resolves to nothing, deterministically. Replay re-resolves the task through its CURRENT property-scoped checklist (`checklist: { propertyId }`, applicable). **Not built:** milestones, sale-case children, record versions, claims. **Not decided:** a task in a cancelled or paused journey (the parent status is not read; the task answer is not flagged as the journey-level answer is), and CANCELLED/NOT_NEEDED tasks are still readable. Executed: `dataPointRead.test.js` 37/37; not run against a real database.

@@ -1,9 +1,9 @@
 // Proposed data-point catalogue (reliability FRD FR-DATA-1..5, D11, D12, D13). The Prisma schema says what exists; this file says what the homeowner may be shown and
 // how they ask for it. FAIL CLOSED: a field not listed here cannot be read through DATA_POINT_READ, whatever the schema contains. The catalogue holds 33 PROPOSED data
 // points (inventory 14, warranties 5, insurance 7, maintenance 7) plus 14 reserve and ownership-cost points (catalogue version 2). The owner approved the field floors and the
-// domain split for exactly these 63 ids (33 at version 1, 14 at version 2, 12 at version 3, 4 at version 4; all 2026-11-12); see APPROVED_DATA_POINT_IDS below. Any other id, or any change of a floor, needs a new approval and a new version.
+// domain split for exactly these 67 ids (33 at version 1, 14 at version 2, 12 at version 3, 4 at version 4, 4 at version 5; all 2026-11-12); see APPROVED_DATA_POINT_IDS below. Any other id, or any change of a floor, needs a new approval and a new version.
 export type DataPointFamily = 'text' | 'date' | 'money' | 'dollars' | 'enum' | 'tags' | 'flag' | 'percent' | 'number';
-export type DataPointEntity = 'InventoryItem' | 'Warranty' | 'InsurancePolicy' | 'PropertyMaintenanceTask' | 'HomeReserveFund' | 'PropertyTaxBillRecord' | 'PropertyTaxAssessmentRecord' | 'PropertySalePrepProfile' | 'PropertySaleCase' | 'HomeBuyerChecklist' | 'PropertyRecord';
+export type DataPointEntity = 'InventoryItem' | 'Warranty' | 'InsurancePolicy' | 'PropertyMaintenanceTask' | 'HomeReserveFund' | 'PropertyTaxBillRecord' | 'PropertyTaxAssessmentRecord' | 'PropertySalePrepProfile' | 'PropertySaleCase' | 'HomeBuyerChecklist' | 'PropertyRecord' | 'HomeBuyerTask';
 export type DataPointDomain = 'appliances-inventory' | 'warranties' | 'insurance' | 'maintenance' | 'reserve-ownership-costs' | 'seller-prep' | 'buyer' | 'documents-records';
 export type AudienceFloor = 'VIEWER' | 'CONTRIBUTOR' | 'OWNER';
 export interface DataPointDefinition {
@@ -25,6 +25,8 @@ export interface DataPointDefinition {
   readonly audience: AudienceFloor;
   /** Words that must appear in the message for a point of a non-inventory entity ("warranty", "policy", "task"), so a bare "expires" never picks an entity. */
   readonly cues?: readonly string[];
+  /** True when the cues are compound phrases ("buyer task") that must take precedence over a generic cue ("task") that is also present. The bare generic word never selects this point. */
+  readonly compoundCue?: boolean;
 }
 
 /** Per-point audience floors (review 2026-11-11). Money, serial numbers, free-form coverage text and tags are not shown to viewers; plain item, date and status facts are. Floors approved by the owner 2026-11-12 for catalogue version 1. */
@@ -47,6 +49,8 @@ const FIELD_AUDIENCE: Readonly<Record<string, AudienceFloor>> = Object.freeze({
   'saleCase.status': 'VIEWER', 'saleCase.targetListDate': 'VIEWER', 'saleCase.targetCloseDate': 'VIEWER',
   'buyer.stage': 'VIEWER', 'buyer.targetCloseDate': 'VIEWER', 'buyer.moveInDate': 'VIEWER',
   'record.type': 'VIEWER', 'record.verification': 'VIEWER', 'record.effectiveTo': 'VIEWER', 'record.retainUntil': 'OWNER',
+  // Catalogue version 5 (owner approval 2026-11-12): first relation read, buyer tasks through the property's checklist. Structured fields only.
+  'buyerTask.status': 'VIEWER', 'buyerTask.dueDate': 'VIEWER', 'buyerTask.completedDate': 'VIEWER', 'buyerTask.priority': 'VIEWER',
 });
 const d = (x: Omit<DataPointDefinition, 'audience'>): DataPointDefinition => {
   const audience = FIELD_AUDIENCE[x.id];
@@ -160,7 +164,22 @@ const RECORD_POINTS: readonly DataPointDefinition[] = [
   rc({ id: 'record.retainUntil', field: 'retainUntil', family: 'date', label: 'The retention date', aliases: ['retain until', 'retained until', 'keep until', 'retention date', 'retention'], sentence: 'is retained until', sensitivity: 'HOME' }),
 ];
 
-export const DATA_POINT_DEFINITIONS: readonly DataPointDefinition[] = Object.freeze([...INVENTORY_POINTS, ...OTHER_DOMAINS, ...RESERVE_COST_POINTS, ...SELL_BUY_POINTS, ...RECORD_POINTS]);
+const BT = ['buyer task', 'buyer tasks', 'buying task', 'buying tasks', 'closing task', 'closing tasks'];
+const bt = (x: Omit<DataPointDefinition, 'domain' | 'entity' | 'cues' | 'audience' | 'compoundCue'>): DataPointDefinition => d({ ...x, domain: 'buyer', entity: 'HomeBuyerTask', cues: BT, compoundCue: true });
+// Catalogue version 5: buyer tasks, the first RELATION read (HomeBuyerTask -> HomeBuyerChecklist, see RELATION_ENTITIES). Structured fields only. The title may SELECT a row and is never returned as a value;
+// description, notes, status reason, evidence JSON, booking id and estimated cost are not catalogued. The cue is the compound phrase; the bare word "task" still means a maintenance task.
+const BUYER_TASK_POINTS: readonly DataPointDefinition[] = [
+  bt({ id: 'buyerTask.status', field: 'status', family: 'enum', label: 'The task status', aliases: ['status'], sentence: 'has status', sensitivity: 'HOME' }),
+  bt({ id: 'buyerTask.dueDate', field: 'dueAt', family: 'date', label: 'When the task is due', aliases: ['due', 'due date', 'when is it due', 'deadline'], sentence: 'is due', sensitivity: 'HOME' }),
+  bt({ id: 'buyerTask.completedDate', field: 'completedAt', family: 'date', label: 'When the task was completed', aliases: ['completed', 'completed on', 'completion date', 'finished', 'when was it completed', 'when did i complete'], sentence: 'was completed', sensitivity: 'HOME' }),
+  bt({ id: 'buyerTask.priority', field: 'priority', family: 'enum', label: 'The task priority', aliases: ['priority', 'how urgent', 'urgent'], sentence: 'has priority', sensitivity: 'HOME' }),
+];
+/** Allowlisted parent-to-child relation paths (relation-read design). The child has no propertyId; it is reached ONLY through the parent, which is property-scoped. Depth is always 1. */
+export const RELATION_ENTITIES: Readonly<Record<string, { readonly parent: DataPointEntity; readonly parentDelegate: string; readonly key: string }>> = Object.freeze({
+  HomeBuyerTask: { parent: 'HomeBuyerChecklist', parentDelegate: 'homeBuyerChecklist', key: 'checklistId' },
+});
+
+export const DATA_POINT_DEFINITIONS: readonly DataPointDefinition[] = Object.freeze([...INVENTORY_POINTS, ...OTHER_DOMAINS, ...RESERVE_COST_POINTS, ...SELL_BUY_POINTS, ...RECORD_POINTS, ...BUYER_TASK_POINTS]);
 export const DATA_POINT_BY_ID: ReadonlyMap<string, DataPointDefinition> = new Map(DATA_POINT_DEFINITIONS.map((p) => [p.id, p]));
 /** The only columns the reader may select per entity (FR-DATA-15: the select list is built from this allowlist, never from user text). */
 export const READABLE_FIELDS: Readonly<Record<DataPointEntity, readonly string[]>> = Object.freeze({
@@ -175,13 +194,14 @@ export const READABLE_FIELDS: Readonly<Record<DataPointEntity, readonly string[]
   PropertySaleCase: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'PropertySaleCase').map((p) => p.field),
   HomeBuyerChecklist: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'HomeBuyerChecklist').map((p) => p.field),
   PropertyRecord: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'PropertyRecord').map((p) => p.field),
+  HomeBuyerTask: DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'HomeBuyerTask').map((p) => p.field),
 });
 export const READABLE_ITEM_FIELDS: readonly string[] = READABLE_FIELDS.InventoryItem;
 
 /** Catalogue version the owner's approval covers. Bump it with any added id or changed audience floor, and re-approve. */
-export const DATA_POINT_CATALOGUE_VERSION = 4;
+export const DATA_POINT_CATALOGUE_VERSION = 5;
 /** Owner approval record (2026-11-12): field audience floors and the domain split (appliances-inventory, warranties, insurance, maintenance; claims is a future domain), version 1 = 33 ids; version 2 adds the 14 reserve-ownership-costs ids (all 14 approved as proposed, tax amounts at CONTRIBUTOR, Expense kept own-profile only, claims deferred). */
-export const DATA_POINT_APPROVAL = Object.freeze({ catalogueVersion: 4, approvedOn: '2026-11-12', scope: 'field audience floors and domain split, exact ids only (33 at v1 + 14 reserve-ownership-costs at v2 + 12 seller-prep/buyer at v3 + 4 PropertyRecord at v4); v4 lowers the 12 v3 floors CONTRIBUTOR -> VIEWER (shared journey facts) and approves record.type/verification/effectiveTo at VIEWER and record.retainUntil at OWNER, only for records visible under visibleRecordWhere(role)' });
+export const DATA_POINT_APPROVAL = Object.freeze({ catalogueVersion: 5, approvedOn: '2026-11-12', scope: 'field audience floors and domain split, exact ids only (33 at v1 + 14 reserve-ownership-costs at v2 + 12 seller-prep/buyer at v3 + 4 PropertyRecord at v4 + 4 buyerTask at v5, all VIEWER, read through the buyer checklist relation); v4 lowers the 12 v3 floors CONTRIBUTOR -> VIEWER (shared journey facts) and approves record.type/verification/effectiveTo at VIEWER and record.retainUntil at OWNER, only for records visible under visibleRecordWhere(role)' });
 export const APPROVED_DATA_POINT_IDS: readonly string[] = Object.freeze([
   'item.brand', 'item.manufacturer', 'item.model', 'item.serial', 'item.installedOn', 'item.purchasedOn', 'item.lastServicedOn', 'item.expectedExpiryDate', 'item.condition', 'item.category', 'item.efficiencyRating', 'item.purchaseCost', 'item.replacementCost', 'item.tags',
   'warranty.expiryDate', 'warranty.startDate', 'warranty.provider', 'warranty.coverage', 'warranty.cost',
@@ -194,6 +214,7 @@ export const APPROVED_DATA_POINT_IDS: readonly string[] = Object.freeze([
   'saleCase.status', 'saleCase.targetListDate', 'saleCase.targetCloseDate',
   'buyer.stage', 'buyer.targetCloseDate', 'buyer.moveInDate',
   'record.type', 'record.verification', 'record.effectiveTo', 'record.retainUntil',
+  'buyerTask.status', 'buyerTask.dueDate', 'buyerTask.completedDate', 'buyerTask.priority',
 ]);
 /** Categories the owner presumes owner-only for any FUTURE catalogue entry (not catalogued today): mortgage/equity/financing, bank/payment, full policy or account ids, household identity/access, title/ownership, tax ids. */
 export const FUTURE_OWNER_ONLY_PRESUMPTIONS: readonly string[] = Object.freeze(['mortgage-equity-financing', 'bank-payment', 'full-policy-or-account-ids', 'household-identity-access', 'title-ownership', 'tax-ids']);
@@ -208,11 +229,14 @@ export function resolveDataPoint(message: string): DataPointDefinition | null {
     // Points of a non-inventory entity need that entity's cue word in the message; the cue also breaks ties against inventory points.
     if (point.cues && !point.cues.some((cue) => new RegExp(`\\b${escapeRe(cue)}\\b`).test(text))) continue;
     if (!new RegExp(`\\b${escapeRe(alias)}\\b`).test(text)) continue;
-    const weight = alias.length + (point.cues ? 100 : 0);
+    const weight = alias.length + (point.cues ? 100 : 0) + (point.compoundCue ? 200 : 0);
     if (!best || weight > best.length) { best = { point, length: weight }; tied = false; }
     else if (weight === best.length && best.point.id !== point.id) tied = true;
   }
-  return best && !tied ? best.point : null;
+  if (!best || tied) return null;
+  // A message that mixes the buyer words with the maintenance word ("buyer maintenance task") is resolved to nothing, deterministically, so the caller asks which; it is never decided by registration order.
+  if ((best.point.entity === 'PropertyMaintenanceTask' || best.point.entity === 'HomeBuyerTask') && /\b(?:buyer|buying|closing)\b/.test(text) && /\bmaintenance\b/.test(text)) return null;
+  return best.point;
 }
 
 /** Who a floor is shown to, in homeowner words. Generated from the point's actual floor so the restriction message never states a different audience than the check enforces. */

@@ -19,6 +19,7 @@ const ENTITY_COPY: Record<string, { plural: string; singular: string; collection
   PropertySalePrepProfile: { plural: 'sale prep profiles', singular: 'sale prep profile', collection: 'sale prep profile', record: 'Sale prep profile', none: 'No sale prep profile is recorded yet' },
   PropertySaleCase: { plural: 'sale plans', singular: 'sale plan', collection: 'sale plan', record: 'Sale plan record', none: 'No sale plan is started for this home yet' },
   HomeBuyerChecklist: { plural: 'buyer journeys', singular: 'buyer journey', collection: 'buyer journey', record: 'Buyer journey record', none: 'No buyer journey is started for this home yet' },
+  HomeBuyerTask: { plural: 'buyer tasks', singular: 'buyer task', collection: 'buyer tasks', record: 'Buyer plan task', none: 'No buyer task is recorded yet' },
   PropertyRecord: { plural: 'home records', singular: 'home record', collection: 'home records', record: 'Home record' },
   PropertyTaxBillRecord: { plural: 'property tax bills', singular: 'property tax bill', collection: 'property tax bills', record: 'Property tax bill record', none: 'No property tax bill is recorded yet' },
   PropertyTaxAssessmentRecord: { plural: 'property tax assessments', singular: 'property tax assessment', collection: 'property tax assessments', record: 'Property tax assessment record', none: 'No property tax assessment is recorded yet' },
@@ -51,6 +52,7 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
   }
   const read = await readDataPoint(propertyId, role, point, message);
   const where = ENTITY_COPY[point.entity];
+  if (read.status === 'AMBIGUOUS' && !read.rows.length) return notice('DATA_POINT_AMBIGUOUS', 'data-point-ambiguous', `Which ${where.singular} do you mean?`, `${read.candidateCount ?? 'More than one'} ${where.plural} could match. Name the one you mean more specifically and I’ll tell you ${point.label.charAt(0).toLowerCase()}${point.label.slice(1)}.`);
   if (read.status === 'AMBIGUOUS') return notice('DATA_POINT_AMBIGUOUS', 'data-point-ambiguous', `Which ${where.singular} do you mean?`, `You have more than one: ${read.rows.map((r) => r.name).join(', ')}. Name one and I’ll tell you ${point.label.charAt(0).toLowerCase()}${point.label.slice(1)}.`);
   if (read.status === 'ITEM_NOT_FOUND') return notice('DATA_POINT_NO_INVENTORY', 'data-point-no-inventory', where.none ?? `No ${where.plural} are recorded yet`, where.none ? 'Add it to your home record and I can tell you.' : `Add it to your home record and I can tell you its details.`);
   if (read.status === 'NO_ITEM_NAMED' && namedTaxYears(message).length) return notice('DATA_POINT_ITEM_NOT_FOUND', 'data-point-year-not-found', `No ${namedTaxYears(message)[0]} record`, `I don’t have an active ${where.singular} for that tax year. Ask without a year and I’ll use your latest.`);
