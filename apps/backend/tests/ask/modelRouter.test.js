@@ -87,13 +87,15 @@ test('a model failure or timeout never throws and leaves the decision as it was'
   assert.deepEqual(outcomes, ['UNAVAILABLE']);
 });
 
-test('the model is not called for safety, deterministic or local-classifier decisions, or when disabled', async () => {
+test('the model is not called for safety or local-classifier decisions, or when disabled; demoted deterministic evidence may proceed to the model', async () => {
+  const demoted = resolveAskRoutingCascade('show me my home inventory', { localRoutingEnabled: true, propertyId: 'p1' });
+  assert.notEqual(demoted.stage, 'DETERMINISTIC');
+  assert.equal(demoted.fastPathLineage.status, 'DEMOTED');
   const cases = [
-    resolveAskRoutingCascade('show me my home inventory', { localRoutingEnabled: true, propertyId: 'p1' }),
     resolveAskRoutingCascade('i smell gas in my house', { localRoutingEnabled: true, propertyId: 'p1' }),
     resolveAskRoutingCascade('how much does it cost me to own this house each year', { localRoutingEnabled: true, classifierEnabled: true, embeddingRetrievalEnabled: true, propertyId: 'p1' }),
   ];
-  assert.deepEqual(cases.map((decision) => decision.stage), ['DETERMINISTIC', 'SAFETY', 'LOCAL_CLASSIFIER']);
+  assert.deepEqual(cases.map((decision) => decision.stage), ['SAFETY', 'LOCAL_CLASSIFIER']);
   for (const decision of cases) {
     const { result, provider, outcomes } = await run({ operationId: 'NONE', confidence: 'HIGH' }, { decision });
     assert.equal(result, decision);

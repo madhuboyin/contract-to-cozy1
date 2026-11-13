@@ -1,50 +1,60 @@
-// Fast-path certification scaffold (reliability FRD FR-FAST-1..9). A deterministic rule that answers WITHOUT the model path is a "fast-path claim"; the FRD says no claim
-// ships as certified until the sealed incorrect-high-confidence gate passes for it. This file defines the record a rule must carry and the check that refuses an
-// uncertified claim. NO rule is certified today: every entry is `UNCERTIFIED`, and `isFastPathCertified` is false for all of them. It measures nothing by itself.
+import { createHash } from 'node:crypto';
+import { ASK_OPERATION_DEFINITIONS, resolveAskOperation, type AskOperationId } from '../askOperationRegistry';
+
 export type FastPathStatus = 'UNCERTIFIED' | 'CERTIFIED' | 'DEMOTED';
 export interface FastPathEvidence {
-  /** Sealed-set size and failures behind the claim (family level, FR-EVAL-14). */
-  readonly sealedFamilies: number;
-  readonly incorrectHighConfidence: number;
-  /** Upper bound on the incorrect-high-confidence rate, computed by scripts/lib/askGateStats.js. */
-  readonly incorrectUpperBound: number;
-  readonly adjacentNegativesPassed: boolean;
-  readonly sealedSetId: string;
-  readonly certifiedAt: string;
+  readonly sealedFamilies: number; readonly incorrectHighConfidence: number; readonly incorrectUpperBound: number;
+  readonly adjacentNegativeRows: number; readonly crossOperationRows: number;
+  readonly adjacentNegativesPassed: boolean; readonly crossOperationNegativesPassed: boolean;
+  readonly perRuleFailures: number; readonly leaveOneRuleOutPassed: boolean;
+  readonly tuningSetId: string; readonly sealedSetId: string; readonly certifiedAt: string;
 }
 export interface FastPathRule {
-  readonly id: string;
-  readonly version: number;
-  readonly description: string;
-  readonly status: FastPathStatus;
-  readonly evidence?: FastPathEvidence;
+  readonly id: string; readonly version: string; readonly operationId: AskOperationId;
+  readonly description: string; readonly status: FastPathStatus; readonly evidence?: FastPathEvidence;
 }
 
-/** The deterministic rules this programme added. Existing deterministic rules in askOperationRegistry.ts are not enumerated here yet (FR-FAST rule ids for them are open). */
-export const FAST_PATH_RULES: readonly FastPathRule[] = Object.freeze([
-  { id: 'ROUTING_NORMALISATION', version: 1, description: 'Framing strip and safe one-edit spelling correction before routing (support/routingNormalization.ts).', status: 'UNCERTIFIED' },
-  { id: 'DATA_POINT_TYPED_READ', version: 1, description: 'Question frame plus a unique reviewed data-point alias routes to DATA_POINT_READ (askOperationRegistry.ts dataPointQuestionPattern).', status: 'UNCERTIFIED' },
-]);
+// A rule group is one declared operation. Its version hashes the complete
+// resolver, so changing any pattern or guard invalidates every group. This is
+// conservative, but it cannot hide a changed member in a pooled certificate.
+const resolverHash = createHash('sha256').update(resolveAskOperation.toString()).digest('hex').slice(0, 16);
+const ruleId = (operationId: AskOperationId) => `DET_${operationId}`;
+const safety = (operationId: AskOperationId) => ASK_OPERATION_DEFINITIONS[operationId].safetyClass.endsWith('_BOUNDARY');
 
-/** The upper bound must be STRICTLY below this (an upper bound of exactly 1% does not certify). A non-finite or missing bound also fails. */
+/** Safety boundaries intercept independently under FR-DEC-0; every other message-routable operation is governed here. */
+export const FAST_PATH_RULES: readonly FastPathRule[] = Object.freeze(Object.values(ASK_OPERATION_DEFINITIONS)
+  .filter((definition) => definition.messageRoutable && !safety(definition.operationId) && definition.operationId !== 'GROUNDED_GUIDANCE')
+  .map((definition) => Object.freeze({ id: ruleId(definition.operationId), version: resolverHash, operationId: definition.operationId,
+    description: definition.semantic.intentDescription, status: 'DEMOTED' as const })));
+
 export const MAX_INCORRECT_HIGH_CONFIDENCE_RATE = 0.01;
 export const MIN_SEALED_FAMILIES_FOR_CLAIM = 381;
+export const MIN_ADJACENT_NEGATIVES_PER_RULE = 30;
+export const MIN_CROSS_OPERATION_NEGATIVES_PER_RULE = 30;
 
-/** Problems that make a rule's record invalid. A CERTIFIED rule needs complete evidence under the thresholds; an UNCERTIFIED one must not carry a certificate. */
 export function validateFastPathRule(rule: FastPathRule): string[] {
   const issues: string[] = [];
-  if (!/^[A-Z][A-Z0-9_]+$/.test(rule.id) || !Number.isInteger(rule.version) || rule.version < 1) issues.push(`${rule.id}: bad id or version`);
-  if (rule.status !== 'CERTIFIED') { if (rule.evidence && rule.status === 'UNCERTIFIED') issues.push(`${rule.id}: an uncertified rule must not carry a certificate`); return issues; }
+  if (!/^DET_[A-Z][A-Z0-9_]+$/.test(rule.id) || !/^[a-f0-9]{16}$/.test(rule.version)) issues.push(`${rule.id}: bad id or resolver hash`);
+  if (rule.id !== ruleId(rule.operationId)) issues.push(`${rule.id}: id does not match ${rule.operationId}`);
+  if (rule.status !== 'CERTIFIED') { if (rule.evidence) issues.push(`${rule.id}: a ${rule.status.toLowerCase()} rule must not carry certification evidence`); return issues; }
   const e = rule.evidence;
   if (!e) return [...issues, `${rule.id}: certified without evidence`];
-  if (e.sealedFamilies < MIN_SEALED_FAMILIES_FOR_CLAIM) issues.push(`${rule.id}: sealed set of ${e.sealedFamilies} families is below ${MIN_SEALED_FAMILIES_FOR_CLAIM}`);
-  if (!(e.incorrectUpperBound < MAX_INCORRECT_HIGH_CONFIDENCE_RATE)) issues.push(`${rule.id}: incorrect-high-confidence upper bound ${e.incorrectUpperBound} is not strictly below ${MAX_INCORRECT_HIGH_CONFIDENCE_RATE}`);
-  if (!e.adjacentNegativesPassed) issues.push(`${rule.id}: adjacent-data-point negatives did not pass`);
-  if (!e.sealedSetId || !e.certifiedAt) issues.push(`${rule.id}: certificate lacks its sealed set id or date`);
+  if (e.sealedFamilies < MIN_SEALED_FAMILIES_FOR_CLAIM) issues.push(`${rule.id}: sealed set below ${MIN_SEALED_FAMILIES_FOR_CLAIM}`);
+  if (!(e.incorrectUpperBound < MAX_INCORRECT_HIGH_CONFIDENCE_RATE)) issues.push(`${rule.id}: incorrect-high-confidence upper bound is not strictly below 1%`);
+  if (e.adjacentNegativeRows < MIN_ADJACENT_NEGATIVES_PER_RULE || !e.adjacentNegativesPassed) issues.push(`${rule.id}: adjacent-negative floor failed`);
+  if (e.crossOperationRows < MIN_CROSS_OPERATION_NEGATIVES_PER_RULE || !e.crossOperationNegativesPassed) issues.push(`${rule.id}: cross-operation floor failed`);
+  if (e.perRuleFailures !== 0) issues.push(`${rule.id}: observed per-rule failure requires demotion`);
+  if (!e.leaveOneRuleOutPassed) issues.push(`${rule.id}: leave-one-rule-out comparison failed`);
+  if (!e.tuningSetId || !e.sealedSetId || !e.certifiedAt) issues.push(`${rule.id}: certificate lacks dataset lineage or date`);
   return issues;
 }
 
-export const isFastPathCertified = (ruleId: string): boolean => {
-  const rule = FAST_PATH_RULES.find((r) => r.id === ruleId);
-  return !!rule && rule.status === 'CERTIFIED' && validateFastPathRule(rule).length === 0;
-};
+export const fastPathRuleForOperation = (operationId: AskOperationId): FastPathRule | null => FAST_PATH_RULES.find((rule) => rule.operationId === operationId) ?? null;
+export const isFastPathCertified = (ruleIdToCheck: string): boolean => { const rule = FAST_PATH_RULES.find((entry) => entry.id === ruleIdToCheck); return !!rule && rule.status === 'CERTIFIED' && validateFastPathRule(rule).length === 0; };
+
+export interface FastPathAggregateEvidence { readonly sealedFamilies: number; readonly failures: number; readonly incorrectUpperBound: number; readonly sealedSetId: string }
+export const validateFastPathAggregate = (e: FastPathAggregateEvidence): string[] => [
+  ...(e.sealedFamilies < MIN_SEALED_FAMILIES_FOR_CLAIM ? [`aggregate sealed set below ${MIN_SEALED_FAMILIES_FOR_CLAIM}`] : []),
+  ...(!(e.incorrectUpperBound < MAX_INCORRECT_HIGH_CONFIDENCE_RATE) ? ['aggregate incorrect-high-confidence upper bound is not strictly below 1%'] : []),
+  ...(!e.sealedSetId ? ['aggregate certificate lacks sealed-set lineage'] : []),
+];

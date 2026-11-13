@@ -1,66 +1,21 @@
 {
  "version": 1,
  "knownGood": {
-  "APPLIANCE_FAILURE_RISK": [
-   "show failure risk for my appliances",
-   "what are the most risky items in my home inventory",
-   "what are the riskiest appliances i own",
-   "which appliances are about to fail"
-  ],
-  "BREAK_EVEN_ANALYSIS": [
-   "break even point for my home",
-   "breakeven analysis",
-   "when do i break even on this house"
-  ],
-  "BUYER_CLOSING_DAY_READINESS": [
-   "closing day checklist",
-   "closing day readiness",
-   "what do i need on closing day"
-  ],
   "BUYER_COST_READINESS": [
    "explain my near term purchase costs",
    "recorded purchase costs",
    "what costs are coming up after the purchase"
   ],
-  "BUYER_DEADLINES": [
-   "upcoming deadlines for my purchase"
-  ],
-  "BUYER_DISCLOSURE_FUNDS_READINESS": [
-   "closing disclosure review",
-   "did my closing disclosure change",
-   "how much cash do i need at closing"
-  ],
   "BUYER_DOCUMENT_READINESS": [
-   "missing transaction documents",
-   "which documents are missing for closing"
-  ],
-  "BUYER_FINANCING_READINESS": [
-   "financing readiness before closing"
-  ],
-  "BUYER_FINDING_DISPOSITION": [
-   "classify the roof finding as negotiation",
-   "mark this finding as post close work"
+   "missing transaction documents"
   ],
   "BUYER_INSPECTION_REVIEW": [
-   "undecided inspection findings",
-   "which inspection findings need a decision before closing"
+   "undecided inspection findings"
   ],
   "BUYER_INSURANCE_READINESS": [
-   "closing insurance checklist",
    "do i have homeowners insurance ready for closing",
    "insurance readiness for closing",
    "what insurance do i need before closing"
-  ],
-  "BUYER_LIFECYCLE_UPDATE": [
-   "cancel my purchase",
-   "change my closing date",
-   "update closing date to the 30th"
-  ],
-  "BUYER_LOAN_ESTIMATES": [
-   "compare the loan offers for my purchase",
-   "list my loan estimates",
-   "my mortgage offers",
-   "show my loan estimates"
   ],
   "BUYER_MOVE_STATUS": [
    "what is left to do before i move in"
@@ -69,278 +24,64 @@
    "negotiation readiness"
   ],
   "BUYER_PLAN_STATUS": [
-   "buyer plan status",
-   "how is my home purchase going",
-   "where am i in the buying process"
-  ],
-  "BUYER_TASK_COMPLETE": [
-   "check off the appraisal task",
-   "complete the lender document item",
-   "i finished the walkthrough task",
-   "mark my closing task done",
-   "tick off the homeowners insurance task"
-  ],
-  "BUYER_TASK_CREATE": [
-   "add a closing task to get the survey done",
-   "add a task to my closing checklist",
-   "add custom closing task",
-   "new closing task call the utilities"
-  ],
-  "BUYER_TASK_UPDATE": [
-   "move the appraisal task to friday",
-   "push the survey task out a week",
-   "reassign the title task to my agent",
-   "reschedule my closing task"
-  ],
-  "BUYER_TITLE_ESCROW_READINESS": [
-   "what is outstanding with escrow"
+   "how is my home purchase going"
   ],
   "BUYER_WALKTHROUGH_READINESS": [
-   "am i ready for the final walkthrough",
    "prepare me for the walkthrough",
    "walkthrough checklist"
   ],
   "CAPABILITY_DISCOVERY": [
-   "do you have anything for planning renovations",
-   "how can you help me with my home",
-   "is there a tool for budgeting repairs",
-   "what features are available",
-   "which tools do you have"
-  ],
-  "CAPITAL_ITEM_FUNDING_GOAL": [
-   "am i saving enough to replace my roof in 5 years",
-   "how do i save for replacing my hvac",
-   "how much capital will i need for a new roof in 4 years",
-   "how much should i put aside each month for a new roof",
-   "if the water heater has to go in 3 years how much more should i save",
-   "what do i need saved to replace the furnace by 2030"
-  ],
-  "CAPITAL_RESERVE_PLAN": [
-   "capital reserve plan",
-   "how much should i save for future home expenses",
-   "long term home savings plan",
-   "what should i set aside for big repairs"
+   "what features are available"
   ],
   "CLAIM_CHECKLIST_VIEW": [
    "show my claim checklist",
    "what do i still need for the claim",
    "what is left to do on my claim"
   ],
-  "CLAIM_FILE": [
-   "file a warranty claim for my dishwasher",
-   "i need to file a claim",
-   "open a claim for the roof leak",
-   "start an insurance claim for water damage"
-  ],
-  "COMMUNITY_UPDATES": [
-   "any city alerts",
-   "community updates",
-   "local community events"
-  ],
   "COVERAGE_COMPARISON_STATUS": [
-   "compare my policy to other quotes",
-   "how does my insurance stack up against alternatives",
-   "show my policy comparison"
+   "how does my insurance stack up against alternatives"
   ],
   "COVERAGE_GAPS": [
-   "am i properly insured",
-   "is my stuff protected by insurance or warranty",
-   "what isnt covered at my house",
-   "where are my coverage gaps",
-   "which of my items are not covered"
-  ],
-  "COVERAGE_REVIEW_STATUS": [
-   "policy review questions",
-   "review my policy details",
-   "what questions should i ask my insurance agent",
-   "what should i check on my homeowners policy"
+   "is my stuff protected by insurance or warranty"
   ],
   "DIY_PROJECTS": [
-   "list my do it yourself projects",
-   "show my diy projects",
-   "what diy projects are planned",
    "which diy steps are left"
-  ],
-  "DOCUMENT_LOOKUP": [
-   "do i have the deed on file",
-   "list the files i uploaded",
-   "show my uploaded documents",
-   "what documents are in my vault",
-   "where is my closing paperwork"
   ],
   "DOCUMENT_PROMOTION_REVIEW": [
    "pending document suggestions",
    "review document candidates"
   ],
-  "DO_NOTHING_SIMULATION": [
-   "cost of ignoring upkeep",
-   "show the do nothing simulation",
-   "what happens if i skip maintenance",
-   "what if i delay home maintenance"
-  ],
-  "ENVIRONMENT_REPORT": [
-   "10 day forecast for my home",
-   "air quality today",
-   "drought conditions near me",
-   "show my environment report"
-  ],
-  "FINANCING_OVERVIEW": [
-   "compare financing options for a project",
-   "heloc vs loan for renovation",
-   "how should i finance a new roof",
-   "show my financing picture"
-  ],
-  "GUIDANCE_JOURNEYS_LIST": [
-   "show guidance overview",
-   "show my guided journeys",
-   "what guidance plans am i working on",
-   "where am i in my guided plan"
-  ],
   "GUIDANCE_JOURNEY_CREATE": [
-   "begin a guided journey",
-   "create a guidance journey",
-   "start a guided plan for fixing my leaky roof",
    "walk me through dealing with a damp basement"
   ],
-  "HOA_COMPLIANCE_STATUS": [
-   "any hoa approval requests pending",
-   "do i have hoa violations",
-   "hoa status",
-   "show my hoa records",
-   "what are my hoa dues"
-  ],
-  "HOME_ACTIONS": [
-   "what are my top priorities for the house",
-   "what are the main things i need to be concerned of for next few days",
-   "what is the most important thing to do first",
-   "what is the most important thing to do next",
-   "what is the single most important thing i need to be concerned of about my home",
-   "what needs my attention"
-  ],
   "HOME_BRIEFING_VIEW": [
-   "my briefing settings",
-   "show my home briefing",
    "what are the latest updates about my home"
   ],
   "HOME_CHANGE_SUMMARY": [
-   "anything change at my house this month",
-   "recent changes to my home",
-   "what changed on my home recently",
-   "what happened lately",
-   "what is new with my property"
-  ],
-  "HOME_DEADLINE_MONITOR": [
-   "alert me before my policy renews",
-   "monitor my home deadlines",
-   "remind me when my warranty expires"
-  ],
-  "HOME_DIGITAL_WILL": [
-   "digital will for my home",
-   "show my home continuity plan"
+   "anything change at my house this month"
   ],
   "HOME_EVENT_RADAR_FEED": [
    "any events that affect my property",
-   "list monitored events near my house",
-   "radar feed",
-   "show my home event radar",
    "what is on the radar for my home"
   ],
-  "HOME_HABITS": [
-   "habit coach suggestions",
-   "show my home habits",
-   "suggest home habits",
-   "weekly habits for home care",
-   "what small habits should i build for my home"
-  ],
-  "HOME_RECORD_EXPORT": [
-   "download my home record",
-   "export my home records as a pdf",
-   "export the warranty section",
-   "save my home records as a file"
-  ],
-  "HOME_RECORD_EXPORT_STATUS": [
-   "can i download my export yet",
-   "check export status",
-   "has my home record export finished",
-   "is my export ready"
-  ],
-  "HOME_STATUS_BOARD": [
-   "show my home status board",
-   "what is the condition of my appliances",
-   "which systems need action"
-  ],
-  "HOME_TIMELINE_EVENTS": [
-   "list my home timeline",
-   "show the history of my home",
-   "what has happened at my house over the years",
-   "what improvements did i make",
-   "what repairs have been done"
-  ],
-  "HOME_UPGRADE_SCENARIOS": [
-   "show home upgrade planner",
-   "show my upgrade options"
-  ],
   "HOME_WORK_ITEMS": [
-   "list my open work items",
-   "open home work items"
-  ],
-  "HOUSEHOLD_ACCESS_SUMMARY": [
-   "list household members",
-   "show who can see my home",
-   "who has access to my home"
+   "list my open work items"
   ],
   "HOUSEHOLD_INVITATION": [
-   "add my spouse to my account",
-   "invite a family member",
-   "invite my wife to the home",
-   "send an invite to my roommate",
-   "share my home with my partner"
-  ],
-  "HVAC_DECISION_CONTINUE": [
-   "continue my furnace decision",
-   "should i replace my furnace, update on my furnace decision",
-   "update on my furnace decision",
-   "where do things stand on my furnace decision"
-  ],
-  "HVAC_DECISION_SCENARIO": [
-   "compare a new hvac quote",
-   "how does this ac quote compare"
+   "send an invite to my roommate"
   ],
   "HVAC_DECISION_START": [
-   "is my heat pump worth fixing",
-   "my ac is old do i replace it",
-   "should i repair or replace my furnace",
    "start an hvac decision"
   ],
   "HVAC_PREFERENCE_SAVE": [
    "save my hvac preference for efficiency"
   ],
-  "INCIDENT_CLAIM_STATUS": [
-   "any open claims on the house",
-   "did my claim get approved",
-   "show my insurance claims",
-   "what is the status of my claim"
-  ],
   "INSPECTION_FINDINGS": [
-   "open inspection items",
-   "show inspection findings"
-  ],
-  "INSPECTION_FINDING_UPDATE": [
-   "accept the inspection finding about the deck",
-   "dismiss that inspection finding",
-   "i fixed the inspection issue",
-   "ignore that inspection item",
-   "mark the roof finding resolved",
-   "resolve finding"
+   "open inspection items"
   ],
   "INSPECTION_NEGOTIATION_PACKAGE": [
    "build a negotiation package from my inspection",
    "inspection negotiation summary"
-  ],
-  "INSPECTION_REPORTS": [
-   "list my inspection reports",
-   "what inspection reports are on file",
-   "which inspection reports do i have"
   ],
   "INSPECTION_REPORT_COMPARE": [
    "compare inspections",
@@ -355,295 +96,59 @@
    "list the latest home intelligence"
   ],
   "INVENTORY_LOOKUP": [
-   "give me the room details and item details in each room",
-   "how many items are there in my master bed room",
-   "how old is my water heater",
-   "list everything in my kitchen",
-   "service history for my furnace",
-   "show me my appliances",
-   "show me the history of my washing machine repairs",
-   "tell me about my water heater",
-   "the condition of my dishwasher",
-   "what is the model number of my dishwasher",
-   "what repairs has my dishwasher had",
-   "what rooms do I have and what is in each one",
-   "what's my roof's condition",
-   "when did i buy my fridge",
-   "when was my water heater last serviced",
    "which items have missing details"
   ],
-  "ITEM_REPLACEMENT_COST": [
-   "cost of a new dishwasher",
-   "how much does a new roof cost",
-   "how much will a new furnace cost",
-   "price of a new refrigerator",
-   "what does a replacement water heater cost"
-  ],
-  "ITEM_RESERVE_ALLOCATION": [
-   "how much have i put toward the furnace so far",
-   "how much have i set aside for my roof",
-   "how much of my reserve is set aside for the roof",
-   "what has been allocated to the water heater"
-  ],
   "MAINTENANCE_BUDGET_FORECAST": [
-   "budget for home upkeep",
    "how much budget i need to allocate over the next 5 years for home maintainence",
-   "how much should i budget for maintenance",
-   "how much to set aside for home repairs",
-   "monthly maintenance budget",
-   "what is the minimum budget i need to allocate for home Maintenance",
-   "what is the minimum i should spend on home maintenance",
    "what will upkeep cost me this year"
   ],
   "MAINTENANCE_FORECAST": [
    "forecast of home system upkeep",
-   "predict upcoming maintenance",
-   "what maintenance is predicted for my systems",
    "what repairs should i expect soon"
-  ],
-  "MAINTENANCE_STATUS": [
-   "list the maintenance i finished",
-   "show my pending home tasks"
-  ],
-  "MAINTENANCE_TASK_COMPLETE": [
-   "check off the furnace service",
-   "i finished cleaning the gutters",
-   "mark the filter change as done",
-   "the gutter task is complete"
-  ],
-  "MAINTENANCE_TASK_CREATE": [
-   "add a task to clean the gutters",
-   "new maintenance task replace water filter",
-   "put dryer vent cleaning on my list",
-   "remind me to change the furnace filter"
-  ],
-  "MAINTENANCE_TASK_UPDATE": [
-   "change the due date on the filter task",
-   "edit my gutter task",
-   "move the gutter cleaning to next month",
-   "postpone dryer vent cleaning",
-   "push back my hvac service by two weeks"
   ],
   "MAJOR_EVENT_ENTRY": [
    "i am getting ready to sell",
-   "preparing for a major home event",
-   "we are planning a big renovation"
-  ],
-  "MATERIAL_SPECS_LIST": [
-   "show my material specs",
-   "what is the color of bedroom",
-   "what paint color is in the living room",
-   "what tile is in my bathroom",
-   "which paint did i use in the bedroom"
-  ],
-  "NEGOTIATION_SHIELD_CASES": [
-   "list negotiation shield cases",
-   "open negotiation shield",
-   "show my negotiation cases"
-  ],
-  "NEIGHBORHOOD_CHANGE_FEED": [
-   "are there any construction activities in my neighbor hood",
-   "are there any development activities happening in my neighbor hood",
-   "local changes near my home"
-  ],
-  "OPERATIONAL_WORK_UPDATE": [
-   "defer this work item",
-   "reopen the work item"
+   "preparing for a major home event"
   ],
   "OWNERSHIP_COSTS": [
    "breakdown of my housing expenses",
-   "by how much my cost of ownership for my home will increase in next 5 years",
    "how much does it cost to own my house",
-   "show my ownership costs",
-   "total cost of owning this home",
-   "what are my yearly home expenses",
-   "what do i spend on the house each month",
-   "what is the cost of ownership for my home"
+   "what do i spend on the house each month"
   ],
   "PAST_HAZARD_EXPOSURE": [
-   "am i in a flood zone",
    "is my house at risk of earthquakes",
-   "past hazard history for my address",
    "what natural hazards affect my home"
   ],
-  "PERMIT_TRACKER_STATUS": [
-   "any open permit inspections",
-   "list permit records",
-   "show my permits"
-  ],
-  "PLANT_CARE_OUTLOOK": [
-   "how should i care for my plants this week",
-   "plant care outlook",
-   "watering advice for my plants",
-   "weather aware plant care",
-   "what should i do for my garden"
-  ],
-  "PRICE_FINALIZATIONS_LIST": [
-   "price finalization records",
-   "show finalized quotes",
-   "what terms did i accept"
-  ],
-  "PROJECT_TRACKER_PROJECTS": [
-   "list completed projects",
-   "show my contractor projects",
-   "status of my kitchen remodel project",
-   "what contractors am i working with",
-   "what projects are in progress"
-  ],
-  "PROPERTY_BRIEFS_LIST": [
-   "list saved briefs",
-   "my home briefs",
-   "open property brief list",
-   "show my property briefs"
-  ],
-  "PROPERTY_SUMMARY": [
-   "how many bathrooms are there",
-   "how many bed rooms do i have",
-   "how many bedrooms do i have",
-   "summarize my property",
-   "tell me about my house",
-   "what details are missing from my home profile",
-   "what is the square footage of my home",
-   "what year was my house built"
-  ],
   "PROPERTY_TAX_APPEAL_READINESS": [
-   "can i appeal my property taxes",
-   "is my property tax too high",
-   "property tax appeal readiness",
-   "should i contest my tax assessment"
-  ],
-  "QUOTE_COMPARISON_CREATE": [
-   "i have three roofing bids to compare",
-   "new quote comparison for the deck",
-   "set up a bid comparison",
-   "start a contractor quote comparison"
-  ],
-  "QUOTE_COMPARISON_REVIEW": [
-   "compare these two contractor quotes",
-   "review my quote comparison",
-   "show my bids",
-   "which contractor bid is better",
-   "which estimate should i pick"
-  ],
-  "RECALL_MATCH_UPDATE": [
-   "confirm the recall applies to my fridge",
-   "dismiss that recall",
-   "resolve recall match"
-  ],
-  "RECALL_REVIEW": [
-   "any product recalls for my home",
-   "are any of my appliances recalled",
-   "have any of my items been recalled",
-   "show recall matches"
-  ],
-  "REFINANCE_ANALYSIS": [
-   "refinance worth it",
-   "should i refinace",
-   "should i refinance"
+   "can i appeal my property taxes"
   ],
   "REFINANCE_COMMAND": [
    "add a refinance scenario",
+   "change my refinance alert settings",
    "delete my refinance scenario"
   ],
   "REFINANCE_RATE_MONITOR": [
-   "alert me when rates drop",
-   "monitor interest rates",
    "tell me if mortgage rates fall below 6 percent",
    "watch mortgage rates for me",
    "what are current mortgage rates"
   ],
   "RENOVATION_PERMIT_READINESS": [
    "am i ready to pull a permit",
-   "permit checklist for my addition",
-   "renovation permit readiness"
-  ],
-  "REPLACEMENT_GUIDANCE": [
-   "can i continue to use my microwave or should i need to buy new one",
-   "can i keep using my oven or replace it",
-   "do I need a new roof",
-   "do i need a new dishwasher",
-   "do i need a new washing machine",
-   "how is my furnace doing",
-   "how is my water heater doing? will it be good for next few years",
-   "how long until my water heater needs replacing",
-   "how many more years does my fridge have left",
-   "is my fridge worth repairing",
-   "is my microwave good enough or do i need to replace it",
-   "is my water heater still good",
-   "repair or replace my washer",
-   "should i replace my microwave",
-   "will my dishwasher last another 5 years"
-  ],
-  "RESERVE_FUND_COMMAND": [
-   "add 200 to my reserve fund",
-   "change my reserve fund contribution",
-   "recalculate my reserve plan",
-   "record a reserve contribution"
-  ],
-  "RISK_MITIGATION_PLAN": [
-   "how do i reduce my insurance risk",
-   "risk mitigation plan",
-   "what loss prevention should i do"
-  ],
-  "ROOM_PLANT_RECOMMENDATIONS": [
-   "best low light plants for my office",
-   "pet safe plants for my kitchen",
-   "recommend plants for the bedroom",
-   "what plants are good for my living room"
+   "permit checklist for my addition"
   ],
   "SAVED_RESULTS": [
-   "list my saved results",
    "show what i saved",
    "what have i bookmarked"
   ],
-  "SAVINGS_OPPORTUNITIES": [
-   "any savings i am missing",
-   "are there any federal/ state rebates for my home",
-   "find ways to lower my home costs",
-   "how can i save money on my home"
-  ],
   "SELLER_PREP_CHECKLIST": [
    "how do i get my house ready to sell",
-   "seller prep checklist",
-   "show the checklist for selling",
-   "what should i fix before i list the house"
-  ],
-  "SELLER_PREP_ITEM_DECISION": [
-   "reopen the seller checklist item",
-   "unpursue that seller prep item"
-  ],
-  "SELL_HOLD_RENT_ANALYSIS": [
-   "compare selling vs keeping",
-   "how much could i rent my house for",
-   "how much rent can i charge",
-   "how much rent can i expect for my home",
-   "how much rent can i expect for my home",
-   "how much rental income would i make",
-   "is it better to hold or sell",
-   "sell hold rent analysis",
-   "should i keep the house or rent it out",
-   "should i sell or rent my house",
-   "would renting out my home make sense"
+   "show the checklist for selling"
   ],
   "SERVICE_PRICE_CHECKS": [
-   "how does my roofing quote compare to market",
-   "is this quote a fair price",
-   "service price radar results",
-   "show my price checks"
-  ],
-  "WARRANTY_LOOKUP": [
-   "is my dishwasher still under warranty",
-   "show warranty details",
-   "what does my warranty cover",
-   "what warranties do i have",
-   "when does my home warranty expire",
-   "which warranties expire this year"
+   "is this quote a fair price"
   ],
   "WORK_OVERVIEW": [
-   "give me an overview of work in progress",
-   "summarize all the work for my home",
-   "what is under way on my house",
-   "what is waiting on me and what is scheduled"
+   "what is under way on my house"
   ]
  },
  "knownMisrouted": {
@@ -653,31 +158,12 @@
   "BUYER_COST_READINESS": [
    "what should i budget immediately after closing"
   ],
-  "BUYER_DOCUMENT_READINESS": [
-   "what documents are unverified"
-  ],
-  "BUYER_FINDING_DISPOSITION": [
-   "dismiss the inspection finding for the purchase"
-  ],
   "BUYER_MOVE_STATUS": [
    "am i ready to move into the new house",
    "how is my move in going"
   ],
-  "COVERAGE_COMPARISON_STATUS": [
-   "insurance quote comparison status"
-  ],
-  "DOCUMENT_LOOKUP": [
-   "find my insurance policy document"
-  ],
-  "DOCUMENT_PROMOTION_REVIEW": [
-   "what did you find in my uploaded documents"
-  ],
-  "GUIDANCE_JOURNEY_CREATE": [
-   "help me plan a bathroom fix step by step"
-  ],
   "HOME_BRIEFING_VIEW": [
-   "give me my home update",
-   "what is new for my house"
+   "give me my home update"
   ],
   "HOME_DIGITAL_WILL": [
    "review my home legacy plan",
@@ -693,8 +179,7 @@
    "what projects have i done on the house"
   ],
   "HOME_WORK_ITEMS": [
-   "what work is due",
-   "which tasks are snoozed"
+   "what work is due"
   ],
   "HOUSEHOLD_ACCESS_SUMMARY": [
    "household access"
@@ -703,31 +188,14 @@
    "note that i want a quiet furnace",
    "set my hvac decision preference"
   ],
-  "INSPECTION_REPORT_COMPARE": [
-   "what changed since the last inspection"
-  ],
   "INSPECTION_REPORT_FINDINGS": [
-   "break down my inspection report",
-   "list findings in my inspection report",
-   "what is in the inspection report"
+   "break down my inspection report"
   ],
   "INTELLIGENCE_ENVELOPE_QUERY": [
-   "show me intelligence signals for my property",
-   "what has the system noticed about my home",
-   "what insights do you have about my home"
-  ],
-  "MAINTENANCE_BUDGET_FORECAST": [
-   "yearly maintenance cost estimate"
-  ],
-  "MAINTENANCE_FORECAST": [
-   "when will my roof need replacing"
+   "what has the system noticed about my home"
   ],
   "MAINTENANCE_STATUS": [
-   "am i caught up on upkeep",
-   "what maintenance is coming up"
-  ],
-  "OPERATIONAL_WORK_UPDATE": [
-   "snooze that task for a week"
+   "am i caught up on upkeep"
   ],
   "PERMIT_TRACKER_STATUS": [
    "is my permit approved"
@@ -738,16 +206,11 @@
   "PROPERTY_TAX_APPEAL_READINESS": [
    "how do i lower my property taxes"
   ],
-  "QUOTE_COMPARISON_CREATE": [
-   "compare my quotes side by side",
-   "help me compare estimates from contractors"
-  ],
   "REFINANCE_ANALYSIS": [
    "can i get a better mortgage rate",
    "would refinancing save me money"
   ],
   "REFINANCE_COMMAND": [
-   "change my refinance alert settings",
    "create a refinance what if at 5.5 percent"
   ],
   "RESERVE_FUND_COMMAND": [

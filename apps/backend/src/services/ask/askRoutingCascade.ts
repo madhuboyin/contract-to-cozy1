@@ -12,6 +12,7 @@ import { classifyAskCandidates, normalizeAskMessage, retrieveAskOperationCandida
 import { ASK_DEFAULT_LANGUAGE, requireCertifiedAskLanguage, type AskLanguageCode } from './askLanguageRegistry';
 import type { AskConfidenceBand } from './askTrust.contract';
 import { resolveAskEntityState, type AskEntityResolutionResult } from './askEntityResolution';
+import { fastPathRuleForOperation, isFastPathCertified } from './fastPath/fastPathCertificates';
 
 // "Which upgrades are worth doing" says nothing about what they are for. Worth depends on the goal, so the homeowner picks one rather than Ask guessing.
 const UPGRADE_OBJECTIVE_PATTERN = /\b(?:which|what)\b.{0,12}\b(?:upgrades?|improvements?|renovations?|projects?)\b.{0,30}\b(?:worth (?:doing|it|making)|best to (?:do|make))\b|\b(?:upgrades?|improvements?|renovations?)\b.{0,12}\bworth (?:doing|it|making)\b/i;
@@ -44,6 +45,7 @@ export interface AskRoutingDecision {
   candidates: AskRoutingCandidate[];
   requiresClarification: boolean;
   entityResolution: AskEntityResolutionResult | null;
+  fastPathLineage?: { ruleId: string; version: string; status: 'CERTIFIED' | 'DEMOTED' } | null;
 }
 
 export function propertyScopeForAskRouting(
@@ -76,14 +78,19 @@ export function resolveAskRoutingCascade(rawMessage: string, options: {
   const rawDirect = resolveAskOperation(correctKnownMisspellings(rawMessage));
   const message = isSafetyBoundary(rawDirect.operationId) ? correctKnownMisspellings(rawMessage) : normalizeForRouting(rawMessage);
   const direct = isSafetyBoundary(rawDirect.operationId) ? rawDirect : resolveAskOperation(message);
+  const directRule = direct.operationId === 'GROUNDED_GUIDANCE' || isSafetyBoundary(direct.operationId) ? null : fastPathRuleForOperation(direct.operationId);
   if (direct.operationId === 'EMERGENCY_BOUNDARY' || direct.operationId === 'UNSAFE_RESTRICTED_BOUNDARY' || direct.operationId === 'OUT_OF_SCOPE_BOUNDARY') {
     return { language, operation: direct, stage: 'SAFETY', candidates: [{ operationId: direct.operationId, language, confidence: direct.confidence, confidenceBand: 'HIGH' }], requiresClarification: false, entityResolution: null };
   }
   if (direct.operationId !== 'GROUNDED_GUIDANCE') {
-    return { language, operation: direct, stage: 'DETERMINISTIC', candidates: [{ operationId: direct.operationId, language, confidence: direct.confidence, confidenceBand: 'HIGH' }], requiresClarification: false, entityResolution: resolveAskEntityState({ message, operationId: direct.operationId, propertyId: options.propertyId, launchEntityId: options.launchEntityId, requiresProperty: direct.requiresProperty }) };
+    const rule = directRule;
+    if (rule && isFastPathCertified(rule.id)) {
+      return { language, operation: direct, stage: 'DETERMINISTIC', candidates: [{ operationId: direct.operationId, language, confidence: direct.confidence, confidenceBand: 'HIGH', reasonCodes: ['FAST_PATH_CERTIFIED'] }], requiresClarification: false, entityResolution: resolveAskEntityState({ message, operationId: direct.operationId, propertyId: options.propertyId, launchEntityId: options.launchEntityId, requiresProperty: direct.requiresProperty }), fastPathLineage: { ruleId: rule.id, version: rule.version, status: 'CERTIFIED' } };
+    }
   }
   if (options.localRoutingEnabled === false) {
-    return { language, operation: direct, stage: 'REMOTE_FALLBACK', candidates: [], requiresClarification: false, entityResolution: null };
+    const fallback = resolution('GROUNDED_GUIDANCE', ASK_OPERATION_DEFINITIONS.GROUNDED_GUIDANCE.confidence);
+    return { language, operation: fallback, stage: 'REMOTE_FALLBACK', candidates: directRule ? [{ operationId: direct.operationId, language, confidence: direct.confidence, confidenceBand: 'LOW', reasonCodes: ['FAST_PATH_DEMOTED'], retrievalPath: 'DETERMINISTIC_CANDIDATE' }] : [], requiresClarification: false, entityResolution: null, fastPathLineage: directRule ? { ruleId: directRule.id, version: directRule.version, status: 'DEMOTED' } : null };
   }
 
   if (SMALL_TALK_PATTERN.test(message.trim()) && message.trim().split(/\s+/).length <= 7) {
@@ -188,24 +195,35 @@ export function resolveAskRoutingCascade(rawMessage: string, options: {
     retrievalPath: candidate.retrievalPath,
     confidenceBand: candidate.confidenceBand,
   }));
+  const demotedRule = directRule;
+  if (demotedRule && !candidates.some((candidate) => candidate.operationId === direct.operationId)) candidates.push({
+    operationId: direct.operationId, language, confidence: direct.confidence, confidenceBand: 'LOW',
+    reasonCodes: ['FAST_PATH_DEMOTED'], retrievalPath: 'DETERMINISTIC_CANDIDATE',
+  });
   // FR-REC-1: a clarification never has fewer than two options. With one candidate there is nothing to choose between, so the turn is not matched
   // (REMOTE_FALLBACK, the safe not-matched path) instead of asking the user to confirm the only choice.
-  const notMatched: AskRoutingDecision = { language, operation: direct, stage: 'REMOTE_FALLBACK', candidates, requiresClarification: false, entityResolution: null };
+  const fallback = resolution('GROUNDED_GUIDANCE', ASK_OPERATION_DEFINITIONS.GROUNDED_GUIDANCE.confidence);
+  const lineage = demotedRule ? { ruleId: demotedRule.id, version: demotedRule.version, status: 'DEMOTED' as const } : null;
+  const notMatched: AskRoutingDecision = { language, operation: fallback, stage: 'REMOTE_FALLBACK', candidates, requiresClarification: false, entityResolution: null, fastPathLineage: lineage };
   if (options.classifierEnabled === false && candidates.length) {
-    return candidates.length < 2 ? notMatched : { language, operation: direct, stage: 'CLARIFICATION', candidates, requiresClarification: true, entityResolution: null };
+    return candidates.length < 2 ? notMatched : { language, operation: fallback, stage: 'CLARIFICATION', candidates, requiresClarification: true, entityResolution: null, fastPathLineage: lineage };
   }
   if (classification.outcome === 'AMBIGUOUS' || classification.outcome === 'MULTI_INTENT') {
     if (candidates.length < 2) return notMatched;
-    return { language, operation: direct, stage: 'CLARIFICATION', candidates, requiresClarification: true, entityResolution: null };
+    return { language, operation: fallback, stage: 'CLARIFICATION', candidates, requiresClarification: true, entityResolution: null, fastPathLineage: lineage };
   }
   if (classification.outcome === 'RESOLVED' && classification.selectedOperationId) {
+    // FR-FAST-3/7: demotion cannot be bypassed by immediately relabelling the
+    // same turn as a local-classifier claim. Until the classifier's stratum is
+    // independently certified it may rank/clarify, but it may not execute.
+    if (demotedRule) return notMatched;
     const selected = retrieved.find((candidate) => candidate.operationId === classification.selectedOperationId)!;
     const definition = getAskOperationDefinition(selected.operationId);
     if (selected.confidenceBand !== 'HIGH' && (definition.semantic.materiality === 'HIGH' || definition.semantic.effect === 'WRITE')) {
       if (candidates.length < 2) return notMatched;
-      return { language, operation: direct, stage: 'CLARIFICATION', candidates, requiresClarification: true, entityResolution: null };
+      return { language, operation: fallback, stage: 'CLARIFICATION', candidates, requiresClarification: true, entityResolution: null, fastPathLineage: lineage };
     }
-    return { language, operation: resolution(selected.operationId, selected.score), stage: 'LOCAL_CLASSIFIER', candidates, requiresClarification: false, entityResolution: resolveAskEntityState({ message, operationId: selected.operationId, propertyId: options.propertyId, launchEntityId: options.launchEntityId, requiresProperty: definition.requiresProperty }) };
+    return { language, operation: resolution(selected.operationId, selected.score), stage: 'LOCAL_CLASSIFIER', candidates, requiresClarification: false, entityResolution: resolveAskEntityState({ message, operationId: selected.operationId, propertyId: options.propertyId, launchEntityId: options.launchEntityId, requiresProperty: definition.requiresProperty }), fastPathLineage: lineage };
   }
-  return { language, operation: direct, stage: 'REMOTE_FALLBACK', candidates, requiresClarification: false, entityResolution: null };
+  return notMatched;
 }

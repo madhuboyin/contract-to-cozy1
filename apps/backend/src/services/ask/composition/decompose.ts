@@ -1,6 +1,6 @@
 // Composition FRD §4.2: decide whether a typed message is a composed (two-component) question, before anything runs. Pure: routing, safety and the
 // operation registry are the only inputs, so every rule is tested without a database. Nothing here executes an operation.
-import { COMPOSITION_PURE_VARIANTS, getAskOperationDefinition, type AskOperationId } from '../askOperationRegistry';
+import { COMPOSITION_PURE_VARIANTS, getAskOperationDefinition, resolveAskOperation, type AskOperationId } from '../askOperationRegistry';
 import { resolveAskRoutingCascade } from '../askRoutingCascade';
 import { operationCoversClause, resolveClauseOperation, splitQuestionClauses, standalone, subjectOf } from '../support/alsoAnswer';
 import { parseTargetDate } from '../support/targetDate';
@@ -31,6 +31,9 @@ export interface DecomposeOptions {
  */
 export function decomposeForComposition(message: string, options: DecomposeOptions = {}): DecompositionOutcome {
   const whole = resolveAskRoutingCascade(message);
+  // Used only for declared coverage and clause inheritance; it does not admit
+  // or execute the raw deterministic match.
+  const wholeOperationId = resolveAskOperation(message).operationId;
   if (whole.stage === 'SAFETY') return { kind: 'SINGLE', reason: 'FULL_MESSAGE_GATE' };
 
   const clauses = splitQuestionClauses(message);
@@ -52,7 +55,7 @@ export function decomposeForComposition(message: string, options: DecomposeOptio
     const spoken = standalone(part, subject);
     const clause = date && !parseTargetDate(spoken, options.now) && /\b(?:cost|price|how much)\b/i.test(spoken) ? `${spoken} ${date.label}` : spoken;
     const resolved = resolveClauseOperation(clause) ?? (
-      whole.operation.operationId === 'CAPITAL_ITEM_FUNDING_GOAL'
+      wholeOperationId === 'CAPITAL_ITEM_FUNDING_GOAL'
       && /\b(?:save|saving|set aside|put aside|per month|each month|a month)\b/i.test(clause)
         ? { operationId: 'CAPITAL_ITEM_FUNDING_GOAL' as const, family: 'DECISION_ANALYSIS', confidence: MIN_CLAUSE_CONFIDENCE }
         : null
@@ -78,7 +81,9 @@ export function decomposeForComposition(message: string, options: DecomposeOptio
   // FR-DEC-6: clauses covered by the whole-message operation are one component.
   // This includes the funding goal, whose contract already states the dated
   // replacement cost as well as the reserve gap and monthly amount.
-  const wholeOperationId = whole.operation.operationId;
+  // Coverage is a declaration lookup, not a routing claim. Use the registry's
+  // raw match so fast-path demotion does not turn one handler that covers two
+  // clauses into two child executions.
   if (!deferred.length && routed.every((entry) => operationCoversClause(wholeOperationId, entry.operationId, entry.clause))) {
     return { kind: 'SINGLE', reason: 'SAME_OPERATION' };
   }
