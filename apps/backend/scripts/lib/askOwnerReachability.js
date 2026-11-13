@@ -12,7 +12,12 @@ const NOUN = { Warranty: 'warranty', InsurancePolicy: 'insurance policy', Proper
 // Points whose value a dedicated operation DOES state (checked against its handler, not assumed): a phrasing that reaches that operation is answered, though not by DATA_POINT_READ. Everything else must reach the data point.
 const OWNED_BY = {
   'item.brand': ['INVENTORY_LOOKUP'], 'item.model': ['INVENTORY_LOOKUP'], 'item.condition': ['INVENTORY_LOOKUP'], 'item.purchasedOn': ['INVENTORY_LOOKUP'], 'item.expectedExpiryDate': ['INVENTORY_LOOKUP', 'REPLACEMENT_GUIDANCE'],
-  'item.replacementCost': ['ITEM_REPLACEMENT_COST'], // item.lastServicedOn is NOT listed: whether the item-history read states the recorded date is unverified
+  'item.replacementCost': ['ITEM_REPLACEMENT_COST'],
+  // WARRANTY_LOOKUP lists a warranty by provider with its expiry, start and coverage text (it states in its own header that it never reads cost); SELLER_PREP_CHECKLIST groups items by status, category and requirement class;
+  // MAINTENANCE_STATUS shows each open task's due date. Task STATUS and PRIORITY are not listed: not verified for the named-task case.
+  'warranty.expiryDate': ['WARRANTY_LOOKUP'], 'warranty.startDate': ['WARRANTY_LOOKUP'], 'warranty.provider': ['WARRANTY_LOOKUP'], 'warranty.coverage': ['WARRANTY_LOOKUP'],
+  'saleItem.status': ['SELLER_PREP_CHECKLIST'], 'saleItem.category': ['SELLER_PREP_CHECKLIST'], 'saleItem.requirementClass': ['SELLER_PREP_CHECKLIST'],
+  'task.nextDueDate': ['MAINTENANCE_STATUS'], // item.lastServicedOn is NOT listed: whether the item-history read states the recorded date is unverified
 
 };
 function phrasings(point) {

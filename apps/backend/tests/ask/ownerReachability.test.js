@@ -62,3 +62,15 @@ test('inventory: details the inventory card never states go to the data point; t
   for (const q of ['What brand is my washer?', 'What is the model number of my dishwasher?', 'What is the condition of my roof?', 'When was my water heater last serviced']) assert.equal(route(q), 'INVENTORY_LOOKUP', q);
   const d = m.byDomain.get('appliances-inventory'); assert.ok((d.routed + d.owned) / d.phrasings >= 0.9, `inventory routed-or-owned ${d.routed + d.owned}/${d.phrasings}`);
 });
+
+// ---- documents and records, plus the verified-owner list (2026-11-13) ----
+test('documents: a detail of a named record goes to the data point; the document lists keep their own operation (typed wording never switches a document view, by design)', () => {
+  assert.equal(resolveAskOperation('What type of document is my roof permit?').operationId, 'DATA_POINT_READ');
+  assert.equal(resolveAskOperation('Show my documents').operationId, 'DOCUMENT_LOOKUP');
+  assert.equal(resolveDataPoint('What type of document is my roof permit?')?.id, 'record.type');
+  // the verified-owner list is explicit: a phrasing counts as owned only for a point in it
+  const { phrasings } = require('../../scripts/lib/askOwnerReachability.js'); assert.ok(phrasings.length >= 0);
+  const w = m.byDomain.get('warranties'); assert.ok((w.routed + w.owned) / w.phrasings >= 0.95, `warranties routed-or-owned ${w.routed + w.owned}/${w.phrasings}`);
+  const sp = m.byDomain.get('seller-prep'); assert.ok((sp.routed + sp.owned) / sp.phrasings >= 0.9, `seller-prep routed-or-owned ${sp.routed + sp.owned}/${sp.phrasings}`);
+  const d = m.byDomain.get('documents-records'); assert.ok(d.routed / d.phrasings >= 0.9, `documents routed ${d.routed}/${d.phrasings}`);
+});

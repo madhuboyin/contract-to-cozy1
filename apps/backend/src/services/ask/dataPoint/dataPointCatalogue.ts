@@ -343,7 +343,7 @@ export function resolveDataPoint(message: string): DataPointDefinition | null {
 }
 
 /** Entities (and claim detail ids) whose single details no dedicated operation answers : a compound-cue question about one of them is read by the data point, not by a list operation that merely shares a word. */
-const DATA_POINT_ONLY_ENTITIES: ReadonlySet<string> = new Set(['HomeReserveFund', 'InsurancePolicy', 'PropertySaleCase', 'PropertySalePrepProfile', 'HomeBuyerTask', 'BuyerJourneyMilestone', 'SaleReadinessItem', 'PropertyRecordVersion', 'ClaimChecklistItem', 'ClaimTimelineEvent', 'ClaimDocument']);
+const DATA_POINT_ONLY_ENTITIES: ReadonlySet<string> = new Set(['PropertyRecord', 'HomeReserveFund', 'InsurancePolicy', 'PropertySaleCase', 'PropertySalePrepProfile', 'HomeBuyerTask', 'BuyerJourneyMilestone', 'SaleReadinessItem', 'PropertyRecordVersion', 'ClaimChecklistItem', 'ClaimTimelineEvent', 'ClaimDocument']);
 // Inventory details the inventory lookup does NOT state (it shows the item's name, brand and model, purchase date, expected lifecycle date and condition, but never its serial number, manufacturer, install date or what it cost; its item-history read owns when something was last serviced). The other inventory points stay with INVENTORY_LOOKUP, which owns them in the routing ratchets.
 const INVENTORY_ONLY_IDS: ReadonlySet<string> = new Set(['item.serial', 'item.purchaseCost', 'item.replacementCost', 'item.efficiencyRating', 'item.installedOn', 'item.manufacturer']);
 // Maintenance-task details the maintenance status read does not state (it lists a task with its due date and status, never its priority, repeat interval, cost or when it was last done).
