@@ -29,6 +29,8 @@ export interface DataPointDefinition {
   readonly compoundCue?: boolean;
   /** Child entities whose cue contains the parent's cue: the matched cue's length also counts, so "claim timeline event" beats "claim". */
   readonly specificCue?: boolean;
+  /** The point does not apply when any of these words is in the message (it names another kind of record, which owns the question). */
+  readonly unlessCues?: readonly string[];
 }
 
 /** Per-point audience floors (review 2026-11-11). Money, serial numbers, free-form coverage text and tags are not shown to viewers; plain item, date and status facts are. Floors approved by the owner 2026-11-12 for catalogue version 1. */
@@ -111,7 +113,8 @@ const OTHER_DOMAINS: readonly DataPointDefinition[] = [
   pol({ id: 'policy.premium', field: 'premiumAmount', family: 'dollars', label: 'The premium', aliases: ['premium', 'premiums', 'cost', 'pay', 'paying', 'monthly cost'], sentence: 'has a premium of', sensitivity: 'FINANCIAL' }),
   pol({ id: 'policy.coverageType', field: 'coverageType', family: 'text', label: 'The type of coverage', aliases: ['coverage type', 'type of coverage', 'type of policy', 'what kind of policy'], sentence: 'has coverage type', sensitivity: 'HOME' }),
   pol({ id: 'policy.personalPropertyLimit', field: 'personalPropertyLimitCents', family: 'money', label: 'The personal property limit', aliases: ['personal property limit', 'personal property coverage', 'contents limit', 'contents coverage'], sentence: 'has a personal property limit of', sensitivity: 'FINANCIAL' }),
-  mt({ id: 'task.nextDueDate', field: 'nextDueDate', family: 'date', label: 'When it is next due', aliases: ['due', 'next due', 'due date', 'when is it due', 'next time', 'scheduled'], sentence: 'is next due', sensitivity: 'HOME' }),
+  // "When is my gutter cleaning due?" names no task word, so the due-date point also accepts "due" as its cue (before this it fell through to the open-ended fallback). A question that names another kind (a warranty, a buyer task) ties or loses to that kind's own cue.
+  d({ id: 'task.nextDueDate', domain: 'maintenance', entity: 'PropertyMaintenanceTask', cues: [...T, 'due'], unlessCues: ['warranty', 'warranties', 'policy', 'policies', 'insurance', 'claim', 'claims', 'permit', 'buyer', 'buying', 'closing', 'milestone', 'sale', 'seller', 'mortgage', 'loan', 'tax', 'taxes', 'contingency', 'contingencies', 'inspection', 'deadline', 'deadlines', 'appraisal', 'escrow', 'title', 'lender'], field: 'nextDueDate', family: 'date', label: 'When it is next due', aliases: ['due', 'next due', 'due date', 'when is it due', 'next time', 'scheduled'], sentence: 'is next due', sensitivity: 'HOME' }),
   mt({ id: 'task.lastCompletedDate', field: 'lastCompletedDate', family: 'date', label: 'When it was last done', aliases: ['last done', 'last complete', 'last completed', 'last time', 'last did', 'completed', 'finished', 'last finished'], sentence: 'was last completed', sensitivity: 'HOME' }),
   mt({ id: 'task.status', field: 'status', family: 'enum', label: 'Its status', aliases: ['status'], sentence: 'has status', sensitivity: 'HOME' }),
   mt({ id: 'task.priority', field: 'priority', family: 'enum', label: 'Its priority', aliases: ['priority', 'how urgent', 'urgent'], sentence: 'has priority', sensitivity: 'HOME' }),
@@ -325,6 +328,7 @@ export function resolveDataPoint(message: string): DataPointDefinition | null {
   for (const point of DATA_POINT_DEFINITIONS) for (const alias of point.aliases) {
     // Points of a non-inventory entity need that entity's cue word in the message; the cue also breaks ties against inventory points.
     let cueLength = 0;
+    if (point.unlessCues?.some((w) => new RegExp(`\\b${escapeRe(w)}\\b`).test(text))) continue;
     if (point.cues) { const hit = point.cues.filter((cue) => new RegExp(`\\b${escapeRe(cue)}\\b`).test(text)); if (!hit.length) continue; cueLength = Math.max(...hit.map((c) => c.length)); }
     if (!new RegExp(`\\b${escapeRe(alias)}\\b`).test(text)) continue;
     // A child entity's cue ("claim checklist step") contains its parent's ("claim"), so its points also score by how specific the matched cue is; this does not change any other entity's scoring.
@@ -342,10 +346,12 @@ export function resolveDataPoint(message: string): DataPointDefinition | null {
 const DATA_POINT_ONLY_ENTITIES: ReadonlySet<string> = new Set(['HomeBuyerTask', 'BuyerJourneyMilestone', 'SaleReadinessItem', 'PropertyRecordVersion', 'ClaimChecklistItem', 'ClaimTimelineEvent', 'ClaimDocument']);
 // Inventory details the inventory lookup does NOT state (it shows the item's name, brand and model, and its condition and history, but never its serial number or what it cost). The other inventory points stay with INVENTORY_LOOKUP, which owns them in the routing ratchets.
 const INVENTORY_ONLY_IDS: ReadonlySet<string> = new Set(['item.serial', 'item.purchaseCost', 'item.replacementCost', 'item.efficiencyRating']);
+// Maintenance-task details the maintenance status read does not state (it lists a task with its due date and status, never its priority, repeat interval, cost or when it was last done).
+const TASK_ONLY_IDS: ReadonlySet<string> = new Set(['task.priority', 'task.frequency', 'task.estimatedCost', 'task.actualCost', 'task.lastCompletedDate']);
 const CLAIM_DETAIL_IDS: ReadonlySet<string> = new Set(['claim.deductible', 'claim.estimatedLoss', 'claim.settlement', 'claim.claimNumber', 'claim.incidentDate', 'claim.openedDate', 'claim.submittedDate', 'claim.closedDate', 'claim.nextFollowUp']);
 export function isDataPointOnlyQuestion(message: string): boolean {
   const point = resolveDataPoint(message);
-  return Boolean(point && (DATA_POINT_ONLY_ENTITIES.has(point.entity) || CLAIM_DETAIL_IDS.has(point.id) || INVENTORY_ONLY_IDS.has(point.id)));
+  return Boolean(point && (DATA_POINT_ONLY_ENTITIES.has(point.entity) || CLAIM_DETAIL_IDS.has(point.id) || INVENTORY_ONLY_IDS.has(point.id) || TASK_ONLY_IDS.has(point.id)));
 }
 
 /** Who a floor is shown to, in homeowner words. Generated from the point's actual floor so the restriction message never states a different audience than the check enforces. */

@@ -1813,7 +1813,8 @@ export function resolveAskOperation(message: string): AskOperationResolution {
     && !quoteReviewOtherOwnerPattern.test(message)) {
     return resolved('QUOTE_COMPARISON_REVIEW', 0.97);
   }
-  if (homeDeadlineMonitorPattern.test(message)) {
+  // "Tell me the priority of my gutter task" asks for a detail; it is not a request to be notified about a deadline.
+  if (homeDeadlineMonitorPattern.test(message) && !(dataPointQuestionPattern.test(message) && isDataPointOnlyQuestion(message))) {
     return resolved('HOME_DEADLINE_MONITOR', 0.97);
   }
   if (propertyTaxAppealPattern.test(message) && !explicitCapabilityPattern.test(message)) {
