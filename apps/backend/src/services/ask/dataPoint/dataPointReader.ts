@@ -40,7 +40,7 @@ export interface DataPointReadResult {
   readonly status: 'FOUND' | 'ITEM_NOT_FOUND' | 'NO_ITEM_NAMED' | 'NOT_RECORDED' | 'AMBIGUOUS';
   /** Ambiguous relation reads: how many children matched, WITHOUT their names (a child's title is never returned as a value). */
   readonly candidateCount?: number;
-  readonly rows: ReadonlyArray<{ id: string; name: string; value: unknown; roomName: string | null; /** Provenance or confidence caveat for this record (FR-REC-2 style); the handler states it instead of giving the value plainly. */ limitation?: string | null }>;
+  readonly rows: ReadonlyArray<{ id: string; name: string; value: unknown; roomName: string | null; /** Provenance or confidence caveat for this record (FR-REC-2 style); the handler states it instead of giving the value plainly. */ limitation?: string | null; /** Set when the value belongs to a cancelled/not-needed child: the handler words it as a recorded past value, never as a current obligation. */ historicalStatus?: string | null }>;
 }
 
 /** Per entity: the Prisma delegate, how a record is named in a question, and whether an unnamed question may list the (few) records. Each query is property-scoped. */
@@ -51,7 +51,7 @@ function taxLimitation(r: any): string | null {
   if (r.sourceType === 'HOMEOWNER_REPORTED' && r.confidence !== 'VERIFIED') return `This ${r.taxYear} figure was entered by you and has not been matched to an official source.`;
   return null;
 }
-interface EntitySpec { readonly mode?: 'NAMED' | 'SINGLETON' | 'LATEST_TAX_YEAR' | 'RELATION_CHILD'; readonly where?: Record<string, unknown>; readonly roleWhere?: (role: string) => Record<string, unknown>; readonly orderBy?: unknown; readonly limitation?: (row: any) => string | null; readonly delegate: string; readonly extraSelect: Record<string, unknown>; readonly labels: (row: any) => string[]; readonly display: (row: any) => string; readonly listUnnamedUpTo: number; readonly roomName?: (row: any) => string | null }
+interface EntitySpec { readonly mode?: 'NAMED' | 'SINGLETON' | 'LATEST_TAX_YEAR' | 'RELATION_CHILD'; /** Relation children: statuses at which a date/priority is not an active obligation (the status itself is still answered plainly). */ readonly inactiveChildStatuses?: readonly string[]; readonly where?: Record<string, unknown>; readonly roleWhere?: (role: string) => Record<string, unknown>; readonly orderBy?: unknown; readonly limitation?: (row: any) => string | null; readonly delegate: string; readonly extraSelect: Record<string, unknown>; readonly labels: (row: any) => string[]; readonly display: (row: any) => string; readonly listUnnamedUpTo: number; readonly roomName?: (row: any) => string | null }
 const ENTITY_SPECS: Readonly<Record<DataPointEntity, EntitySpec>> = {
   InventoryItem: { delegate: 'inventoryItem', extraSelect: { name: true, room: { select: { name: true } } }, labels: (r) => [r.name], display: (r) => r.name, listUnnamedUpTo: 0, roomName: (r) => r.room?.name ?? null },
   Warranty: { delegate: 'warranty', extraSelect: { providerName: true, category: true, inventoryItem: { select: { name: true } } }, labels: (r) => [r.inventoryItem?.name, r.providerName, String(r.category ?? '').replace(/_/g, ' ')].filter(Boolean), display: (r) => (r.inventoryItem?.name ? `${r.inventoryItem.name} warranty` : r.providerName ? `${r.providerName} warranty` : 'warranty'), listUnnamedUpTo: 1 },
@@ -63,7 +63,9 @@ const ENTITY_SPECS: Readonly<Record<DataPointEntity, EntitySpec>> = {
   // Home Records metadata: named by title. The canonical visibility rule (visibleRecordWhere) is applied to the query itself, so a record this role may not see is never selected and is
   // indistinguishable from one that does not exist. Active, not trashed. The data-point floor (record.retainUntil is OWNER) can only narrow this.
   // Relation read: tasks of the property's buyer checklist (design: allowlisted path, parent-first). The title only SELECTS a task; it never reaches a row's name or value. Child lifecycle: a task marked not applicable is not read.
-  HomeBuyerTask: { mode: 'RELATION_CHILD', delegate: 'homeBuyerTask', where: { applicability: { not: 'NOT_APPLICABLE' } }, orderBy: [{ priority: 'asc' }, { dueAt: 'asc' }], extraSelect: { title: true }, labels: (r) => [r.title], display: () => 'buyer task', listUnnamedUpTo: 1 },
+  HomeBuyerTask: { mode: 'RELATION_CHILD', delegate: 'homeBuyerTask', where: { applicability: { not: 'NOT_APPLICABLE' } }, orderBy: [{ priority: 'asc' }, { dueAt: 'asc' }], inactiveChildStatuses: ['CANCELLED', 'NOT_NEEDED'], extraSelect: { title: true, status: true }, labels: (r) => [r.title], display: () => 'buyer task', listUnnamedUpTo: 1 },
+  // Milestones of the same checklist. The STRUCTURED type selects a row and is returned as a value; the free-form customLabel, notes, responsible user and source ids are never selected.
+  BuyerJourneyMilestone: { mode: 'RELATION_CHILD', delegate: 'buyerJourneyMilestone', orderBy: [{ dueAt: 'asc' }], inactiveChildStatuses: ['CANCELLED', 'WAIVED'], extraSelect: { type: true, status: true }, labels: (r) => [typeWords(r.type)], display: (r) => `${typeWords(r.type)} milestone`, listUnnamedUpTo: 1 },
   PropertyRecord: { delegate: 'propertyRecord', extraSelect: { title: true }, roleWhere: (role) => ({ lifecycleStatus: 'ACTIVE', trashedAt: null, ...visibleRecordWhere(role as HouseholdRole) }), labels: (r) => [r.title], display: (r) => String(r.title), listUnnamedUpTo: 0 },
   PropertyTaxBillRecord: { mode: 'LATEST_TAX_YEAR', delegate: 'propertyTaxBillRecord', where: { status: 'ACTIVE', supersededById: null }, orderBy: [{ taxYear: 'desc' }, { observedAt: 'desc' }], extraSelect: { taxYear: true, sourceType: true, confidence: true }, labels: () => [], display: (r) => `${r.taxYear} property tax bill`, listUnnamedUpTo: 0, limitation: taxLimitation },
   // Sale prep, sale case and buyer journey are one row per property (propertyId @unique): singleton reads. A buyer journey that is not ACTIVE says so, so a stale stage is not stated plainly.
@@ -74,6 +76,7 @@ const ENTITY_SPECS: Readonly<Record<DataPointEntity, EntitySpec>> = {
   PropertyTaxAssessmentRecord: { mode: 'LATEST_TAX_YEAR', delegate: 'propertyTaxAssessmentRecord', where: { status: 'ACTIVE', supersededById: null }, orderBy: [{ taxYear: 'desc' }, { observedAt: 'desc' }], extraSelect: { taxYear: true, sourceType: true, confidence: true }, labels: () => [], display: (r) => `${r.taxYear} property tax assessment`, listUnnamedUpTo: 0, limitation: taxLimitation },
 };
 
+const typeWords = (t: unknown) => String(t ?? '').toLowerCase().replace(/_/g, ' ');
 const isPresent = (v: unknown) => v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0);
 
 /** The single allowlisted template per entity. `propertyId` is the authorised property; the caller has already run ensurePropertyAccess. */
@@ -88,20 +91,29 @@ export async function readDataPoint(propertyId: string, role: string, point: Dat
     const path = RELATION_ENTITIES[point.entity];
     if (!path) throw new Error(`no relation path declared for ${point.entity}`);
     // Parent first: the property-scoped parent is found by propertyId; children are read ONLY through it. A child id is never trusted.
-    const parents: any[] = await (prisma as any)[path.parentDelegate].findMany({ where: { propertyId }, select: { id: true }, take: DATA_POINT_RELATION_PARENT_CAP });
+    const parents: any[] = await (prisma as any)[path.parentDelegate].findMany({ where: { propertyId }, select: { id: true, status: true }, take: DATA_POINT_RELATION_PARENT_CAP });
     if (!parents.length) return { point, status: 'ITEM_NOT_FOUND', rows: [] };
-    const children: any[] = await (prisma as any)[spec.delegate].findMany({ where: { [path.key]: { in: parents.map((p) => String(p.id)) }, ...(spec.where ?? {}) }, select, ...(spec.orderBy ? { orderBy: spec.orderBy } : {}), take: DATA_POINT_RELATION_CHILD_CAP });
+    const journeyStatus = new Map(parents.map((p) => [String(p.id), String(p.status ?? 'ACTIVE')]));
+    const children: any[] = await (prisma as any)[spec.delegate].findMany({ where: { [path.key]: { in: parents.map((p) => String(p.id)) }, ...(spec.where ?? {}) }, select: { ...select, [path.key]: true }, ...(spec.orderBy ? { orderBy: spec.orderBy } : {}), take: DATA_POINT_RELATION_CHILD_CAP });
     if (!children.length) return { point, status: 'ITEM_NOT_FOUND', rows: [] };
     const hit = new Set<string>();
     for (const label of new Set(children.flatMap((r) => spec.labels(r)))) for (const m of matchItemsByName(message, children.filter((r) => spec.labels(r).includes(label)).map((r) => ({ id: String(r.id), name: label })))) hit.add(m.id);
     let chosen = children.filter((r) => hit.has(String(r.id)));
     // Most specific title wins: "inspection follow up" names the longer task, not also the shorter "inspection". Equal specificity stays ambiguous.
     if (chosen.length > 1) { const specificity = (r: any) => Math.max(...spec.labels(r).map((l: string) => tokens(l).length)); const top = Math.max(...chosen.map(specificity)); chosen = chosen.filter((r) => specificity(r) === top); }
-    if (!chosen.length && children.length === 1) chosen = children;
+    // A single unnamed row is a safe default only while its journey is ACTIVE or PAUSED; for a cancelled, handed-off or archived journey the row must be named explicitly (historical read).
+    const journeyOf = (r: any) => journeyStatus.get(String(r[path.key])) ?? 'ACTIVE';
+    if (!chosen.length && children.length === 1 && ['ACTIVE', 'PAUSED'].includes(journeyOf(children[0]))) chosen = children;
     if (!chosen.length) return { point, status: 'AMBIGUOUS', candidateCount: children.length, rows: [] };
     if (chosen.length > 1) return { point, status: 'AMBIGUOUS', candidateCount: chosen.length, rows: [] };
-    const value = chosen[0][point.field] ?? null;
-    return { point, status: isPresent(value) ? 'FOUND' : 'NOT_RECORDED', rows: [{ id: String(chosen[0].id), name: spec.display(chosen[0]), value, roomName: null }] };
+    const row = chosen[0]; const value = row[point.field] ?? null;
+    // Lifecycle limitations (owner rules 2026-11-12). Journey: paused says so; any other non-active state is a historical read. Child: a cancelled / not-needed row answers its STATUS plainly, but a date or
+    // priority is carried only as a recorded past value, never as an active obligation. The limitation is part of the result, so replay of the stored answer keeps it.
+    const js = journeyOf(row); const jw = js.toLowerCase().replace(/_/g, ' ');
+    const journeyLimit = js === 'ACTIVE' ? null : js === 'PAUSED' ? 'This buyer journey is paused.' : `This buyer journey is ${jw}, so this value may no longer represent an active obligation.`;
+    const childStatus = String(row.status ?? ''); const inactive = point.field !== 'status' && (spec.inactiveChildStatuses ?? []).includes(childStatus);
+    const childLimit = inactive ? `This ${spec.display(row)} is ${childStatus.toLowerCase().replace(/_/g, ' ')}, so this is a recorded past value, not an active obligation.` : null;
+    return { point, status: isPresent(value) ? 'FOUND' : 'NOT_RECORDED', rows: [{ id: String(row.id), name: spec.display(row), value, roomName: null, limitation: [journeyLimit, childLimit].filter(Boolean).join(' ') || null, historicalStatus: inactive ? childStatus.toLowerCase().replace(/_/g, ' ') : null }] };
   }
   if (spec.mode === 'SINGLETON' || spec.mode === 'LATEST_TAX_YEAR') {
     // Singleton: the one row for the property. Latest tax year: ACTIVE, non-superseded records ordered newest year first; the year named in the message (4 digits, 2000-2099) is used

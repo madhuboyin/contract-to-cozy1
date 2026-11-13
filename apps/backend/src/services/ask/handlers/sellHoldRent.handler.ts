@@ -445,11 +445,16 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
   }
 
   const access = await ensurePropertyAccess(userId, propertyId);
+  // Owner policy 2026-11-12: cost ranges and value-add estimates are owner-only. The reduced items are built BEFORE any block, row, progress step or suggestion, so a non-owner's result
+  // never contains an amount, a formatted range or anything derived from one. Counts, status, category, class and completion state stay shared.
+  const isOwner = access.role === HouseholdRole.OWNER;
+  const hadCostDetail = overview.readinessItems.some((item) => item.estimatedCostMinCents != null || item.estimatedCostMaxCents != null || item.estimatedValueAddMinCents != null || item.estimatedValueAddMaxCents != null);
+  const readinessItems = isOwner ? overview.readinessItems : overview.readinessItems.map((item) => ({ ...item, estimatedCostMinCents: null, estimatedCostMaxCents: null, estimatedValueAddMinCents: null, estimatedValueAddMaxCents: null }));
   const caseActions = sellerPrepCaseActions(access.role, overview.saleCase.status || 'PREPARING', overview.canCreate);
   const itemActions = sellerPrepItemActions(access.role);
-  const openItems = overview.readinessItems.filter((item) => item.status === 'OPEN');
-  const pursuingItems = overview.readinessItems.filter((item) => item.status === 'PURSUING');
-  const waivedItems = overview.readinessItems.filter((item) => item.status === 'WAIVED');
+  const openItems = readinessItems.filter((item) => item.status === 'OPEN');
+  const pursuingItems = readinessItems.filter((item) => item.status === 'PURSUING');
+  const waivedItems = readinessItems.filter((item) => item.status === 'WAIVED');
   const waivedCount = waivedItems.length;
 
   const grouped = new Map<string, typeof openItems>();
@@ -482,6 +487,8 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
     // and (FRD v1.338) the case's own dates, budget range and stage. No CTA that exits Ask for the desktop rendering of the same data.
     actions: caseActions,
   }];
+  // The note rides in the existing summary (no extra block, so the checklist keeps its declared shape).
+  if (!isOwner && hadCostDetail) (blocks[0] as { body: string }).body += ' Cost details are available to the property owner.';
 
   // Notable upgrades (FRD v1.443): the page's pick-list of completed projects, as-built materials and key improvements. Its own block, because the summary
   // above already holds the three actions a summary block allows. Shown to every role (a read); only a contributor gets the button.
@@ -523,7 +530,7 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
 
   // IW-PRES-020 (FRD v1.80): the sale case's own readiness figure as a ring, with the must-address counts and the next
   // three open must-address items (blockers first), each with the two decisions an open item allows.
-  const figure = saleReadinessFigure(overview.readinessItems);
+  const figure = saleReadinessFigure(readinessItems);
   if (figure.percent !== null) {
     const classOrder = (item: typeof openItems[number]) => SALE_READINESS_MUST_ADDRESS_CLASSES.indexOf(item.requirementClass);
     const openActions = itemActions.filter((action) => action.id === 'sale-item-pursue' || action.id === 'sale-item-waive');

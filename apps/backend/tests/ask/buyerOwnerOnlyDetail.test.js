@@ -78,3 +78,48 @@ test('insurance: non-owners never get premium, deductible or policy number (even
   const restore = install('VIEWER');
   try { const s = dump(await run('BUYER_INSURANCE_READINESS')); assert.ok(!s.includes('987654') && !s.includes('1,800')); } finally { restore(); }
 });
+
+// ---- Seller prep amounts and free-form text (owner policy 2026-11-12) ----
+const { PropertySaleCaseService } = require('../../src/services/propertySaleCase.service.ts');
+const { BuyerWalkthroughService } = require('../../src/services/buyerWalkthrough.service.ts');
+const { prisma } = require('../../src/lib/prisma.ts');
+require('../../src/services/ask/handlers/sellHoldRent.handler.ts');
+function installMore(role) {
+  const base = install(role);
+  const saved = [PropertySaleCaseService.getCase, PropertySaleCaseService.getNotableUpgradeCandidates, BuyerWalkthroughService.get, prisma.inspectionFinding, HomeBuyerTaskService.getTasks];
+  const item = (o) => ({ id: 'si1', title: 'Repaint exterior', detail: 'neutral colours', status: 'OPEN', category: 'COSMETIC', requirementClass: 'VERIFICATION_NEEDED', estimatedCostMinCents: 450000, estimatedCostMaxCents: 678900, estimatedValueAddMinCents: 900000, estimatedValueAddMaxCents: 1250000, ...o });
+  PropertySaleCaseService.getCase = async () => ({ canCreate: false, saleCase: { status: 'PREPARING', updatedAt: new Date('2026-11-01T12:00:00Z'), budgetRange: 'RANGE_5_15K' }, readinessItems: [item({}), item({ id: 'si2', title: 'Fix roof', requirementClass: 'MATERIAL_BLOCKER', category: 'REPAIR', estimatedCostMinCents: 1500000, estimatedCostMaxCents: 1500000 })], transitions: [] });
+  PropertySaleCaseService.getNotableUpgradeCandidates = async () => ({ candidates: [] });
+  BuyerWalkthroughService.get = async () => ({ workspace: { scheduledAt: null, completedAt: null, observations: [{ id: 'o1', area: 'Kitchen', category: 'GENERAL', status: 'NOTED', notes: 'WALKNOTE-77 owner email a@b.c' }], issues: [] } });
+  HomeBuyerTaskService.getTasks = async () => [{ id: 'mv1', title: 'Book movers', description: 'MOVEDESC-55 gate code 1234', status: 'PENDING', priority: 'NOW', dueAt: new Date('2026-12-01T12:00:00Z'), taskType: 'MOVE', applicability: 'APPLICABLE', estimatedCostCents: null }];
+  const selects = []; prisma.inspectionFinding = { findMany: async (a) => { selects.push(a.select); return [{ id: 'f1', homeSystem: 'ROOF', severity: 'MAJOR', ...(a.select.inspectorDescription ? { inspectorDescription: 'INSPDESC-99 seller said the roof leaks' } : {}), negotiationCaseLinks: [{ id: 'l1', sellerResponse: 'PENDING', outcome: 'PENDING' }] }]; } };
+  return { selects, restore: () => { base(); [PropertySaleCaseService.getCase, PropertySaleCaseService.getNotableUpgradeCandidates, BuyerWalkthroughService.get, prisma.inspectionFinding, HomeBuyerTaskService.getTasks] = saved; } };
+}
+test('seller prep: non-owners get counts, status, category and class but no cost range, value-add or total anywhere; owners keep them', async () => {
+  for (const role of ['VIEWER', 'CONTRIBUTOR']) {
+    const w = installMore(role);
+    try { const r = await run('SELLER_PREP_CHECKLIST'); const s = dump(r);
+      for (const x of ['4,500', '6,789', '15,000', '9,000', '12,500', '450000', '678900', '1500000', 'estimated', 'amountLabel":"$']) assert.ok(!s.includes(x), `${role} must not see ${x}`);
+      assert.match(r.blocks[0].body, /Cost details are available to the property owner\./); assert.ok(!r.blocks.some((b) => b.id === 'seller-prep-owner-costs'), 'no extra block');
+      assert.match(r.blocks[0].body, /2 open items/); assert.ok(s.includes('Fix roof') && s.includes('Blocks a sale'));
+    } finally { w.restore(); }
+  }
+  const w = installMore('OWNER');
+  try { const s = dump(await run('SELLER_PREP_CHECKLIST')); assert.ok(s.includes('$4,500') && s.includes('estimated')); assert.ok(!s.includes('Cost details are available')); } finally { w.restore(); }
+});
+test('free-form text: move descriptions, walkthrough notes and inspector descriptions are never in a non-owner result (and the inspector text is not even selected); owners keep them', async () => {
+  for (const role of ['VIEWER', 'CONTRIBUTOR']) {
+    const w = installMore(role);
+    try {
+      const move = dump(await run('BUYER_MOVE_STATUS')); assert.ok(!move.includes('MOVEDESC-55') && !move.includes('gate code') && move.includes('Book movers') && move.includes('Due '), `${role} move`);
+      const walk = dump(await run('BUYER_WALKTHROUGH_READINESS')); assert.ok(!walk.includes('WALKNOTE-77') && !walk.includes('a@b.c') && walk.includes('Kitchen'), `${role} walkthrough`);
+      const neg = dump(await run('BUYER_NEGOTIATION_READINESS')); assert.ok(!neg.includes('INSPDESC-99') && neg.includes('ROOF') && neg.includes('PENDING'), `${role} negotiation`);
+      assert.equal('inspectorDescription' in w.selects.at(-1), false, 'not selected for a non-owner');
+    } finally { w.restore(); }
+  }
+  const w = installMore('OWNER');
+  try {
+    assert.ok(dump(await run('BUYER_MOVE_STATUS')).includes('MOVEDESC-55')); assert.ok(dump(await run('BUYER_WALKTHROUGH_READINESS')).includes('WALKNOTE-77'));
+    assert.ok(dump(await run('BUYER_NEGOTIATION_READINESS')).includes('INSPDESC-99')); assert.equal(w.selects.at(-1).inspectorDescription, true);
+  } finally { w.restore(); }
+});

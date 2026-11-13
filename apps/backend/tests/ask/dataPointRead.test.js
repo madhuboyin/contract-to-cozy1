@@ -168,15 +168,15 @@ test('source authorization: a restricted source is redacted once the role drops,
   assert.deepEqual(seen.at(-1), ['PropertyMaintenanceTask', { id: 't1', propertyId: 'p1' }]);
 });
 
-test('owner approval (2026-11-12) covers exactly the 67 catalogued ids at catalogue version 5 (33 at v1 + 14 reserve-ownership-costs + 12 seller-prep/buyer + 4 record + 4 buyerTask); any unapproved id or version drift fails', () => {
+test('owner approval (2026-11-12) covers exactly the 71 catalogued ids at catalogue version 6 (33 at v1 + 14 reserve-ownership-costs + 12 seller-prep/buyer + 4 record + 4 buyerTask + 4 buyerMilestone); any unapproved id or version drift fails', () => {
   assert.equal(DATA_POINT_CATALOGUE_VERSION, DATA_POINT_APPROVAL.catalogueVersion, 'a new catalogue version needs a new approval record');
   const ids = DATA_POINT_DEFINITIONS.map((p) => p.id);
   assert.equal(new Set(ids).size, ids.length, 'ids are unique');
   assert.deepEqual(ids.filter((id) => !APPROVED_DATA_POINT_IDS.includes(id)), [], 'every catalogued id must be owner-approved');
   assert.deepEqual(APPROVED_DATA_POINT_IDS.filter((id) => !ids.includes(id)), [], 'an approved id that is no longer catalogued must be removed from the approval');
-  assert.equal(ids.length, 67); assert.equal(DATA_POINT_CATALOGUE_VERSION, 5);
+  assert.equal(ids.length, 71); assert.equal(DATA_POINT_CATALOGUE_VERSION, 6);
   const by = (d) => DATA_POINT_DEFINITIONS.filter((p) => p.domain === d).length;
-  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance'), by('reserve-ownership-costs'), by('seller-prep'), by('buyer'), by('documents-records')], [14, 5, 7, 7, 14, 9, 7, 4]);
+  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance'), by('reserve-ownership-costs'), by('seller-prep'), by('buyer'), by('documents-records')], [14, 5, 7, 7, 14, 9, 11, 4]);
 });
 test('the restriction copy is generated from the field floor, so it never names a different audience than the check enforces', async () => {
   assert.match(audienceFloorCopy('CONTRIBUTOR').title, /contributors and owners/);
@@ -347,7 +347,7 @@ function taskStub(role, { checklists = [{ id: 'cl1' }], tasks = [] } = {}, calls
   prisma.homeBuyerTask = { findMany: async (a) => { calls.push(['child', a]); return tasks; } };
   prisma.propertyMaintenanceTask = { findMany: async () => [{ id: 'm1', title: 'Clean gutters', status: 'PENDING', nextDueDate: new Date('2026-12-01T12:00:00Z') }] };
 }
-const bTask = (o) => ({ id: 'bt1', title: 'Order inspection', status: 'IN_PROGRESS', dueAt: new Date('2026-11-20T12:00:00Z'), completedAt: null, priority: 'NOW', ...o });
+const bTask = (o) => ({ id: 'bt1', checklistId: 'cl1', title: 'Order inspection', status: 'IN_PROGRESS', dueAt: new Date('2026-11-20T12:00:00Z'), completedAt: null, priority: 'NOW', ...o });
 test('v5 routing: each compound cue selects buyerTask.*, bare "task" stays maintenance, mixed wording resolves deterministically to nothing', () => {
   for (const cue of ['buyer task', 'buying task', 'closing task']) {
     assert.equal(resolveDataPoint(`what is the status of my ${cue}`)?.id, 'buyerTask.status', cue);
@@ -366,9 +366,9 @@ test('v5 read: parent first (property-scoped), child only through it, capped; th
   const calls = []; taskStub('VIEWER', { tasks: [bTask({}), bTask({ id: 'bt2', title: 'Book movers', dueAt: null, status: 'PENDING' })] }, calls);
   const r = await dataPointReadResult('u1', 'p1', 'when is my buyer task order inspection due');
   assert.equal(r.status, 'ANSWERED'); assert.match(r.blocks[0].body, /Your buyer task is due /);
-  assert.deepEqual(calls[0], ['parent', { where: { propertyId: 'p1' }, select: { id: true }, take: 5 }]);
+  assert.deepEqual(calls[0], ['parent', { where: { propertyId: 'p1' }, select: { id: true, status: true }, take: 5 }]);
   assert.deepEqual(calls[1][1].where, { checklistId: { in: ['cl1'] }, applicability: { not: 'NOT_APPLICABLE' } }); assert.equal(calls[1][1].take, 50);
-  assert.deepEqual(Object.keys(calls[1][1].select).sort(), ['dueAt', 'id', 'title']);
+  assert.deepEqual(Object.keys(calls[1][1].select).sort(), ['checklistId', 'dueAt', 'id', 'status', 'title'], 'the task status and parent key are always selected so lifecycle limitations can be applied');
   assert.ok(!JSON.stringify(r).includes('Order inspection') && !JSON.stringify(r).includes('Book movers'), 'the title is not a returned value');
   // asking for another field about a titled task does not echo the title either
   const pr = await dataPointReadResult('u1', 'p1', 'what is the priority of my buyer task book movers');
@@ -394,4 +394,96 @@ test('v5 replay: the task is re-resolved through its CURRENT property-scoped che
   assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx(true), [sourceRef('HomeBuyerTask', 'bt1')]), 'AUTHORIZED');
   assert.deepEqual(seen.at(-1), ['HomeBuyerTask', { id: 'bt1', checklist: { propertyId: 'p1' }, applicability: { not: 'NOT_APPLICABLE' } }]);
   assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx(false), [sourceRef('HomeBuyerTask', 'bt1')]), 'REDACT_SECTION');
+});
+
+// ---- Review P1: lifecycle limitations for relation reads (journey and child status) ----
+test('lifecycle: a paused journey is stated; a cancelled journey needs an explicitly named task and carries a limitation', async () => {
+  taskStub('VIEWER', { checklists: [{ id: 'cl1', status: 'PAUSED' }], tasks: [bTask({})] });
+  const paused = await dataPointReadResult('u1', 'p1', 'when is my buyer task due');
+  assert.equal(paused.status, 'READY_WITH_LIMITATIONS'); assert.match(paused.blocks[0].body, /buyer journey is paused/);
+  for (const js of ['CANCELLED', 'HANDED_OFF', 'ARCHIVED']) {
+    taskStub('VIEWER', { checklists: [{ id: 'cl1', status: js }], tasks: [bTask({})] });
+    const unnamed = await dataPointReadResult('u1', 'p1', 'when is my buyer task due');
+    assert.equal(unnamed.reasonCode, 'DATA_POINT_AMBIGUOUS', `${js}: a lone unnamed task is not defaulted for a non-active journey`); assert.ok(!JSON.stringify(unnamed).includes('2026'));
+    const named = await dataPointReadResult('u1', 'p1', 'when is my buyer task order inspection due');
+    assert.equal(named.status, 'READY_WITH_LIMITATIONS', js); assert.match(named.blocks[0].body, new RegExp(`journey is ${js.toLowerCase().replace('_', ' ')}, so this value may no longer represent an active obligation`));
+  }
+  taskStub('VIEWER', { checklists: [{ id: 'cl1', status: 'ACTIVE' }], tasks: [bTask({})] });
+  assert.equal((await dataPointReadResult('u1', 'p1', 'when is my buyer task due')).status, 'ANSWERED', 'an active journey reads normally');
+});
+test('lifecycle: a cancelled or not-needed task answers its status plainly but its date or priority only as a past value, never as an upcoming deadline', async () => {
+  for (const st of ['CANCELLED', 'NOT_NEEDED']) {
+    taskStub('VIEWER', { tasks: [bTask({ status: st })] });
+    const word = st.toLowerCase().replace('_', ' ');
+    const status = await dataPointReadResult('u1', 'p1', 'what is the status of my buyer task');
+    assert.equal(status.status, 'ANSWERED'); assert.match(status.blocks[0].body, new RegExp(`has status ${word}`));
+    for (const q of ['when is my buyer task due', 'what is the priority of my buyer task']) {
+      const r = await dataPointReadResult('u1', 'p1', q); const body = r.blocks[0].body;
+      assert.equal(r.status, 'READY_WITH_LIMITATIONS', `${st} ${q}`); assert.match(body, new RegExp(`is ${word}\\. Its recorded (date|value) was`)); assert.match(body, /recorded past value, not an active obligation/);
+      assert.doesNotMatch(body, /is due|has priority/, 'not worded as a current deadline or priority'); assert.match(r.blocks[0].title, /./);
+    }
+    taskStub('VIEWER', { tasks: [bTask({ status: st, completedAt: new Date('2026-10-01T12:00:00Z') })] });
+    assert.match((await dataPointReadResult('u1', 'p1', 'when did I complete my buyer task')).blocks[0].body, /recorded past value/);
+  }
+  taskStub('VIEWER', { tasks: [bTask({ status: 'COMPLETED' })] });
+  assert.equal((await dataPointReadResult('u1', 'p1', 'when is my buyer task due')).status, 'ANSWERED', 'a completed task is not an inactive one');
+});
+
+// ---- Catalogue v6: milestones, the second relation path ----
+const ms = (o) => ({ id: 'm1', checklistId: 'cl1', type: 'INSPECTION', status: 'IN_PROGRESS', dueAt: new Date('2026-11-22T12:00:00Z'), completedAt: null, ...o });
+function msStub(role, { checklists = [{ id: 'cl1', status: 'ACTIVE' }], rows = [] } = {}, calls = []) {
+  propertyAccessService.resolvePropertyAccess = async () => ({ propertyId: 'p1', userId: 'u1', role, isOwner: role === 'OWNER' });
+  prisma.homeBuyerChecklist = { findMany: async (a) => { calls.push(['parent', a]); return checklists; } };
+  prisma.buyerJourneyMilestone = { findMany: async (a) => { calls.push(['child', a]); return rows; } };
+}
+test('v6 routing: milestone compound cues select buyerMilestone.*; bare milestone or task words do not', () => {
+  for (const cue of ['buyer milestone', 'buying milestone', 'closing milestone', 'purchase milestone']) {
+    assert.equal(resolveDataPoint(`what is the status of my ${cue}`)?.id, 'buyerMilestone.status', cue);
+    assert.equal(resolveDataPoint(`when is my ${cue} due`)?.id, 'buyerMilestone.dueDate', cue);
+    assert.equal(resolveDataPoint(`when did I complete my ${cue}`)?.id, 'buyerMilestone.completedDate', cue);
+    assert.equal(resolveDataPoint(`what type is my ${cue}`)?.id, 'buyerMilestone.type', cue);
+  }
+  assert.equal(resolveDataPoint('when is my milestone due'), null, 'a bare milestone selects nothing');
+  assert.equal(resolveDataPoint('when is my closing task due')?.id, 'buyerTask.dueDate', 'closing task still means a task');
+  const fields = DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'BuyerJourneyMilestone').map((p) => p.field).sort();
+  assert.deepEqual(fields, ['completedAt', 'dueAt', 'status', 'type']);
+  assert.ok(DATA_POINT_DEFINITIONS.filter((p) => p.entity === 'BuyerJourneyMilestone').every((p) => p.audience === 'VIEWER'));
+});
+test('v6 read: parent first, only structured columns selected (never customLabel/notes/responsible/source ids); the type selects a row, most specific wins', async () => {
+  const calls = []; msStub('VIEWER', { rows: [ms({}), ms({ id: 'm2', type: 'INSPECTION_CONTINGENCY', dueAt: new Date('2026-11-25T12:00:00Z') })] }, calls);
+  const r = await dataPointReadResult('u1', 'p1', 'when is my buyer milestone inspection contingency due');
+  assert.equal(r.status, 'ANSWERED'); assert.match(r.blocks[0].body, /Your inspection contingency milestone is due .*25/);
+  assert.deepEqual(calls[0], ['parent', { where: { propertyId: 'p1' }, select: { id: true, status: true }, take: 5 }]);
+  assert.deepEqual(calls[1][1].where, { checklistId: { in: ['cl1'] } }); assert.equal(calls[1][1].take, 50);
+  assert.deepEqual(Object.keys(calls[1][1].select).sort(), ['checklistId', 'dueAt', 'id', 'status', 'type']);
+  for (const banned of ['customLabel', 'notes', 'responsibleUserId', 'sourceEntityId', 'sourceDocumentId']) assert.ok(!(banned in calls[1][1].select), banned);
+  assert.match((await dataPointReadResult('u1', 'p1', 'when is my buyer milestone inspection due')).blocks[0].body, /Your inspection milestone is due .*22/);
+  const t = await dataPointReadResult('u1', 'p1', 'what type is my buyer milestone inspection contingency');
+  assert.match(t.blocks[0].body, /is of type inspection contingency/);
+  assert.deepEqual(r.parameters.sources, [{ sourceType: 'BuyerJourneyMilestone', sourceId: 'm2' }]);
+  assert.equal((await dataPointReadResult('u1', 'p1', 'when is my buyer milestone due')).reasonCode, 'DATA_POINT_AMBIGUOUS');
+  msStub('VIEWER', { rows: [ms({ type: 'CUSTOM' })] }); assert.equal((await dataPointReadResult('u1', 'p1', 'when is my buyer milestone due')).status, 'ANSWERED', 'a lone milestone is the default; the custom label is never needed');
+  msStub('VIEWER', { checklists: [] }); assert.equal((await dataPointReadResult('u1', 'p1', 'when is my buyer milestone due')).reasonCode, 'DATA_POINT_NO_INVENTORY');
+});
+test('v6 lifecycle: the same journey and child caveats apply to milestones; a cancelled or waived milestone is never an upcoming deadline', async () => {
+  msStub('VIEWER', { checklists: [{ id: 'cl1', status: 'CANCELLED' }], rows: [ms({})] });
+  assert.equal((await dataPointReadResult('u1', 'p1', 'when is my buyer milestone due')).reasonCode, 'DATA_POINT_AMBIGUOUS');
+  assert.match((await dataPointReadResult('u1', 'p1', 'when is my buyer milestone inspection due')).blocks[0].body, /journey is cancelled, so this value may no longer represent an active obligation/);
+  msStub('VIEWER', { checklists: [{ id: 'cl1', status: 'PAUSED' }], rows: [ms({})] });
+  assert.match((await dataPointReadResult('u1', 'p1', 'when is my buyer milestone due')).blocks[0].body, /journey is paused/);
+  for (const st of ['CANCELLED', 'WAIVED']) {
+    msStub('VIEWER', { rows: [ms({ status: st })] });
+    assert.equal((await dataPointReadResult('u1', 'p1', 'what is the status of my buyer milestone')).status, 'ANSWERED', 'status stays plain');
+    const due = (await dataPointReadResult('u1', 'p1', 'when is my buyer milestone due')).blocks[0].body;
+    assert.match(due, new RegExp(`is ${st.toLowerCase()}\\. Its recorded date was`)); assert.doesNotMatch(due, /is due/);
+  }
+  msStub('VIEWER', { rows: [ms({ status: 'MISSED' })] });
+  assert.equal((await dataPointReadResult('u1', 'p1', 'when is my buyer milestone due')).status, 'ANSWERED', 'a missed milestone keeps its date; its status says missed');
+});
+test('v6 replay: the milestone is re-resolved through its CURRENT property-scoped checklist', async () => {
+  const { COMPOSABLE_SOURCE_AUTHORIZATION: AUTH, sourceRef } = require('../../src/services/ask/composition/sourceAuthorization.ts');
+  const seen = []; const ctx = (present) => ({ userId: 'u1', propertyId: 'p1', role: 'VIEWER', exists: async (m, w) => { seen.push([m, w]); return present; } });
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx(true), [sourceRef('BuyerJourneyMilestone', 'm1')]), 'AUTHORIZED');
+  assert.deepEqual(seen.at(-1), ['BuyerJourneyMilestone', { id: 'm1', checklist: { propertyId: 'p1' } }]);
+  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx(false), [sourceRef('BuyerJourneyMilestone', 'm1')]), 'REDACT_SECTION');
 });

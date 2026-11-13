@@ -19,6 +19,7 @@ const ENTITY_COPY: Record<string, { plural: string; singular: string; collection
   PropertySalePrepProfile: { plural: 'sale prep profiles', singular: 'sale prep profile', collection: 'sale prep profile', record: 'Sale prep profile', none: 'No sale prep profile is recorded yet' },
   PropertySaleCase: { plural: 'sale plans', singular: 'sale plan', collection: 'sale plan', record: 'Sale plan record', none: 'No sale plan is started for this home yet' },
   HomeBuyerChecklist: { plural: 'buyer journeys', singular: 'buyer journey', collection: 'buyer journey', record: 'Buyer journey record', none: 'No buyer journey is started for this home yet' },
+  BuyerJourneyMilestone: { plural: 'buyer milestones', singular: 'buyer milestone', collection: 'buyer milestones', record: 'Buyer journey milestone', none: 'No buyer milestone is recorded yet' },
   HomeBuyerTask: { plural: 'buyer tasks', singular: 'buyer task', collection: 'buyer tasks', record: 'Buyer plan task', none: 'No buyer task is recorded yet' },
   PropertyRecord: { plural: 'home records', singular: 'home record', collection: 'home records', record: 'Home record' },
   PropertyTaxBillRecord: { plural: 'property tax bills', singular: 'property tax bill', collection: 'property tax bills', record: 'Property tax bill record', none: 'No property tax bill is recorded yet' },
@@ -62,7 +63,8 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
     const names = read.rows.map((r) => r.name).join(' and ');
     return notice('DATA_POINT_NOT_RECORDED', 'data-point-not-recorded', `${point.label.replace(/^The /, 'The ')} for your ${names} isn’t recorded`, `Nothing is saved for this yet. You can add it by editing the record, and then I can tell you.`);
   }
-  const sentences = present.map((r) => `Your ${r.name} ${point.sentence} ${formatDataPointValue(point, r.value)}.`);
+  // A cancelled / not-needed child is worded as a recorded past value, never as a current obligation ("is due" is not used for it).
+  const sentences = present.map((r) => (r.historicalStatus ? `Your ${r.name} is ${r.historicalStatus}. Its recorded ${point.family === 'date' ? 'date' : 'value'} was ${formatDataPointValue(point, r.value)}.` : `Your ${r.name} ${point.sentence} ${formatDataPointValue(point, r.value)}.`));
   const missing = read.rows.length - present.length;
   if (missing > 0) sentences.push(`${missing === 1 ? 'One matching item has' : `${missing} matching items have`} nothing recorded for this.`);
   // Provenance/confidence limitation (FR-REC-2): a low-confidence or self-entered record is not stated plainly.

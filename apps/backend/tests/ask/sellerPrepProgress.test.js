@@ -61,7 +61,8 @@ test('the sale readiness figure counts only must-address items, settled when res
 });
 
 test('the checklist answer leads with the ring: its basis, the must-address counts, and the next open must-address items, blockers first', async () => {
-  install([item('verify-first', 'VERIFICATION_NEEDED', 'OPEN', { title: 'Verify the roof age' }), ...sixMustAddress()]);
+  // Cost ranges are owner-only (owner policy 2026-11-12), so the amount assertions below run as the owner; the contributor counterpart is asserted at the end.
+  install([item('verify-first', 'VERIFICATION_NEEDED', 'OPEN', { title: 'Verify the roof age' }), ...sixMustAddress()], 'OWNER');
   const result = await invoke();
   assert.deepEqual(result.suggestions, [], 'the checklist must not suggest paraphrases that reopen the same checklist');
   assert.deepEqual(result.blocks.map((block) => block.id), ['seller-prep-summary', 'seller-prep-progress', 'seller-prep-open-items', 'seller-prep-evidence', 'seller-prep-boundary']);
@@ -134,8 +135,19 @@ test('shelf facts: a blocker is critical and the other must-address kinds cautio
   assert.deepEqual(facts({ category: 'PRESENTATION' }), { tone: 'DEFAULT', timingLabel: null, amountLabel: null });
 });
 
+test('non-owners see the same checklist shape with no cost range on any row or ring step, and the note rides in the summary (owner policy 2026-11-12)', async () => {
+  for (const role of ['VIEWER', 'CONTRIBUTOR']) {
+    install(sixMustAddress(), role);
+    const result = await invoke();
+    assert.deepEqual(result.blocks.map((block) => block.id), ['seller-prep-summary', 'seller-prep-progress', 'seller-prep-open-items', 'seller-prep-evidence', 'seller-prep-boundary']);
+    assert.match(result.blocks[0].body, /Cost details are available to the property owner\./);
+    assert.ok(!JSON.stringify(result).includes('$5,000') && !JSON.stringify(result).includes('estimated"') && !JSON.stringify(result).includes('500000'), role);
+    assert.ok(progress(result).nextSteps.every((step) => step.amountLabel === null), role);
+  }
+});
+
 test('the real handler declares shelves for the checklist, keeping every item decision, and the answer checker still passes', async () => {
-  install(sixMustAddress());
+  install(sixMustAddress(), 'OWNER');
   const result = await invoke();
   const list = result.blocks.find((block) => block.id === 'seller-prep-open-items');
   assert.deepEqual(list.presentation, { pattern: 'SHELVES' });

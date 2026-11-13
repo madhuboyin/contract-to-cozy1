@@ -719,6 +719,8 @@ async function buyerMoveStatusResult(userId: string, propertyId: string): Promis
   if (data.presentationMode === 'CANDIDATE' || !data.overview) {
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no move status to review.');
   }
+  // Free-form task descriptions are owner-only (owner policy 2026-11-12): they cannot be guaranteed free of financing, contract, contact or access details. Structured status, priority and due date stay shared.
+  const moveOwner = (await ensurePropertyAccess(userId, propertyId)).role === HouseholdRole.OWNER;
   const allTasks = await HomeBuyerTaskService.getTasks(userId, propertyId);
   const moveTasks = allTasks.filter((task) => task.taskType === 'MOVE' && task.applicability !== 'NOT_APPLICABLE');
   const completed = moveTasks.filter((task) => task.status === 'COMPLETED').length;
@@ -738,7 +740,7 @@ async function buyerMoveStatusResult(userId: string, propertyId: string): Promis
       type: 'GROUPED_LIST', filters: [], id: 'buyer-move-status-tasks', title: 'Open move tasks',
       description: 'From the canonical Buyer Plan, filtered to move tasks.',
       sections: [{ id: 'move-tasks', title: 'Move', count: open.length, items: open.slice(0, 10).map((task) => ({
-        id: task.id, title: task.title, description: task.description,
+        id: task.id, title: task.title, description: moveOwner ? task.description : null,
         meta: [task.priority === 'NOW' ? 'Now' : task.priority, task.dueAt ? `Due ${humanDate(task.dueAt)}` : null].filter((value): value is string => Boolean(value)),
         status: task.status, href: null,
       })) }], collection: boundedCollection(open, 10),
@@ -895,7 +897,9 @@ async function buyerWalkthroughReadinessResult(userId: string, propertyId: strin
   if (data.presentationMode === 'CANDIDATE' || !data.overview) {
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no walkthrough to prepare.');
   }
-  const canChange = (await ensurePropertyAccess(userId, propertyId)).role !== HouseholdRole.VIEWER;
+  const walkthroughRole = (await ensurePropertyAccess(userId, propertyId)).role;
+  const canChange = walkthroughRole !== HouseholdRole.VIEWER;
+  const walkthroughOwner = walkthroughRole === HouseholdRole.OWNER; // observation notes are free-form: owner-only
   const walkthroughData = await BuyerWalkthroughService.get(userId, propertyId);
   type WalkthroughView = {
     scheduledAt: string | null; completedAt: string | null;
@@ -936,7 +940,7 @@ async function buyerWalkthroughReadinessResult(userId: string, propertyId: strin
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'buyer-walkthrough-observations', title: 'What you have checked', description: 'Recorded for the final walkthrough.',
       sections: [{ id: 'observations', title: 'Observations', count: workspace.observations.length, items: workspace.observations.slice(0, 25).map((observation) => ({
-        id: observation.id, title: observation.area, description: observation.notes, meta: [WALKTHROUGH_OBSERVATION_CATEGORY_LABELS[observation.category] ?? observation.category],
+        id: observation.id, title: observation.area, description: walkthroughOwner ? observation.notes : null, meta: [WALKTHROUGH_OBSERVATION_CATEGORY_LABELS[observation.category] ?? observation.category],
         status: OBSERVATION_STATUS_LABELS[observation.status] ?? observation.status, href: null, entityType: WALKTHROUGH_ENTITY_TYPES.OBSERVATION,
         actions: canChange ? observationKinds(observation, withIssue.has(observation.id), Boolean(workspace.completedAt)).map((kind) => rowAction(kind, kind === 'OBSERVATION_REVIEW' ? 'Record the result' : 'Record an issue', kind === 'OBSERVATION_REVIEW' ? 'SECONDARY' : 'PRIMARY')) : [],
       })) }], collection: boundedCollection(workspace.observations, 25), actions: [],
@@ -1165,7 +1169,7 @@ async function buyerContractTimelineResult(userId: string, propertyId: string): 
   };
 }
 
-async function buyerNegotiationReadinessResult(userId: string, propertyId: string, canChange = false): Promise<AskOperationResult> {
+async function buyerNegotiationReadinessResult(userId: string, propertyId: string, canChange = false, isOwner = false): Promise<AskOperationResult> {
   const context = await loadBuyerPlanContext(userId, propertyId);
   if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s negotiation readiness right now.');
   const { data } = context;
@@ -1175,7 +1179,9 @@ async function buyerNegotiationReadinessResult(userId: string, propertyId: strin
   const findings = await prisma.inspectionFinding.findMany({
     where: { propertyId, buyerDisposition: 'PRE_CLOSE_NEGOTIATION' },
     select: {
-      id: true, homeSystem: true, inspectorDescription: true, severity: true,
+      id: true, homeSystem: true, severity: true,
+      // The inspector's free-form description is owner-only and is not even selected for anyone else.
+      ...(isOwner ? { inspectorDescription: true } : {}),
       negotiationCaseLinks: { select: { id: true, sellerResponse: true, outcome: true } },
     },
     orderBy: { severity: 'desc' },
@@ -1194,7 +1200,7 @@ async function buyerNegotiationReadinessResult(userId: string, propertyId: strin
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'buyer-negotiation-findings', title: 'Findings in negotiation', description: 'From confirmed inspection findings classified for seller negotiation.',
       sections: [{ id: 'findings', title: 'Findings', count: findings.length, items: findings.slice(0, 10).map((finding) => ({
-        id: finding.id, title: finding.homeSystem, description: finding.inspectorDescription?.slice(0, 140) ?? null,
+        id: finding.id, title: finding.homeSystem, description: isOwner ? ((finding as { inspectorDescription?: string | null }).inspectorDescription?.slice(0, 140) ?? null) : null,
         meta: [finding.severity], status: finding.negotiationCaseLinks[0]?.sellerResponse ?? 'PENDING', href: null,
         // A contributor or owner can start negotiating a finding, then record what the seller said and the result.
         entityType: BUYER_FINDING_ENTITY_TYPE,
@@ -1466,7 +1472,7 @@ registerCapabilityHandler('buyer.contract-timeline', async (envelope) => buyerCo
 
 registerCapabilityHandler('buyer.negotiation-readiness', async (envelope, deps) => {
   const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
-  return buyerNegotiationReadinessResult(envelope.userId, envelope.propertyId!, access.role !== 'VIEWER');
+  return buyerNegotiationReadinessResult(envelope.userId, envelope.propertyId!, access.role !== 'VIEWER', access.role === 'OWNER');
 });
 
 registerCapabilityHandler('buyer.cost-readiness', async (envelope) => buyerCostReadinessResult(envelope.userId, envelope.propertyId!));
