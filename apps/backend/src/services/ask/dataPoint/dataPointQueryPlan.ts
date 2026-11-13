@@ -55,7 +55,7 @@ const f = (point: string, type: FieldType, column: string, words: string[], labe
 
 export const QUERY_TEMPLATES: readonly QueryTemplate[] = Object.freeze([
   {
-    id: 'inventory', entity: 'InventoryItem', delegate: 'inventoryItem', nouns: ['appliances', 'inventory items', 'household items', 'items in my inventory'], singularNouns: ['appliance', 'inventory item'], plural: 'items', singular: 'item',
+    id: 'inventory', entity: 'InventoryItem', delegate: 'inventoryItem', nouns: ['appliances', 'inventory items', 'household items', 'items in my inventory'], singularNouns: ['appliance', 'inventory item'], plural: 'inventory items', singular: 'inventory item',
     labelSelect: { name: true }, labelFields: ['name'], countFloor: 'VIEWER',
     fields: {
       installedOn: f('item.installedOn', 'date', 'installedOn', ['installed', 'install date', 'age', 'old', 'older', 'oldest', 'newest', 'newer'], 'installed'),
@@ -314,6 +314,17 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
     return { kind: 'PLAN', plan: { shape: 'AGGREGATE', template, predicates, sort: null, limit: QUERY_MAX_LIMIT, aggregate: { fn: sumQ ? 'SUM' : 'AVG', field: measureKey, groupBy: null }, touched: [...touched], showField: null, excludesClosed } };
   }
 
+  // "my top 3 appliances by replacement cost": a ranking by a NAMED measure. The measure must be one the template declares; an unnamed one is asked back like any other ambiguous ranking.
+  const topBy = !superlative && /\btop (?:\d+|one|two|three|four|five|ten)\b/.test(text) ? fieldNamed(template, text, undefined, (x) => x.measure) : null;
+  if (!superlative && /\btop (?:\d+|one|two|three|four|five|ten)\b/.test(text) && plural) {
+    const measures = Object.entries(template.fields).filter(([, v]) => v.measure);
+    if (!measures.length) return { kind: 'NONE' };
+    const key = topBy ?? (measures.length === 1 ? measures[0][0] : null);
+    if (!key) return { kind: 'CLARIFY', reasonCode: 'DATA_POINT_QUERY_MEASURE_REQUIRED', title: 'Ranked by what?', body: `I can rank your ${template.plural} by ${measures.map(([, v]) => v.label).join(' or ')}. Say which one.` };
+    touched.add(key);
+    return { kind: 'PLAN', plan: { shape: 'TOP_K', template, predicates, sort: { field: key, dir: 'desc' }, limit: limit(limitAsk ?? num(/\btop (\d+|one|two|three|four|five|ten)\b/.exec(text)![1]), 5), aggregate: null, touched: [...touched], showField: key, excludesClosed } };
+  }
+
   if (superlative) {
     const word = superlative[1];
     const dir: 'asc' | 'desc' = /most expensive|priciest|costliest|most costly|largest|highest|biggest|newest|youngest|latest/.test(word) ? 'desc' : 'asc';
@@ -354,8 +365,10 @@ export function isDataPointQuery(message: string, now: Date = new Date()): boole
 export function isDataPointComputedQuery(message: string, now: Date = new Date()): boolean {
   if (!dataPointQueryLead.test(message)) return false;
   const o = planDataPointQuery(message, now);
-  if (o.kind !== 'PLAN' || o.plan.shape === 'LIST' || o.plan.template.id === 'tasks') return false;
-  // Warranties and policies already have dedicated operations that filter by expiry window (WARRANTY_LOOKUP, the coverage operations); they keep plain filters. Counts, rankings and totals are not theirs.
-  if (o.plan.shape === 'FILTER' && (o.plan.template.id === 'warranties' || o.plan.template.id === 'policies')) return false;
+  if (o.kind !== 'PLAN' || o.plan.shape === 'LIST') return false;
+  const { plan } = o;
+  // Counts, rankings and totals are never what a list operation answers. A plain FILTER over warranties, policies or tasks is left to the dedicated operation that already filters by date or status (warranty and coverage lookups, the maintenance
+  // status read) UNLESS it filters by an amount, which none of them can do. The inventory lookup and the claims status read only list, so their filters are computed here.
+  if (plan.shape === 'FILTER' && ['warranties', 'policies', 'tasks'].includes(plan.template.id)) return plan.predicates.some((p) => plan.template.fields[p.field]?.measure);
   return true;
 }

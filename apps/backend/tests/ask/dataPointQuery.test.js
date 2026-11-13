@@ -119,7 +119,7 @@ test('top-k does not rank unrecorded values and says so; a contributor may rank 
   try {
     const r = await dataPointReadResult('u1', 'p1', 'what is my most expensive appliance to replace');
     assert.equal(r.status, 'READY_WITH_LIMITATIONS'); assert.equal(r.reasonCode, 'DATA_POINT_QUERY_PARTIAL');
-    assert.match(r.blocks[0].body, /Furnace \(\$9,000\)/); assert.match(r.blocks[0].body, /3 items? (?:has|have) no replacement cost recorded/);
+    assert.match(r.blocks[0].body, /Furnace \(\$9,000\)/); assert.match(r.blocks[0].body, /3 inventory items? (?:has|have) no replacement cost recorded/);
     assert.equal(r.parameters.sources[0].minRole, 'CONTRIBUTOR');
     const [, , args] = w.calls.find((c) => c[1] === 'findMany'); assert.deepEqual(args.where.replacementCostCents, { not: null }); assert.deepEqual(args.orderBy[0], { replacementCostCents: 'desc' });
   } finally { w.restore(); }
@@ -127,9 +127,9 @@ test('top-k does not rank unrecorded values and says so; a contributor may rank 
 
 test('aggregates: count needs no row scan; sum reports how many records had a value and how many did not; an all-null measure says so; claims need a contributor', async () => {
   let w = stub('VIEWER', { inventoryItem: { count: () => 7 } });
-  try { const r = await dataPointReadResult('u1', 'p1', 'how many appliances do I have'); assert.match(r.blocks[0].body, /You have 7 items/); assert.deepEqual(r.parameters.sources, [{ sourceType: 'Property', sourceId: 'p1' }]); } finally { w.restore(); }
+  try { const r = await dataPointReadResult('u1', 'p1', 'how many appliances do I have'); assert.match(r.blocks[0].body, /You have 7 inventory items/); assert.deepEqual(r.parameters.sources, [{ sourceType: 'Property', sourceId: 'p1' }]); } finally { w.restore(); }
   w = stub('CONTRIBUTOR', { inventoryItem: { count: (a) => (a.where.replacementCostCents === null ? 2 : 6), aggregate: () => ({ _sum: { replacementCostCents: 2400000 }, _avg: {}, _count: { replacementCostCents: 4 } }) } });
-  try { const r = await dataPointReadResult('u1', 'p1', 'what is the total replacement cost of my appliances'); assert.match(r.blocks[0].body, /\$24,000/); assert.match(r.blocks[0].body, /from 4 items with a recorded value/); assert.match(r.blocks[0].body, /2 items have no replacement cost recorded/); assert.equal(r.status, 'READY_WITH_LIMITATIONS'); } finally { w.restore(); }
+  try { const r = await dataPointReadResult('u1', 'p1', 'what is the total replacement cost of my appliances'); assert.match(r.blocks[0].body, /\$24,000/); assert.match(r.blocks[0].body, /from 4 inventory items with a recorded value/); assert.match(r.blocks[0].body, /2 inventory items have no replacement cost recorded/); assert.equal(r.status, 'READY_WITH_LIMITATIONS'); } finally { w.restore(); }
   w = stub('CONTRIBUTOR', { inventoryItem: { count: () => 5, aggregate: () => ({ _sum: { replacementCostCents: null }, _avg: {}, _count: { replacementCostCents: 0 } }) } });
   try { assert.match((await dataPointReadResult('u1', 'p1', 'what is the total replacement cost of my appliances')).blocks[0].body, /nothing to add up/); } finally { w.restore(); }
   w = stub('VIEWER', { claim: { count: () => 3 } });
@@ -142,7 +142,7 @@ test('aggregates: count needs no row scan; sum reports how many records had a va
 
 test('group-by count, empty result and the claims row label (type, never the title)', async () => {
   let w = stub('VIEWER', { inventoryItem: { groupBy: () => [{ condition: 'POOR', _count: { _all: 2 } }, { condition: 'GOOD', _count: { _all: 5 } }] } });
-  try { const r = await dataPointReadResult('u1', 'p1', 'how many appliances do I have by condition'); assert.match(r.blocks[0].body, /good 5, poor 2/); assert.match(r.blocks[0].body, /You have 7 items/); } finally { w.restore(); }
+  try { const r = await dataPointReadResult('u1', 'p1', 'how many appliances do I have by condition'); assert.match(r.blocks[0].body, /good 5, poor 2/); assert.match(r.blocks[0].body, /You have 7 inventory items/); } finally { w.restore(); }
   w = stub('VIEWER', { inventoryItem: { findMany: () => [], count: () => 0 } });
   try { const r = await dataPointReadResult('u1', 'p1', 'which appliances are older than ten years'); assert.equal(r.status, 'ANSWERED'); assert.match(r.blocks[0].body, /No .* match/); } finally { w.restore(); }
   w = stub('CONTRIBUTOR', { claim: { findMany: () => [{ id: 'c1', type: 'WATER_DAMAGE', title: 'SECRET-TITLE', status: 'APPROVED' }], count: () => 1 } });
@@ -152,7 +152,9 @@ test('group-by count, empty result and the claims row label (type, never the tit
 test('routing: query questions reach DATA_POINT_READ; existing specific operations and point reads keep their routes', () => {
   const op = (m) => resolveAskOperation(m).operationId;
   for (const m of ['which appliances are older than ten years', 'how many warranties expire in the next 60 days', 'what is my most expensive appliance to replace']) assert.equal(op(m), 'DATA_POINT_READ', m);
-  assert.equal(op('what is the serial number of my refrigerator'), 'INVENTORY_LOOKUP', 'a point read keeps the route it had before the query shapes (unchanged)');
+  assert.equal(op('what is the serial number of my refrigerator'), 'DATA_POINT_READ', 'a detail the inventory lookup never states (serial number) is read by the data point');
+  assert.equal(op('what is the model number of my dishwasher'), 'INVENTORY_LOOKUP', 'a detail the lookup does state stays with the lookup (the routing ratchets own it)');
+  assert.equal(op('what is the status of my buyer task'), 'DATA_POINT_READ', 'a buyer task is not a maintenance task');
   assert.notEqual(op('what is the weather like'), 'DATA_POINT_READ');
   assert.equal(op('what are my overdue maintenance tasks'), resolveAskOperation('what are my overdue maintenance tasks').operationId); // tasks keep their own status route
 });

@@ -338,6 +338,16 @@ export function resolveDataPoint(message: string): DataPointDefinition | null {
   return best.point;
 }
 
+/** Entities (and claim detail ids) whose single details no dedicated operation answers : a compound-cue question about one of them is read by the data point, not by a list operation that merely shares a word. */
+const DATA_POINT_ONLY_ENTITIES: ReadonlySet<string> = new Set(['HomeBuyerTask', 'BuyerJourneyMilestone', 'SaleReadinessItem', 'PropertyRecordVersion', 'ClaimChecklistItem', 'ClaimTimelineEvent', 'ClaimDocument']);
+// Inventory details the inventory lookup does NOT state (it shows the item's name, brand and model, and its condition and history, but never its serial number or what it cost). The other inventory points stay with INVENTORY_LOOKUP, which owns them in the routing ratchets.
+const INVENTORY_ONLY_IDS: ReadonlySet<string> = new Set(['item.serial', 'item.purchaseCost', 'item.replacementCost', 'item.efficiencyRating']);
+const CLAIM_DETAIL_IDS: ReadonlySet<string> = new Set(['claim.deductible', 'claim.estimatedLoss', 'claim.settlement', 'claim.claimNumber', 'claim.incidentDate', 'claim.openedDate', 'claim.submittedDate', 'claim.closedDate', 'claim.nextFollowUp']);
+export function isDataPointOnlyQuestion(message: string): boolean {
+  const point = resolveDataPoint(message);
+  return Boolean(point && (DATA_POINT_ONLY_ENTITIES.has(point.entity) || CLAIM_DETAIL_IDS.has(point.id) || INVENTORY_ONLY_IDS.has(point.id)));
+}
+
 /** Who a floor is shown to, in homeowner words. Generated from the point's actual floor so the restriction message never states a different audience than the check enforces. */
 export function audienceFloorCopy(floor: AudienceFloor): { title: string; who: string } {
   switch (floor) {

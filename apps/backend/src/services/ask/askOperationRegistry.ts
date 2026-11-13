@@ -1,4 +1,4 @@
-import { resolveDataPoint } from './dataPoint/dataPointCatalogue';
+import { isDataPointOnlyQuestion, resolveDataPoint } from './dataPoint/dataPointCatalogue';
 import { isDataPointComputedQuery, isDataPointQuery } from './dataPoint/dataPointQueryPlan';
 import { isWriteCapableOperation } from './support/writeCapability';
 import { isItemCostMessage, isItemFundingGoalMessage, isItemReserveAllocationMessage } from './support/itemFundingWording';
@@ -1896,6 +1896,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   // Query shapes 4-6 (filter, top-k, aggregate) over warranties, policies, inventory and claims are computed by the generic reader; the lookups below only list, so they could not honor the predicate. Maintenance tasks keep their own status operation.
   if (isDataPointComputedQuery(message) && !explicitCapabilityPattern.test(message)) return resolved('DATA_POINT_READ', 0.93);
+  // A detail only the data point can give (a buyer task or milestone, a sale item, a record version, a claim's amounts, number or children) is not answered by any list operation: "what is the status of my buyer task" must not
+  // be read as a MAINTENANCE question. These entities have no dedicated read operation of their own, so the compound-cue point wins here.
+  if (dataPointQuestionPattern.test(message) && isDataPointOnlyQuestion(message) && !explicitCapabilityPattern.test(message)) return resolved('DATA_POINT_READ', 0.93);
   if (warrantyLookupPattern.test(message) && !warrantyLookupOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('WARRANTY_LOOKUP', 0.96);
   }

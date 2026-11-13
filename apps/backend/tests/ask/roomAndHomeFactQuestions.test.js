@@ -43,8 +43,10 @@ test('the colour of a room reaches Material Specs', () => {
 test('an appliance’s model, brand, purchase date and age reach the inventory answer', () => {
   for (const message of [
     'what is the model number of my dishwasher', 'when did i buy my fridge', 'how old is my water heater',
-    'what brand is my washer', 'what is the serial number of my dryer', 'when did we install the furnace',
+    'what brand is my washer', 'when did we install the furnace',
   ]) assert.equal(route(message), 'INVENTORY_LOOKUP', message);
+  // The inventory answer lists an item's name, brand, model and dates but never states its serial number or what it cost, so those are read by the data point (owner reachability measurement, 2026-11-13).
+  for (const message of ['what is the serial number of my dryer', 'how much did i pay for my dishwasher']) assert.equal(route(message), 'DATA_POINT_READ', message);
   assert.equal(route('how old is my fridge'), 'REPLACEMENT_GUIDANCE', 'the existing fridge-age route is unchanged');
 });
 

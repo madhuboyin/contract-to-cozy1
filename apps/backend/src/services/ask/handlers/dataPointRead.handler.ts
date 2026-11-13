@@ -104,7 +104,7 @@ async function dataPointQueryResult(propertyId: string, role: string, plan: Quer
     title = run.total === 0 ? `No ${t.plural} match` : sorted ? (plan.limit === 1 ? `Top ${t.singular}: ${shown[0]?.label}` : `Top ${Math.min(plan.limit, run.total)} ${t.plural}`) : `${run.total} ${noun(run.total)}${qualifier}`;
     if (run.total === 0) lines.push(`No ${t.plural}${qualifier} match.`);
     else {
-      lines.push(`${sorted ? `Ranked${plan.sort ? ` by ${t.fields[plan.sort.field].label}, ${plan.sort.dir === 'desc' ? 'highest' : 'lowest'} first` : ''}: ` : `${run.total} ${noun(run.total)}${qualifier}: `}${shown.map((r) => (plan.showField ? `${r.label} (${valueText(r.value)})` : r.label)).join('; ')}${run.total > shown.length ? `; and ${run.total - shown.length} more` : ''}.`);
+      lines.push(`${sorted ? `Ranked${plan.sort ? ` by ${t.fields[plan.sort.field].label}, ${plan.sort.dir === 'desc' ? 'highest' : 'lowest'} first` : ''}: ` : `${run.total} ${noun(run.total)}${qualifier}: `}${shown.map((r) => (plan.showField ? `${r.label} (${valueText(r.value)})` : r.label)).join('; ')}${!sorted && run.total > shown.length ? `; and ${run.total - shown.length} more` : ''}.`);
     }
     if (run.unrecorded > 0) { limited = true; lines.push(`${run.unrecorded} ${noun(run.unrecorded)} ${run.unrecorded === 1 ? 'has' : 'have'} no ${t.fields[plan.sort!.field].label} recorded, so ${run.unrecorded === 1 ? 'it is' : 'they are'} not ranked.`); }
   }
