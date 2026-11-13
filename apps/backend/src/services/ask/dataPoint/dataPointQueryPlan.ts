@@ -5,7 +5,7 @@
 import { DATA_POINT_BY_ID, type DataPointDefinition, type DataPointEntity } from './dataPointCatalogue';
 
 export type QueryShape = 'LIST' | 'FILTER' | 'TOP_K' | 'AGGREGATE';
-export type FieldType = 'date' | 'money' | 'dollars' | 'enum';
+export type FieldType = 'date' | 'money' | 'dollars' | 'percent' | 'enum';
 export type Operator = 'lt' | 'lte' | 'gt' | 'gte' | 'equals' | 'in';
 export type AggregateFn = 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX';
 
@@ -14,7 +14,7 @@ export const QUERY_MAX_LIMIT = 100;
 export const QUERY_DEFAULT_SHOWN = 10;
 export const QUERY_MAX_RELATIVE_YEARS = 50;
 /** Operators allowed per field type: the allowlist FR-DATA-15 asks for. */
-export const OPERATORS_BY_TYPE: Readonly<Record<FieldType, readonly Operator[]>> = Object.freeze({ date: ['lt', 'lte', 'gt', 'gte'], money: ['lt', 'lte', 'gt', 'gte'], dollars: ['lt', 'lte', 'gt', 'gte'], enum: ['equals', 'in'] });
+export const OPERATORS_BY_TYPE: Readonly<Record<FieldType, readonly Operator[]>> = Object.freeze({ date: ['lt', 'lte', 'gt', 'gte'], money: ['lt', 'lte', 'gt', 'gte'], dollars: ['lt', 'lte', 'gt', 'gte'], percent: ['lt', 'lte', 'gt', 'gte'], enum: ['equals', 'in'] });
 
 export interface QueryField {
   /** The catalogued data point this field is read through: its audience floor and family apply to every use of the field. */
@@ -48,6 +48,12 @@ export interface QueryTemplate {
   readonly dateField: string | null;
   /** An optional base filter (for example a task that is not cancelled). */
   readonly baseWhere?: Record<string, unknown>;
+  /** The property scope for entities with no plain propertyId (a child reached through its property-scoped parent). Default: { propertyId }. */
+  readonly scopeWhere?: (propertyId: string) => Record<string, unknown>;
+  /** True when a singular noun still means the whole kind for an aggregate ("my average property tax bill": there is one bill per year on record). */
+  readonly singularAggregate?: boolean;
+  /** How a row's label is written when it is not a plain column value (for example "2025 tax bill"). */
+  readonly labelFormat?: (value: string) => string;
 }
 
 const f = (point: string, type: FieldType, column: string, words: string[], label: string, o: { sortable?: boolean; measure?: boolean; groupable?: boolean } = {}): QueryField =>
@@ -107,6 +113,47 @@ export const QUERY_TEMPLATES: readonly QueryTemplate[] = Object.freeze([
       priority: { low: 'LOW', medium: 'MEDIUM', high: 'HIGH', urgent: 'URGENT' },
     },
     dateField: 'nextDueDate',
+  },
+  // Property tax: one ACTIVE, non-superseded record per tax year (the same rule the point reads use), so a count or a total is over years on record, never over superseded duplicates. Reserve has no template: the reserve
+  // fund is ONE row per property (nothing to list, count or rank), so its figures are point reads (reserve.*).
+  {
+    id: 'taxBills', entity: 'PropertyTaxBillRecord', delegate: 'propertyTaxBillRecord', nouns: ['property tax bills', 'tax bills', 'property taxes'], singularNouns: ['property tax bill', 'tax bill'], plural: 'property tax bills', singular: 'property tax bill',
+    singularAggregate: true, labelSelect: { taxYear: true }, labelFields: ['taxYear'], labelFormat: (year) => `${year} tax bill`, countFloor: 'VIEWER', baseWhere: { status: 'ACTIVE', supersededById: null },
+    fields: {
+      amount: f('taxBill.amount', 'dollars', 'billAmount', ['amount', 'bill amount', 'paid', 'owed', 'cost', 'tax paid', 'bill'], 'bill amount', { measure: true }),
+      issueDate: f('taxBill.issueDate', 'date', 'issueDate', ['issued', 'issue date'], 'issue date'),
+      effectiveRate: f('taxBill.effectiveRate', 'percent', 'effectiveTaxRate', ['rate', 'effective rate', 'tax rate', 'effective tax rate'], 'effective tax rate'),
+    },
+    enumWords: {}, dateField: 'issueDate',
+  },
+  {
+    id: 'taxAssessments', entity: 'PropertyTaxAssessmentRecord', delegate: 'propertyTaxAssessmentRecord', nouns: ['property tax assessments', 'tax assessments', 'assessments'], singularNouns: ['property tax assessment', 'tax assessment', 'assessment'], plural: 'property tax assessments', singular: 'property tax assessment',
+    singularAggregate: true, labelSelect: { taxYear: true }, labelFields: ['taxYear'], labelFormat: (year) => `${year} assessment`, countFloor: 'VIEWER', baseWhere: { status: 'ACTIVE', supersededById: null },
+    fields: {
+      totalAssessedValue: f('taxAssessment.totalAssessedValue', 'dollars', 'totalAssessedValue', ['assessed value', 'total assessed value', 'assessed', 'total assessed'], 'total assessed value', { measure: true }),
+      taxableValue: f('taxAssessment.taxableValue', 'dollars', 'taxableValue', ['taxable value', 'taxable'], 'taxable value', { measure: true }),
+      landValue: f('taxAssessment.landValue', 'dollars', 'landValue', ['land value', 'land'], 'land value', { measure: true }),
+      improvementValue: f('taxAssessment.improvementValue', 'dollars', 'improvementValue', ['improvement value', 'improvements', 'improvement'], 'improvement value', { measure: true }),
+      assessmentDate: f('taxAssessment.assessmentDate', 'date', 'assessmentDate', ['assessed on', 'assessment date', 'assessed date'], 'assessment date'),
+    },
+    enumWords: {}, dateField: 'assessmentDate',
+  },
+  // Sale-readiness items (the seller-prep checklist). A child of the property's sale case, scoped through it. The amounts on an item (cost and value-add ranges) are not catalogued, so no amount can be filtered or totalled here.
+  {
+    id: 'saleItems', entity: 'SaleReadinessItem', delegate: 'saleReadinessItem', nouns: ['sale items', 'sale-readiness items', 'sale readiness items', 'seller-prep items', 'seller prep items', 'sale checklist items', 'seller prep checklist items'], singularNouns: ['sale item', 'sale-readiness item', 'sale readiness item', 'seller-prep item', 'seller prep item'], plural: 'sale-readiness items', singular: 'sale-readiness item',
+    labelSelect: { title: true }, labelFields: ['title'], countFloor: 'VIEWER', scopeWhere: (propertyId) => ({ saleCase: { propertyId } }),
+    fields: {
+      status: f('saleItem.status', 'enum', 'status', ['status'], 'status', { sortable: false, groupable: true }),
+      category: f('saleItem.category', 'enum', 'category', ['category'], 'category', { sortable: false, groupable: true }),
+      requirementClass: f('saleItem.requirementClass', 'enum', 'requirementClass', ['requirement', 'requirement class', 'class'], 'requirement class', { sortable: false, groupable: true }),
+      dueAt: f('saleItem.dueDate', 'date', 'dueAt', ['due', 'overdue', 'deadline'], 'due'),
+    },
+    enumWords: {
+      status: { open: 'OPEN', resolved: 'RESOLVED', waived: 'WAIVED', pursuing: 'PURSUING', 'being pursued': 'PURSUING' },
+      category: { safety: 'SAFETY_STRUCTURAL', structural: 'SAFETY_STRUCTURAL', systems: 'SYSTEMS_MAINTENANCE', maintenance: 'SYSTEMS_MAINTENANCE', permits: 'PERMITS_DISCLOSURE', disclosure: 'PERMITS_DISCLOSURE', documentation: 'DOCUMENTATION_RECORDS', records: 'DOCUMENTATION_RECORDS', financial: 'FINANCIAL_DECISION', presentation: 'PRESENTATION' },
+      requirementClass: { blockers: 'MATERIAL_BLOCKER', blocker: 'MATERIAL_BLOCKER', 'material blockers': 'MATERIAL_BLOCKER', 'needs verification': 'VERIFICATION_NEEDED', verification: 'VERIFICATION_NEEDED', optional: 'OPTIONAL_IMPROVEMENT', 'professional decision': 'PROFESSIONAL_DECISION' },
+    },
+    dateField: 'dueAt',
   },
   {
     id: 'claims', entity: 'Claim', delegate: 'claim', nouns: ['claims', 'insurance claims'], singularNouns: ['claim'], plural: 'claims', singular: 'claim',
@@ -257,7 +304,7 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
     push({ field: 'nextDueDate', op: 'lt', value: now.toISOString(), describe: 'overdue' }); excludesClosed = true;
   }
   // money thresholds: "more than $1,000", "over 500 dollars", "less than $200"
-  if ((m = /\b(more than|over|above|greater than|less than|under|below|cheaper than)\s+\$?(\d[\d,]*(?:\.\d+)?)\s*(?:dollars|bucks)?\b/.exec(text)) && !/\b(older|newer) than\b/.test(m[0])) {
+  if ((m = /\b(more than|over|above|greater than|less than|under|below|cheaper than)\s+\$?(\d[\d,]*(?:\.\d+)?)(?!\.?\d)(?!\s*(?:%|percent))\s*(?:dollars|bucks)?\b/.exec(text)) && !/\b(older|newer) than\b/.test(m[0])) {
     const key = fieldNamed(template, text, Object.keys(template.fields).find((k) => template.fields[k].measure) ?? undefined, (x) => x.measure);
     const field = key ? template.fields[key] : null;
     if (field && (field.type === 'money' || field.type === 'dollars')) {
@@ -265,14 +312,20 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
       if (Number.isFinite(amount) && amount >= 0 && amount < 1e9) push({ field: key!, op: /more|over|above|greater/.test(m[1]) ? 'gt' : 'lt', value: field.type === 'money' ? Math.round(amount * 100) : amount, describe: `${/more|over|above|greater/.test(m[1]) ? 'over' : 'under'} $${amount.toLocaleString('en-US')}` });
     }
   }
+  // percent thresholds: "effective rate above 1.5%", "tax rate under 2 percent"
+  if ((m = /\b(more than|over|above|greater than|less than|under|below)\s+(\d+(?:\.\d+)?)\s*(?:%|percent)/.exec(text))) {
+    const key = fieldNamed(template, text, Object.keys(template.fields).find((k) => template.fields[k].type === 'percent'), (x) => x.type === 'percent'); const field = key ? template.fields[key] : null;
+    if (field && key) { const pct = Number(m[2]); if (Number.isFinite(pct) && pct >= 0 && pct <= 100) push({ field: key, op: /more|over|above|greater/.test(m[1]) ? 'gt' : 'lt', value: pct / 100, describe: `${/more|over|above|greater/.test(m[1]) ? 'above' : 'below'} ${pct}%` }); }
+  }
   // enum words: "in poor condition", "high priority", "approved claims"
   for (const [key, words] of Object.entries(template.enumWords)) {
     const field = template.fields[key];
     for (const [word, value] of Object.entries(words).sort((a, b) => b[0].length - a[0].length)) {
       const rx = key === 'condition' ? new RegExp(`\\b${word} condition\\b`) : key === 'priority' ? new RegExp(`\\b${word} priority\\b`) : new RegExp(`\\b${word}\\b`);
-      if (key === 'category' && !/\bcategory\b|\bhvac\b|\bplumbing\b|\belectrical\b|\bsafety\b|\bfurniture\b|\belectronics\b/.test(text)) continue;
+      if (key === 'category' && template.id === 'inventory' && !/\bcategory\b|\bhvac\b|\bplumbing\b|\belectrical\b|\bsafety\b|\bfurniture\b|\belectronics\b/.test(text)) continue;
+      if (key === 'category' && template.id === 'saleItems' && !/\bcategory\b/.test(text)) continue;
       if (key === 'status' && template.id === 'tasks' && /\boverdue\b/.test(text)) continue;
-      if (rx.test(text) && !predicates.some((p) => p.field === key)) { push({ field: key, op: 'equals', value, describe: `${field.label} ${value.toLowerCase().replace(/_/g, ' ')}` }); break; }
+      if (rx.test(text) && !predicates.some((p) => p.field === key)) { push({ field: key, op: 'equals', value, describe: key === 'status' ? value.toLowerCase().replace(/_/g, ' ') : key === 'condition' ? `${value.toLowerCase()} condition` : `${field.label} ${value.toLowerCase().replace(/_/g, ' ')}` }); break; }
     }
   }
 
@@ -280,17 +333,19 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
   // A qualifier the plan did not turn into a predicate must not be silently dropped ("how many OPEN claims" answered as "how many claims" would be a wrong answer): such a question gets no plan.
   if (template.id === 'tasks' && /\b(open|active|outstanding|incomplete)\b/.test(text) && !excludesClosed) { excludesClosed = true; }
   const stray = /\b(open|active|current|upcoming|recent|unresolved|outstanding|incomplete|late|broken|failing|unpaid|expensive|valuable)\b/.exec(text);
-  const strayConsumed = stray && ((template.id === 'tasks' && /open|active|outstanding|incomplete/.test(stray[1])) || (/expensive|valuable/.test(stray[1]) && /\b(most|least) (expensive|valuable)\b|\bexpensive\b.*\b(than|over|under)\b/.test(text)));
+  const strayConsumed = stray && ((Object.values(template.enumWords).some((words) => stray[1] in words) && predicates.some((p) => p.op === 'equals')) || (template.id === 'tasks' && /open|active|outstanding|incomplete/.test(stray[1])) || (/expensive|valuable/.test(stray[1]) && /\b(most|least) (expensive|valuable)\b|\bexpensive\b.*\b(than|over|under)\b/.test(text)));
   if (stray && !strayConsumed) return { kind: 'NONE' };
 
   // A singular noun names ONE record ("my claim roof hail", "my warranty"): only a superlative ("the oldest appliance", "which warranty expires first") may use it; everything else needs the plural kind.
   const preSuperlative = /\b(most expensive|priciest|costliest|most costly|least expensive|cheapest|oldest|newest|youngest|largest|highest|lowest|biggest|soonest|earliest|latest|next to expire|expires? (?:first|soonest|next)|expiring (?:first|soonest|next)|due (?:first|soonest|next)|first to expire)\b/.test(text);
-  if (!plural && !preSuperlative) return { kind: 'NONE' };
+  const aggregateWord = /\b(average|mean|typical|total(?! assessed)|sum|combined|altogether)\b/.test(text);
+  if (!plural && !preSuperlative && !(template.singularAggregate && aggregateWord)) return { kind: 'NONE' };
 
   // ---- shape ----
   // "claim number of my claim" and "serial number of my fridge" are point reads, not counts: "number of" counts only over a plural noun.
   const countQ = /\bhow many\b|\bcount\b/.test(text) || (plural && /\bnumber of\b/.test(text));
-  const sumQ = /\b(total|sum|combined|altogether|add up)\b/.test(text);
+  // "total assessed value" is a FIELD NAME, not a request to add up: "total" counts as a sum word only when it is not followed by "assessed".
+  const sumQ = /\b(total(?! assessed)|sum|combined|altogether|add up)\b/.test(text);
   const avgQ = /\b(average|mean|typical)\b/.test(text);
   const superlative = /\b(most expensive|priciest|costliest|most costly|least expensive|cheapest|oldest|newest|youngest|largest|highest|lowest|biggest|soonest|earliest|latest|next to expire|expires? (?:first|soonest|next)|expiring (?:first|soonest|next)|due (?:first|soonest|next)|first to expire)\b/.exec(text);
   const listQ = /\b(list|show|what|which)\b.*\b(?:do i have|have i got|are there|i have|i own)\b|\b(?:list|show) (?:all )?(?:of )?(?:my|our|the)\b/.test(text);
@@ -304,7 +359,11 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
       if (groupBy) touched.add(groupBy);
       return { kind: 'PLAN', plan: { shape: 'AGGREGATE', template, predicates, sort: null, limit: QUERY_MAX_LIMIT, aggregate: { fn: 'COUNT', field: null, groupBy }, touched: [...touched], showField: null, excludesClosed } };
     }
-    const measure = fieldNamed(template, text, undefined, (x) => x.measure); const measureKey = measure && template.fields[measure].measure ? measure : null;
+    const numericOk = (x: QueryField) => x.measure || (avgQ && !sumQ && x.type === 'percent');
+    const named = fieldNamed(template, text, undefined, numericOk);
+    const onlyMeasures = Object.entries(template.fields).filter(([, v]) => v.measure);
+    // A template with exactly ONE measure needs no naming ("my average tax bill"); several must be named.
+    const measureKey = named && numericOk(template.fields[named]) ? named : onlyMeasures.length === 1 ? onlyMeasures[0][0] : null;
     if (!measureKey) {
       const measures = Object.entries(template.fields).filter(([, v]) => v.measure).map(([, v]) => v.label);
       if (!measures.length) return { kind: 'NONE' };
@@ -315,7 +374,7 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
   }
 
   // "my top 3 appliances by replacement cost": a ranking by a NAMED measure. The measure must be one the template declares; an unnamed one is asked back like any other ambiguous ranking.
-  const topBy = !superlative && /\btop (?:\d+|one|two|three|four|five|ten)\b/.test(text) ? fieldNamed(template, text, undefined, (x) => x.measure) : null;
+  const topBy = !superlative && /\btop (?:\d+|one|two|three|four|five|ten)\b/.test(text) ? fieldNamed(template, text, undefined, (x) => x.measure || x.type === 'percent') : null;
   if (!superlative && /\btop (?:\d+|one|two|three|four|five|ten)\b/.test(text) && plural) {
     const measures = Object.entries(template.fields).filter(([, v]) => v.measure);
     if (!measures.length) return { kind: 'NONE' };
@@ -332,9 +391,9 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
     if (/oldest|newest|youngest/.test(word)) key = template.fields.installedOn ? 'installedOn' : null;
     else if (/soonest|earliest|first|next|latest/.test(word) || /expire|due/.test(word)) key = template.dateField;
     else if (/expensive|priciest|costliest|costly|cheapest|largest|highest|lowest|biggest/.test(word)) {
-      const named = fieldNamed(template, text, undefined, (x) => x.measure);
+      const named = fieldNamed(template, text, undefined, (x) => x.measure || x.type === 'percent');
       const namedField = named ? template.fields[named] : null;
-      if (namedField && namedField.measure) key = named;
+      if (namedField && (namedField.measure || namedField.type === 'percent')) key = named;
       else {
         const measures = Object.entries(template.fields).filter(([, v]) => v.measure);
         if (measures.length === 1) key = measures[0][0];

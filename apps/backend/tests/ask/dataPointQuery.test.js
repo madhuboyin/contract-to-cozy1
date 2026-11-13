@@ -17,14 +17,17 @@ test('FR-DATA-16 conformance: every template field is a catalogued data point of
   for (const t of plan.QUERY_TEMPLATES) {
     assert.ok(t.nouns.length && t.countFloor, t.id);
     const model = Prisma.dmmf.datamodel.models.find((m) => m.name === t.entity);
-    assert.ok(model.fields.some((f) => f.name === 'propertyId' && f.kind === 'scalar'), `${t.entity} is property-scoped`);
+    if (t.scopeWhere) { // a child reached through its property-scoped parent (declared in RELATION_ENTITIES)
+      const rel = require('../../src/services/ask/dataPoint/dataPointCatalogue.ts').RELATION_ENTITIES[t.entity]; assert.ok(rel, `${t.entity} declares its relation path`);
+      assert.deepEqual(Object.keys(t.scopeWhere('p1')), [rel.parentDelegate === 'propertySaleCase' ? 'saleCase' : 'x']); assert.equal(JSON.stringify(t.scopeWhere('p1')).includes('"propertyId":"p1"'), true);
+    } else assert.ok(model.fields.some((f) => f.name === 'propertyId' && f.kind === 'scalar'), `${t.entity} is property-scoped`);
     for (const [key, field] of Object.entries(t.fields)) {
       const point = DATA_POINT_BY_ID.get(field.point);
       assert.ok(point, `${t.id}.${key} -> ${field.point}`);
       assert.equal(point.entity, t.entity); assert.equal(point.field, field.column);
       assert.ok(READABLE_FIELDS[t.entity].includes(field.column), `${field.column} is a readable catalogued column`);
       assert.ok(model.fields.some((f) => f.name === field.column), `${t.entity}.${field.column} exists`);
-      const expected = { date: 'date', money: 'money', dollars: 'dollars', enum: 'enum' }[field.type]; assert.equal(point.family, expected, `${t.id}.${key} family`);
+      const expected = { date: 'date', money: 'money', dollars: 'dollars', percent: 'percent', enum: 'enum' }[field.type]; assert.equal(point.family, expected, `${t.id}.${key} family`);
       if (field.measure) assert.ok(['money', 'dollars'].includes(field.type), `${t.id}.${key} is a numeric measure`);
     }
     for (const f of Object.values(t.fields)) for (const word of Object.values(t.enumWords)) void word;
@@ -190,5 +193,50 @@ test('a query answer is a snapshot: it carries as-of time, is never composable, 
     assert.equal(r.parameters.dataPointQuery.snapshot, true); assert.ok(r.parameters.dataPointQuery.asOf); assert.ok(r.blocks[1].items[0].observedAt, 'the evidence says when it was read');
     assert.equal(AUTH.DATA_POINT_READ.describeSources({ reasonCode: r.reasonCode, parameters: r.parameters, blocks: r.blocks }), null, 'undeclared sources fail closed: never composed or replayed');
     assert.equal(AUTH.DATA_POINT_READ.describeSources({ reasonCode: undefined, parameters: { sources: [{ sourceType: 'InventoryItem', sourceId: 'i1' }] }, blocks: [] }).length, 1, 'a point read still declares its sources');
+  } finally { w.restore(); }
+});
+
+// ---- templates for property tax and sale-readiness items (reserve has none: one row per property) ----
+test('tax bills and assessments: counts, totals, rankings and filters over the years on record, with the single-measure default and the percent field', () => {
+  const t = (m) => get(m);
+  assert.deepEqual([t('how many tax bills do I have').shape, t('how many tax bills do I have').template.id], ['AGGREGATE', 'taxBills']);
+  const avg = t('what is my average property tax bill'); assert.deepEqual([avg.aggregate.fn, avg.aggregate.field], ['AVG', 'amount'], 'one measure needs no naming');
+  const top = t('what was my highest tax bill'); assert.deepEqual([top.shape, top.sort.field, top.sort.dir], ['TOP_K', 'amount', 'desc']);
+  assert.equal(t('what is the highest effective tax rate across my tax bills').sort.field, 'effectiveRate');
+  const rate = t('which tax bills have an effective rate above 1.5%'); assert.deepEqual([rate.predicates[0].field, rate.predicates[0].op, rate.predicates[0].value], ['effectiveRate', 'gt', 0.015]); assert.equal(rate.predicates.length, 1, 'the percent is not also read as dollars');
+  const big = t('which tax bills were more than $5,000'); assert.deepEqual([big.predicates[0].field, big.predicates[0].value], ['amount', 5000]);
+  assert.equal(t('what is the average effective tax rate on my tax bills').aggregate.field, 'effectiveRate');
+  assert.equal(p('what is the total of my tax bills').kind, 'PLAN');
+  const a = t('what is my highest total assessed value across my tax assessments'); assert.deepEqual([a.template.id, a.shape, a.sort.field], ['taxAssessments', 'TOP_K', 'totalAssessedValue'], '"total assessed value" is a field name, not a sum request');
+  assert.equal(p('what is the total value across my tax assessments').kind, 'CLARIFY', 'several measures must be named');
+  assert.equal(t('what is the total taxable value of my tax assessments').aggregate.field, 'taxableValue');
+  assert.equal(p('what is my current tax bill').kind, 'NONE', '"current" is a latest-year point read, not a query');
+  assert.equal(p('what is my 2024 tax bill').kind, 'NONE');
+});
+test('sale-readiness items: counts, filters by status, category, requirement class and due date; a bare "item" never selects them; "open" is a real predicate here', () => {
+  const t = (m) => get(m);
+  const n = t('how many sale items are open'); assert.deepEqual([n.shape, n.template.id, n.predicates[0].value], ['AGGREGATE', 'saleItems', 'OPEN']);
+  assert.equal(t('which seller-prep items are resolved').predicates[0].value, 'RESOLVED');
+  assert.equal(t('how many sale-readiness items have been waived').predicates[0].value, 'WAIVED');
+  assert.equal(t('which sale items are material blockers').predicates[0].value, 'MATERIAL_BLOCKER');
+  assert.equal(t('which sale items are in the permits category').predicates[0].value, 'PERMITS_DISCLOSURE');
+  assert.equal(t('which sale items are due in the next 30 days').predicates.length, 2);
+  assert.equal(t('how many sale items do I have by category').aggregate.groupBy, 'category');
+  assert.equal(p('how many items are open').kind, 'NONE'); assert.equal(p('how many tasks are open').kind, 'NONE');
+  assert.equal(p('how many sale items are broken').kind, 'NONE', 'an unknown qualifier is never dropped');
+});
+test('the runner scopes tax records to ACTIVE non-superseded rows and sale items through the property sale case; the label is the tax year or the item title', async () => {
+  const taxPlan = get('how many tax bills do I have'); const w1 = buildWhere('p1', taxPlan);
+  assert.equal(w1.propertyId, 'p1'); assert.equal(w1.status, 'ACTIVE'); assert.equal(w1.supersededById, null);
+  const salePlan = get('how many sale items are open'); const w2 = buildWhere('p1', salePlan);
+  assert.deepEqual(w2.saleCase, { propertyId: 'p1' }); assert.equal('propertyId' in w2, false, 'a child has no propertyId column'); assert.deepEqual(w2.AND, [{ status: 'OPEN' }]);
+  const w = stub('OWNER', { propertyTaxBillRecord: { findMany: () => [{ id: 't1', taxYear: 2025, billAmount: { toNumber: () => 7200 } }, { id: 't2', taxYear: 2024, billAmount: { toNumber: () => 6900 } }], count: (a) => (a.where.billAmount === null ? 0 : 2), aggregate: () => ({ _sum: { billAmount: { toNumber: () => 14100 } }, _avg: {}, _count: { billAmount: 2 } }) },
+    saleReadinessItem: { findMany: () => [{ id: 's1', title: 'Fix railing', status: 'OPEN', dueAt: new Date('2026-12-01T12:00:00Z') }], count: () => 1 }, property: { findUnique: () => ({ timezone: 'UTC' }) } });
+  try {
+    const top = await dataPointReadResult('u1', 'p1', 'what was my highest tax bill'); assert.match(top.blocks[0].body, /2025 tax bill \(\$7,200\)/); assert.equal(top.status, 'ANSWERED');
+    const sum = await dataPointReadResult('u1', 'p1', 'what is my total property tax bill amount'); assert.match(sum.blocks[0].body, /\$14,100/); assert.match(sum.blocks[0].body, /2 property tax bills/);
+    const items = await dataPointReadResult('u1', 'p1', 'which sale items are due in the next 30 days'); assert.match(items.blocks[0].body, /Fix railing/);
+    const call = w.calls.find((c) => c[0] === 'saleReadinessItem' && c[1] === 'findMany')[2]; assert.deepEqual(call.where.saleCase, { propertyId: 'p1' });
+    assert.deepEqual(Object.keys(call.select).sort(), ['dueAt', 'id', 'title'], 'no detail, cost or waiver text is selected');
   } finally { w.restore(); }
 });

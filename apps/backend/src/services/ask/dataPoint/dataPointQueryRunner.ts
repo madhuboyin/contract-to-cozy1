@@ -29,13 +29,13 @@ export function buildWhere(propertyId: string, plan: QueryPlan, extra: Record<st
     and.push({ [field.column]: p.op === 'equals' ? value : { [p.op]: value } });
   }
   if (plan.excludesClosed && t.fields.status) and.push({ [t.fields.status.column]: { notIn: CLOSED_TASK } });
-  return { propertyId, ...(t.baseWhere ?? {}), ...(and.length ? { AND: and } : {}), ...extra };
+  return { ...(t.scopeWhere ? t.scopeWhere(propertyId) : { propertyId }), ...(t.baseWhere ?? {}), ...(and.length ? { AND: and } : {}), ...extra };
 }
 
 function labelOf(t: QueryTemplate, row: any): string {
   for (const path of t.labelFields) {
     const value = path.split('.').reduce((acc: any, key) => (acc == null ? acc : acc[key]), row);
-    if (value) return t.entity === 'Claim' ? `${String(value).toLowerCase().replace(/_/g, ' ')} claim` : String(value);
+    if (value) return t.entity === 'Claim' ? `${String(value).toLowerCase().replace(/_/g, ' ')} claim` : t.labelFormat ? t.labelFormat(String(value)) : String(value);
   }
   return t.singular;
 }
