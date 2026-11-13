@@ -10,7 +10,7 @@
 // Safety nets kept: safety and deterministic routes never reach it; the chosen operation's answer still goes through the answer-trust and
 //                   semantic relevance checks; any failure leaves the local decision exactly as it was.
 import { z } from 'zod';
-import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, messageNamesOnlyNonHvacItem, type AskOperationId } from './askOperationRegistry';
+import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, isReadOnlyOperation, messageNamesOnlyNonHvacItem, type AskOperationId } from './askOperationRegistry';
 import { retrieveAskOperationCandidates } from './askSemanticRouter';
 import { resolveAskEntityState } from './askEntityResolution';
 import { ASK_DEFAULT_LANGUAGE } from './askLanguageRegistry';
@@ -45,7 +45,7 @@ export function isAskModelRoutableOperation(operationId: AskOperationId): boolea
   const definition = ASK_OPERATION_DEFINITIONS[operationId];
   return Boolean(definition)
     && definition.messageRoutable
-    && definition.semantic.effect === 'READ'
+    && isReadOnlyOperation(operationId)
     && !definition.safetyClass.endsWith('_BOUNDARY')
     && operationId !== 'GROUNDED_GUIDANCE';
 }

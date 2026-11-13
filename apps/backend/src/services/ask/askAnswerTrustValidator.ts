@@ -1,5 +1,5 @@
 import type { AskPresentationBlock } from '../../productFramework/ask/ask.contract';
-import { getAskOperationDefinition, type AskOperationId, type AskOperationResult } from './askOperationRegistry';
+import { getAskOperationDefinition, isReadOnlyOperation, type AskOperationId, type AskOperationResult } from './askOperationRegistry';
 import type { AskAnswerTrustResult } from './askTrust.contract';
 import { validateAskSemanticAnswerRelevance, type AskSemanticAnswerRelevanceResult } from './askSemanticAnswerValidator';
 import type { AskLanguageCode } from './askLanguageRegistry';
@@ -423,7 +423,7 @@ export function validateAskAnswerTrustPipeline(input: {
     ].filter((operationId): operationId is AskOperationId => Boolean(operationId)))]
       .filter((operationId) => !getAskOperationDefinition(operationId).safetyClass.endsWith('_BOUNDARY'))
       // A competing or runner-up request is offered as a choice only if it is a read: "export the home record" is never what a water-heater question meant.
-      .filter((operationId) => operationId === input.operationId || getAskOperationDefinition(operationId).semantic.effect === 'READ');
+      .filter((operationId) => operationId === input.operationId || isReadOnlyOperation(operationId));
     // "Get general educational home guidance" is the fallback that just failed; it is a choice only when nothing else is.
     if (candidateOperationIds.length > 1) candidateOperationIds = candidateOperationIds.filter((operationId) => operationId !== 'GROUNDED_GUIDANCE');
     candidateOperationIds = candidateOperationIds.slice(0, 3);

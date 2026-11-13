@@ -3,6 +3,7 @@
 // Order: closed misspelling list -> framing strip -> generic one-edit spelling correction toward a versioned vocabulary (routingVocabulary.generated.ts).
 // Safety is evaluated on the raw text by the caller before this runs (FR-NRM-9), so normalisation can never remove a safety signal.
 import { correctKnownMisspellings } from './commonMisspellings';
+import { maskProtectedSpans, type KnownName } from '../privacy/promptMinimizer';
 import { ROUTING_VOCABULARY, ROUTING_VOCABULARY_VERSION } from './routingVocabulary.generated';
 
 export { ROUTING_VOCABULARY_VERSION };
@@ -87,7 +88,14 @@ export function correctSpelling(message: string): string {
   });
 }
 
-/** The text routing reads. Never throws; falls back to the raw message. */
-export function normalizeForRouting(rawMessage: string): string {
-  try { return correctSpelling(stripFraming(correctKnownMisspellings(rawMessage))); } catch { return rawMessage; }
+/**
+ * The text routing reads. Never throws; falls back to the raw message. FR-NRM-1: pass-1 identifier protection (FR-PRV-1) runs on the RAW message first, so the misspelling list, framing removal and spelling correction can only
+ * touch unprotected text: a contractor, insurer, lender or household member's name, an email, phone, address or typed identifier is never "corrected" into a vocabulary word. The protected spans are restored, so the routing
+ * text is otherwise exactly what was typed. `knownNames` are the property's own names (privacy/knownNames.ts), loaded after the property is authorised.
+ */
+export function normalizeForRouting(rawMessage: string, knownNames: ReadonlyArray<KnownName> = []): string {
+  try {
+    const { masked, restore } = maskProtectedSpans(rawMessage, knownNames);
+    return restore(correctSpelling(stripFraming(correctKnownMisspellings(masked))));
+  } catch { return rawMessage; }
 }

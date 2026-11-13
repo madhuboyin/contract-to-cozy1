@@ -13,8 +13,8 @@ import { getAskDomainCommandByOperation } from '../askDomainCommandRegistry';
  */
 export type PersistenceClass = 'NONE' | 'TECHNICAL' | 'DERIVED' | 'USER_VISIBLE' | 'CONFIRMATION_REQUIRED';
 
-interface Declaration { readonly persistenceClass: PersistenceClass; readonly reason: string }
-const decl = (persistenceClass: PersistenceClass, reason: string): Declaration => ({ persistenceClass, reason });
+interface Declaration { readonly persistenceClass: PersistenceClass; readonly reason: string; /** True when the persistence is only reconciliation or analysis a reader would expect (not a decision or record the homeowner started), so the operation is still offered and routed as a read. */ readonly readerEquivalent?: boolean }
+const decl = (persistenceClass: PersistenceClass, reason: string, readerEquivalent = false): Declaration => ({ persistenceClass, reason, ...(readerEquivalent ? { readerEquivalent } : {}) });
 
 /**
  * Operations whose class is NOT the default. The default is derived: an operation with a domain command is CONFIRMATION_REQUIRED, every other one is NONE. Each entry names why;
@@ -24,11 +24,11 @@ export const PERSISTENCE_DECLARATIONS: Readonly<Record<string, Declaration>> = O
   // Decision-thread bookkeeping at message time (intended; matrix materiality carve-out), so not read-only.
   HVAC_DECISION_START: decl('USER_VISIBLE', 'writes DecisionThread, links, RecommendationSnapshot, PropertyChange at message time'),
   HVAC_DECISION_SCENARIO: decl('USER_VISIBLE', 'continues the HVAC decision thread at message time'),
-  REPLACEMENT_GUIDANCE: decl('USER_VISIBLE', 'persists ReplaceRepairAnalysis and, for an HVAC item, decision threads (D17: composition uses ITEM_REPAIR_REPLACE_VERDICT instead)'),
+  REPLACEMENT_GUIDANCE: decl('USER_VISIBLE', 'persists ReplaceRepairAnalysis and, for an HVAC item, decision threads (D17: composition uses ITEM_REPAIR_REPLACE_VERDICT instead)', true),
   // Lifecycle reconciliation on read (trace §5): may create events or transition tasks/work items when an underlying source resolved. Individually reviewed under D15.
-  HOME_ACTIONS: decl('USER_VISIBLE', 'ensureRecurringHandoff can create HomeEvent and update HomeBuyerTask, InspectionFinding, NewHomeSetupPlan; also DerivedTrait'),
-  HOME_CHANGE_SUMMARY: decl('USER_VISIBLE', 'ensureRecurringHandoff lifecycle reconciliation on read'),
-  SELLER_PREP_CHECKLIST: decl('USER_VISIBLE', 'syncReadinessItems can transition work items and reopen linked records'),
+  HOME_ACTIONS: decl('USER_VISIBLE', 'ensureRecurringHandoff can create HomeEvent and update HomeBuyerTask, InspectionFinding, NewHomeSetupPlan; also DerivedTrait', true),
+  HOME_CHANGE_SUMMARY: decl('USER_VISIBLE', 'ensureRecurringHandoff lifecycle reconciliation on read', true),
+  SELLER_PREP_CHECKLIST: decl('USER_VISIBLE', 'syncReadinessItems can transition work items and reopen linked records', true),
   // Reproducible derived materialisation and default rows (trace §5): automatically permitted.
   MAINTENANCE_FORECAST: decl('DERIVED', 'regenerates MaintenancePrediction'),
   CAPITAL_RESERVE_PLAN: decl('DERIVED', 'AssumptionSet and HomeCapitalTimelineAnalysis; may enqueue a notification'),
@@ -50,6 +50,9 @@ export function persistenceClassOf(operationId: string): PersistenceClass {
   if (declared) return declared.persistenceClass;
   return getAskDomainCommandByOperation(operationId) !== null ? 'CONFIRMATION_REQUIRED' : 'NONE';
 }
+
+/** A write-capable operation whose persistence is reconciliation or analysis done while reading (declared above). Everything else write-capable starts or changes something the homeowner would notice. */
+export function isReaderEquivalentOperation(operationId: string): boolean { return PERSISTENCE_DECLARATIONS[operationId]?.readerEquivalent === true; }
 
 /** Write-capable = could change homeowner-visible state (USER_VISIBLE) or is a confirm-gated record command. NONE, TECHNICAL and DERIVED are not (D15 "automatically permitted"). */
 export function isWriteCapableOperation(operationId: string): boolean {

@@ -1,6 +1,6 @@
 import { resolveDataPointsMulti, isReserveFactQuestion, isDataPointDetailQuestion, isDataPointOnlyQuestion, isSaleProfileQuestion, resolveDataPoint } from './dataPoint/dataPointCatalogue';
 import { isDataPointComputedQuery, isDataPointQuery } from './dataPoint/dataPointQueryPlan';
-import { isWriteCapableOperation } from './support/writeCapability';
+import { isReaderEquivalentOperation, isWriteCapableOperation } from './support/writeCapability';
 import { isItemCostMessage, isItemFundingGoalMessage, isItemReserveAllocationMessage } from './support/itemFundingWording';
 import { validateCoverageDeclarations } from './composition/quantities';
 import { COMPOSABLE_SOURCE_AUTHORIZATION } from './composition/sourceAuthorization';
@@ -1115,6 +1115,15 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
 
 export function getAskOperationDefinition(operationId: AskOperationId): AskOperationDefinition {
   return ASK_OPERATION_DEFINITIONS[operationId];
+}
+
+/**
+ * True only for an operation that is a read BOTH by its registry `effect` label and by what it can persist (FR-WRT-4): it persists nothing a homeowner would notice, or only reconciliation or analysis a reader would expect (declared `readerEquivalent`). The `effect` label alone is wrong for operations the write trace found mislabelled
+ * (for example HVAC_DECISION_START and HVAC_DECISION_SCENARIO are labelled READ but persist a decision), so every place that asks "is this safe to offer or route as a read" uses this, never the label.
+ */
+export function isReadOnlyOperation(operationId: AskOperationId): boolean {
+  const definition = ASK_OPERATION_DEFINITIONS[operationId];
+  return Boolean(definition) && definition.semantic.effect === 'READ' && (!isWriteCapableOperation(operationId) || isReaderEquivalentOperation(operationId));
 }
 
 export function validateAskOperationDefinitions(): string[] {

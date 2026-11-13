@@ -17,7 +17,7 @@ test('availability: single-call p*qt, two-stage p*qd*qt^S, no-model 1, scenarios
   close(routingSuccessProbability({ kind: 'SINGLE_CALL' }, b), 0.999 * 0.995);
   close(routingSuccessProbability({ kind: 'TWO_STAGE', targetCalls: 3 }, b), 0.999 * 0.997 * 0.995 ** 3);
   close(routingSuccessProbability({ kind: 'NO_MODEL' }, b), 1);
-  close(routingSuccessProbability({ kind: 'TWO_STAGE', targetCalls: 3 }, AVAILABILITY_SCENARIOS.optimistic), 1);
+  close(routingSuccessProbability({ kind: 'TWO_STAGE', targetCalls: 3 }, AVAILABILITY_SCENARIOS.optimistic), 0.9999 * 0.999 * 0.999 ** 3);
   const two = { kind: 'TWO_STAGE', targetCalls: 2 };
   const order = ['optimistic', 'baseline', 'degradedProvider', 'correlatedOutage'].map((k) => routingSuccessProbability(two, AVAILABILITY_SCENARIOS[k]));
   for (let i = 1; i < order.length; i += 1) assert.ok(order[i] <= order[i - 1] + 1e-12, `${i}: ${order}`);

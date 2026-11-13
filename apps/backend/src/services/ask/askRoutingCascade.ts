@@ -1,5 +1,6 @@
 import { correctKnownMisspellings } from './support/commonMisspellings';
 import { normalizeForRouting } from './support/routingNormalization';
+import type { KnownName } from './privacy/promptMinimizer';
 import {
   ASK_OPERATION_DEFINITIONS,
   getAskOperationDefinition,
@@ -70,13 +71,15 @@ export function resolveAskRoutingCascade(rawMessage: string, options: {
   language?: AskLanguageCode;
   propertyId?: string | null;
   launchEntityId?: string | null;
+  /** The authorised property's own names (insurers, contractors, lenders, household members): protected from spelling correction (FR-NRM-1, FR-PRV-1). */
+  knownNames?: ReadonlyArray<KnownName>;
 } = {}): AskRoutingDecision {
   const language = options.language ?? ASK_DEFAULT_LANGUAGE;
   requireCertifiedAskLanguage(language);
   // Routing reads a closed list of common misspellings and split words as their correct form ("maintainence", "neighbor hood"); nothing else changes.
   // FR-NRM-9: safety is evaluated on the raw text first, so normalisation can never remove a safety signal; everything else routes on the normalised text.
   const rawDirect = resolveAskOperation(correctKnownMisspellings(rawMessage));
-  const message = isSafetyBoundary(rawDirect.operationId) ? correctKnownMisspellings(rawMessage) : normalizeForRouting(rawMessage);
+  const message = isSafetyBoundary(rawDirect.operationId) ? correctKnownMisspellings(rawMessage) : normalizeForRouting(rawMessage, options.knownNames);
   const direct = isSafetyBoundary(rawDirect.operationId) ? rawDirect : resolveAskOperation(message);
   const directRule = direct.operationId === 'GROUNDED_GUIDANCE' || isSafetyBoundary(direct.operationId) ? null : fastPathRuleForOperation(direct.operationId);
   if (direct.operationId === 'EMERGENCY_BOUNDARY' || direct.operationId === 'UNSAFE_RESTRICTED_BOUNDARY' || direct.operationId === 'OUT_OF_SCOPE_BOUNDARY') {

@@ -22,27 +22,41 @@ const CUE_ROLE: ReadonlyArray<readonly [RegExp, PlaceholderRole]> = [
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const hasDigit = (s: string) => /\d/.test(s);
 
-function replaceAll(text: string, re: RegExp, role: PlaceholderRole, pass: 1 | 2, out: Array<{ role: PlaceholderRole; pass: 1 | 2 }>, group = 0): string {
+type Marker = (role: PlaceholderRole, original: string) => string;
+const placeholderMarker: Marker = (role) => `[${role}]`;
+
+function replaceAll(text: string, re: RegExp, role: PlaceholderRole, pass: 1 | 2, out: Array<{ role: PlaceholderRole; pass: 1 | 2 }>, group = 0, mark: Marker = placeholderMarker): string {
   return text.replace(re, (...args) => {
     out.push({ role, pass });
-    if (group === 0) return `[${role}]`;
-    const whole = args[0] as string; const captured = args[group] as string;
-    return whole.replace(captured, `[${role}]`);
+    const whole = args[0] as string;
+    if (group === 0) return mark(role, whole);
+    const captured = args[group] as string;
+    return whole.replace(captured, mark(role, captured));
   });
 }
 
-function pass1(raw: string, known: ReadonlyArray<KnownName>, out: Array<{ role: PlaceholderRole; pass: 1 | 2 }>): string {
+function pass1(raw: string, known: ReadonlyArray<KnownName>, out: Array<{ role: PlaceholderRole; pass: 1 | 2 }>, mark: Marker = placeholderMarker): string {
   let text = raw;
   // server-known names first, with their typed role (longest first so "State Farm Insurance" wins over "State")
-  for (const k of [...known].sort((a, b) => b.name.length - a.name.length)) if (k.name.trim().length >= 3) text = replaceAll(text, new RegExp(`\\b${escapeRe(k.name.trim())}\\b`, 'gi'), k.role, 1, out);
-  text = replaceAll(text, /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, 'EMAIL', 1, out);
-  text = replaceAll(text, /\bhttps?:\/\/\S+|\bwww\.\S+/gi, 'URL', 1, out);
-  text = replaceAll(text, /\b\d{3}-\d{2}-\d{4}\b/g, 'SSN', 1, out);
-  text = replaceAll(text, /(?<!\d)(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}(?!\d)/g, 'PHONE', 1, out);
-  text = replaceAll(text, /\b(?:dob|date of birth|born)\s*(?:on|:)?\s*\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/gi, 'DOB', 1, out);
-  for (const [re, role] of CUE_ROLE) text = replaceAll(text, re, role, 1, out, 1);
-  text = replaceAll(text, new RegExp(`\\b\\d{1,6}\\s+(?:[A-Z][\\w'-]*\\s+){0,3}${STREET_SUFFIX}\\b\\.?(?:\\s+(?:apt|unit|suite|ste|#)\\s*\\w+)?`, 'gi'), 'ADDRESS', 1, out);
+  for (const k of [...known].sort((a, b) => b.name.length - a.name.length)) if (k.name.trim().length >= 3) text = replaceAll(text, new RegExp(`\\b${escapeRe(k.name.trim())}\\b`, 'gi'), k.role, 1, out, 0, mark);
+  text = replaceAll(text, /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, 'EMAIL', 1, out, 0, mark);
+  text = replaceAll(text, /\bhttps?:\/\/\S+|\bwww\.\S+/gi, 'URL', 1, out, 0, mark);
+  text = replaceAll(text, /\b\d{3}-\d{2}-\d{4}\b/g, 'SSN', 1, out, 0, mark);
+  text = replaceAll(text, /(?<!\d)(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}(?!\d)/g, 'PHONE', 1, out, 0, mark);
+  text = replaceAll(text, /\b(?:dob|date of birth|born)\s*(?:on|:)?\s*\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/gi, 'DOB', 1, out, 0, mark);
+  for (const [re, role] of CUE_ROLE) text = replaceAll(text, re, role, 1, out, 1, mark);
+  text = replaceAll(text, new RegExp(`\\b\\d{1,6}\\s+(?:[A-Z][\\w'-]*\\s+){0,3}${STREET_SUFFIX}\\b\\.?(?:\\s+(?:apt|unit|suite|ste|#)\\s*\\w+)?`, 'gi'), 'ADDRESS', 1, out, 0, mark);
   return text;
+}
+
+/**
+ * FR-NRM-1 / FR-PRV-1: pass-1 identifier protection for the ROUTING text. Every pass-1 span (server-known names with their role, emails, phones, URLs, identifiers, addresses) is replaced by an opaque sentinel so spelling
+ * correction and framing removal can only touch unprotected text; `restore` puts the original spans back, so routing still reads exactly what was typed. Nothing is sent anywhere by this function.
+ */
+export function maskProtectedSpans(raw: string, known: ReadonlyArray<KnownName> = []): { masked: string; restore: (text: string) => string; protectedCount: number } {
+  const originals: string[] = [];
+  const masked = pass1(raw, known, [], (_role, original) => { originals.push(original); return `\uE000${originals.length - 1}\uE001`; });
+  return { masked, protectedCount: originals.length, restore: (text) => text.replace(/\uE000(\d+)\uE001/g, (whole, index: string) => originals[Number(index)] ?? whole) };
 }
 
 /** Conservative re-check of the final payload. Returns the text and whether something identifier-like could not be classified. */
