@@ -4,9 +4,10 @@ require('ts-node/register/transpile-only');
 const r = require('../../src/services/ask/dataPoint/queryShapeRegistries.ts');
 const { planDataPointQuery } = require('../../src/services/ask/dataPoint/dataPointQueryPlan.ts');
 
-test('the three registries ship empty and no shape 7-9 is enabled; the planner has no such shape', () => {
-  assert.deepEqual([r.TIME_SERIES_REGISTRY.length, r.ABSENCE_REQUIREMENT_REGISTRY.length, r.CROSS_ENTITY_RELATION_REGISTRY.length], [0, 0, 0]);
-  assert.deepEqual(r.queryShapesEnabled(), { timeSeries: false, absence: false, crossEntity: false });
+test('owner-path declarations validate and enable shapes 7-9; the generic planner (shapes 3-6) still builds no plan for them', () => {
+  assert.deepEqual([r.validateTimeSeries(), r.validateAbsence(), r.validateCrossEntity()], [[], [], []]);
+  assert.deepEqual(r.queryShapesEnabled(), { timeSeries: true, absence: true, crossEntity: true });
+  assert.ok(r.TIME_SERIES_REGISTRY.length > 0 && r.ABSENCE_REQUIREMENT_REGISTRY.length > 0 && r.CROSS_ENTITY_RELATION_REGISTRY.length > 0);
   for (const m of ['how has my tax bill changed over the years', 'what documents am I missing', 'which appliances have a warranty']) assert.notEqual(planDataPointQuery(m).kind, 'PLAN', m);
 });
 test('time series: needs a catalogued point, an observation timestamp (never an edit time), bounded periods and a named reviewer', () => {

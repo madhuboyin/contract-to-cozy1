@@ -21,6 +21,8 @@ export interface TimeSeriesDeclaration {
 /** Shape 8: a requirement with an applicability rule, a responsible source and the four distinct outcomes. */
 export interface AbsenceRequirementDeclaration {
   readonly requirementId: string;
+  /** The catalogued point whose absence is asked about. */
+  readonly dataPointId?: string;
   readonly label: string;
   /** When the requirement applies to a home at all (a declared rule id, evaluated deterministically, never free text). */
   readonly applicabilityRuleId: string;
@@ -47,9 +49,23 @@ export interface CrossEntityRelationDeclaration {
   readonly reviewedOn: string;
 }
 
-export const TIME_SERIES_REGISTRY: readonly TimeSeriesDeclaration[] = Object.freeze([]);
-export const ABSENCE_REQUIREMENT_REGISTRY: readonly AbsenceRequirementDeclaration[] = Object.freeze([]);
-export const CROSS_ENTITY_RELATION_REGISTRY: readonly CrossEntityRelationDeclaration[] = Object.freeze([]);
+// Owner-path declarations (2026-11-13). The reviewer field records the owner's session approval, not a named external reviewer (D8 is still open): replace it when one is named.
+export const TIME_SERIES_REGISTRY: readonly TimeSeriesDeclaration[] = Object.freeze([
+  { dataPointId: 'taxBill.amount', historyEntity: 'PropertyTaxBillRecord', timestampColumn: 'taxYear', ordering: 'OBSERVED_AT_ASC', deduplication: 'LATEST_RECORDED_WINS', supersession: 'EXCLUDE_SUPERSEDED', maxPeriods: 10, reviewedBy: 'product owner (approved in session 2026-11-13: shapes 7-9 for the owner path)', reviewedOn: '2026-11-13' },
+  { dataPointId: 'taxAssessment.totalAssessedValue', historyEntity: 'PropertyTaxAssessmentRecord', timestampColumn: 'taxYear', ordering: 'OBSERVED_AT_ASC', deduplication: 'LATEST_RECORDED_WINS', supersession: 'EXCLUDE_SUPERSEDED', maxPeriods: 10, reviewedBy: 'product owner (approved in session 2026-11-13: shapes 7-9 for the owner path)', reviewedOn: '2026-11-13' },
+] as TimeSeriesDeclaration[]);
+export const ABSENCE_REQUIREMENT_REGISTRY: readonly AbsenceRequirementDeclaration[] = Object.freeze([
+  { requirementId: 'item.serial.recorded', dataPointId: 'item.serial', label: 'item.serial', applicabilityRuleId: 'EVERY_INVENTORY_ITEM', responsibleSource: 'InventoryItem', outcomes: ['NOT_RECORDED', 'NOT_APPLICABLE', 'NOT_AUTHORIZED', 'NOT_FOUND'], audienceFloor: 'VIEWER', reviewedBy: 'product owner (approved in session 2026-11-13: shapes 7-9 for the owner path)', reviewedOn: '2026-11-13' },
+  { requirementId: 'item.model.recorded', dataPointId: 'item.model', label: 'item.model', applicabilityRuleId: 'EVERY_INVENTORY_ITEM', responsibleSource: 'InventoryItem', outcomes: ['NOT_RECORDED', 'NOT_APPLICABLE', 'NOT_AUTHORIZED', 'NOT_FOUND'], audienceFloor: 'VIEWER', reviewedBy: 'product owner (approved in session 2026-11-13: shapes 7-9 for the owner path)', reviewedOn: '2026-11-13' },
+  { requirementId: 'item.installedOn.recorded', dataPointId: 'item.installedOn', label: 'item.installedOn', applicabilityRuleId: 'EVERY_INVENTORY_ITEM', responsibleSource: 'InventoryItem', outcomes: ['NOT_RECORDED', 'NOT_APPLICABLE', 'NOT_AUTHORIZED', 'NOT_FOUND'], audienceFloor: 'VIEWER', reviewedBy: 'product owner (approved in session 2026-11-13: shapes 7-9 for the owner path)', reviewedOn: '2026-11-13' },
+  { requirementId: 'item.purchasedOn.recorded', dataPointId: 'item.purchasedOn', label: 'item.purchasedOn', applicabilityRuleId: 'EVERY_INVENTORY_ITEM', responsibleSource: 'InventoryItem', outcomes: ['NOT_RECORDED', 'NOT_APPLICABLE', 'NOT_AUTHORIZED', 'NOT_FOUND'], audienceFloor: 'VIEWER', reviewedBy: 'product owner (approved in session 2026-11-13: shapes 7-9 for the owner path)', reviewedOn: '2026-11-13' },
+  { requirementId: 'item.purchaseCost.recorded', dataPointId: 'item.purchaseCost', label: 'item.purchaseCost', applicabilityRuleId: 'EVERY_INVENTORY_ITEM', responsibleSource: 'InventoryItem', outcomes: ['NOT_RECORDED', 'NOT_APPLICABLE', 'NOT_AUTHORIZED', 'NOT_FOUND'], audienceFloor: 'VIEWER', reviewedBy: 'product owner (approved in session 2026-11-13: shapes 7-9 for the owner path)', reviewedOn: '2026-11-13' },
+  { requirementId: 'item.lastServicedOn.recorded', dataPointId: 'item.lastServicedOn', label: 'item.lastServicedOn', applicabilityRuleId: 'EVERY_INVENTORY_ITEM', responsibleSource: 'InventoryItem', outcomes: ['NOT_RECORDED', 'NOT_APPLICABLE', 'NOT_AUTHORIZED', 'NOT_FOUND'], audienceFloor: 'VIEWER', reviewedBy: 'product owner (approved in session 2026-11-13: shapes 7-9 for the owner path)', reviewedOn: '2026-11-13' },
+] as AbsenceRequirementDeclaration[]);
+// The warranty side is reached THROUGH the property-scoped item (Warranty.inventoryItemId), so it can never be another home's record.
+export const CROSS_ENTITY_RELATION_REGISTRY: readonly CrossEntityRelationDeclaration[] = Object.freeze([
+  { relationId: 'item-warranty', from: 'InventoryItem', to: 'Warranty', viaColumn: 'inventoryItemId', cardinality: 'ONE_TO_MANY', maxJoinedRows: 100, audienceFloors: { InventoryItem: 'VIEWER', Warranty: 'VIEWER' }, propertyScopedBothSides: true, reviewedBy: 'product owner (approved in session 2026-11-13: shapes 7-9 for the owner path)', reviewedOn: '2026-11-13' },
+] as CrossEntityRelationDeclaration[]);
 
 const reviewed = (e: { reviewedBy: string; reviewedOn: string }, id: string, issues: string[]) => {
   if (!e.reviewedBy?.trim()) issues.push(`${id}: no named reviewer`);
@@ -72,6 +88,7 @@ export function validateAbsence(entries: readonly AbsenceRequirementDeclaration[
     if (seen.has(e.requirementId)) issues.push(`${e.requirementId}: declared twice`); seen.add(e.requirementId);
     if (!e.applicabilityRuleId?.trim()) issues.push(`${e.requirementId}: no applicability rule`);
     if (!e.responsibleSource) issues.push(`${e.requirementId}: no responsible source`);
+    if (e.dataPointId !== undefined && !DATA_POINT_BY_ID.has(e.dataPointId)) issues.push(`${e.requirementId}: ${e.dataPointId} is not a catalogued data point`);
     const need = ['NOT_RECORDED', 'NOT_APPLICABLE', 'NOT_AUTHORIZED', 'NOT_FOUND'];
     if (!Array.isArray(e.outcomes) || need.some((o, i) => e.outcomes[i] !== o)) issues.push(`${e.requirementId}: the four outcomes must be kept distinct`);
     reviewed(e, e.requirementId, issues);

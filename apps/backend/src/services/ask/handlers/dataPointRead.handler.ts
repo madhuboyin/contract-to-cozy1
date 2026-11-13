@@ -13,6 +13,7 @@ import { planDataPointQuery, pointOf, type QueryPlan } from '../dataPoint/dataPo
 import { prisma } from '../../../lib/prisma';
 import { safeTimezone } from '../support/propertyContext';
 import { runDataPointQuery } from '../dataPoint/dataPointQueryRunner';
+import { planShape789, runShape789, shapePointIds, type Shape789Plan } from '../dataPoint/dataPointShapes789';
 
 const ENTITY_COPY: Record<string, { plural: string; singular: string; collection: string; record: string; none?: string }> = {
   InventoryItem: { plural: 'items', singular: 'inventory', collection: 'inventory', record: 'Home inventory record' },
@@ -122,6 +123,64 @@ async function dataPointQueryResult(propertyId: string, role: string, plan: Quer
   };
 }
 
+
+const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
+const fmtMoney = (v: number) => `$${v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+/** Shapes 7-9: change over tax years, a field not recorded / not serviced since, items with no warranty. Always a snapshot (never composable), as every computed answer is. */
+async function shape789Result(propertyId: string, role: string, plan: Shape789Plan): Promise<AskOperationResult> {
+  for (const id of shapePointIds(plan)) {
+    const p = DATA_POINT_BY_ID.get(id);
+    if (p && !roleMayRead(role, p)) { const copy = audienceFloorCopy(p.audience); return notice('DATA_POINT_RESTRICTED', 'data-point-restricted', copy.title, `${p.label} is only shown to ${copy.who}, so I can't answer this for you. Ask the home’s owner if you need it.`); }
+  }
+  const run = await runShape789(propertyId, plan);
+  const lines: string[] = []; let title = ''; let limited = false; let evidenceLabel = 'Your inventory';
+  const names = (n: number) => run.rows.slice(0, 10).map((r) => r.label).join('; ') + (run.total > 10 ? `; and ${run.total - 10} more` : '');
+  if (plan.shape === 'TIME_SERIES') {
+    evidenceLabel = plan.label === 'total assessed value' ? 'Your property tax assessments' : 'Your property tax bills';
+    const series = run.series ?? []; const known = series.filter((x) => x.value !== null) as Array<{ id: string; year: number; value: number }>;
+    if (!series.length) { title = `No ${plan.label} history recorded`; lines.push(`I don’t have any active ${plan.label} records for this home, so there is no change to show.`); }
+    else if (known.length < 2) { limited = true; title = `Only ${known.length === 1 ? 'one' : 'no'} ${plan.label} on record`; lines.push(`I have ${series.length} tax ${plural(series.length, 'year', 'years')} on record${known.length === 1 ? `: ${known[0].year} was ${fmtMoney(known[0].value)}` : ' with no amount'}. I need at least two years with an amount to show a change.`); }
+    else {
+      const first = known[0]; const last = known[known.length - 1]; const diff = last.value - first.value; const pct = first.value ? (diff / first.value) * 100 : null;
+      title = `${plan.label[0].toUpperCase()}${plan.label.slice(1)}: ${diff === 0 ? 'unchanged' : diff > 0 ? 'up' : 'down'} since ${first.year}`;
+      lines.push(`${known.map((x, i) => `${x.year}: ${fmtMoney(x.value)}${i ? ` (${x.value - known[i - 1].value >= 0 ? '+' : '−'}${fmtMoney(Math.abs(x.value - known[i - 1].value))})` : ''}`).join('; ')}.`);
+      lines.push(`From ${first.year} to ${last.year} it ${diff === 0 ? 'did not change' : `${diff > 0 ? 'rose' : 'fell'} by ${fmtMoney(Math.abs(diff))}${pct === null ? '' : ` (${Math.abs(pct).toFixed(1)}%)`}`}.`);
+      if (known.length < series.length) { limited = true; lines.push(`${series.length - known.length} ${plural(series.length - known.length, 'year has', 'years have')} no amount recorded and ${plural(series.length - known.length, 'is', 'are')} left out.`); }
+      lines.push('Based on the active tax records on file, one per tax year.');
+    }
+    const sources = series.length ? series.map((x) => sourceRef((plan.entity) as CompositeSourceType, x.id)) : [sourceRef('Property', propertyId)];
+    return snapshotResult(sources, 'TIME_SERIES', title, lines, limited, evidenceLabel);
+  }
+  if (plan.shape === 'ABSENCE') {
+    title = run.total === 0 ? `Every item has its ${plan.label} recorded` : `${run.total} ${plural(run.total, 'item has', 'items have')} no ${plan.label} recorded`;
+    lines.push(run.total === 0 ? `None of your inventory items is missing a ${plan.label}.` : `${plan.count ? `${run.total} of your items` : names(run.total)} ${plan.count ? plural(run.total, 'has', 'have') + ` no ${plan.label} recorded.` : `${plural(run.total, 'has', 'have')} no ${plan.label} recorded.`}`);
+    if (run.total > 0) lines.push('“Not recorded” means nothing is saved for it yet, not that it does not exist.');
+  } else if (plan.shape === 'STALE_SERVICE') {
+    const never = run.neverServiced ?? 0;
+    title = run.total === 0 ? 'Nothing is overdue for service' : `${run.total} ${plural(run.total, 'item', 'items')} not serviced ${plan.cutoff ? `in over ${plan.windowText}` : 'ever'}`;
+    lines.push(run.total === 0 ? `Every item with a service date was serviced ${plan.cutoff ? `within ${plan.windowText}` : 'at some point'}.` : `${plan.count ? `${run.total} of your items` : names(run.total)} ${plan.cutoff ? `${plural(run.total, 'was', 'were')} last serviced more than ${plan.windowText} ago or ${plural(run.total, 'has', 'have')} no service recorded` : `${plural(run.total, 'has', 'have')} no service recorded`}.`);
+    if (plan.cutoff && never > 0) { limited = true; lines.push(`${never} of these ${plural(never, 'has', 'have')} no service date at all, so ${plural(never, 'it may', 'they may')} have been serviced without being recorded.`); }
+  } else {
+    const where = plan.currentOnly ? 'no current warranty' : 'no warranty record';
+    title = run.total === 0 ? `Every item has a ${plan.currentOnly ? 'current ' : ''}warranty record` : `${run.total} ${plural(run.total, 'item has', 'items have')} ${where}`;
+    lines.push(run.total === 0 ? `Each of your inventory items has a ${plan.currentOnly ? 'warranty that has not expired' : 'warranty record'}.` : `${plan.count ? `${run.total} of your items` : names(run.total)} ${plural(run.total, 'has', 'have')} ${where}${plan.currentOnly ? ' (none that has not expired)' : ''}.`);
+    if (run.total > 0) { limited = true; lines.push('This only reflects warranties saved against an item; a warranty that is recorded without being linked to the item is not counted.'); }
+  }
+  const sources = run.rows.length ? run.rows.slice(0, 10).map((r) => sourceRef('InventoryItem', r.id)) : [sourceRef('Property', propertyId)];
+  return snapshotResult(sources, plan.shape, title, lines, limited, evidenceLabel);
+}
+function snapshotResult(sources: ReturnType<typeof sourceRef>[], shape: string, title: string, lines: string[], limited: boolean, evidenceLabel: string): AskOperationResult {
+  return {
+    status: limited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: limited ? 'DATA_POINT_QUERY_PARTIAL' : undefined,
+    parameters: { sources, dataPointQuery: { snapshot: true, shape, template: 'shape789', asOf: new Date().toISOString() } },
+    blocks: [
+      { type: 'SUMMARY', id: 'data-point-query-summary', title, body: lines.join(' '), tone: limited ? 'CAUTION' : 'DEFAULT', actions: [] },
+      { type: 'EVIDENCE', id: 'data-point-evidence', title: 'Where this comes from', items: [{ label: evidenceLabel, source: evidenceLabel, observedAt: new Date().toISOString() }] },
+    ] as AskPresentationBlock[],
+    suggestions: [],
+  };
+}
+
 /** One summary for a multi-part question: each facet's own answer (value, limitation or notice) in order, with the union of their sources, so no facet is silently dropped. */
 function mergeFacetResults(results: AskOperationResult[]): AskOperationResult {
   const summaries = results.map((r) => r.blocks.find((b) => (b as { type: string }).type === 'SUMMARY') as { title?: string; body?: string } | undefined);
@@ -145,6 +204,7 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
   // The planner is pure: the property's timezone is read here and passed in, so calendar periods (this month, next week) use the property's calendar, not UTC.
   const timeZone = await propertyTimeZone(propertyId);
   const queryOutcome = forcedPoint ? ({ kind: 'NONE' } as const) : planDataPointQuery(message, new Date(), timeZone);
+  if (!forcedPoint) { const shapePlan = planShape789(message); if (shapePlan) return shape789Result(propertyId, role, shapePlan); }
   // A multi-part question ("what is my deductible and when does my insurance policy expire") has several facets: each is read through the ordinary single-point path and all are answered in one summary.
   if (!forcedPoint && queryOutcome.kind === 'NONE') {
     const facets = resolveDataPointsMulti(message);

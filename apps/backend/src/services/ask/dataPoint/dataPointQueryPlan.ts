@@ -4,6 +4,7 @@
 // Anything outside a template yields no plan. A plan never contains free text from the message except validated numbers, years and enum words.
 import { DATA_POINT_BY_ID, type DataPointDefinition, type DataPointEntity } from './dataPointCatalogue';
 import { visibleRecordWhere } from '../../homeRecordsAccess';
+import { planShape789 } from './dataPointShapes789';
 
 export type QueryShape = 'LIST' | 'FILTER' | 'TOP_K' | 'AGGREGATE';
 export type FieldType = 'date' | 'money' | 'dollars' | 'percent' | 'enum';
@@ -469,9 +470,11 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
 
 /** Cheap guard for routing: a message that is plausibly a query question (so the router need not build a plan for every message). */
 export const dataPointQueryLead = /^\s*(?:what|which|how many|how much|list|show|tell me|do i have|are there|count|give me|find|have i|did i|has my|are any|is there)\b/i;
-export function isDataPointQuery(message: string, now: Date = new Date()): boolean { return dataPointQueryLead.test(message) && planDataPointQuery(message, now).kind !== 'NONE'; }
+export function isDataPointQuery(message: string, now: Date = new Date()): boolean { return (dataPointQueryLead.test(message) && planDataPointQuery(message, now).kind !== 'NONE') || planShape789(message, now) !== null; }
 /** Shapes 4-6 over entities with no dedicated filtering operation (the router uses this ahead of the generic lookups). */
 export function isDataPointComputedQuery(message: string, now: Date = new Date()): boolean {
+  // Shapes 7-9 (change over years, absence, items with no warranty) are never a list operation's answer.
+  if (planShape789(message, now) !== null) return true;
   if (!dataPointQueryLead.test(message)) return false;
   const o = planDataPointQuery(message, now);
   if (o.kind !== 'PLAN' || o.plan.shape === 'LIST') return false;
