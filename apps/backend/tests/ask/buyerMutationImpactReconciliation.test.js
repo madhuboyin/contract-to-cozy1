@@ -79,25 +79,22 @@ test('selectSiblingRefreshTargets returns an empty array for an empty input', ()
   assert.deepEqual(selectSiblingRefreshTargets([], () => false), []);
 });
 
-// AskExecutionResponseSchema's childExecutions caps at 3 (ask.contract.ts).
-// 1 explicit source + 3 declared siblings (BUYER_PLAN_STATUS/BUYER_DEADLINES/
-// BUYER_MOVE_STATUS on a move-task reschedule) is the real worst case this
-// guards against -- exceeding the cap would fail response validation on an
-// otherwise-successful mutation.
-test('capReconciledChildExecutions keeps the explicit source and truncates siblings to stay at the cap of 3', () => {
+// Reconciliation shares the six-child public response limit with composition.
+test('capReconciledChildExecutions keeps the explicit source and all siblings within the limit of 6', () => {
   const source = ['source'];
   const siblings = ['plan-status', 'deadlines', 'move-status'];
-  assert.deepEqual(capReconciledChildExecutions(source, siblings), ['source', 'plan-status', 'deadlines']);
+  assert.deepEqual(capReconciledChildExecutions(source, siblings), ['source', 'plan-status', 'deadlines', 'move-status']);
 });
 
 test('capReconciledChildExecutions never drops the explicit source, even with a full sibling set', () => {
-  const result = capReconciledChildExecutions(['source'], ['a', 'b', 'c', 'd', 'e']);
+  const result = capReconciledChildExecutions(['source'], ['a', 'b', 'c', 'd', 'e', 'f']);
   assert.equal(result[0], 'source');
-  assert.equal(result.length, 3);
+  assert.deepEqual(result, ['source', 'a', 'b', 'c', 'd', 'e']);
+  assert.equal(result.length, 6);
 });
 
-test('capReconciledChildExecutions with no explicit source still caps siblings at 3', () => {
-  assert.deepEqual(capReconciledChildExecutions([], ['a', 'b', 'c', 'd']), ['a', 'b', 'c']);
+test('capReconciledChildExecutions with no explicit source accepts up to six siblings', () => {
+  assert.deepEqual(capReconciledChildExecutions([], ['a', 'b', 'c', 'd']), ['a', 'b', 'c', 'd']);
 });
 
 test('capReconciledChildExecutions below the cap keeps everything', () => {

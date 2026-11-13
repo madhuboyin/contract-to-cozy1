@@ -14,10 +14,11 @@ export type RuntimeUnderstandingOutcome =
   | { kind: 'UNAVAILABLE'; reason: string }
   | { kind: 'PLAN'; clauses: ComposedClause[]; deferred: DeferredClause[] };
 
-/** Runtime bridge. Only independently executable operation facets are admitted today; dependency-aware merge remains fail-closed. */
+/** Runtime bridge from a deterministically validated request plan. */
 export async function planRuntimeUnderstanding(input: {
   message: string;
   eligibleOperationIds: ReadonlySet<AskOperationId>;
+  eligibleDataPointIds: ReadonlySet<string>;
   controls: RuntimeUnderstandingControls;
   provider: UnderstandingProvider;
   /** The authorised property's own names, protected by the minimiser before anything is sent (FR-PRV-1). */
@@ -29,16 +30,20 @@ export async function planRuntimeUnderstanding(input: {
   if (!isUnderstandingStratumCertified('SINGLE_STAGE_READ_PLAN')) return { kind: 'DISABLED', reason: 'STRATUM_NOT_CERTIFIED' };
   const outcome = await guardedPlan({
     message: input.message, provider: input.provider, providerTermsRecorded: true, knownNames: input.knownNames,
-    planContext: { eligibleOperationIds: input.eligibleOperationIds },
+    planContext: { eligibleOperationIds: input.eligibleOperationIds, eligibleDataPointIds: input.eligibleDataPointIds },
   });
   if (outcome.kind !== 'PLANNED') return { kind: 'UNAVAILABLE', reason: outcome.reason };
   const accepted = outcome.validation.accepted;
-  const clauses: ComposedClause[] = accepted
-    .filter((facet) => facet.target.kind === 'OPERATION' && facet.dependsOn.length === 0)
-    .map((facet) => ({ clause: facet.span, operationId: facet.target.kind === 'OPERATION' ? facet.target.operationId : 'DATA_POINT_READ', confidence: facet.confidence }));
+  const clauses: ComposedClause[] = accepted.map((facet) => ({
+    clause: facet.span,
+    operationId: facet.target.kind === 'OPERATION' ? facet.target.operationId : 'DATA_POINT_READ',
+    confidence: facet.confidence,
+    facetId: facet.id,
+    dependsOn: facet.dependsOn,
+    ...(facet.target.kind === 'DATA_POINT' ? { dataPointId: facet.target.dataPointId } : {}),
+  }));
   const deferred: DeferredClause[] = [
-    ...accepted.filter((facet) => facet.target.kind === 'DATA_POINT' || facet.dependsOn.length > 0).map((facet) => ({ clause: facet.span, reason: 'NOT_COMPOSABLE' as const, operationId: facet.target.kind === 'OPERATION' ? facet.target.operationId : 'DATA_POINT_READ' as AskOperationId })),
     ...outcome.validation.dropped.map((facet) => ({ clause: facet.span, reason: facet.reason === 'OVER_LIMIT' ? 'OVER_LIMIT' as const : 'NOT_ROUTED' as const, operationId: null })),
   ];
-  return clauses.length >= 2 ? { kind: 'PLAN', clauses, deferred } : { kind: 'UNAVAILABLE', reason: 'NO_EXECUTABLE_MULTI_FACET_PLAN' };
+  return clauses.length ? { kind: 'PLAN', clauses, deferred } : { kind: 'UNAVAILABLE', reason: 'NO_EXECUTABLE_PLAN' };
 }

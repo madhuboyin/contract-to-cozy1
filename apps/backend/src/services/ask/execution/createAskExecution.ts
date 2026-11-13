@@ -8,7 +8,7 @@ import { logger } from '../../../lib/logger';
 import { recordAskCapabilityLifecycle } from '../askCapabilityLifecycle';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
-import { askCompositionTotal, askTurnStageDurationSeconds, askTurnFailuresTotal, type AskTurnStage, askExecutionDurationSeconds, askExecutionsTotal, askInlineCapturesTotal, askRoutingDecisionsTotal, askModelRouterTotal, askUnansweredRecoveryTotal, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../../lib/metrics';
+import { askCompositionTotal, askTurnStageDurationSeconds, askTurnFailuresTotal, type AskTurnStage, askExecutionDurationSeconds, askExecutionsTotal, askInlineCapturesTotal, askRoutingDecisionsTotal, askUnansweredRecoveryTotal, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../../lib/metrics';
 import { type AskAccountRole } from '../askAccountEligibility';
 import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
 import { runConversationalCaptureForTurn } from '../conversationalUnderstanding/conversationalCapture';
@@ -16,12 +16,10 @@ import { asInputJson, askFailureBlocks, askFailureStatus, assertSkillResultBlock
 import { executeOperation } from '../execution/executeOperation';
 import { classifyLaunchedOutcome, recordHandoffOutcome, resolveHandoffAttribution, type AskHandoffAttribution } from './askHandoffTelemetry';
 import { propertyScopeForAskRouting, resolveAskRoutingCascade, type AskRoutingDecision } from '../askRoutingCascade';
-import { refineAskRoutingWithModel } from '../askModelRouter';
 import { offerDidYouMean, isAskUnansweredFallbackResult } from '../support/didYouMean';
 import { withGeneralGuidanceCard } from '../support/generalGuidanceCard';
 import { findApprovedGeneralGuidanceText } from '../../groundedAsk.service';
 import { clarificationLabelFor, UPGRADE_OBJECTIVE_REASON, upgradeObjectiveLabelFor } from '../support/clarificationLabels';
-import { geminiService } from '../../gemini.service';
 import { resolveAskFollowUpMessage, shouldForceAskOperation } from '../askFollowUpContext';
 import { getSkillDefinition, getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../../skills/skillRegistry';
 import { ASK_CAPABILITY_UNIQUE_OPERATION } from '../../intelligence/capabilitySkillGuidanceBridge.registry';
@@ -43,6 +41,7 @@ import { recoverComposedTurn, runComposedTurn } from '../composition/runComposed
 import { GeminiUnderstandingProvider } from '../modelRouting/understandingProvider';
 import { planRuntimeUnderstanding } from '../modelRouting/runtimeUnderstanding';
 import { loadKnownNames } from '../privacy/knownNames';
+import { DATA_POINT_DEFINITIONS, roleMayRead } from '../dataPoint/dataPointCatalogue';
 import { buildAuthorizationView } from '../composition/authorizationView';
 import { resolveSlotFollowUp } from '../composition/slotContext';
 import { extractSlots, sanitizeSlots } from '../composition/slots';
@@ -296,6 +295,9 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       : await planRuntimeUnderstanding({
         message: input.message,
         eligibleOperationIds: new Set(eligibleOperationIds),
+        eligibleDataPointIds: new Set(DATA_POINT_DEFINITIONS
+          .filter((point) => initialPropertyAccess && roleMayRead(String(initialPropertyAccess.role), point))
+          .map((point) => point.id)),
         controls: {
           enabled: controls.understandingPlannerEnabled && controls.remoteGenerationEnabled,
           providerTermsRecorded: controls.understandingProviderTermsRecorded,
@@ -513,20 +515,6 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       requiresClarification: true,
       entityResolution: null,
     };
-  }
-  // A message the local router could not place (the generic fallback, or a clarification between candidates) may be placed by a model that
-  // chooses between registered read-only operations (askModelRouter.ts). Off unless ASK_MODEL_ROUTER_ENABLED; every other outcome, and any
-  // failure, leaves the decision exactly as it is. A declared or contextual operation never reaches it.
-  if (!forcedOperationId) {
-    routingDecision = await refineAskRoutingWithModel(routingDecision, {
-      enabled: controls.modelRouterEnabled && controls.remoteGenerationEnabled && controls.localRoutingEnabled,
-      message: routingMessage,
-      provider: { select: (request) => geminiService.selectAskOperation(request) },
-      eligibleOperationIds,
-      propertyId: executionPropertyId,
-      launchEntityId: input.launchContext?.entityId,
-      onOutcome: (outcome) => askModelRouterTotal.inc({ outcome: outcome.toLowerCase() }),
-    });
   }
   // The local classifier already had the concatenated prior+current message
   // to work with; only step in when it still found nothing confident

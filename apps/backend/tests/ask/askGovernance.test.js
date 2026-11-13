@@ -19,6 +19,7 @@ const {
 const { readAskOperationalControls } = require('../../src/config/askOperationalControls.ts');
 const {
   ASK_RESPONSE_SCHEMA_VERSION,
+  MAX_ASK_CHILD_EXECUTIONS,
   AskExecutionResponseSchema,
   AskPendingWorkItemSchema,
   AskPresentationBlockSchema,
@@ -605,7 +606,7 @@ test('response actions distinguish inline workflow commands from navigation link
 });
 
 // Ask Cozy Stage 3, Phase 3 (implementation plan §9/§19; FRD §16/§28).
-test('childExecutions defaults to empty, accepts up to 3 full child response objects, and nests only one level deep', () => {
+test('childExecutions defaults to empty, accepts every supported facet, and nests only one level deep', () => {
   const base = {
     schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
     executionId: 'parent-1', sessionId: 'session-1', question: 'I replaced the roof last summer for $14,500.', status: 'ANSWERED',
@@ -632,8 +633,9 @@ test('childExecutions defaults to empty, accepts up to 3 full child response obj
   assert.equal(withChild.data.childExecutions.length, 1);
   assert.deepEqual(withChild.data.childExecutions[0].childExecutions, []);
 
-  // Bounded at 3, per FRD §16/§28's decision (mirroring captureRequests's own max(3) precedent).
-  const tooMany = AskExecutionResponseSchema.safeParse({ ...base, childExecutions: [child, child, child, child] });
+  const atLimit = AskExecutionResponseSchema.safeParse({ ...base, childExecutions: Array(MAX_ASK_CHILD_EXECUTIONS).fill(child) });
+  assert.equal(atLimit.success, true);
+  const tooMany = AskExecutionResponseSchema.safeParse({ ...base, childExecutions: Array(MAX_ASK_CHILD_EXECUTIONS + 1).fill(child) });
   assert.equal(tooMany.success, false);
 
   // A child cannot itself carry a further nested child -- one level only.

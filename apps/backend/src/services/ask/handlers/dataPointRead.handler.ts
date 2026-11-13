@@ -260,4 +260,11 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
   };
 }
 
-registerCapabilityHandler('data-point-read.read', async (envelope) => dataPointReadResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('data-point-read.read', async (envelope) => {
+  const requestedId = envelope.launchContext?.dataPointId;
+  const forcedPoint = requestedId ? DATA_POINT_BY_ID.get(requestedId) : undefined;
+  // A server-authored launch id that is no longer catalogued fails closed; it
+  // is never silently reinterpreted from message text.
+  if (requestedId && !forcedPoint) return notice('DATA_POINT_NOT_IDENTIFIED', 'data-point-unidentified', 'That home detail is not available', 'Ask for the detail again and I’ll use the current home-data catalogue.');
+  return dataPointReadResult(envelope.userId, envelope.propertyId!, envelope.message, forcedPoint);
+});

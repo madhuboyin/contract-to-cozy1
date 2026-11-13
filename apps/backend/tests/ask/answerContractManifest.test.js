@@ -16,15 +16,20 @@ test('every message-routable operation is in the manifest, and nothing else is',
   assert.equal(manifest.operationCount, routable.length);
   for (const o of manifest.operations) assert.ok(o.handlerFiles.length > 0, `${o.operationId} has no handler registered for ${o.adapterKey}`);
 });
-test('the complete manifest is consumed at runtime and rejects undeclared variants', () => {
-  assert.deepEqual(operationAnswerContractCoverage(), { covered: manifest.operationCount, total: manifest.operationCount });
-  const operation = manifest.operations[0];
+test('runtime consumes only code-path-certified contracts and rejects scan-only or undeclared variants', () => {
+  const certified = manifest.operations.filter((operation) => operation.evidenceTier === 'CODE_PATH_CONTRACT');
+  assert.deepEqual(operationAnswerContractCoverage(), { covered: certified.length, total: manifest.operationCount });
+  const operation = certified[0];
   const declaration = operation.emittedBlockIds.find((candidate) => operation.allowedBlockTypes.includes(candidate.slice(0, candidate.indexOf(':'))));
   const separator = declaration.indexOf(':');
   const type = declaration.slice(0, separator);
   const id = declaration.slice(separator + 1).replace(/\*$/, 'example');
   assert.equal(matchesOperationAnswerContract(operation.operationId, { status: 'ANSWERED', blocks: [{ type, id }], suggestions: [] }), true);
   assert.equal(matchesOperationAnswerContract(operation.operationId, { status: 'ANSWERED', blocks: [{ type, id: 'not-declared-by-the-handler' }], suggestions: [] }), false);
+  const scanOnly = manifest.operations.find((candidate) => candidate.evidenceTier === 'SOURCE_SCAN_ONLY');
+  const scanned = scanOnly.emittedBlockIds.find((candidate) => scanOnly.allowedBlockTypes.includes(candidate.slice(0, candidate.indexOf(':'))));
+  const scanSeparator = scanned.indexOf(':');
+  assert.equal(matchesOperationAnswerContract(scanOnly.operationId, { status: 'ANSWERED', blocks: [{ type: scanned.slice(0, scanSeparator), id: scanned.slice(scanSeparator + 1).replace(/\*$/, 'example') }], suggestions: [] }), false);
 });
 test('the committed manifest is current (run scripts/ask-answer-contract-manifest.js --write after changing a handler block id)', () => {
   const run = spawnSync(process.execPath, [path.join(__dirname, '../../scripts/ask-answer-contract-manifest.js')], { env: { ...process.env, TS_NODE_TRANSPILE_ONLY: 'true' }, encoding: 'utf8' });

@@ -10,10 +10,40 @@ import { ASK_OPERATION_DEFINITIONS } from '../askOperationRegistry';
 import { DATA_POINT_DEFINITIONS } from '../dataPoint/dataPointCatalogue';
 import { isWriteCapableOperation } from '../support/writeCapability';
 import { geminiService } from '../../gemini.service';
+import { z } from 'zod';
 
 export const MODEL_CALL_BUDGET = Object.freeze({ maxTotalCalls: 4, maxTargetCalls: 3, perCallTimeoutMs: 1500, totalBudgetMs: 4000 });
+export const SINGLE_STAGE_CANDIDATE_LIMIT = 120;
 
-export interface UnderstandingProvider { readonly name: string; plan(input: { readonly text: string; readonly signal: AbortSignal }): Promise<unknown> }
+const ProviderCandidateSchema = z.object({
+  kind: z.enum(['OPERATION', 'DATA_POINT']), operationId: z.string().optional(), dataPointId: z.string().optional(),
+  entityRef: z.string().nullable().optional(), parameters: z.record(z.string(), z.unknown()).default({}),
+  requiredSlots: z.array(z.string()).max(12).default([]),
+  evidence: z.object({ jobMatch: z.enum(['DIRECT', 'PARTIAL', 'NONE']), itemNamed: z.boolean() }).strict(),
+}).strict();
+const ProviderUnderstandingSchema = z.object({
+  disposition: z.enum(['MATCH', 'NONE_FITS', 'INSUFFICIENT_TEXT']),
+  candidates: z.array(ProviderCandidateSchema).max(3), slots: z.record(z.string(), z.unknown()),
+  selfAssessment: z.enum(['HIGH', 'MEDIUM', 'LOW']), requestPlan: z.object({ facets: z.array(z.record(z.string(), z.unknown())).max(32) }).strict().nullable().optional(),
+}).strict().superRefine((value, ctx) => {
+  if ((value.disposition === 'MATCH') !== (value.candidates.length > 0)) ctx.addIssue({ code: 'custom', path: ['candidates'], message: 'MATCH requires candidates; non-MATCH requires none.' });
+  value.candidates.forEach((candidate, index) => {
+    if (candidate.kind === 'OPERATION' && !candidate.operationId) ctx.addIssue({ code: 'custom', path: ['candidates', index, 'operationId'], message: 'operationId is required.' });
+    if (candidate.kind === 'DATA_POINT' && !candidate.dataPointId) ctx.addIssue({ code: 'custom', path: ['candidates', index, 'dataPointId'], message: 'dataPointId is required.' });
+    if (candidate.kind === 'OPERATION' && candidate.dataPointId) ctx.addIssue({ code: 'custom', path: ['candidates', index, 'dataPointId'], message: 'dataPointId is not allowed for an operation.' });
+    if (candidate.kind === 'DATA_POINT' && candidate.operationId) ctx.addIssue({ code: 'custom', path: ['candidates', index, 'operationId'], message: 'operationId is not allowed for a data point.' });
+  });
+});
+
+export interface UnderstandingProvider {
+  readonly name: string;
+  plan(input: {
+    readonly text: string;
+    readonly signal: AbortSignal;
+    readonly eligibleOperationIds?: ReadonlySet<string>;
+    readonly eligibleDataPointIds?: ReadonlySet<string>;
+  }): Promise<unknown>;
+}
 export type GuardOutcome =
   | { readonly kind: 'PLANNED'; readonly validation: PlanValidation; readonly sentText: string; readonly calls: number }
   | { readonly kind: 'REFUSED'; readonly reason: 'PROVIDER_TERMS_NOT_RECORDED' | 'NO_CALL_UNCLASSIFIABLE_IDENTIFIER' | 'NO_CALL_UNINTERPRETABLE_AFTER_MINIMISATION' }
@@ -36,7 +66,11 @@ export async function guardedPlan(input: GuardedPlanInput): Promise<GuardOutcome
   const timer = setTimeout(() => controller.abort(), MODEL_CALL_BUDGET.perCallTimeoutMs);
   try {
     const raw = await Promise.race([
-      input.provider.plan({ text: minimised.text, signal: controller.signal }),
+      input.provider.plan({
+        text: minimised.text, signal: controller.signal,
+        eligibleOperationIds: input.planContext.eligibleOperationIds,
+        eligibleDataPointIds: input.planContext.eligibleDataPointIds,
+      }),
       new Promise<never>((_, reject) => controller.signal.addEventListener('abort', () => reject(Object.assign(new Error('timeout'), { name: 'TimeoutError' })))),
     ]);
     // The plan is validated against the MINIMISED text's words: a facet span is a phrase of the message, and placeholders are not routing words.
@@ -59,14 +93,45 @@ export class ScriptedProvider implements UnderstandingProvider {
 /** Real provider adapter. It exposes only reviewed ids and descriptions; no home record values are included. */
 export class GeminiUnderstandingProvider implements UnderstandingProvider {
   readonly name = 'gemini-structured-understanding';
-  async plan(input: { text: string; signal: AbortSignal }): Promise<unknown> {
-    const operations = Object.values(ASK_OPERATION_DEFINITIONS)
-      .filter((definition) => definition.messageRoutable && definition.composableRead && !isWriteCapableOperation(definition.operationId))
-      .map((definition) => ({ id: definition.operationId, description: definition.semantic.intentDescription }));
-    const dataPoints = DATA_POINT_DEFINITIONS.map((point) => ({ id: point.id, description: point.label, domain: point.domain }));
-    const raw = await geminiService.planAskUnderstanding({ text: input.text, operations, dataPoints, signal: input.signal });
-    if (!raw || typeof raw !== 'object' || !Array.isArray((raw as { facets?: unknown }).facets)) return raw;
-    return { facets: (raw as { facets: Array<Record<string, unknown>> }).facets.map((facet) => ({
+  async plan(input: { text: string; signal: AbortSignal; eligibleOperationIds?: ReadonlySet<string>; eligibleDataPointIds?: ReadonlySet<string> }): Promise<unknown> {
+    const operationCatalogue = Object.values(ASK_OPERATION_DEFINITIONS)
+      .filter((definition) => (!input.eligibleOperationIds || input.eligibleOperationIds.has(definition.operationId))
+        && definition.messageRoutable && definition.composableRead && !isWriteCapableOperation(definition.operationId))
+      .map((definition) => ({ id: definition.operationId, description: definition.semantic.intentDescription, domain: `operation:${definition.family}` }));
+    const dataPointCatalogue = DATA_POINT_DEFINITIONS
+      .filter((point) => !input.eligibleDataPointIds || input.eligibleDataPointIds.has(point.id))
+      .map((point) => ({ id: point.id, description: point.label, domain: point.domain }));
+    let raw: unknown;
+    if (operationCatalogue.length + dataPointCatalogue.length <= SINGLE_STAGE_CANDIDATE_LIMIT) {
+      raw = await geminiService.planAskUnderstanding({ text: input.text, operations: operationCatalogue.map(({ domain: _domain, ...entry }) => entry), dataPoints: dataPointCatalogue, signal: input.signal });
+    } else {
+      const domainIds = [...new Set([...operationCatalogue.map((entry) => entry.domain), ...dataPointCatalogue.map((entry) => entry.domain)])].sort();
+      const stageOne = await geminiService.selectAskUnderstandingDomains({ text: input.text, domains: domainIds.map((id) => ({ id, description: id.replace(/^operation:/, '').replace(/_/g, ' ').toLowerCase() })), signal: input.signal }) as { disposition?: string; domains?: Array<{ domainId?: string }> };
+      if (stageOne.disposition !== 'MATCH') return { disposition: stageOne.disposition, candidates: [], slots: {}, selfAssessment: 'LOW', requestPlan: null };
+      const selected = [...new Set((stageOne.domains ?? []).map((entry) => entry.domainId).filter((id): id is string => domainIds.includes(id ?? '')))].slice(0, MODEL_CALL_BUDGET.maxTargetCalls);
+      const parts = await Promise.all(selected.map((domain) => geminiService.planAskUnderstanding({
+        text: input.text,
+        operations: operationCatalogue.filter((entry) => entry.domain === domain).map(({ domain: _domain, ...entry }) => entry),
+        dataPoints: dataPointCatalogue.filter((entry) => entry.domain === domain),
+        signal: input.signal,
+      }) as Promise<{ disposition?: string; candidates?: Array<Record<string, unknown>>; requestPlan?: { facets?: Array<Record<string, unknown>> } | null }>));
+      const facets: Array<Record<string, unknown>> = []; const candidates: Array<Record<string, unknown>> = [];
+      for (const part of parts) {
+        const offset = facets.length;
+        for (const facet of part.requestPlan?.facets ?? []) facets.push({ ...facet, dependsOn: Array.isArray(facet.dependsOn) ? facet.dependsOn.map((value) => Number(value) + offset) : [] });
+        candidates.push(...(part.candidates ?? []));
+      }
+      raw = { disposition: facets.length || candidates.length ? 'MATCH' : 'NONE_FITS', candidates: candidates.slice(0, 3), slots: {}, selfAssessment: 'MEDIUM', requestPlan: { facets } };
+    }
+    if (!raw || typeof raw !== 'object') return raw;
+    const parsedResponse = ProviderUnderstandingSchema.safeParse(raw);
+    if (!parsedResponse.success) return raw;
+    const response = parsedResponse.data;
+    if (response.disposition !== 'MATCH') return { facets: [] };
+    const proposed: Array<Record<string, unknown>> = Array.isArray(response.requestPlan?.facets) && response.requestPlan!.facets!.length
+      ? response.requestPlan!.facets!
+      : (response.candidates ?? []).slice(0, 1).map((candidate) => ({ ...candidate, span: input.text, dependsOn: [], confidence: 0.5 } as Record<string, unknown>));
+    return { facets: proposed.map((facet) => ({
       span: facet.span,
       target: facet.kind === 'DATA_POINT'
         ? { kind: 'DATA_POINT', dataPointId: facet.dataPointId }

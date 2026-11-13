@@ -101,11 +101,11 @@ test('real Gemini adapter sends only reviewed catalogue metadata and normalizes 
   let captured;
   geminiService.planAskUnderstanding = async (input) => {
     captured = input;
-    return { facets: [{ span: 'how old is my water heater', kind: 'OPERATION', operationId: 'INVENTORY_LOOKUP', entity: 'water heater', dependsOn: [], confidence: 0.91 }] };
+    return { disposition: 'MATCH', candidates: [{ kind: 'OPERATION', operationId: 'INVENTORY_LOOKUP', parameters: {}, requiredSlots: [], evidence: { jobMatch: 'DIRECT', itemNamed: true } }], slots: {}, selfAssessment: 'HIGH', requestPlan: { facets: [{ span: 'how old is my water heater', kind: 'OPERATION', operationId: 'INVENTORY_LOOKUP', entity: 'water heater', dependsOn: [], confidence: 0.91 }] } };
   };
   t.after(() => { geminiService.planAskUnderstanding = original; });
   const provider = new GeminiUnderstandingProvider();
-  const raw = await provider.plan({ text: 'how old is my water heater', signal: new AbortController().signal });
+  const raw = await provider.plan({ text: 'how old is my water heater', signal: new AbortController().signal, eligibleOperationIds: new Set(['INVENTORY_LOOKUP']), eligibleDataPointIds: new Set(['item.installedOn']) });
   assert.equal(captured.text, 'how old is my water heater');
   assert.ok(captured.operations.some((entry) => entry.id === 'INVENTORY_LOOKUP'));
   assert.ok(captured.dataPoints.some((entry) => entry.id === 'item.installedOn'));
@@ -114,7 +114,7 @@ test('real Gemini adapter sends only reviewed catalogue metadata and normalizes 
 
 test('runtime bridge cannot call a provider without every policy gate and a certified calibration stratum', async () => {
   const provider = new ScriptedProvider(() => { throw new Error('must not be called'); });
-  const common = { message: MSG, eligibleOperationIds: new Set(['INVENTORY_LOOKUP']), provider };
+  const common = { message: MSG, eligibleOperationIds: new Set(['INVENTORY_LOOKUP']), eligibleDataPointIds: new Set(['item.installedOn']), provider };
   assert.equal((await planRuntimeUnderstanding({ ...common, controls: { enabled: false, providerTermsRecorded: false, homeownerTextApproved: false } })).reason, 'FEATURE_OFF');
   assert.equal((await planRuntimeUnderstanding({ ...common, controls: { enabled: true, providerTermsRecorded: false, homeownerTextApproved: true } })).reason, 'PROVIDER_TERMS_NOT_RECORDED');
   assert.equal((await planRuntimeUnderstanding({ ...common, controls: { enabled: true, providerTermsRecorded: true, homeownerTextApproved: false } })).reason, 'HOMEOWNER_TEXT_NOT_APPROVED');

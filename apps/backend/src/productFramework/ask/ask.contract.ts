@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { FEEDBACK_REASON_CODES } from '../feedback.contract';
 
 export const ASK_RESPONSE_SCHEMA_VERSION = '1.0' as const;
+/** FR-DEC-1 / FR-FACET-2: a public response can carry every supported facet. */
+export const MAX_ASK_CHILD_EXECUTIONS = 6;
 
 export const ASK_EXECUTION_STATUSES = [
   'RECEIVED',
@@ -1536,6 +1538,10 @@ export const CreateAskExecutionRequestSchema = z.object({
     // role/target/confirmation check still runs exactly as it does for any
     // other route to that same operation (ACT-002).
     operationId: z.string().trim().max(120).nullable().optional(),
+    // Server-authored only for a validated model request-plan component. The
+    // DATA_POINT_READ handler revalidates this id against the reviewed
+    // catalogue and applies its ordinary role/property authorization.
+    dataPointId: z.string().trim().max(120).nullable().optional(),
     // SUGGESTED_NEXT_ACTIONS: the registered outcome of a selected Suggested Next Action. Set by the server from the stored offer, so an
     // operation that needs more than free text to pick a field (inventory correction) never re-parses its own message.
     outcomeKey: z.string().trim().max(80).nullable().optional(),
@@ -1715,7 +1721,7 @@ const AskExecutionResponseChildSchema = AskExecutionResponseBaseSchema.extend({
 }).superRefine(validateEvidenceClaimMappings);
 
 export const AskExecutionResponseSchema = AskExecutionResponseBaseSchema.extend({
-  childExecutions: z.array(AskExecutionResponseChildSchema).max(3).default([]),
+  childExecutions: z.array(AskExecutionResponseChildSchema).max(MAX_ASK_CHILD_EXECUTIONS).default([]),
 }).superRefine(validateEvidenceClaimMappings);
 
 export const AskPendingWorkItemSchema = z.object({

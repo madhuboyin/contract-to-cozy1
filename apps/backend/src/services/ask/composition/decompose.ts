@@ -5,12 +5,22 @@ import { resolveAskRoutingCascade } from '../askRoutingCascade';
 import { operationCoversClause, resolveClauseOperation, splitQuestionClauses, standalone, subjectOf } from '../support/alsoAnswer';
 import { parseTargetDate } from '../support/targetDate';
 import { COVERAGE_DECLARATIONS, coverageSkips } from './quantities';
+import { MAX_ASK_CHILD_EXECUTIONS } from '../../../productFramework/ask/ask.contract';
 
 /** Understanding reliability FRD D4/Amendment A (FR-DEC-1): up to six facets are composed; more are never silently truncated. */
-export const MAX_COMPOSED_COMPONENTS = 6;
+export const MAX_COMPOSED_COMPONENTS = MAX_ASK_CHILD_EXECUTIONS;
 const MIN_CLAUSE_CONFIDENCE = 0.85;
 
-export interface ComposedClause { clause: string; operationId: AskOperationId; confidence: number }
+export interface ComposedClause {
+  clause: string;
+  operationId: AskOperationId;
+  confidence: number;
+  /** Present only for a validated model-selected DATA_POINT target. */
+  dataPointId?: string;
+  /** Stable facet ids of earlier clauses this clause depends on. */
+  facetId?: string;
+  dependsOn?: readonly string[];
+}
 /** FR-DEC-4a: a part that was NOT run. It is named in the answer with the reason, never dropped and never guessed. */
 export interface DeferredClause { clause: string; reason: 'NOT_ROUTED' | 'LOW_CONFIDENCE' | 'NOT_ELIGIBLE' | 'NOT_COMPOSABLE' | 'OVER_LIMIT'; operationId: AskOperationId | null }
 

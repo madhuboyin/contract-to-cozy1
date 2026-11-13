@@ -5,6 +5,7 @@ interface OperationAnswerContract {
   operationId: string;
   allowedBlockTypes: string[];
   emittedBlockIds: string[];
+  evidenceTier: 'CODE_PATH_CONTRACT' | 'TYPED_CONTRACT_UNTESTED_AGAINST_HANDLER' | 'SOURCE_SCAN_ONLY';
 }
 
 const CONTRACTS = new Map(
@@ -21,7 +22,7 @@ function idMatches(declaration: string, type: string, id: string): boolean {
 /** Runtime half of FR-GATE-1/2; used only after semantic mismatch checks. */
 export function matchesOperationAnswerContract(operationId: AskOperationId, result: AskOperationResult): boolean {
   const contract = CONTRACTS.get(operationId);
-  if (!contract || result.blocks.length === 0) return false;
+  if (!contract || contract.evidenceTier !== 'CODE_PATH_CONTRACT' || result.blocks.length === 0) return false;
   const allowedTypes = new Set(contract.allowedBlockTypes);
   return result.blocks.every((block) => allowedTypes.has(block.type)
     && contract.emittedBlockIds.some((declaration) => idMatches(declaration, block.type, block.id)));
@@ -30,7 +31,7 @@ export function matchesOperationAnswerContract(operationId: AskOperationId, resu
 export function operationAnswerContractCoverage(): { covered: number; total: number } {
   const contracts = [...CONTRACTS.values()];
   return {
-    covered: contracts.filter((contract) => contract.allowedBlockTypes.length > 0 && contract.emittedBlockIds.length > 0).length,
+    covered: contracts.filter((contract) => contract.evidenceTier === 'CODE_PATH_CONTRACT' && contract.allowedBlockTypes.length > 0 && contract.emittedBlockIds.length > 0).length,
     total: contracts.length,
   };
 }

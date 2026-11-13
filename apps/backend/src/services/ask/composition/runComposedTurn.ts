@@ -210,7 +210,10 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
     try {
       const response = await input.createChild(input.userId, {
         clientRequestId, sessionId: input.sessionId, message: run.clause.clause, propertyId: input.propertyId,
-        launchContext: { surface: 'ASK_COMPOSED_COMPONENT', operationId: run.clause.operationId },
+        launchContext: {
+          surface: 'ASK_COMPOSED_COMPONENT', operationId: run.clause.operationId,
+          ...(run.clause.dataPointId ? { dataPointId: run.clause.dataPointId } : {}),
+        },
       } as CreateAskExecutionRequest, input.accountRole, { composition: { parentExecutionId: parent.id, expiresAt: parent.expiresAt } });
       return { executionId: response.executionId, status: response.status };
     } catch {
@@ -232,8 +235,7 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   const attemptsOf = async (run: ComponentRun) => storedOf((await db.askExecution.findUnique({ where: { id: parent.id } }))!).attempts.filter((a) => a.componentKey === run.key);
   const latestOf = (attempts: Attempt[]) => [...attempts].sort((a, b) => b.number - a.number)[0];
 
-  // Both components are dispatched concurrently (FR-EXE-4); each child applies its own authorization in its own service path.
-  await Promise.all(runs.map(async (run) => {
+  const executeRun = async (run: ComponentRun): Promise<void> => {
     const mine = await attemptsOf(run);
     if (mode === 'REFRESH') { await runAttempt(run, 'REFRESH'); return; }
     if (mode === 'RETRY_EXHAUSTED') { if (exhaustedComponentKeys(await db.askExecution.findUnique({ where: { id: parent.id } }) as AskExecution).includes(run.key)) await runAttempt(run, 'RETRY'); return; }
@@ -245,7 +247,21 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
       const outcome = await callChild(run, latest.number);
       await recordAttempt(db, parent.id, { ...latest, executionId: outcome.executionId, status: outcome.status });
     }
-  }));
+  };
+  // Independent facets run concurrently. A dependent facet is dispatched only
+  // after all named predecessor facets have settled, preserving the validated
+  // request-plan DAG rather than flattening it into an unordered batch.
+  const pending = new Set(runs);
+  const settledFacetIds = new Set<string>();
+  while (pending.size) {
+    const ready = [...pending].filter((run) => (run.clause.dependsOn ?? []).every((dependency) => settledFacetIds.has(dependency)));
+    if (!ready.length) throw new AssemblyInvariantError('validated request plan contains an unresolved dependency');
+    await Promise.all(ready.map(executeRun));
+    for (const run of ready) {
+      pending.delete(run);
+      if (run.clause.facetId) settledFacetIds.add(run.clause.facetId);
+    }
+  }
 
   // D9: one automatic retry of a retryable child, admitted against the parent's current row (FR-PER-16). A rejected retry converts to a terminal outcome.
   if (mode === 'START' || mode === 'RECOVER') {

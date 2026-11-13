@@ -29,7 +29,12 @@ export interface ValidFacet { readonly id: string; readonly span: string; readon
 export interface DroppedFacet { readonly index: number; readonly span: string; readonly reason: DropReason }
 export interface PlanValidation { readonly accepted: readonly ValidFacet[]; readonly dropped: readonly DroppedFacet[]; readonly overflow: number }
 
-export interface PlanContext { readonly message: string; readonly eligibleOperationIds?: ReadonlySet<AskOperationId>; readonly maxFacets?: number }
+export interface PlanContext {
+  readonly message: string;
+  readonly eligibleOperationIds?: ReadonlySet<AskOperationId>;
+  readonly eligibleDataPointIds?: ReadonlySet<string>;
+  readonly maxFacets?: number;
+}
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9$ ]+/g, ' ').replace(/\s+/g, ' ').trim();
 /** Stable facet identity (FR-FACET-13 (2)): from entity and target, never from call order. */
@@ -46,6 +51,7 @@ export function validateRequestPlan(raw: unknown, ctx: PlanContext): PlanValidat
     let target: ValidFacet['target']; let key: string;
     if (facet.target.kind === 'DATA_POINT') {
       if (!DATA_POINT_BY_ID.has(facet.target.dataPointId)) return drop('UNKNOWN_TARGET');
+      if (ctx.eligibleDataPointIds && !ctx.eligibleDataPointIds.has(facet.target.dataPointId)) return drop('NOT_ELIGIBLE');
       target = { kind: 'DATA_POINT', dataPointId: facet.target.dataPointId }; key = `DP:${facet.target.dataPointId}`;
     } else {
       const requested = facet.target.operationId as AskOperationId; let def: ReturnType<typeof getAskOperationDefinition>;

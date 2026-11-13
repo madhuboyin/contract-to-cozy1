@@ -5,7 +5,7 @@ import { ASK_MUTATION_IMPACT_REGISTRY, impactedReadOperationIds } from '../gover
 import { markExecutionsStale, recordReconciliationOutcome, staleMarkerFor, withoutStaleMarker } from '../support/askReconciliation';
 import { AskExecution, AskExecutionStatus, HouseholdRole } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
-import { ASK_RESPONSE_SCHEMA_VERSION, AskPresentationBlockSchema, type AskExecutionResponse, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
+import { ASK_RESPONSE_SCHEMA_VERSION, MAX_ASK_CHILD_EXECUTIONS, AskPresentationBlockSchema, type AskExecutionResponse, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
 import { askInlineCapturesTotal, askTurnStageDurationSeconds, askRemoteGenerationTotal, askSkillAdapterExecutionDurationSeconds, askSkillAdapterExecutionsTotal, askSkillAdapterResolutionDurationSeconds, askSkillCanonicalOperationDurationSeconds, askSkillExecutionDurationSeconds, askSkillExecutionsTotal, askSkillHandoffsTotal } from '../../../lib/metrics';
 import { type PropertyAccess } from '../../propertyAccess.service';
@@ -772,14 +772,14 @@ async function refreshImpactedSiblingExecutions(
 // server-owned sibling-impact refresh, so both a confirm handler's first
 // run AND confirmAskExecution's completed-replay branch (below) can call
 // one function and get the full, current reconciliation behavior.
-// AskExecutionResponseSchema's own childExecutions field is capped at 3
-// (ask.contract.ts) -- the explicit sourceExecutionId refresh plus up to 3
+// AskExecutionResponseSchema's own childExecutions field is capped at the
+// composition limit -- the explicit sourceExecutionId refresh plus declared
 // declared siblings (BUYER_MOVE_STATUS included) can together exceed that,
 // which would fail response validation on an otherwise-successful mutation.
 // The explicit source (the one list this row-action was actually launched
 // from -- definitely still visible) always keeps its slot; sibling
 // refreshes fill whatever budget remains, in the map's own declared order.
-const ASK_RECONCILED_CHILD_EXECUTIONS_LIMIT = 3;
+const ASK_RECONCILED_CHILD_EXECUTIONS_LIMIT = MAX_ASK_CHILD_EXECUTIONS;
 
 // Pure, extracted for direct unit testing -- a boundary bug here would be a
 // silent regression (a successful mutation's response failing schema
