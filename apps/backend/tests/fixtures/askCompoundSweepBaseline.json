@@ -24,7 +24,7 @@
     "Show my capital plan for major replacements": "FULL",
     "What are the top three things I should spend money on this year and what happens if I skip them?": "FALLBACK",
     "What big expenses are coming in the next 5 years?": "CLARIFY",
-    "What does it cost me per year to keep the house maintained, and how does that compare to my reserve contributions?": "PARTIAL",
+    "What does it cost me per year to keep the house maintained, and how does that compare to my reserve contributions?": "FALLBACK",
     "What is my total cost of ownership next year including maintenance, insurance and property tax?": "FULL",
     "What is not covered by my insurance or warranties and what could that cost me?": "FULL",
     "What maintenance is overdue and what will it cost if I put it off another year?": "PARTIAL",
