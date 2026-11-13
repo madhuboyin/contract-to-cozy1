@@ -290,6 +290,11 @@ export const askModelRouterTotal = new Counter({
   registers: [register],
 });
 
+/** FR-UND-12 / FR-REC-2: every non-answer outcome under its own code (never folded into another), so reports can separate them. */
+export const askRecoveryOutcomeTotal = new Counter({
+  name: 'ask_recovery_outcome_total', help: 'Ask non-answer outcomes by recovery code (OUT_OF_DOMAIN, MODEL_NONE_FITS, MISSING_RECORD_DATA, ...).', labelNames: ['code'] as const, registers: [register],
+});
+
 export const askUnansweredRecoveryTotal = new Counter({
   name: 'ask_unanswered_recovery_total',
   help: 'Messages the generic fallback could not answer: a "Did you mean" was offered, or no candidate cleared the floor',

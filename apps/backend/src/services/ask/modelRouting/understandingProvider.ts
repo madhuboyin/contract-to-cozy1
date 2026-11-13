@@ -47,7 +47,10 @@ export interface UnderstandingProvider {
 export type GuardOutcome =
   | { readonly kind: 'PLANNED'; readonly validation: PlanValidation; readonly sentText: string; readonly calls: number }
   | { readonly kind: 'REFUSED'; readonly reason: 'PROVIDER_TERMS_NOT_RECORDED' | 'NO_CALL_UNCLASSIFIABLE_IDENTIFIER' | 'NO_CALL_UNINTERPRETABLE_AFTER_MINIMISATION' }
-  | { readonly kind: 'UNAVAILABLE'; readonly reason: 'TIMEOUT' | 'PROVIDER_ERROR' | 'SCHEMA_FAILURE'; readonly calls: number };
+  /** FR-UND-12: the model answered and said NONE_FITS or INSUFFICIENT_TEXT. These are outcomes of their own, not a schema failure and not an outage. */
+  | { readonly kind: 'NO_MATCH'; readonly disposition: 'NONE_FITS' | 'INSUFFICIENT_TEXT'; readonly calls: number }
+  /** `stage` is set when the failure happened in a named stage of the two-stage path (STAGE1_UNAVAILABLE / STAGE2_UNAVAILABLE). */
+  | { readonly kind: 'UNAVAILABLE'; readonly reason: 'TIMEOUT' | 'PROVIDER_ERROR' | 'SCHEMA_FAILURE'; readonly calls: number; readonly stage?: 'STAGE1' | 'STAGE2' };
 
 export interface GuardedPlanInput {
   readonly message: string;
@@ -73,12 +76,18 @@ export async function guardedPlan(input: GuardedPlanInput): Promise<GuardOutcome
       }),
       new Promise<never>((_, reject) => controller.signal.addEventListener('abort', () => reject(Object.assign(new Error('timeout'), { name: 'TimeoutError' })))),
     ]);
+    // FR-UND-12: a valid NONE_FITS / INSUFFICIENT_TEXT reply is its own outcome; it must not reach plan validation, where an empty plan reads as a schema failure.
+    if (raw && typeof raw === 'object' && Array.isArray((raw as { facets?: unknown }).facets) && (raw as { facets: unknown[] }).facets.length === 0) {
+      const disposition = (raw as { disposition?: unknown }).disposition;
+      if (disposition === 'NONE_FITS' || disposition === 'INSUFFICIENT_TEXT') return { kind: 'NO_MATCH', disposition, calls: 1 };
+    }
     // The plan is validated against the MINIMISED text's words: a facet span is a phrase of the message, and placeholders are not routing words.
     const validation = validateRequestPlan(raw, { ...input.planContext, message: input.message });
     if (!validation.accepted.length && !validation.dropped.length) return { kind: 'UNAVAILABLE', reason: 'SCHEMA_FAILURE', calls: 1 };
     return { kind: 'PLANNED', validation, sentText: minimised.text, calls: 1 };
   } catch (error) {
-    return { kind: 'UNAVAILABLE', reason: (error as Error)?.name === 'TimeoutError' ? 'TIMEOUT' : 'PROVIDER_ERROR', calls: 1 };
+    const stage = (error as { stage?: unknown })?.stage;
+    return { kind: 'UNAVAILABLE', reason: (error as Error)?.name === 'TimeoutError' ? 'TIMEOUT' : 'PROVIDER_ERROR', calls: 1, ...(stage === 'STAGE1' || stage === 'STAGE2' ? { stage } : {}) };
   } finally { clearTimeout(timer); }
 }
 
@@ -106,7 +115,8 @@ export class GeminiUnderstandingProvider implements UnderstandingProvider {
       raw = await geminiService.planAskUnderstanding({ text: input.text, operations: operationCatalogue.map(({ domain: _domain, ...entry }) => entry), dataPoints: dataPointCatalogue, signal: input.signal });
     } else {
       const domainIds = [...new Set([...operationCatalogue.map((entry) => entry.domain), ...dataPointCatalogue.map((entry) => entry.domain)])].sort();
-      const stageOne = await geminiService.selectAskUnderstandingDomains({ text: input.text, domains: domainIds.map((id) => ({ id, description: id.replace(/^operation:/, '').replace(/_/g, ' ').toLowerCase() })), signal: input.signal }) as { disposition?: string; domains?: Array<{ domainId?: string }> };
+      const tagStage = (stage: 'STAGE1' | 'STAGE2') => (error: unknown): never => { throw Object.assign(error instanceof Error ? error : new Error(String(error)), { stage }); };
+      const stageOne = await geminiService.selectAskUnderstandingDomains({ text: input.text, domains: domainIds.map((id) => ({ id, description: id.replace(/^operation:/, '').replace(/_/g, ' ').toLowerCase() })), signal: input.signal }).catch(tagStage('STAGE1')) as { disposition?: string; domains?: Array<{ domainId?: string }> };
       if (stageOne.disposition !== 'MATCH') return { disposition: stageOne.disposition, candidates: [], slots: {}, selfAssessment: 'LOW', requestPlan: null };
       const selected = [...new Set((stageOne.domains ?? []).map((entry) => entry.domainId).filter((id): id is string => domainIds.includes(id ?? '')))].slice(0, MODEL_CALL_BUDGET.maxTargetCalls);
       const parts = await Promise.all(selected.map((domain) => geminiService.planAskUnderstanding({
@@ -114,7 +124,7 @@ export class GeminiUnderstandingProvider implements UnderstandingProvider {
         operations: operationCatalogue.filter((entry) => entry.domain === domain).map(({ domain: _domain, ...entry }) => entry),
         dataPoints: dataPointCatalogue.filter((entry) => entry.domain === domain),
         signal: input.signal,
-      }) as Promise<{ disposition?: string; candidates?: Array<Record<string, unknown>>; requestPlan?: { facets?: Array<Record<string, unknown>> } | null }>));
+      }).catch(tagStage('STAGE2')) as Promise<{ disposition?: string; candidates?: Array<Record<string, unknown>>; requestPlan?: { facets?: Array<Record<string, unknown>> } | null }>));
       const facets: Array<Record<string, unknown>> = []; const candidates: Array<Record<string, unknown>> = [];
       for (const part of parts) {
         const offset = facets.length;
@@ -127,7 +137,7 @@ export class GeminiUnderstandingProvider implements UnderstandingProvider {
     const parsedResponse = ProviderUnderstandingSchema.safeParse(raw);
     if (!parsedResponse.success) return raw;
     const response = parsedResponse.data;
-    if (response.disposition !== 'MATCH') return { facets: [] };
+    if (response.disposition !== 'MATCH') return { facets: [], disposition: response.disposition };
     const proposed: Array<Record<string, unknown>> = Array.isArray(response.requestPlan?.facets) && response.requestPlan!.facets!.length
       ? response.requestPlan!.facets!
       : (response.candidates ?? []).slice(0, 1).map((candidate) => ({ ...candidate, span: input.text, dependsOn: [], confidence: 0.5 } as Record<string, unknown>));

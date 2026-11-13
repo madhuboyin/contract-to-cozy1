@@ -8,7 +8,7 @@ import { logger } from '../../../lib/logger';
 import { recordAskCapabilityLifecycle } from '../askCapabilityLifecycle';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
-import { askCompositionTotal, askTurnStageDurationSeconds, askTurnFailuresTotal, type AskTurnStage, askExecutionDurationSeconds, askExecutionsTotal, askInlineCapturesTotal, askRoutingDecisionsTotal, askUnansweredRecoveryTotal, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../../lib/metrics';
+import { askCompositionTotal, askRecoveryOutcomeTotal, askTurnStageDurationSeconds, askTurnFailuresTotal, type AskTurnStage, askExecutionDurationSeconds, askExecutionsTotal, askInlineCapturesTotal, askRoutingDecisionsTotal, askUnansweredRecoveryTotal, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../../lib/metrics';
 import { type AskAccountRole } from '../askAccountEligibility';
 import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
 import { runConversationalCaptureForTurn } from '../conversationalUnderstanding/conversationalCapture';
@@ -41,6 +41,7 @@ import { recoverComposedTurn, runComposedTurn } from '../composition/runComposed
 import { GeminiUnderstandingProvider } from '../modelRouting/understandingProvider';
 import { planRuntimeUnderstanding } from '../modelRouting/runtimeUnderstanding';
 import { loadKnownNames } from '../privacy/knownNames';
+import { MODEL_PATH_RECOVERIES, RECOVERY_OUTCOMES, recoveryBlock, recoveryCodeForReason } from '../recovery/recoveryOutcomes';
 import { DATA_POINT_DEFINITIONS, roleMayRead } from '../dataPoint/dataPointCatalogue';
 import { buildAuthorizationView } from '../composition/authorizationView';
 import { resolveSlotFollowUp } from '../composition/slotContext';
@@ -311,8 +312,23 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
         executionId: execution.id,
         eventType: 'UNDERSTANDING_PLAN_NOT_USED',
         // Governance reason only: never persist the prompt or provider payload (D3b).
-        metadataJson: asInputJson({ reason: modelPlan.reason }),
+        metadataJson: asInputJson({ reason: modelPlan.reason, ...(modelPlan.kind === 'UNAVAILABLE' && modelPlan.recovery ? { telemetryCode: RECOVERY_OUTCOMES[modelPlan.recovery].telemetryCode } : {}) }),
       } });
+    }
+    // FR-UND-12 / FR-REC-7: each model outcome is its own code. When the local router found nothing either, the homeowner gets that outcome's own recovery (a safe not-matched reply, one question for the
+    // missing detail, or a request to rephrase), never a capability-absence claim and never the generic guidance fallback. An outage or a schema failure shows nothing: the local decision stands (FR-UND-4).
+    if (modelPlan?.kind === 'UNAVAILABLE' && modelPlan.recovery) {
+      askRecoveryOutcomeTotal.inc({ code: modelPlan.recovery });
+      if (MODEL_PATH_RECOVERIES.has(modelPlan.recovery) && plannerRoutingDecision.stage === 'REMOTE_FALLBACK') {
+        const settled = await prisma.askExecution.update({
+          where: { id: execution.id },
+          data: {
+            status: 'ANSWERED', reasonCode: RECOVERY_OUTCOMES[modelPlan.recovery].reasonCode, completedAt: new Date(),
+            resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: [recoveryBlock(modelPlan.recovery)], captureRequests: [], confirmation: null, clarification: null, suggestions: [], suggestedNextActionsGoverned: false, suggestedNextActions: [], skillHandoff: null, continuesExecutionId: null, originalResponse: null }),
+          },
+        });
+        return mapPersistedExecution(settled, await propertySummary(executionPropertyId));
+      }
     }
     const admittedModelPlan = modelPlan?.kind === 'PLAN' ? modelPlan : null;
     if (decomposition.kind === 'NOT_COMPOSED' && !admittedModelPlan) {
@@ -731,6 +747,9 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     if (validation) recordAskAnswerTrustMetrics(operation.operationId, validation);
     assertSkillResultBlocksAllowed(operation.operationId, result, skillTelemetryTrace);
     // Composition FRD FR-DEC-4: a message the decomposer declined is answered by the single best operation, and the response says which part was not answered.
+    // FR-REC-2: a result that already is one of the recovery outcomes (an out-of-domain boundary, a missing record value) is counted under that outcome's own code.
+    const recoveredAs = recoveryCodeForReason(result.reasonCode);
+    if (recoveredAs) askRecoveryOutcomeTotal.inc({ code: recoveredAs });
     if (declinedComposition && !routingDecision.requiresClarification && result.status !== 'NEEDS_CLARIFICATION') {
       result = { ...result, blocks: [...result.blocks, declinedCompositionNote(declinedComposition.reason, declinedComposition.clauseCount)] };
     }
