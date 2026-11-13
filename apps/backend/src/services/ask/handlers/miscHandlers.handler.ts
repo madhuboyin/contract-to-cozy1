@@ -17,6 +17,7 @@ import { evaluateFeatureContext } from '../../../modules/propertyContext/applica
 import { assertCoverageConflictFree } from '../../coverageConflict.service';
 import { queryIntelligenceEnvelope } from '../../intelligenceEnvelope';
 import { ReplaceRepairService } from '../../replaceRepairAnalysis.service';
+import { REPAIR_REPLACE_SAVE_ACTION_ID, REPAIR_REPLACE_SAVE_MESSAGE, REPAIR_REPLACE_START_HVAC_ACTION_ID } from '../support/repairReplaceSave';
 import { REPAIR_REPLACE_WHAT_IF_ACTION_ID, REPAIR_REPLACE_WHAT_IF_CAPTURE_KEY, REPAIR_REPLACE_WHAT_IF_MESSAGE, RepairReplaceWhatIfAnswerSchema, whatIfOverrides, whatIfSummary, type RepairReplaceOverrides } from '../support/repairReplaceWhatIf';
 import { humanDate, money } from '../askFormatting';
 import { capitalCategoryDefault } from '../../homeCapitalTimeline.service';
@@ -182,7 +183,7 @@ export async function homeDeadlineMonitorResult(userId: string, propertyId: stri
 /** A what-if run (FRD v1.466): the homeowner's own numbers, computed without saving. Absent for the ordinary analysis. */
 interface RepairReplaceWhatIf { overrides: RepairReplaceOverrides }
 
-export async function replacementGuidanceResult(userId: string, propertyId: string, message: string, focusedInventoryItemId: string | null | undefined, executionId: string, whatIf?: RepairReplaceWhatIf, options: { pure?: boolean } = {}): Promise<AskOperationResult> {
+export async function replacementGuidanceResult(userId: string, propertyId: string, message: string, focusedInventoryItemId: string | null | undefined, executionId: string, whatIf?: RepairReplaceWhatIf, options: { pure?: boolean; save?: boolean } = {}): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const allItems = await prisma.inventoryItem.findMany({
     where: { propertyId }, orderBy: [{ isVerified: 'desc' }, { updatedAt: 'desc' }], take: 200,
@@ -255,14 +256,14 @@ export async function replacementGuidanceResult(userId: string, propertyId: stri
   if (item.category === 'HVAC') {
     // D17: the pure read never starts an HVAC decision thread (that persists); it says so and leaves the decision to its own turn.
     if (options.pure) {
-      return { status: 'READY_WITH_LIMITATIONS', reasonCode: 'REPAIR_REPLACE_HVAC_OWN_DECISION', blocks: [{ type: 'SUMMARY', id: 'repair-replace-hvac-own-decision', title: `${item.name}: HVAC repair or replace is its own decision`, body: 'An HVAC system opens a guided decision that is saved to your home record, so it is not answered inside a longer question. Ask “Should I repair or replace my HVAC?” on its own to start it.', tone: 'CAUTION', actions: [] }], suggestions: [] };
+      return { status: 'READY_WITH_LIMITATIONS', reasonCode: 'REPAIR_REPLACE_HVAC_OWN_DECISION', blocks: [{ type: 'SUMMARY', id: 'repair-replace-hvac-own-decision', title: `${item.name}: HVAC repair or replace is its own decision`, body: 'An HVAC system opens a guided decision that is saved to your home record, so it is not answered inside a longer question. Ask “Should I repair or replace my HVAC?” on its own to start it.', tone: 'CAUTION', actions: access.role === HouseholdRole.VIEWER ? [] : [{ id: REPAIR_REPLACE_START_HVAC_ACTION_ID, label: 'Start the HVAC decision', interactionType: 'START_WORKFLOW' as const, message: `Should I repair or replace ${item.name}?`, operationId: 'REPLACEMENT_GUIDANCE' as const, entityType: 'INVENTORY_ITEM', entityId: item.id, style: 'SECONDARY' as const }] }], suggestions: [] };
     }
     return hvacDecisionStartResult(userId, propertyId, message, executionId, item.id);
   }
   const evaluation = await evaluateFeatureContext(propertyId, userId, {
     featureKey: 'REPAIR_REPLACE', operationKey: 'RUN_ANALYSIS', operationInput: { inventoryItemId: item.id },
   });
-  const captureRequests: AskCaptureRequest[] = access.role === HouseholdRole.VIEWER || whatIf || options.pure ? [] : evaluation.requirements.slice(0, 1).map((requirement) => ({
+  const captureRequests: AskCaptureRequest[] = access.role === HouseholdRole.VIEWER || whatIf || options.pure || options.save ? [] : evaluation.requirements.slice(0, 1).map((requirement) => ({
     requirementId: requirement.requirementId,
     captureKey: requirement.capture.captureKey,
     classification: requirement.classification,
@@ -309,13 +310,13 @@ export async function replacementGuidanceResult(userId: string, propertyId: stri
   });
   return {
     status: captureRequests.length || analysis.confidence !== 'HIGH' ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
-    reasonCode: whatIf ? 'REPAIR_REPLACE_WHAT_IF' : captureRequests.length ? 'LIFECYCLE_CONTEXT_OPTIONAL' : analysis.confidence !== 'HIGH' ? 'REPAIR_REPLACE_CONFIDENCE_LIMITED' : undefined,
+    reasonCode: whatIf ? 'REPAIR_REPLACE_WHAT_IF' : options.save ? 'REPAIR_REPLACE_ANALYSIS_SAVED' : captureRequests.length ? 'LIFECYCLE_CONTEXT_OPTIONAL' : analysis.confidence !== 'HIGH' ? 'REPAIR_REPLACE_CONFIDENCE_LIMITED' : undefined,
     contextVersion: evaluation.contextVersion,
     parameters: { inventoryItemId: item.id },
     captureRequests,
     blocks: [{
       type: 'SUMMARY', id: 'repair-replace-guidance', title: `${item.name}: ${verdict}`,
-      body: `${whatIf ? `This is a what-if using ${whatIfSummary(whatIf.overrides).join(', ')}. Nothing was saved, and the item's recorded analysis is unchanged. ` : ''}${analysis.summary ?? `The canonical model currently indicates ${verdict}.`} Confidence is ${analysis.confidence.toLowerCase()}.${analysis.breakEvenMonths == null ? '' : ` Modeled break-even is about ${analysis.breakEvenMonths} months.`}`,
+      body: `${options.save ? 'Saved to this item’s record; other views will show this analysis. ' : ''}${whatIf ? `This is a what-if using ${whatIfSummary(whatIf.overrides).join(', ')}. Nothing was saved, and the item's recorded analysis is unchanged. ` : ''}${analysis.summary ?? `The canonical model currently indicates ${verdict}.`} Confidence is ${analysis.confidence.toLowerCase()}.${analysis.breakEvenMonths == null ? '' : ` Modeled break-even is about ${analysis.breakEvenMonths} months.`}`,
       tone: ['REPLACE_NOW', 'REPLACE_SOON'].includes(analysis.verdict) ? 'CAUTION' : 'DEFAULT',
       // The complete canonical Repair vs Replace analysis is already rendered
       // below. Do not eject the homeowner to the legacy desktop surface. The one follow-up is a typed Ask action carrying this
@@ -329,6 +330,11 @@ export async function replacementGuidanceResult(userId: string, propertyId: stri
         id: REPAIR_REPLACE_WHAT_IF_ACTION_ID, label: whatIf ? 'Change the numbers' : 'Try different numbers', interactionType: 'START_WORKFLOW' as const, message: REPAIR_REPLACE_WHAT_IF_MESSAGE,
         operationId: 'REPLACEMENT_GUIDANCE' as const, entityType: 'INVENTORY_ITEM', entityId: item.id, style: 'SECONDARY' as const,
       }]),
+      // D17: a pure verdict (composition) wrote nothing; keeping it is an explicit contributor action, separate from starting an HVAC plan.
+      ...(options.pure && access.role !== HouseholdRole.VIEWER ? [{
+        id: REPAIR_REPLACE_SAVE_ACTION_ID, label: 'Save this analysis', interactionType: 'START_WORKFLOW' as const, message: REPAIR_REPLACE_SAVE_MESSAGE,
+        operationId: 'REPLACEMENT_GUIDANCE' as const, entityType: 'INVENTORY_ITEM', entityId: item.id, style: 'SECONDARY' as const,
+      }] : []),
       ...(whatIf ? [{
         id: 'repair-replace-back-to-recorded', label: 'Back to the recorded analysis', interactionType: 'START_WORKFLOW' as const, message: `Should I repair or replace ${item.name}?`,
         operationId: 'REPLACEMENT_GUIDANCE' as const, entityType: 'INVENTORY_ITEM', entityId: item.id, style: 'QUIET' as const,
@@ -361,6 +367,25 @@ function whatIfCapture(contextVersion: string, item: { id: string; name: string 
     ] } as unknown as AskCaptureRequest['inputSchema'],
     currentAnswer: entered ?? prefill, allowNotSure: false, sensitivity: 'FINANCIAL', destinationLabel: 'Used for this what-if only; nothing is saved', confirmationText: null, expectedContextVersion: contextVersion,
   };
+}
+
+/** The explicit "Save this analysis" turn (D17): only the declared action starts it, a contributor or owner, a non-HVAC item. It persists through the ordinary canonical analysis. */
+export async function repairReplaceSaveResult(
+  userId: string, propertyId: string, launch: { entityType?: string | null; entityId?: string | null; operationId?: string | null; surface?: string | null } | undefined, executionId: string,
+): Promise<AskOperationResult> {
+  const notice = (reasonCode: string, title: string, body: string, status: AskOperationResult['status'] = 'NOT_APPLICABLE'): AskOperationResult => ({
+    status, reasonCode, blocks: [{ type: 'SUMMARY', id: 'repair-replace-save-notice', title, body, tone: 'DEFAULT', actions: [] }], suggestions: [],
+  });
+  // A refresh or replay of an earlier answer must never write.
+  if (launch?.operationId !== 'REPLACEMENT_GUIDANCE' || launch.surface === 'ASK_REFRESH' || launch.entityType !== 'INVENTORY_ITEM' || !launch.entityId) {
+    return notice('REPAIR_REPLACE_SAVE_TARGET_REQUIRED', 'Open the analysis first', 'Use Save this analysis on a repair or replace analysis. Nothing has been saved.');
+  }
+  const access = await ensurePropertyAccess(userId, propertyId);
+  if (access.role === HouseholdRole.VIEWER) return notice('ASK_PERMISSION_REQUIRED', 'A contributor or owner can save this analysis', 'Your role can view this analysis but not save it. Nothing has been saved.', 'BLOCKED');
+  const item = await prisma.inventoryItem.findFirst({ where: { id: launch.entityId, propertyId }, select: { id: true, name: true, category: true } });
+  if (!item) return notice('REPAIR_REPLACE_ITEM_NOT_FOUND', 'That item is no longer available', 'It may have been removed. Nothing has been saved.');
+  if (item.category === 'HVAC') return notice('REPAIR_REPLACE_SAVE_HVAC', 'HVAC is decided in its own plan', 'A heating or cooling system is decided in its own repair or replace decision. Use Start the HVAC decision. Nothing has been saved.');
+  return replacementGuidanceResult(userId, propertyId, `Should I repair or replace ${item.name}?`, item.id, executionId, undefined, { save: true });
 }
 
 /** The what-if on one item (FRD v1.466): only the declared action starts it, a contributor or owner, a non-HVAC item (HVAC has its own decision thread). */
@@ -937,7 +962,9 @@ registerCapabilityHandler('intelligence-envelope.query', async (envelope) => int
 
 registerCapabilityHandler('home-operations.update', async (envelope) => operationalWorkUpdateResult(envelope.propertyId!, envelope.message, envelope.launchContext));
 
-registerCapabilityHandler('inventory.replacement', async (envelope) => envelope.message.trim() === REPAIR_REPLACE_WHAT_IF_MESSAGE
+registerCapabilityHandler('inventory.replacement', async (envelope) => envelope.message.trim() === REPAIR_REPLACE_SAVE_MESSAGE
+  ? repairReplaceSaveResult(envelope.userId, envelope.propertyId!, envelope.launchContext ?? undefined, envelope.executionId)
+  : envelope.message.trim() === REPAIR_REPLACE_WHAT_IF_MESSAGE
   ? repairReplaceWhatIfResult(envelope.userId, envelope.propertyId!, envelope.launchContext ?? undefined, envelope.executionId)
   : replacementGuidanceResult(
   envelope.userId,

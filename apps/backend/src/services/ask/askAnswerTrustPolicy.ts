@@ -154,7 +154,9 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   PROPERTY_SUMMARY: new Set(['add-warranty', 'add-timeline-event', 'add-room', 'add-inventory-item']),
   CAPTURE_EVENT_CONFIRM: new Set(['open-timeline', 'open-home-timeline']),
   CAPABILITY_DISCOVERY: new Set(['explore-available-tools', 'explore-tools']),
-  REPLACEMENT_GUIDANCE: new Set(['open-inventory', 'open-repair-replace', 'show-inventory', 'add-inventory-item', 'repair-replace-check-warranty', 'repair-replace-what-if', 'repair-replace-back-to-recorded']),
+  // The composed child runs under the pure variant's own id, so its two explicit persistence actions (D17) are allowlisted here too; its other actions are unchanged.
+  ITEM_REPAIR_REPLACE_VERDICT: new Set(['repair-replace-save-analysis', 'repair-replace-start-hvac-decision']),
+  REPLACEMENT_GUIDANCE: new Set(['open-inventory', 'open-repair-replace', 'show-inventory', 'add-inventory-item', 'repair-replace-check-warranty', 'repair-replace-what-if', 'repair-replace-back-to-recorded', 'repair-replace-save-analysis', 'repair-replace-start-hvac-decision']),
   // FRD v1.45: the analysis also shows the homeowner's own rate monitors (MONITOR renders its own pause/resume/stop).
   REFINANCE_ANALYSIS: new Set([
     'refinance-test-scenario', 'refinance-start-monitor', 'refinance-compare-offers',
