@@ -23,6 +23,8 @@ export interface AbsenceRequirementDeclaration {
   readonly requirementId: string;
   /** The catalogued point whose absence is asked about. */
   readonly dataPointId?: string;
+  /** Extra wording that names the field in a question, beyond the point's own aliases. */
+  readonly words?: readonly string[];
   readonly label: string;
   /** When the requirement applies to a home at all (a declared rule id, evaluated deterministically, never free text). */
   readonly applicabilityRuleId: string;
@@ -60,6 +62,7 @@ export const ABSENCE_REQUIREMENT_REGISTRY: readonly AbsenceRequirementDeclaratio
   { requirementId: 'item.installedOn.recorded', dataPointId: 'item.installedOn', label: 'item.installedOn', applicabilityRuleId: 'EVERY_INVENTORY_ITEM', responsibleSource: 'InventoryItem', outcomes: ['NOT_RECORDED', 'NOT_APPLICABLE', 'NOT_AUTHORIZED', 'NOT_FOUND'], audienceFloor: 'VIEWER', reviewedBy: 'product owner (approved in session 2026-11-13: shapes 7-9 for the owner path)', reviewedOn: '2026-11-13' },
   { requirementId: 'item.purchasedOn.recorded', dataPointId: 'item.purchasedOn', label: 'item.purchasedOn', applicabilityRuleId: 'EVERY_INVENTORY_ITEM', responsibleSource: 'InventoryItem', outcomes: ['NOT_RECORDED', 'NOT_APPLICABLE', 'NOT_AUTHORIZED', 'NOT_FOUND'], audienceFloor: 'VIEWER', reviewedBy: 'product owner (approved in session 2026-11-13: shapes 7-9 for the owner path)', reviewedOn: '2026-11-13' },
   { requirementId: 'item.purchaseCost.recorded', dataPointId: 'item.purchaseCost', label: 'item.purchaseCost', applicabilityRuleId: 'EVERY_INVENTORY_ITEM', responsibleSource: 'InventoryItem', outcomes: ['NOT_RECORDED', 'NOT_APPLICABLE', 'NOT_AUTHORIZED', 'NOT_FOUND'], audienceFloor: 'VIEWER', reviewedBy: 'product owner (approved in session 2026-11-13: shapes 7-9 for the owner path)', reviewedOn: '2026-11-13' },
+  { requirementId: 'item.replacementCost.recorded', dataPointId: 'item.replacementCost', words: ['replacement cost', 'replacement price', 'replacement value', 'cost to replace'], label: 'item.replacementCost', applicabilityRuleId: 'EVERY_INVENTORY_ITEM', responsibleSource: 'InventoryItem', outcomes: ['NOT_RECORDED', 'NOT_APPLICABLE', 'NOT_AUTHORIZED', 'NOT_FOUND'], audienceFloor: 'VIEWER', reviewedBy: 'product owner (approved in session 2026-11-13: shapes 7-9 for the owner path)', reviewedOn: '2026-11-13' },
   { requirementId: 'item.lastServicedOn.recorded', dataPointId: 'item.lastServicedOn', label: 'item.lastServicedOn', applicabilityRuleId: 'EVERY_INVENTORY_ITEM', responsibleSource: 'InventoryItem', outcomes: ['NOT_RECORDED', 'NOT_APPLICABLE', 'NOT_AUTHORIZED', 'NOT_FOUND'], audienceFloor: 'VIEWER', reviewedBy: 'product owner (approved in session 2026-11-13: shapes 7-9 for the owner path)', reviewedOn: '2026-11-13' },
 ] as AbsenceRequirementDeclaration[]);
 // The warranty side is reached THROUGH the property-scoped item (Warranty.inventoryItemId), so it can never be another home's record.

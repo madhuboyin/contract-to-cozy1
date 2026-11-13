@@ -12,6 +12,9 @@ test('planning: absence, service gap, no warranty, change over time; ordinary qu
   assert.equal(shape('Which appliances have no serial number recorded?'), 'ABSENCE');
   assert.equal(planShape789('How many appliances are missing a purchase date?').count, true);
   assert.equal(shape('Which items have no model number on file?'), 'ABSENCE');
+  assert.equal(planShape789('Which items have no replacement cost recorded?').pointId, 'item.replacementCost');
+  assert.equal(planShape789('How many appliances are missing a replacement value?').count, true);
+  assert.equal(shape('How much does a new roof cost?'), null); assert.equal(shape('What is the replacement cost of my furnace?'), null);
   assert.equal(shape('Which appliances have I not serviced in over a year?'), 'STALE_SERVICE');
   assert.equal(planShape789('Which appliances have never been serviced?').cutoff, null);
   assert.equal(shape('Which appliances have no warranty?'), 'NO_WARRANTY');
@@ -29,6 +32,7 @@ test('routing: these questions reach DATA_POINT_READ', () => {
 test('where clauses are property-scoped and built only from declarations', () => {
   const now = new Date('2026-11-13T00:00:00Z');
   assert.deepEqual(shapeWhere('p1', planShape789('which appliances have no purchase date', now), now), { propertyId: 'p1', purchasedOn: null });
+  assert.deepEqual(shapeWhere('p1', planShape789('which appliances have no replacement cost recorded', now), now), { propertyId: 'p1', replacementCostCents: null });
   assert.deepEqual(shapeWhere('p1', planShape789('which appliances have no serial number', now), now), { propertyId: 'p1', OR: [{ serialNumber: null }, { serialNumber: '' }] });
   const stale = shapeWhere('p1', planShape789('which appliances have I not serviced in over 2 years', now), now);
   assert.equal(stale.propertyId, 'p1'); assert.equal(stale.OR[1].lastServicedOn.lt.toISOString().slice(0, 10), '2024-11-13');

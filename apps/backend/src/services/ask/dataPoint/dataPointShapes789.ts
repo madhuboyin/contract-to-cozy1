@@ -23,7 +23,7 @@ function absenceTarget(text: string): { pointId: string; column: string; label: 
   const hits: Array<{ id: string; column: string; label: string; len: number }> = [];
   for (const e of ABSENCE_REQUIREMENT_REGISTRY) {
     const p = e.dataPointId ? point(e.dataPointId) : undefined; if (!p || p.entity !== 'InventoryItem') continue;
-    for (const a of p.aliases) if (a.length > 3 && text.includes(` ${a.toLowerCase()} `)) hits.push({ id: p.id, column: p.field, label: p.label.replace(/^The /, '').replace(/^When it was /, '').toLowerCase(), len: a.length });
+    for (const a of [...p.aliases, ...(e.words ?? [])]) if (a.length > 3 && text.includes(` ${a.toLowerCase()} `)) hits.push({ id: p.id, column: p.field, label: p.label.replace(/^The /, '').replace(/^When it was /, '').toLowerCase(), len: a.length });
   }
   if (!hits.length) return null;
   const best = Math.max(...hits.map((h) => h.len)); const top = [...new Set(hits.filter((h) => h.len === best).map((h) => h.id))];
