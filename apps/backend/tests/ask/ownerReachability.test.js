@@ -74,3 +74,17 @@ test('documents: a detail of a named record goes to the data point; the document
   const sp = m.byDomain.get('seller-prep'); assert.ok((sp.routed + sp.owned) / sp.phrasings >= 0.9, `seller-prep routed-or-owned ${sp.routed + sp.owned}/${sp.phrasings}`);
   const d = m.byDomain.get('documents-records'); assert.ok(d.routed / d.phrasings >= 0.9, `documents routed ${d.routed}/${d.phrasings}`);
 });
+
+// ---- natural-phrasing gaps found by probing real-sounding owner questions (2026-11-13) ----
+test('natural insurance and sale-plan questions no longer fall to the open-ended fallback', () => {
+  const route = (q) => resolveAskOperation(q).operationId;
+  const cases = {
+    'What company insures my home?': 'policy.carrier', 'Who insures my house?': 'policy.carrier', 'How much do I pay for homeowners insurance?': 'policy.premium', 'What is my deductible?': 'policy.deductible',
+    'How much coverage do I have for my belongings?': 'policy.personalPropertyLimit', 'When do I plan to list my house?': 'saleCase.targetListDate', 'When do I plan to close on the sale?': 'saleCase.targetCloseDate',
+  };
+  for (const [q, id] of Object.entries(cases)) { assert.equal(resolveDataPoint(q)?.id, id, q); assert.equal(route(q), 'DATA_POINT_READ', q); }
+  // a claim's deductible keeps its own, more specific cue
+  assert.equal(resolveDataPoint('What is the deductible on my claim?')?.id, 'claim.deductible'); assert.equal(resolveDataPoint('What is the deductible on my insurance policy?')?.id, 'policy.deductible');
+  // first-person subjects no longer hide a detail question ("how much do I pay"), but a bare question with no recorded detail still resolves to nothing
+  assert.equal(resolveDataPoint('How much do I pay for lunch?'), null);
+});

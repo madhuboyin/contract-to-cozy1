@@ -24,6 +24,8 @@ function phrasings(point) {
   const out = new Set(); const subject = SUBJECT[point.entity] ?? '';
   const cues = point.cues?.length ? [...point.cues] : [NOUN[point.entity] ?? ''];
   for (const alias of point.aliases) for (const cue of cues) {
+    // a self-referential pair ("the deductible of my deductible") is generated nonsense, not a phrasing an owner would use
+    if (cue && (cue.includes(alias) || alias.includes(cue))) continue;
     const target = point.cues ? `${cue}${subject ? ` ${subject}` : ''}`.trim() : `${subject}`.trim();
     out.add(`What is the ${alias} of my ${target}?`);
     out.add(`Tell me the ${alias} for my ${target}.`);
