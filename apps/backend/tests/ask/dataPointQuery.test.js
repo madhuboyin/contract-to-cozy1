@@ -19,7 +19,7 @@ test('FR-DATA-16 conformance: every template field is a catalogued data point of
     const model = Prisma.dmmf.datamodel.models.find((m) => m.name === t.entity);
     if (t.scopeWhere) { // a child reached through its property-scoped parent (declared in RELATION_ENTITIES)
       const rel = require('../../src/services/ask/dataPoint/dataPointCatalogue.ts').RELATION_ENTITIES[t.entity]; assert.ok(rel, `${t.entity} declares its relation path`);
-      assert.deepEqual(Object.keys(t.scopeWhere('p1')), [rel.parentDelegate === 'propertySaleCase' ? 'saleCase' : 'x']); assert.equal(JSON.stringify(t.scopeWhere('p1')).includes('"propertyId":"p1"'), true);
+      assert.ok(['saleCase', 'checklist'].includes(Object.keys(t.scopeWhere('p1'))[0]), 'the scope goes through the declared parent'); assert.equal(JSON.stringify(t.scopeWhere('p1')).includes('"propertyId":"p1"'), true);
     } else assert.ok(model.fields.some((f) => f.name === 'propertyId' && f.kind === 'scalar'), `${t.entity} is property-scoped`);
     for (const [key, field] of Object.entries(t.fields)) {
       const point = DATA_POINT_BY_ID.get(field.point);

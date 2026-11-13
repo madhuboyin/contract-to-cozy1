@@ -1285,7 +1285,7 @@ const renovationPermitPattern = /\b(?:renovation|remodel|addition|project|permit
 // cascade below for exactly that reason -- majorEventEntryResult's own
 // suggestion text already says "Check sale readiness" verbatim, which this
 // pattern is written to catch.
-const sellerPrepChecklistPattern = /\b(?:seller prep|sale readiness|selling readiness|listing readiness)\b|\b(?:am i|are we|is (?:my|this|the) home)\b.{0,25}\bready\b.{0,25}\bto (?:sell|list)\b|\bcheck\b.{0,15}\b(?:sale|seller|selling)\b.{0,15}\breadiness\b/i;
+const sellerPrepChecklistPattern = /\b(?:seller prep|sale readiness|selling readiness|listing readiness)\b|\b(?:am i|are we|is (?:my|this|the) (?:home|house))\b.{0,25}\bready\b.{0,25}\bto (?:sell|list)\b|\b(?:repairs?|fix(?:es)?|fixing|improvements?)\b.{0,50}\bbefore (?:i |we )?(?:sell|selling|list|listing)\b|\bcheck\b.{0,15}\b(?:sale|seller|selling)\b.{0,15}\breadiness\b/i;
 // Phase 7, write-path slice (implementation plan §13; FRD §31). Requires an
 // explicit decision verb bidirectionally near "seller prep"/"sale
 // readiness"/"checklist" + "item" phrasing -- deliberately narrower than

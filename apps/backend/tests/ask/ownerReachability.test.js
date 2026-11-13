@@ -15,7 +15,7 @@ test('every canonical query-shape question plans to the intended shape for the f
   assert.deepEqual(m.queryRows.filter((r) => !r.ok).map((r) => r.message), []);
   const unrouted = m.queryRows.filter((r) => r.operation !== 'DATA_POINT_READ').map((r) => `${r.template}/${r.shape}`);
   // only plain lists and date filters owned by dedicated operations (warranty and coverage lookups, the maintenance status read) may stay with them
-  for (const u of unrouted) assert.match(u, /^(warranties|policies|tasks)\/(LIST|FILTER)$/, `${u} must be owned by a dedicated operation`);
+  for (const u of unrouted) assert.match(u, /^(warranties|policies|tasks|buyerTasks)\/(LIST|FILTER)$/, `${u} must be owned by a dedicated operation`);
 });
 
 // ---- maintenance phrasing fixes (2026-11-13) ----
@@ -123,4 +123,21 @@ test('claims, maintenance and inventory: a payout is not a premium, a read quest
   assert.deepEqual(planDataPointQuery('Which maintenance tasks are high priority?').plan.predicates.map((p) => [p.field, p.value]), [['priority', 'HIGH']]);
   const old = planDataPointQuery('What appliances are over ten years old?'); assert.deepEqual([old.plan.predicates[0].field, old.plan.predicates[0].op], ['installedOn', 'lt']);
   const spend = planDataPointQuery('What did I spend on my appliances?'); assert.deepEqual([spend.plan.aggregate.fn, spend.plan.aggregate.field], ['SUM', 'purchaseCost']);
+});
+
+// ---- fourth natural-phrasing probe: buyer and seller (2026-11-13) ----
+test('buyer task counts and seller-readiness questions: new buyer-task templates, "have I" questions, "left" items, and readiness questions reach the checklist', () => {
+  const route = (q) => resolveAskOperation(q).operationId;
+  const { planDataPointQuery } = require('../../src/services/ask/dataPoint/dataPointQueryPlan.ts');
+  const plan = (q) => { const o = planDataPointQuery(q); assert.equal(o.kind, 'PLAN', q); return o.plan; };
+  // buyer tasks (the closing checklist) are counted and filtered as buyer tasks, never as maintenance tasks
+  assert.deepEqual([plan('How many buyer tasks are completed?').template.id, plan('How many buyer tasks are completed?').predicates[0].value], ['buyerTasks', 'COMPLETED']);
+  assert.equal(route('How many buyer tasks are completed?'), 'DATA_POINT_READ'); assert.equal(plan('How many buyer tasks do I have?').shape, 'AGGREGATE');
+  const overdue = plan('How many closing tasks are overdue?'); assert.deepEqual([overdue.predicates[0].field, overdue.excludesClosed], ['dueAt', true]);
+  assert.equal(route('Which buyer tasks are still open?'), 'BUYER_PLAN_STATUS', 'a plain buyer-task list stays with the buyer plan');
+  // seller items
+  assert.deepEqual([plan('Have I waived any sale items?').predicates[0].value, route('Have I waived any sale items?')], ['WAIVED', 'DATA_POINT_READ']);
+  assert.equal(plan('How many sale items are left?').predicates[0].value, 'OPEN'); assert.equal(plan('How many items are left on my sale checklist?').template.id, 'saleItems');
+  // ("What do I need to do before selling my home?" stays with the life-event entry: an existing routing test owns it)
+  for (const q of ['Is my house ready to list?', 'What repairs should I make before selling?', 'What is the most important thing to fix before selling?', 'What is left on my seller prep?']) assert.equal(route(q), 'SELLER_PREP_CHECKLIST', q);
 });

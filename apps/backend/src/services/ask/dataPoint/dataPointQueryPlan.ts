@@ -140,7 +140,7 @@ export const QUERY_TEMPLATES: readonly QueryTemplate[] = Object.freeze([
   },
   // Sale-readiness items (the seller-prep checklist). A child of the property's sale case, scoped through it. The amounts on an item (cost and value-add ranges) are not catalogued, so no amount can be filtered or totalled here.
   {
-    id: 'saleItems', entity: 'SaleReadinessItem', delegate: 'saleReadinessItem', nouns: ['sale items', 'sale-readiness items', 'sale readiness items', 'seller-prep items', 'seller prep items', 'sale checklist items', 'seller prep checklist items'], singularNouns: ['sale item', 'sale-readiness item', 'sale readiness item', 'seller-prep item', 'seller prep item'], plural: 'sale-readiness items', singular: 'sale-readiness item',
+    id: 'saleItems', entity: 'SaleReadinessItem', delegate: 'saleReadinessItem', nouns: ['sale items', 'sale-readiness items', 'sale readiness items', 'seller-prep items', 'seller prep items', 'sale checklist items', 'seller prep checklist items', 'items on my sale checklist', 'items left on my sale checklist', 'items on my seller prep checklist', 'items left on my seller prep checklist', 'items left on my seller prep', 'items on my seller prep', 'items are left on my sale checklist', 'items are left on my seller prep checklist', 'items are left on my seller prep'], singularNouns: ['sale item', 'sale-readiness item', 'sale readiness item', 'seller-prep item', 'seller prep item'], plural: 'sale-readiness items', singular: 'sale-readiness item',
     labelSelect: { title: true }, labelFields: ['title'], countFloor: 'VIEWER', scopeWhere: (propertyId) => ({ saleCase: { propertyId } }),
     fields: {
       status: f('saleItem.status', 'enum', 'status', ['status'], 'status', { sortable: false, groupable: true }),
@@ -149,9 +149,25 @@ export const QUERY_TEMPLATES: readonly QueryTemplate[] = Object.freeze([
       dueAt: f('saleItem.dueDate', 'date', 'dueAt', ['due', 'overdue', 'deadline'], 'due'),
     },
     enumWords: {
-      status: { open: 'OPEN', resolved: 'RESOLVED', waived: 'WAIVED', pursuing: 'PURSUING', 'being pursued': 'PURSUING' },
+      status: { open: 'OPEN', left: 'OPEN', remaining: 'OPEN', incomplete: 'OPEN', resolved: 'RESOLVED', waived: 'WAIVED', pursuing: 'PURSUING', 'being pursued': 'PURSUING' },
       category: { safety: 'SAFETY_STRUCTURAL', structural: 'SAFETY_STRUCTURAL', systems: 'SYSTEMS_MAINTENANCE', maintenance: 'SYSTEMS_MAINTENANCE', permits: 'PERMITS_DISCLOSURE', disclosure: 'PERMITS_DISCLOSURE', documentation: 'DOCUMENTATION_RECORDS', records: 'DOCUMENTATION_RECORDS', financial: 'FINANCIAL_DECISION', presentation: 'PRESENTATION' },
       requirementClass: { blockers: 'MATERIAL_BLOCKER', blocker: 'MATERIAL_BLOCKER', 'material blockers': 'MATERIAL_BLOCKER', 'needs verification': 'VERIFICATION_NEEDED', verification: 'VERIFICATION_NEEDED', optional: 'OPTIONAL_IMPROVEMENT', 'professional decision': 'PROFESSIONAL_DECISION' },
+    },
+    dateField: 'dueAt',
+  },
+  // Buyer tasks (the closing checklist), a child of the property's buyer checklist. Tasks marked not applicable are excluded, as the point reads do. The buyer plan operations own plain lists and date filters.
+  {
+    id: 'buyerTasks', entity: 'HomeBuyerTask', delegate: 'homeBuyerTask', nouns: ['buyer tasks', 'buying tasks', 'closing tasks', 'home buying tasks'], singularNouns: ['buyer task', 'closing task', 'buying task'], plural: 'buyer tasks', singular: 'buyer task',
+    labelSelect: { title: true }, labelFields: ['title'], countFloor: 'VIEWER', scopeWhere: (propertyId) => ({ checklist: { propertyId } }), baseWhere: { applicability: { not: 'NOT_APPLICABLE' } },
+    fields: {
+      status: f('buyerTask.status', 'enum', 'status', ['status'], 'status', { sortable: false, groupable: true }),
+      priority: f('buyerTask.priority', 'enum', 'priority', ['priority'], 'priority', { sortable: false, groupable: true }),
+      dueAt: f('buyerTask.dueDate', 'date', 'dueAt', ['due', 'overdue', 'deadline'], 'due'),
+      completedAt: f('buyerTask.completedDate', 'date', 'completedAt', ['completed', 'finished'], 'completed'),
+    },
+    enumWords: {
+      status: { pending: 'PENDING', 'not started': 'PENDING', 'in progress': 'IN_PROGRESS', blocked: 'BLOCKED', completed: 'COMPLETED', complete: 'COMPLETED', done: 'COMPLETED', finished: 'COMPLETED', cancelled: 'CANCELLED' },
+      priority: { 'now priority': 'NOW', 'soon priority': 'SOON' },
     },
     dateField: 'dueAt',
   },
@@ -302,8 +318,8 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
     push({ field: dateField, op: 'gte', value: start.toISOString(), describe: `${mm[1]} ${unit}` }); push({ field: dateField, op: 'lt', value: end.toISOString(), describe: `${mm[1]} ${unit}` });
   } else if (dateField && /\b(?:expired|lapsed)\b/.test(text)) {
     push({ field: dateField, op: 'lt', value: now.toISOString(), describe: 'already past' });
-  } else if (template.id === 'tasks' && /\boverdue\b/.test(text)) {
-    push({ field: 'nextDueDate', op: 'lt', value: now.toISOString(), describe: 'overdue' }); excludesClosed = true;
+  } else if ((template.id === 'tasks' || template.id === 'buyerTasks') && /\boverdue\b/.test(text)) {
+    push({ field: template.dateField!, op: 'lt', value: now.toISOString(), describe: 'overdue' }); excludesClosed = true;
   }
   // money thresholds: "more than $1,000", "over 500 dollars", "less than $200"
   if ((m = /\b(more than|over|above|greater than|less than|under|below|cheaper than)\s+\$?(\d[\d,]*(?:\.\d+)?)(?!\.?\d)(?!\s*(?:%|percent))\s*(?:dollars|bucks)?\b/.exec(text)) && !/\b(older|newer) than\b/.test(m[0])) {
@@ -326,16 +342,16 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
       const rx = key === 'condition' ? new RegExp(`\\b${word} condition\\b`) : key === 'priority' ? new RegExp(`\\b${word} priority\\b`) : new RegExp(`\\b${word}\\b`);
       if (key === 'category' && template.id === 'inventory' && !/\bcategory\b|\bhvac\b|\bplumbing\b|\belectrical\b|\bsafety\b|\bfurniture\b|\belectronics\b/.test(text)) continue;
       if (key === 'category' && template.id === 'saleItems' && !/\bcategory\b/.test(text)) continue;
-      if (key === 'status' && template.id === 'tasks' && /\boverdue\b/.test(text)) continue;
+      if (key === 'status' && (template.id === 'tasks' || template.id === 'buyerTasks') && /\boverdue\b/.test(text)) continue;
       if (rx.test(text) && !predicates.some((p) => p.field === key)) { push({ field: key, op: 'equals', value, describe: key === 'status' ? value.toLowerCase().replace(/_/g, ' ') : key === 'condition' ? `${value.toLowerCase()} condition` : `${field.label} ${value.toLowerCase().replace(/_/g, ' ')}` }); break; }
     }
   }
 
   if (overflow) return { kind: 'CLARIFY', reasonCode: 'DATA_POINT_QUERY_TOO_MANY_FILTERS', title: 'That is more filters than I can apply at once', body: `I can apply up to ${QUERY_MAX_PREDICATES} conditions to one question. Ask with fewer, or in two steps, so I do not answer only part of what you asked.` };
   // A qualifier the plan did not turn into a predicate must not be silently dropped ("how many OPEN claims" answered as "how many claims" would be a wrong answer): such a question gets no plan.
-  if (template.id === 'tasks' && /\b(open|active|outstanding|incomplete)\b/.test(text) && !excludesClosed) { excludesClosed = true; }
+  if ((template.id === 'tasks' || template.id === 'buyerTasks') && /\b(open|active|outstanding|incomplete|left|remaining)\b/.test(text) && !excludesClosed && !predicates.some((p) => p.field === 'status')) { excludesClosed = true; }
   const stray = /\b(open|active|current|upcoming|recent|unresolved|outstanding|incomplete|late|broken|failing|unpaid|expensive|valuable)\b/.exec(text);
-  const strayConsumed = stray && ((Object.values(template.enumWords).some((words) => stray[1] in words) && predicates.some((p) => p.op === 'equals')) || (template.id === 'tasks' && /open|active|outstanding|incomplete/.test(stray[1])) || (/expensive|valuable/.test(stray[1]) && /\b(most|least) (expensive|valuable)\b|\bexpensive\b.*\b(than|over|under)\b/.test(text)));
+  const strayConsumed = stray && ((Object.values(template.enumWords).some((words) => stray[1] in words) && predicates.some((p) => p.op === 'equals')) || ((template.id === 'tasks' || template.id === 'buyerTasks') && /open|active|outstanding|incomplete/.test(stray[1])) || (/expensive|valuable/.test(stray[1]) && /\b(most|least) (expensive|valuable)\b|\bexpensive\b.*\b(than|over|under)\b/.test(text)));
   if (stray && !strayConsumed) return { kind: 'NONE' };
 
   // A singular noun names ONE record ("my claim roof hail", "my warranty"): only a superlative ("the oldest appliance", "which warranty expires first") may use it; everything else needs the plural kind.
@@ -420,7 +436,7 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
 }
 
 /** Cheap guard for routing: a message that is plausibly a query question (so the router need not build a plan for every message). */
-export const dataPointQueryLead = /^\s*(?:what|which|how many|how much|list|show|tell me|do i have|are there|count|give me|find)\b/i;
+export const dataPointQueryLead = /^\s*(?:what|which|how many|how much|list|show|tell me|do i have|are there|count|give me|find|have i|did i|has my|are any|is there)\b/i;
 export function isDataPointQuery(message: string, now: Date = new Date()): boolean { return dataPointQueryLead.test(message) && planDataPointQuery(message, now).kind !== 'NONE'; }
 /** Shapes 4-6 over entities with no dedicated filtering operation (the router uses this ahead of the generic lookups). */
 export function isDataPointComputedQuery(message: string, now: Date = new Date()): boolean {
@@ -430,6 +446,6 @@ export function isDataPointComputedQuery(message: string, now: Date = new Date()
   const { plan } = o;
   // Counts, rankings and totals are never what a list operation answers. A plain FILTER over warranties, policies or tasks is left to the dedicated operation that already filters by date or status (warranty and coverage lookups, the maintenance
   // status read) UNLESS it filters by an amount, which none of them can do. The inventory lookup and the claims status read only list, so their filters are computed here.
-  if (plan.shape === 'FILTER' && ['warranties', 'policies', 'tasks'].includes(plan.template.id)) return plan.predicates.some((p) => plan.template.fields[p.field]?.measure || (plan.template.id === 'tasks' && p.field === 'priority'));
+  if (plan.shape === 'FILTER' && ['warranties', 'policies', 'tasks', 'buyerTasks'].includes(plan.template.id)) return plan.predicates.some((p) => plan.template.fields[p.field]?.measure || (plan.template.id === 'tasks' && p.field === 'priority'));
   return true;
 }
