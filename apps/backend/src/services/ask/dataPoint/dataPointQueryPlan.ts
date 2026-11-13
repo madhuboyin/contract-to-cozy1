@@ -66,7 +66,7 @@ export const QUERY_TEMPLATES: readonly QueryTemplate[] = Object.freeze([
     fields: {
       installedOn: f('item.installedOn', 'date', 'installedOn', ['installed', 'install date', 'age', 'old', 'older', 'oldest', 'newest', 'newer'], 'installed'),
       purchasedOn: f('item.purchasedOn', 'date', 'purchasedOn', ['purchased', 'bought', 'purchase date'], 'purchased'),
-      purchaseCost: f('item.purchaseCost', 'money', 'purchaseCostCents', ['purchase price', 'purchase cost', 'paid', 'bought for', 'purchase'], 'purchase price', { measure: true }),
+      purchaseCost: f('item.purchaseCost', 'money', 'purchaseCostCents', ['purchase price', 'purchase cost', 'paid', 'bought for', 'purchase', 'spend', 'spent'], 'purchase price', { measure: true }),
       replacementCost: f('item.replacementCost', 'money', 'replacementCostCents', ['replacement cost', 'replacement value', 'replace', 'replacement'], 'replacement cost', { measure: true }),
       condition: f('item.condition', 'enum', 'condition', ['condition'], 'condition', { sortable: false, groupable: true }),
       category: f('item.category', 'enum', 'category', ['category'], 'category', { sortable: false, groupable: true }),
@@ -273,7 +273,9 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
 
   // ---- predicates ----
   let m: RegExpExecArray | null;
-  if (template.fields.installedOn && (m = /\b(older|newer) than (\d+|[a-z]+) (years?|months?)\b/.exec(text))) {
+  // "older than ten years", "over ten years old", "more than 10 years old"
+  const ageMatch = /\b(older|newer) than (\d+|[a-z]+) (years?|months?)\b/.exec(text) ?? (() => { const x = /\b(?:over|more than|at least) (\d+|[a-z]+) (years?|months?) old\b/.exec(text); return x ? Object.assign([x[0], 'older', x[1], x[2]], { index: x.index }) as unknown as RegExpExecArray : null; })();
+  if (template.fields.installedOn && (m = ageMatch)) {
     const n = num(m[2]); if (n === null || !withinRange(n, m[3])) return { kind: 'NONE' };
     const cutoff = unitDate(now, n, m[3], -1); if (!cutoff) return { kind: 'NONE' };
     push({ field: 'installedOn', op: m[1] === 'older' ? 'lt' : 'gt', value: cutoff.toISOString(), describe: `${m[1]} than ${n} ${m[3]}` });
@@ -345,7 +347,7 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
   // "claim number of my claim" and "serial number of my fridge" are point reads, not counts: "number of" counts only over a plural noun.
   const countQ = /\bhow many\b|\bcount\b/.test(text) || (plural && /\bnumber of\b/.test(text));
   // "total assessed value" is a FIELD NAME, not a request to add up: "total" counts as a sum word only when it is not followed by "assessed".
-  const sumQ = /\b(total(?! assessed)|sum|combined|altogether|add up)\b/.test(text);
+  const sumQ = /\b(total(?! assessed)|sum|combined|altogether|add up|spen[dt])\b/.test(text);
   const avgQ = /\b(average|mean|typical)\b/.test(text);
   const superlative = /\b(most expensive|most valuable|priciest|costliest|most costly|least expensive|cheapest|oldest|newest|youngest|largest|highest|lowest|biggest|soonest|earliest|latest|next to expire|expires? (?:first|soonest|next)|expiring (?:first|soonest|next)|due (?:first|soonest|next)|first to expire)\b/.exec(text);
   const listQ = /\b(list|show|what|which)\b.*\b(?:do i have|have i got|are there|i have|i own)\b|\b(?:list|show) (?:all )?(?:of )?(?:my|our|the)\b/.test(text);
@@ -428,6 +430,6 @@ export function isDataPointComputedQuery(message: string, now: Date = new Date()
   const { plan } = o;
   // Counts, rankings and totals are never what a list operation answers. A plain FILTER over warranties, policies or tasks is left to the dedicated operation that already filters by date or status (warranty and coverage lookups, the maintenance
   // status read) UNLESS it filters by an amount, which none of them can do. The inventory lookup and the claims status read only list, so their filters are computed here.
-  if (plan.shape === 'FILTER' && ['warranties', 'policies', 'tasks'].includes(plan.template.id)) return plan.predicates.some((p) => plan.template.fields[p.field]?.measure);
+  if (plan.shape === 'FILTER' && ['warranties', 'policies', 'tasks'].includes(plan.template.id)) return plan.predicates.some((p) => plan.template.fields[p.field]?.measure || (plan.template.id === 'tasks' && p.field === 'priority'));
   return true;
 }

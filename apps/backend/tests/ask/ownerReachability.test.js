@@ -109,3 +109,18 @@ test('natural tax, buyer, claim and ranking questions no longer fall to the open
   assert.equal(planDataPointQuery('What is my most valuable appliance?').reasonCode, 'DATA_POINT_QUERY_MEASURE_REQUIRED', '"valuable" is a ranking; purchase price or replacement cost is asked, not guessed');
   assert.equal(planDataPointQuery('What is my most valuable appliance by replacement cost?').plan.sort.field, 'replacementCost');
 });
+
+// ---- third natural-phrasing probe: claims, maintenance, inventory (2026-11-13) ----
+test('claims, maintenance and inventory: a payout is not a premium, a read question is not an edit, and age and spend questions plan', () => {
+  const route = (q) => resolveAskOperation(q).operationId;
+  const { planDataPointQuery } = require('../../src/services/ask/dataPoint/dataPointQueryPlan.ts');
+  assert.equal(resolveDataPoint('How much did my insurance pay for the water damage?')?.id, 'claim.settlement', 'a payout question is the claim settlement, not the policy premium');
+  assert.equal(resolveDataPoint('How much do I pay for homeowners insurance?')?.id, 'policy.premium'); assert.equal(resolveDataPoint('What is my homeowners premium?')?.id, 'policy.premium');
+  assert.equal(resolveDataPoint('How much was my claim for?')?.id, 'claim.estimatedLoss');
+  // a read question that names a priority or a change is not an edit; real edit commands still are
+  assert.equal(route('Which maintenance tasks are high priority?'), 'DATA_POINT_READ'); assert.notEqual(route('How often do I change my furnace filter?'), 'MAINTENANCE_TASK_UPDATE');
+  for (const q of ['Move my gutter cleaning to Friday', 'Change the priority of my gutter cleaning task', 'Reschedule my furnace filter service']) assert.equal(route(q), 'MAINTENANCE_TASK_UPDATE', q);
+  assert.deepEqual(planDataPointQuery('Which maintenance tasks are high priority?').plan.predicates.map((p) => [p.field, p.value]), [['priority', 'HIGH']]);
+  const old = planDataPointQuery('What appliances are over ten years old?'); assert.deepEqual([old.plan.predicates[0].field, old.plan.predicates[0].op], ['installedOn', 'lt']);
+  const spend = planDataPointQuery('What did I spend on my appliances?'); assert.deepEqual([spend.plan.aggregate.fn, spend.plan.aggregate.field], ['SUM', 'purchaseCost']);
+});

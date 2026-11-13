@@ -1794,7 +1794,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if ((maintenanceCompletePattern.test(message) || maintenanceCompletePassivePattern.test(message)) && !explicitCapabilityPattern.test(message)) {
     return resolved('MAINTENANCE_TASK_COMPLETE', 0.97);
   }
-  if ((maintenanceUpdatePattern.test(message) || maintenanceCostEditPattern.test(message)) && !remindMeToPattern.test(message) && !hypotheticalQuestionPattern.test(message)) {
+  // A read question ("Which maintenance tasks are high priority?", "How often do I change my furnace filter?") is not an edit, even though it names a priority or a change.
+  if ((maintenanceUpdatePattern.test(message) || maintenanceCostEditPattern.test(message)) && !remindMeToPattern.test(message) && !hypotheticalQuestionPattern.test(message)
+    && !/^\s*(?:which|what(?:'s|s)?|how (?:many|often|much|long)|when(?:'s)?|who)\b/i.test(message)) {
     return resolved('MAINTENANCE_TASK_UPDATE', 0.97);
   }
   if (guidanceJourneyCreatePattern.test(message)) {
