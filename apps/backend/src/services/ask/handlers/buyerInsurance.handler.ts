@@ -24,7 +24,21 @@ export interface InsuranceView {
   policy: null | { carrierName: string; policyNumber: string; startDate: string | null; expiryDate: string | null };
 }
 
-export function buyerInsuranceFromView(view: InsuranceView, canChange: boolean, now: Date): AskOperationResult {
+export const OWNER_AMOUNTS_NOTE = 'Amounts are available to the property owner.';
+/** Owner policy 2026-11-12: premium, deductible and the full policy number are owner-only. The reduced view is built BEFORE any block, so a non-owner's blocks never contain them. */
+function reduceInsuranceViewForNonOwner(view: InsuranceView): { view: InsuranceView; hadAmounts: boolean } {
+  const w = view.workspace;
+  const hadAmounts = Boolean(w?.quotes.some((q) => q.annualPremiumCents != null || q.deductibleCents != null)) || Boolean(view.policy?.policyNumber);
+  return { hadAmounts, view: {
+    workspace: w ? { ...w, quotes: w.quotes.map((q) => ({ ...q, annualPremiumCents: null, deductibleCents: null })) } : null,
+    policy: view.policy ? { ...view.policy, policyNumber: '' } : null,
+  } };
+}
+
+/** `isOwner` defaults to false: a caller that forgets it gets the reduced (non-owner) answer, never the amounts. */
+export function buyerInsuranceFromView(rawView: InsuranceView, canChange: boolean, now: Date, isOwner = false): AskOperationResult {
+  const reduced = isOwner ? { view: rawView, hadAmounts: false } : reduceInsuranceViewForNonOwner(rawView);
+  const view = reduced.view;
   const summaryAction = (kind: InsuranceKind, label: string) => ({
     id: INSURANCE_ACTION_IDS[kind], label, message: INSURANCE_MESSAGES[kind], interactionType: 'START_WORKFLOW' as const, operationId: 'BUYER_INSURANCE_COMMAND' as const, style: 'SECONDARY' as const,
   });
@@ -49,7 +63,7 @@ export function buyerInsuranceFromView(view: InsuranceView, canChange: boolean, 
   const blockedBind = bindBlocker({ selectedQuoteId: w.selectedQuoteId, boundPolicyId: w.boundPolicyId }, chosen, now);
   const bindOffered = canChange && !w.boundPolicyId && chosen !== null && blockedBind === null;
   const body = [
-    view.policy ? `Bound: ${view.policy.carrierName}, policy ${view.policy.policyNumber}${view.policy.startDate ? `, from ${humanDate(new Date(view.policy.startDate))}` : ''}.`
+    view.policy ? `Bound: ${view.policy.carrierName}${view.policy.policyNumber ? `, policy ${view.policy.policyNumber}` : ''}${view.policy.startDate ? `, from ${humanDate(new Date(view.policy.startDate))}` : ''}.`
       : chosen ? `Chosen quote: ${chosen.carrierName}${dollars(chosen.annualPremiumCents) ? `, ${dollars(chosen.annualPremiumCents)} a year` : ''}. Not recorded as bound yet.` : 'No quote has been chosen yet.',
     `Proof for your lender: ${PROOF_LABELS[w.lenderProofStatus] ?? w.lenderProofStatus}. For closing: ${PROOF_LABELS[w.closingProofStatus] ?? w.closingProofStatus}.`,
     w.requiredEffectiveAt ? `Needed in effect by ${humanDate(new Date(w.requiredEffectiveAt))}.` : null,
@@ -81,6 +95,7 @@ export function buyerInsuranceFromView(view: InsuranceView, canChange: boolean, 
       })) }], collection: collectionDescriptor({ sourceTotal: w.requirements.length, fetchedCount: w.requirements.length, sections: [{ items: w.requirements.slice(0, 10) }], nextPageAvailable: false }), actions: [],
     });
   }
+  if (reduced.hadAmounts) blocks.push({ type: 'SUMMARY', id: 'buyer-insurance-owner-amounts', title: OWNER_AMOUNTS_NOTE, body: 'Premiums, deductibles and the policy number are shown to the property owner only.', tone: 'DEFAULT', actions: [] });
   blocks.push(boundary);
   return { status: openBlocking.length ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: openBlocking.length ? 'BUYER_INSURANCE_HAS_BLOCKERS' : undefined, blocks, suggestions: [] };
 }
@@ -88,5 +103,5 @@ export function buyerInsuranceFromView(view: InsuranceView, canChange: boolean, 
 registerCapabilityHandler('buyer.insurance-readiness', async (envelope, deps) => {
   const access = await (deps?.propertyAccess ?? ensurePropertyAccess(envelope.userId, envelope.propertyId!));
   const data = await BuyerInsuranceService.get(envelope.userId, envelope.propertyId!);
-  return buyerInsuranceFromView({ workspace: data.workspace as never, policy: data.policy as never }, access.role !== HouseholdRole.VIEWER, new Date());
+  return buyerInsuranceFromView({ workspace: data.workspace as never, policy: data.policy as never }, access.role !== HouseholdRole.VIEWER, new Date(), access.role === HouseholdRole.OWNER);
 });

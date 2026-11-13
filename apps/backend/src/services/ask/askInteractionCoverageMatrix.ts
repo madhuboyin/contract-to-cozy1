@@ -1342,7 +1342,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     track: 'Buyer journey',
     rollClass: 'READ_RESULT',
     canonicalOwner: 'buyer.loan-estimates',
-    roleFloor: 'VIEWER',
+    roleFloor: 'OWNER',
     messageRoutable: true,
     confirmationCapable: false,
     correctionModes: [],

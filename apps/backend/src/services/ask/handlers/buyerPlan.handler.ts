@@ -753,6 +753,14 @@ async function buyerMoveStatusResult(userId: string, propertyId: string): Promis
   };
 }
 
+const OWNER_DETAIL_NOTE = 'Details are available to the property owner.';
+const OWNER_AMOUNTS_NOTE = 'Amounts are available to the property owner.';
+/** The earliest of a set of ISO due dates, or null. Dates are shared; the labels they belong to are not. */
+function nextDueDate(values: ReadonlyArray<string | Date | null | undefined>): Date | null {
+  const dates = values.filter((v): v is string | Date => Boolean(v)).map((v) => new Date(v)).filter((d) => !Number.isNaN(d.getTime())).sort((a, b) => a.getTime() - b.getTime());
+  return dates[0] ?? null;
+}
+
 async function buyerFinancingReadinessResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   const context = await loadBuyerPlanContext(userId, propertyId);
   if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s financing readiness right now.');
@@ -785,7 +793,9 @@ async function buyerFinancingReadinessResult(userId: string, propertyId: string)
   }
   const readiness = readinessData.readiness as unknown as { appraisalStatus: string; underwritingStatus: string; clearToCloseRecordedAt: string | null; conditions: Array<{ id: string; title: string; notes: string | null; dueAt: string | null; blocking: boolean; status: string }> };
   const blockingConditions = readiness.conditions.filter((condition) => condition.blocking && !['SATISFIED', 'WAIVED'].includes(condition.status));
-  const canChange = (await ensurePropertyAccess(userId, propertyId)).role !== HouseholdRole.VIEWER;
+  const role = (await ensurePropertyAccess(userId, propertyId)).role;
+  const canChange = role !== HouseholdRole.VIEWER;
+  const isOwner = role === HouseholdRole.OWNER;
   const unresolvedConditions = readiness.conditions.filter((condition) => closingItemUpdatable('LENDER', condition.status)).sort((left, right) => Number(right.blocking) - Number(left.blocking));
   const blocks: AskOperationResult['blocks'] = [{
     type: 'SUMMARY', id: 'buyer-financing-summary',
@@ -794,7 +804,12 @@ async function buyerFinancingReadinessResult(userId: string, propertyId: string)
     tone: blockingConditions.length ? 'CAUTION' : 'DEFAULT',
     actions: canChange ? [closingItemSummaryAction('LENDER_ADD', 'Add a lender condition'), closingItemSummaryAction('LENDER_APPRAISAL', 'Update appraisal status'), closingItemSummaryAction('LENDER_UNDERWRITING', 'Update underwriting status')] : [],
   }];
-  if (unresolvedConditions.length) {
+  // Owner policy 2026-11-12: lender-condition status and due dates are shared; titles and free-form notes are owner-only. A non-owner gets counts and the next due date, built without ever reading the title or notes into a block.
+  if (!isOwner && unresolvedConditions.length) {
+    const next = nextDueDate(unresolvedConditions.map((condition) => condition.dueAt));
+    blocks[0] = { ...blocks[0], body: `${(blocks[0] as { body: string }).body} ${unresolvedConditions.length} lender condition${unresolvedConditions.length === 1 ? ' remains' : 's remain'} open${next ? `; the next is due ${humanDate(next)}` : ''}. ${OWNER_DETAIL_NOTE}` } as typeof blocks[0];
+  }
+  if (isOwner && unresolvedConditions.length) {
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'buyer-financing-conditions', title: blockingConditions.length ? 'Lender conditions, blocking first' : 'Open lender conditions', description: 'From the recorded lender readiness.',
       sections: [{ id: 'conditions', title: 'Conditions', count: unresolvedConditions.length, items: unresolvedConditions.slice(0, 10).map((condition) => ({
@@ -836,7 +851,9 @@ async function buyerTitleEscrowReadinessResult(userId: string, propertyId: strin
   }
   const workspace = titleData.workspace as unknown as { titleReviewStatus: string; closingAppointmentAt: string | null; issues: Array<{ id: string; title: string; dueAt: string | null; blocking: boolean; status: string }> };
   const openBlockingIssues = workspace.issues.filter((issue) => issue.blocking && !['RESOLVED', 'WAIVED'].includes(issue.status));
-  const canChange = (await ensurePropertyAccess(userId, propertyId)).role !== HouseholdRole.VIEWER;
+  const role = (await ensurePropertyAccess(userId, propertyId)).role;
+  const canChange = role !== HouseholdRole.VIEWER;
+  const isOwner = role === HouseholdRole.OWNER;
   const openIssues = workspace.issues.filter((issue) => closingItemUpdatable('TITLE', issue.status)).sort((left, right) => Number(right.blocking) - Number(left.blocking));
   const blocks: AskOperationResult['blocks'] = [{
     type: 'SUMMARY', id: 'buyer-title-summary',
@@ -845,7 +862,12 @@ async function buyerTitleEscrowReadinessResult(userId: string, propertyId: strin
     tone: openBlockingIssues.length ? 'CAUTION' : 'DEFAULT',
     actions: canChange ? [closingItemSummaryAction('TITLE_ADD', 'Add a title or escrow issue'), ...titleContactActions] : [],
   }];
-  if (openIssues.length) {
+  // Title/escrow issue titles and descriptions are owner-only (title and ownership details). Non-owners get counts, status and ordinary dates.
+  if (!isOwner && openIssues.length) {
+    const next = nextDueDate(openIssues.map((issue) => issue.dueAt));
+    blocks[0] = { ...blocks[0], body: `${(blocks[0] as { body: string }).body} ${openIssues.length} title or escrow issue${openIssues.length === 1 ? ' remains' : 's remain'} open${next ? `; the next is due ${humanDate(next)}` : ''}. ${OWNER_DETAIL_NOTE}` } as typeof blocks[0];
+  }
+  if (isOwner && openIssues.length) {
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'buyer-title-issues', title: openBlockingIssues.length ? 'Title/escrow issues, blocking first' : 'Open title/escrow issues', description: 'From the recorded title and escrow workspace.',
       sections: [{ id: 'issues', title: 'Issues', count: openIssues.length, items: openIssues.slice(0, 10).map((issue) => ({
@@ -1080,7 +1102,9 @@ async function buyerContractTimelineResult(userId: string, propertyId: string): 
   if (data.presentationMode === 'CANDIDATE' || !data.overview) {
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no contract to review.');
   }
-  const canChange = (await ensurePropertyAccess(userId, propertyId)).role !== HouseholdRole.VIEWER;
+  const role = (await ensurePropertyAccess(userId, propertyId)).role;
+  const canChange = role !== HouseholdRole.VIEWER;
+  const isOwner = role === HouseholdRole.OWNER;
   const contractData = await BuyerContractService.get(userId, propertyId);
   const workspace = contractData.workspace as unknown as { revisions: Array<{ id: string; status: string; targetClosingDate: string | null; acceptedAt: string | null; contingencies: Array<{ id: string; label: string; status: string; dueAt: string | null }> }> } | null;
   const current = workspace?.revisions.find((revision) => revision.status === 'CONFIRMED') ?? null;
@@ -1097,7 +1121,8 @@ async function buyerContractTimelineResult(userId: string, propertyId: string): 
   const contractActions = !canChange ? [] : draft
     ? [contractAction('DRAFT_EDIT', 'Edit the draft'), contractAction('CONTINGENCY_ADD', 'Add a contingency'), contractAction('CONFIRM', 'Confirm the draft')]
     : [contractAction('DRAFT_START', 'Start a revision')];
-  const draftBlock = draft ? [{
+  // Contingency labels and types are contract terms (owner-only). Non-owners get status, counts and deadlines, so no label is placed in any block for them.
+  const draftBlock = draft && isOwner ? [{
     type: 'GROUPED_LIST' as const, filters: [], id: 'buyer-contract-draft', title: `Draft revision ${draft.revisionNumber}`, description: 'Not part of your plan until you confirm it against the signed contract.',
     sections: [{ id: 'draft', title: 'Contingencies in the draft', count: draft.contingencies.length, items: draft.contingencies.slice(0, 15).map((item) => ({
       id: item.id, title: item.label, description: null, meta: [item.dueAt ? `Due ${humanDate(new Date(item.dueAt))}` : null].filter((value): value is string => Boolean(value)),
@@ -1116,11 +1141,11 @@ async function buyerContractTimelineResult(userId: string, propertyId: string): 
   const blocks: AskOperationResult['blocks'] = [{
     type: 'SUMMARY', id: 'buyer-contract-summary',
     title: conflicts.length ? 'The confirmed contract conflicts with another recorded date' : (openContingencies.length ? `${openContingencies.length} contract contingenc${openContingencies.length === 1 ? 'y is' : 'ies are'} still open` : 'No contract contingency is currently open'),
-    body: conflicts.join(' ') || `Accepted ${current.acceptedAt ? humanDate(new Date(current.acceptedAt)) : 'date not recorded'}, target closing ${current.targetClosingDate ? humanDate(new Date(current.targetClosingDate)) : 'not recorded'}.`,
+    body: `${conflicts.join(' ') || `Accepted ${current.acceptedAt ? humanDate(new Date(current.acceptedAt)) : 'date not recorded'}, target closing ${current.targetClosingDate ? humanDate(new Date(current.targetClosingDate)) : 'not recorded'}.`}${!isOwner && openContingencies.length ? ` ${openContingencies.length} active contingenc${openContingencies.length === 1 ? 'y has' : 'ies have'} ${nextDueDate(openContingencies.map((item) => item.dueAt)) ? `a deadline; the next is ${humanDate(nextDueDate(openContingencies.map((item) => item.dueAt))!)}` : 'no deadline recorded'}. ${OWNER_DETAIL_NOTE}` : ''}`,
     tone: conflicts.length || openContingencies.length ? 'CAUTION' : 'DEFAULT',
     actions: contractActions,
   }, ...draftBlock];
-  if (openContingencies.length) {
+  if (isOwner && openContingencies.length) {
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'buyer-contract-contingencies', title: 'Open contingencies', description: 'From the confirmed contract revision.',
       sections: [{ id: 'contingencies', title: 'Contingencies', count: openContingencies.length, items: openContingencies.slice(0, 10).map((item) => ({
@@ -1196,18 +1221,21 @@ async function buyerCostReadinessResult(userId: string, propertyId: string): Pro
   if (data.presentationMode === 'CANDIDATE' || !data.overview) {
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there are no recorded near-term costs.');
   }
+  const costOwner = (await ensurePropertyAccess(userId, propertyId)).role === HouseholdRole.OWNER;
   const tasks = await HomeBuyerTaskService.getTasks(userId, propertyId);
+  const openApplicable = tasks.filter((task) => task.applicability !== 'NOT_APPLICABLE' && !['COMPLETED', 'NOT_NEEDED', 'CANCELLED'].includes(task.status));
   const costedTasks = tasks.filter((task) => task.applicability !== 'NOT_APPLICABLE' && !['COMPLETED', 'NOT_NEEDED', 'CANCELLED'].includes(task.status) && task.estimatedCostCents != null);
   const totalCents = costedTasks.reduce((sum, task) => sum + (task.estimatedCostCents ?? 0), 0);
   const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString('en-US')}`;
   const blocks: AskOperationResult['blocks'] = [{
     type: 'SUMMARY', id: 'buyer-cost-summary',
-    title: costedTasks.length ? `${money(totalCents)} in recorded near-term costs across ${costedTasks.length} item${costedTasks.length === 1 ? '' : 's'}` : 'No near-term cost estimates are recorded yet',
-    body: costedTasks.length ? 'These are user-recorded or modelled estimates, not confirmed invoices or a guarantee of final cost.' : 'Add an estimated cost to a Buyer Plan task to track near-term purchase costs here.',
+    // Owner policy 2026-11-12: individual and total amounts are owner-only. A non-owner gets counts and which tasks still lack an estimate; no amount is computed into any non-owner block.
+    title: !costedTasks.length ? 'No near-term cost estimates are recorded yet' : costOwner ? `${money(totalCents)} in recorded near-term costs across ${costedTasks.length} item${costedTasks.length === 1 ? '' : 's'}` : `${costedTasks.length} open task${costedTasks.length === 1 ? ' has' : 's have'} a recorded cost estimate`,
+    body: costedTasks.length ? (costOwner ? 'These are user-recorded or modelled estimates, not confirmed invoices or a guarantee of final cost.' : `${OWNER_AMOUNTS_NOTE} ${openApplicable.length - costedTasks.length} open task${openApplicable.length - costedTasks.length === 1 ? ' has' : 's have'} no estimate yet.`) : 'Add an estimated cost to a Buyer Plan task to track near-term purchase costs here.',
     tone: 'DEFAULT',
     actions: [],
   }];
-  if (costedTasks.length) {
+  if (costOwner && costedTasks.length) {
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'buyer-cost-items', title: 'Recorded cost items', description: 'Estimated costs from open Buyer Plan tasks.',
       sections: [{ id: 'costs', title: 'Costs', count: costedTasks.length, items: costedTasks.slice(0, 10).map((task) => ({

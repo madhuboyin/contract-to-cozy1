@@ -67,7 +67,7 @@ test('routing: the read is typed; the command is declared-action only; contribut
 
 test('the answer offers controls to contributors only, bind only when the service would accept, and says Ask buys and binds nothing', () => {
   const chosen = ws({ selectedQuoteId: 'q1', quotes: [quote({ status: 'SELECTED' })] });
-  const out = (w, canChange) => buyerInsuranceFromView({ workspace: w, policy: null }, canChange, new Date('2026-09-15T00:00:00Z'));
+  const out = (w, canChange) => buyerInsuranceFromView({ workspace: w, policy: null }, canChange, new Date('2026-09-15T00:00:00Z'), true);
   assert.deepEqual(out(chosen, true).blocks[0].actions.map((a) => a.id), ['buyer-insurance-requirement-add', 'buyer-insurance-quote-add', 'buyer-insurance-proof', 'buyer-insurance-bind']);
   assert.deepEqual(out(ws(), true).blocks[0].actions.map((a) => a.id), ['buyer-insurance-requirement-add', 'buyer-insurance-quote-add', 'buyer-insurance-proof']);
   assert.deepEqual(out(chosen, false).blocks[0].actions, []);
