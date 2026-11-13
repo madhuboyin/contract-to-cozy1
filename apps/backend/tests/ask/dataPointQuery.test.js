@@ -156,3 +156,37 @@ test('routing: query questions reach DATA_POINT_READ; existing specific operatio
   assert.notEqual(op('what is the weather like'), 'DATA_POINT_READ');
   assert.equal(op('what are my overdue maintenance tasks'), resolveAskOperation('what are my overdue maintenance tasks').operationId); // tasks keep their own status route
 });
+
+// ---- review fixes: predicate overflow, property-timezone calendar periods, query snapshot replay ----
+test('more recognised predicates than the limit are never executed as a partial set: they are asked back', () => {
+  const six = 'which appliances older than ten years in 2012 expiring within 30 days more than $500 in poor condition hvac category';
+  const o = p(six); assert.equal(o.kind, 'CLARIFY'); assert.equal(o.reasonCode, 'DATA_POINT_QUERY_TOO_MANY_FILTERS');
+  assert.equal(get('which appliances are older than ten years in poor condition').predicates.length, 2, 'within the limit it is unchanged');
+});
+test('calendar periods use the PROPERTY timezone and calendar boundaries, not rolling UTC windows', () => {
+  const at = (iso, tz, m) => { const o = plan.planDataPointQuery(m, new Date(iso), tz); assert.equal(o.kind, 'PLAN', m); return o.plan.predicates.map((x) => [x.op, x.value]); };
+  // 2026-11-13 12:00Z is Nov 13 04:00 in Los Angeles. November starts at PDT (UTC-7) and December starts after DST ended (UTC-8).
+  assert.deepEqual(at('2026-11-13T12:00:00Z', 'America/Los_Angeles', 'which warranties expire this month'), [['gte', '2026-11-01T07:00:00.000Z'], ['lt', '2026-12-01T08:00:00.000Z']]);
+  assert.deepEqual(at('2026-11-13T12:00:00Z', 'America/Los_Angeles', 'which maintenance tasks are due next month'), [['gte', '2026-12-01T08:00:00.000Z'], ['lt', '2027-01-01T08:00:00.000Z']]);
+  assert.deepEqual(at('2026-11-13T12:00:00Z', 'UTC', 'which warranties expire this year'), [['gte', '2026-01-01T00:00:00.000Z'], ['lt', '2027-01-01T00:00:00.000Z']]);
+  // the same instant is in different months in different zones: 2026-12-01T03:00Z is still Nov 30 in Los Angeles but already Dec 1 in UTC
+  assert.deepEqual(at('2026-12-01T03:00:00Z', 'America/Los_Angeles', 'which warranties expire this month')[0], ['gte', '2026-11-01T07:00:00.000Z']);
+  assert.deepEqual(at('2026-12-01T03:00:00Z', 'UTC', 'which warranties expire this month')[0], ['gte', '2026-12-01T00:00:00.000Z']);
+  // week: Monday start; 2026-11-13 is a Friday, so this week is Mon Nov 9 to Mon Nov 16 (exclusive)
+  assert.deepEqual(at('2026-11-13T12:00:00Z', 'America/New_York', 'which maintenance tasks are due this week'), [['gte', '2026-11-09T05:00:00.000Z'], ['lt', '2026-11-16T05:00:00.000Z']]);
+  assert.deepEqual(at('2026-11-13T12:00:00Z', 'America/New_York', 'which maintenance tasks are due next week')[0], ['gte', '2026-11-16T05:00:00.000Z']);
+  // a year named in the question is a calendar year in the property timezone too
+  assert.deepEqual(at('2026-11-13T12:00:00Z', 'Pacific/Auckland', 'which appliances were installed before 2010'), [['lt', '2009-12-31T11:00:00.000Z']]);
+  assert.deepEqual(at('2026-11-13T12:00:00Z', 'Not/AZone', 'which warranties expire this year')[0], ['gte', '2026-01-01T00:00:00.000Z'], 'an invalid zone falls back to UTC');
+  assert.equal(plan.calendarRange(new Date('2026-03-10T12:00:00Z'), 'America/Chicago', 'month', 0).start.toISOString(), '2026-03-01T06:00:00.000Z', 'DST starts later in March: the boundary uses the offset in force at that instant');
+});
+test('a query answer is a snapshot: it carries as-of time, is never composable, and a point read is unaffected', async () => {
+  const { COMPOSABLE_SOURCE_AUTHORIZATION: AUTH } = require('../../src/services/ask/composition/sourceAuthorization.ts');
+  const w = stub('VIEWER', { inventoryItem: { count: () => 7 }, property: { findUnique: () => ({ timezone: 'America/Chicago' }) } });
+  try {
+    const r = await dataPointReadResult('u1', 'p1', 'how many appliances do I have');
+    assert.equal(r.parameters.dataPointQuery.snapshot, true); assert.ok(r.parameters.dataPointQuery.asOf); assert.ok(r.blocks[1].items[0].observedAt, 'the evidence says when it was read');
+    assert.equal(AUTH.DATA_POINT_READ.describeSources({ reasonCode: r.reasonCode, parameters: r.parameters, blocks: r.blocks }), null, 'undeclared sources fail closed: never composed or replayed');
+    assert.equal(AUTH.DATA_POINT_READ.describeSources({ reasonCode: undefined, parameters: { sources: [{ sourceType: 'InventoryItem', sourceId: 'i1' }] }, blocks: [] }).length, 1, 'a point read still declares its sources');
+  } finally { w.restore(); }
+});

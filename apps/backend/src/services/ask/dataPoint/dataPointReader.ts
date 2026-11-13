@@ -113,7 +113,7 @@ export async function readDataPoint(propertyId: string, role: string, point: Dat
     const lower = ` ${message.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ')} `;
     const children: any[] = await (prisma as any)[spec.delegate].findMany({
       where: { claimId: claim.id, ...(point.entity === 'ClaimDocument' ? { document: { propertyId, lifecycleStatus: 'ACTIVE', trashedAt: null, ...visibleRecordWhere(role as HouseholdRole) } } : {}) },
-      select, take: 100, orderBy: point.entity === 'ClaimChecklistItem' ? [{ orderIndex: 'asc' }] : [{ createdAt: 'asc' }],
+      select: { ...select, ...(point.entity === 'ClaimDocument' ? { documentId: true } : {}) }, take: 100, orderBy: point.entity === 'ClaimChecklistItem' ? [{ orderIndex: 'asc' }] : [{ createdAt: 'asc' }],
     });
     if (!children.length) return { point, status: 'ITEM_NOT_FOUND', rows: [] };
     let chosen: any[];
@@ -133,7 +133,9 @@ export async function readDataPoint(propertyId: string, role: string, point: Dat
     const name = point.entity === 'ClaimChecklistItem' ? `${claimName} checklist step ${Number(row.orderIndex) + 1}` : point.entity === 'ClaimTimelineEvent' ? `${claimName} ${typeWords(row.type)} event` : `${claimName} ${typeWords(row.type)} document`;
     // A checklist step on a closed or denied claim is a historical value, not an open obligation.
     const limitation = point.entity === 'ClaimChecklistItem' && ['CLOSED', 'DENIED'].includes(String(claim.status)) ? `This claim is ${typeWords(claim.status)}, so this step may no longer represent an open obligation.` : null;
-    return { point, status: isPresent(value) ? 'FOUND' : 'NOT_RECORDED', rows: [{ id: String(row.id), name, value, roomName: null, limitation }] };
+    // The source id carries the claim (and, for a document, the linked Home Record) the answer was about, so replay refuses a child that was moved to another claim or relinked to another record.
+    const sourceId = point.entity === 'ClaimDocument' ? `${claim.id}~${row.documentId}~${row.id}` : `${claim.id}~${row.id}`;
+    return { point, status: isPresent(value) ? 'FOUND' : 'NOT_RECORDED', rows: [{ id: sourceId, name, value, roomName: null, limitation }] };
   }
   if (spec.mode === 'RECORD_VERSION') {
     const parentSpec = ENTITY_SPECS.PropertyRecord;

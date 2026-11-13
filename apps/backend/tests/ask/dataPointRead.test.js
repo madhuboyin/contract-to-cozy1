@@ -726,7 +726,7 @@ test('v10 checklist: the claim is named first; a step is chosen by number; free-
   assert.equal(st.status, 'ANSWERED'); assert.match(st.blocks[0].body, /water damage claim checklist step 1 has status done/i);
   assert.equal(calls[0][1].where.propertyId, 'p1'); assert.deepEqual(calls[1][1].where, { claimId: 'c1' });
   assert.deepEqual(Object.keys(calls[1][1].select).sort(), ['id', 'orderIndex', 'status']);
-  assert.deepEqual(st.parameters.sources, [{ sourceType: 'ClaimChecklistItem', sourceId: 's1', minRole: 'CONTRIBUTOR' }]);
+  assert.deepEqual(st.parameters.sources, [{ sourceType: 'ClaimChecklistItem', sourceId: 'c1~s1', minRole: 'CONTRIBUTOR' }]);
   assert.match((await dataPointReadResult('u1', 'p1', 'is claim checklist step 2 required')).blocks[0].body, /is required: no/);
   assert.match((await dataPointReadResult('u1', 'p1', 'when was claim checklist step 1 completed')).blocks[0].body, /was completed .*10/);
   assert.equal((await dataPointReadResult('u1', 'p1', 'what is the status of claim checklist step 9')).reasonCode, 'DATA_POINT_ITEM_NOT_FOUND');
@@ -744,23 +744,37 @@ test('v10 events and documents: chosen by structured type only, never "the lates
   assert.equal((await dataPointReadResult('u1', 'p1', 'when did the note claim timeline event happen')).reasonCode, 'DATA_POINT_AMBIGUOUS', 'two notes: not defaulted to the latest');
   assert.equal((await dataPointReadResult('u1', 'p1', 'when did the latest claim timeline event happen')).reasonCode, 'DATA_POINT_ITEM_NOT_FOUND', '"latest" selects nothing');
   assert.ok(!('title' in calls.find((c) => c[0] === 'event')[1].select) && !('meta' in calls.find((c) => c[0] === 'event')[1].select));
-  const dcalls = []; ccStub('CONTRIBUTOR', { docs: [{ id: 'd1', type: 'ESTIMATE', createdAt: new Date('2026-09-02T12:00:00Z') }] }, dcalls);
+  const dcalls = []; ccStub('CONTRIBUTOR', { docs: [{ id: 'd1', documentId: 'rec9', type: 'ESTIMATE', createdAt: new Date('2026-09-02T12:00:00Z') }] }, dcalls);
   const doc = await dataPointReadResult('u1', 'p1', 'when was the estimate claim document attached'); assert.match(doc.blocks[0].body, /estimate document was attached .*2/i);
   const q = dcalls.find((c) => c[0] === 'doc')[1]; assert.equal(q.where.claimId, 'c1');
   assert.deepEqual(q.where.document, { propertyId: 'p1', lifecycleStatus: 'ACTIVE', trashedAt: null, visibility: 'HOUSEHOLD' }, 'the Home Record visibility rule applies in addition to the claim');
-  assert.deepEqual(Object.keys(q.select).sort(), ['createdAt', 'id', 'type']);
+  assert.deepEqual(Object.keys(q.select).sort(), ['createdAt', 'documentId', 'id', 'type']);
+  assert.deepEqual(doc.parameters.sources, [{ sourceType: 'ClaimDocument', sourceId: 'c1~rec9~d1', minRole: 'CONTRIBUTOR' }]);
   const ocalls = []; ccStub('OWNER', { docs: [] }, ocalls); await dataPointReadResult('u1', 'p1', 'when was the estimate claim document attached');
   assert.equal(ocalls.find((c) => c[0] === 'doc')[1].where.document.visibility, undefined, 'owners are not filtered');
   ccStub('VIEWER', { docs: [] }); assert.equal((await dataPointReadResult('u1', 'p1', 'when was the estimate claim document attached')).reasonCode, 'DATA_POINT_RESTRICTED');
 });
-test('v10 replay: checklist and event re-check the claim in this property; a document re-checks BOTH the claim and the role-visible Home Record', async () => {
+test('v10 replay: a child is re-checked as THAT child of THAT claim; a document needs the claim AND the role-visible Home Record, and a moved or relinked document is redacted', async () => {
   const { COMPOSABLE_SOURCE_AUTHORIZATION: AUTH, sourceRef } = require('../../src/services/ask/composition/sourceAuthorization.ts');
-  const seen = []; const ctx = (role, present) => ({ userId: 'u1', propertyId: 'p1', role, exists: async (m, w) => { seen.push([m, w]); return present; } });
   const ref = (t, id) => ({ ...sourceRef(t, id), minRole: 'CONTRIBUTOR' });
-  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx('CONTRIBUTOR', true), [ref('ClaimChecklistItem', 's1')]), 'AUTHORIZED'); assert.deepEqual(seen.at(-1), ['ClaimChecklistItem', { id: 's1', claim: { propertyId: 'p1' } }]);
-  await AUTH.DATA_POINT_READ.authorizeSources(ctx('CONTRIBUTOR', true), [ref('ClaimTimelineEvent', 'e1')]); assert.deepEqual(seen.at(-1)[1], { id: 'e1', propertyId: 'p1', claim: { propertyId: 'p1' } });
-  await AUTH.DATA_POINT_READ.authorizeSources(ctx('CONTRIBUTOR', true), [ref('ClaimDocument', 'd1')]);
-  assert.deepEqual(seen.at(-1), ['ClaimDocument', { id: 'd1', claim: { propertyId: 'p1' }, document: { propertyId: 'p1', lifecycleStatus: 'ACTIVE', trashedAt: null, visibility: 'HOUSEHOLD' } }]);
-  assert.notEqual(await AUTH.DATA_POINT_READ.authorizeSources(ctx('VIEWER', true), [ref('ClaimDocument', 'd1')]), 'AUTHORIZED', 'a viewer is below the CONTRIBUTOR floor');
-  assert.equal(await AUTH.DATA_POINT_READ.authorizeSources(ctx('CONTRIBUTOR', false), [ref('ClaimDocument', 'd1')]), 'REDACT_SECTION', 'the record is no longer visible to this role');
+  // a tiny fake of the tables, evaluating the exact where the contract builds
+  const db = { step: { id: 's1', claimId: 'c1' }, event: { id: 'e1', claimId: 'c1', propertyId: 'p1' }, doc: { id: 'd1', claimId: 'c1', documentId: 'rec9', recPropertyId: 'p1', recVisibility: 'HOUSEHOLD', recActive: true } };
+  const exists = async (model, w) => {
+    if (model === 'ClaimChecklistItem') return w.id === db.step.id && w.claimId === db.step.claimId && w.claim.propertyId === 'p1';
+    if (model === 'ClaimTimelineEvent') return w.id === db.event.id && w.claimId === db.event.claimId && w.propertyId === db.event.propertyId;
+    const d = w.document; return w.id === db.doc.id && w.claimId === db.doc.claimId && w.documentId === db.doc.documentId && w.claim.propertyId === 'p1'
+      && d.propertyId === db.doc.recPropertyId && db.doc.recActive && d.lifecycleStatus === 'ACTIVE' && d.trashedAt === null && (!d.visibility || d.visibility === db.doc.recVisibility);
+  };
+  const ctx = (role) => ({ userId: 'u1', propertyId: 'p1', role, exists });
+  const check = (role, t, id) => AUTH.DATA_POINT_READ.authorizeSources(ctx(role), [ref(t, id)]);
+  assert.equal(await check('CONTRIBUTOR', 'ClaimChecklistItem', 'c1~s1'), 'AUTHORIZED');
+  assert.equal(await check('CONTRIBUTOR', 'ClaimTimelineEvent', 'c1~e1'), 'AUTHORIZED');
+  assert.equal(await check('CONTRIBUTOR', 'ClaimDocument', 'c1~rec9~d1'), 'AUTHORIZED');
+  assert.equal(await check('CONTRIBUTOR', 'ClaimChecklistItem', 'c2~s1'), 'REDACT_SECTION', 'an answer about claim c1\'s step is not valid for c2');
+  db.doc.claimId = 'c2'; assert.equal(await check('CONTRIBUTOR', 'ClaimDocument', 'c1~rec9~d1'), 'REDACT_SECTION', 'a document MOVED to another claim is redacted');
+  db.doc.claimId = 'c1'; db.doc.documentId = 'rec10'; assert.equal(await check('CONTRIBUTOR', 'ClaimDocument', 'c1~rec9~d1'), 'REDACT_SECTION', 'a document RELINKED to another Home Record is redacted');
+  db.doc.documentId = 'rec9'; db.doc.recVisibility = 'OWNER_ONLY'; assert.equal(await check('CONTRIBUTOR', 'ClaimDocument', 'c1~rec9~d1'), 'REDACT_SECTION', 'the record became owner-only');
+  assert.equal(await check('OWNER', 'ClaimDocument', 'c1~rec9~d1'), 'AUTHORIZED', 'owners are not filtered by record visibility');
+  db.doc.recVisibility = 'HOUSEHOLD'; db.doc.recActive = false; assert.equal(await check('CONTRIBUTOR', 'ClaimDocument', 'c1~rec9~d1'), 'REDACT_SECTION', 'the record was trashed');
+  db.doc.recActive = true; assert.notEqual(await check('VIEWER', 'ClaimDocument', 'c1~rec9~d1'), 'AUTHORIZED', 'below the CONTRIBUTOR floor');
 });

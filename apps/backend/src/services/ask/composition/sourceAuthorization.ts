@@ -73,10 +73,11 @@ const CHECKS: Record<CompositeSourceType, { where: (context: SourceAuthorization
   // Child of the buyer checklist: re-resolved through its CURRENT property-scoped checklist on replay (a task that moved or became not applicable is redacted).
   HomeBuyerTask: { where: (c, id) => ({ id, checklist: { propertyId: c.propertyId }, applicability: { not: 'NOT_APPLICABLE' } }), onMissing: 'REDACT_SECTION' },
   Claim: { where: (c, id) => ({ id, propertyId: c.propertyId }), onMissing: 'REDACT_SECTION' },
-  ClaimChecklistItem: { where: (c, id) => ({ id, claim: { propertyId: c.propertyId } }), onMissing: 'REDACT_SECTION' },
-  ClaimTimelineEvent: { where: (c, id) => ({ id, propertyId: c.propertyId, claim: { propertyId: c.propertyId } }), onMissing: 'REDACT_SECTION' },
+  // Claim children are cited as `<claimId>~<id>` (a document as `<claimId>~<recordId>~<id>`): the answer was about THAT child of THAT claim, so a child moved to another claim or relinked to another record is redacted on replay.
+  ClaimChecklistItem: { where: (c, id) => { const [claimId, itemId] = id.split('~'); return { id: itemId ?? id, claimId: claimId ?? '', claim: { propertyId: c.propertyId } }; }, onMissing: 'REDACT_SECTION' },
+  ClaimTimelineEvent: { where: (c, id) => { const [claimId, eventId] = id.split('~'); return { id: eventId ?? id, claimId: claimId ?? '', propertyId: c.propertyId, claim: { propertyId: c.propertyId } }; }, onMissing: 'REDACT_SECTION' },
   // A claim document needs BOTH its claim in this property AND its Home Record visible to this role (neither parent broadens the other).
-  ClaimDocument: { where: (c, id) => ({ id, claim: { propertyId: c.propertyId }, document: { propertyId: c.propertyId, lifecycleStatus: 'ACTIVE', trashedAt: null, ...visibleRecordWhere(c.role as HouseholdRole) } }), onMissing: 'REDACT_SECTION' },
+  ClaimDocument: { where: (c, id) => { const [claimId, documentId, rowId] = id.split('~'); return { id: rowId ?? id, claimId: claimId ?? '', documentId: documentId ?? '', claim: { propertyId: c.propertyId }, document: { propertyId: c.propertyId, lifecycleStatus: 'ACTIVE', trashedAt: null, ...visibleRecordWhere(c.role as HouseholdRole) } }; }, onMissing: 'REDACT_SECTION' },
   // A version that was selected AS CURRENT must still be the record's current version on replay (relation: PropertyRecordCurrentVersion), with the same visibility/lifecycle rules.
   CurrentPropertyRecordVersion: { where: (c, id) => ({ id, currentForRecord: { is: { propertyId: c.propertyId, lifecycleStatus: 'ACTIVE', trashedAt: null, ...visibleRecordWhere(c.role as HouseholdRole) } } }), onMissing: 'REDACT_SECTION' },
   PropertyRecordVersion: { where: (c, id) => ({ id, record: { propertyId: c.propertyId, lifecycleStatus: 'ACTIVE', trashedAt: null, ...visibleRecordWhere(c.role as HouseholdRole) } }), onMissing: 'REDACT_SECTION' },
@@ -131,6 +132,8 @@ function build(contract: OperationContract): ComposableReadAuthorization {
   return {
     describeSources(result) {
       const params = isRecord(result.parameters) ? result.parameters : null;
+      // A query snapshot (count, total, ranking, filter) cannot be kept fresh by per-row source checks, so it is never composable or replayable: undeclared sources fail closed.
+      if (params && isRecord(params.dataPointQuery) && params.dataPointQuery.snapshot === true) return null;
       let refs: CompositeSourceReference[] | null = null;
       if (params && Array.isArray(params.sources)) {
         const parsed = params.sources.map((raw) => validRef(raw, allowed));

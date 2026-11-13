@@ -10,6 +10,8 @@ import { ensurePropertyAccess } from '../askHandlerSupport';
 import { audienceFloorCopy, resolveDataPoint, roleMayRead, type DataPointDefinition } from '../dataPoint/dataPointCatalogue';
 import { namedTaxYears, readDataPoint } from '../dataPoint/dataPointReader';
 import { planDataPointQuery, pointOf, type QueryPlan } from '../dataPoint/dataPointQueryPlan';
+import { prisma } from '../../../lib/prisma';
+import { safeTimezone } from '../support/propertyContext';
 import { runDataPointQuery } from '../dataPoint/dataPointQueryRunner';
 
 const ENTITY_COPY: Record<string, { plural: string; singular: string; collection: string; record: string; none?: string }> = {
@@ -51,6 +53,9 @@ const notice = (reasonCode: string, id: string, title: string, body: string): As
   status: 'READY_WITH_LIMITATIONS', reasonCode, parameters: { sources: [] }, blocks: [{ type: 'SUMMARY', id, title, body, tone: 'CAUTION', actions: [] } as AskPresentationBlock], suggestions: [],
 });
 
+async function propertyTimeZone(propertyId: string): Promise<string> {
+  try { const row = await prisma.property.findUnique({ where: { id: propertyId }, select: { timezone: true } }); return safeTimezone(row?.timezone); } catch { return 'UTC'; }
+}
 const ROLE_RANK: Record<string, number> = { VIEWER: 0, CONTRIBUTOR: 1, OWNER: 2 };
 const RANK_ROLE = ['VIEWER', 'CONTRIBUTOR', 'OWNER'] as const;
 const NUMBER_FAMILY_LABEL = (family: string, value: unknown) => formatDataPointValue({ family } as unknown as DataPointDefinition, value);
@@ -105,10 +110,13 @@ async function dataPointQueryResult(propertyId: string, role: string, plan: Quer
   }
   const sources = plan.shape === 'AGGREGATE' || !run.rows.length ? [{ ...sourceRef('Property', propertyId), ...minRole }] : run.rows.slice(0, 10).map((r) => ({ ...sourceRef(t.entity as CompositeSourceType, r.id), ...minRole }));
   return {
-    status: limited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: limited ? 'DATA_POINT_QUERY_PARTIAL' : undefined, parameters: { sources },
+    status: limited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: limited ? 'DATA_POINT_QUERY_PARTIAL' : undefined,
+    // A count, total, ranking or filter changes when ANY record is added, removed, edited or stops matching, which per-row sources cannot detect. It is therefore a snapshot as of `asOf`, and is NOT composable: a composite
+    // never reuses it (describeSources returns null for it); asking again re-runs the plan.
+    parameters: { sources, dataPointQuery: { snapshot: true, shape: plan.shape, template: t.id, asOf: new Date().toISOString() } },
     blocks: [
       { type: 'SUMMARY', id: 'data-point-query-summary', title, body: lines.join(' '), tone: limited ? 'CAUTION' : 'DEFAULT', actions: [] },
-      { type: 'EVIDENCE', id: 'data-point-evidence', title: 'Where this comes from', items: [{ label: `Your ${t.plural}`, source: where?.record ?? t.entity, observedAt: null }] },
+      { type: 'EVIDENCE', id: 'data-point-evidence', title: 'Where this comes from', items: [{ label: `Your ${t.plural}`, source: where?.record ?? t.entity, observedAt: new Date().toISOString() }] },
     ] as AskPresentationBlock[],
     suggestions: [],
   };
@@ -117,7 +125,9 @@ async function dataPointQueryResult(propertyId: string, role: string, plan: Quer
 export async function dataPointReadResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const role = String(access.role);
-  const queryOutcome = planDataPointQuery(message);
+  // The planner is pure: the property's timezone is read here and passed in, so calendar periods (this month, next week) use the property's calendar, not UTC.
+  const timeZone = await propertyTimeZone(propertyId);
+  const queryOutcome = planDataPointQuery(message, new Date(), timeZone);
   if (queryOutcome.kind === 'CLARIFY') return notice(queryOutcome.reasonCode, 'data-point-query-clarify', queryOutcome.title, queryOutcome.body);
   if (queryOutcome.kind === 'PLAN') return dataPointQueryResult(propertyId, role, queryOutcome.plan);
   const point = resolveDataPoint(message);

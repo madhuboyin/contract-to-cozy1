@@ -169,9 +169,10 @@ function pickTemplate(text: string): { template: QueryTemplate; plural: boolean 
   return { template: distinct[0].template, plural: distinct.some((h) => h.plural) };
 }
 
-function fieldNamed(template: QueryTemplate, text: string, fallback?: string): string | null {
+/** The field a message names, restricted to the fields acceptable for the clause (a date clause never picks the "condition" field just because that word is also in the message). */
+function fieldNamed(template: QueryTemplate, text: string, fallback?: string, accept: (field: QueryField) => boolean = () => true): string | null {
   let best: { key: string; len: number } | null = null;
-  for (const [key, field] of Object.entries(template.fields)) for (const w of field.words) if (text.includes(` ${w} `) || text.includes(` ${w}s `)) { if (!best || w.length > best.len) best = { key, len: w.length }; }
+  for (const [key, field] of Object.entries(template.fields)) if (accept(field)) for (const w of field.words) if (text.includes(` ${w} `) || text.includes(` ${w}s `)) { if (!best || w.length > best.len) best = { key, len: w.length }; }
   return best?.key ?? fallback ?? null;
 }
 
@@ -185,8 +186,30 @@ const unitDate = (now: Date, n: number, unit: string, sign: 1 | -1): Date | null
 };
 const withinRange = (n: number, unit: string) => !(unit.startsWith('year') && n > QUERY_MAX_RELATIVE_YEARS) && n > 0 && n <= 1000;
 
-/** The plan for a message at a given time, or why there is none. Never throws on user text. */
-export function planDataPointQuery(message: string, now: Date = new Date()): QueryPlanOutcome {
+// ---- calendar boundaries in the PROPERTY's timezone (never rolling windows, never UTC) ----
+const DTF_CACHE = new Map<string, Intl.DateTimeFormat>();
+function dtf(tz: string) { let f = DTF_CACHE.get(tz); if (!f) { f = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', weekday: 'short' }); DTF_CACHE.set(tz, f); } return f; }
+function zonedParts(date: Date, tz: string) { const o: Record<string, string> = {}; for (const part of dtf(tz).formatToParts(date)) o[part.type] = part.value; return { y: Number(o.year), m: Number(o.month), d: Number(o.day), h: Number(o.hour), mi: Number(o.minute), s: Number(o.second), dow: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(o.weekday) }; }
+function offsetMinutes(date: Date, tz: string) { const p = zonedParts(date, tz); return (Date.UTC(p.y, p.m - 1, p.d, p.h, p.mi, p.s) - (date.getTime() - date.getUTCMilliseconds())) / 60_000; }
+/** The instant local midnight of y-m-d occurs in `tz` (month and day may overflow; Date.UTC normalises). Handles DST by re-checking the offset at the candidate instant. */
+export function zonedMidnightUtc(y: number, m: number, d: number, tz: string): Date {
+  const guess = Date.UTC(y, m - 1, d); const first = offsetMinutes(new Date(guess), tz); let t = guess - first * 60_000;
+  const second = offsetMinutes(new Date(t), tz); if (second !== first) t = guess - second * 60_000;
+  return new Date(t);
+}
+/** [start, end) of the calendar month, week (Monday start) or year `offset` periods from the current one, in the property's timezone. */
+export function calendarRange(now: Date, tz: string, unit: 'month' | 'week' | 'year', offset: number): { start: Date; end: Date } {
+  const p = zonedParts(now, tz);
+  if (unit === 'year') return { start: zonedMidnightUtc(p.y + offset, 1, 1, tz), end: zonedMidnightUtc(p.y + offset + 1, 1, 1, tz) };
+  if (unit === 'month') return { start: zonedMidnightUtc(p.y, p.m + offset, 1, tz), end: zonedMidnightUtc(p.y, p.m + offset + 1, 1, tz) };
+  const sinceMonday = (p.dow + 6) % 7;
+  return { start: zonedMidnightUtc(p.y, p.m, p.d - sinceMonday + 7 * offset, tz), end: zonedMidnightUtc(p.y, p.m, p.d - sinceMonday + 7 * (offset + 1), tz) };
+}
+const validZone = (tz: string) => { try { dtf(tz); return true; } catch { return false; } };
+
+/** The plan for a message at a given time (and property timezone), or why there is none. Never throws on user text. */
+export function planDataPointQuery(message: string, now: Date = new Date(), timeZoneIn: string = 'UTC'): QueryPlanOutcome {
+  const timeZone = validZone(timeZoneIn) ? timeZoneIn : 'UTC';
   const text = norm(message);
   // "claim checklist step", "claim timeline event", "claim document" name a child of one claim (a point read), not the kind "claims".
   if (/\bclaim (?:checklist|timeline|events?|documents?|steps?|attachments?)\b/.test(text)) return { kind: 'NONE' };
@@ -197,7 +220,9 @@ export function planDataPointQuery(message: string, now: Date = new Date()): Que
   const predicates: Predicate[] = [];
   let excludesClosed = false;
   const touched = new Set<string>();
-  const push = (p: Predicate) => { if (predicates.length < QUERY_MAX_PREDICATES) { predicates.push(p); touched.add(p.field); } };
+  // More recognised qualifiers than the template allows is NEVER executed as a partial set (a truncated filter would look like it honored the whole question): it is asked back.
+  let overflow = false;
+  const push = (p: Predicate) => { if (predicates.length < QUERY_MAX_PREDICATES) { predicates.push(p); touched.add(p.field); } else overflow = true; };
 
   // ---- predicates ----
   let m: RegExpExecArray | null;
@@ -208,9 +233,9 @@ export function planDataPointQuery(message: string, now: Date = new Date()): Que
   }
   const dateField = template.dateField;
   if (dateField && (m = /\b(before|after|in|since) (19\d\d|20\d\d)\b/.exec(text)) && !/\bin (?:the )?next\b/.test(text)) {
-    const year = Number(m[2]); const key = fieldNamed(template, text, dateField) ?? dateField; const field = template.fields[key];
+    const year = Number(m[2]); const key = fieldNamed(template, text, dateField, (x) => x.type === 'date') ?? dateField; const field = template.fields[key];
     if (field?.type === 'date') {
-      const start = new Date(Date.UTC(year, 0, 1)); const end = new Date(Date.UTC(year + 1, 0, 1));
+      const start = zonedMidnightUtc(year, 1, 1, timeZone); const end = zonedMidnightUtc(year + 1, 1, 1, timeZone);
       if (m[1] === 'before') push({ field: key, op: 'lt', value: start.toISOString(), describe: `before ${year}` });
       else if (m[1] === 'after') push({ field: key, op: 'gte', value: end.toISOString(), describe: `after ${year}` });
       else if (m[1] === 'since') push({ field: key, op: 'gte', value: start.toISOString(), describe: `since ${year}` });
@@ -222,8 +247,10 @@ export function planDataPointQuery(message: string, now: Date = new Date()): Que
     const end = unitDate(now, n, m[2], 1); if (!end) return { kind: 'NONE' };
     push({ field: dateField, op: 'gte', value: now.toISOString(), describe: `from today` }); push({ field: dateField, op: 'lte', value: end.toISOString(), describe: `within ${n} ${m[2]}` });
   } else if (dateField && /\b(?:this|next) (month|week|year)\b/.test(text) && /\b(?:expiring|expire|expires|due|ending)\b/.test(text)) {
-    const mm = /\b(this|next) (month|week|year)\b/.exec(text)!; const unit = mm[2]; const start = mm[1] === 'this' ? now : unitDate(now, 1, unit, 1)!; const end = unitDate(start, 1, unit, 1)!;
-    push({ field: dateField, op: 'gte', value: start.toISOString(), describe: `${mm[1]} ${unit}` }); push({ field: dateField, op: 'lte', value: end.toISOString(), describe: `${mm[1]} ${unit}` });
+    // A calendar period, not a rolling window: [start, end) of this or next month, week (Monday start) or year in the PROPERTY's timezone.
+    const mm = /\b(this|next) (month|week|year)\b/.exec(text)!; const unit = mm[2] as 'month' | 'week' | 'year';
+    const { start, end } = calendarRange(now, timeZone, unit, mm[1] === 'this' ? 0 : 1);
+    push({ field: dateField, op: 'gte', value: start.toISOString(), describe: `${mm[1]} ${unit}` }); push({ field: dateField, op: 'lt', value: end.toISOString(), describe: `${mm[1]} ${unit}` });
   } else if (dateField && /\b(?:expired|lapsed)\b/.test(text)) {
     push({ field: dateField, op: 'lt', value: now.toISOString(), describe: 'already past' });
   } else if (template.id === 'tasks' && /\boverdue\b/.test(text)) {
@@ -231,7 +258,7 @@ export function planDataPointQuery(message: string, now: Date = new Date()): Que
   }
   // money thresholds: "more than $1,000", "over 500 dollars", "less than $200"
   if ((m = /\b(more than|over|above|greater than|less than|under|below|cheaper than)\s+\$?(\d[\d,]*(?:\.\d+)?)\s*(?:dollars|bucks)?\b/.exec(text)) && !/\b(older|newer) than\b/.test(m[0])) {
-    const key = fieldNamed(template, text, Object.keys(template.fields).find((k) => template.fields[k].measure) ?? undefined);
+    const key = fieldNamed(template, text, Object.keys(template.fields).find((k) => template.fields[k].measure) ?? undefined, (x) => x.measure);
     const field = key ? template.fields[key] : null;
     if (field && (field.type === 'money' || field.type === 'dollars')) {
       const amount = Number(m[2].replace(/,/g, ''));
@@ -249,6 +276,7 @@ export function planDataPointQuery(message: string, now: Date = new Date()): Que
     }
   }
 
+  if (overflow) return { kind: 'CLARIFY', reasonCode: 'DATA_POINT_QUERY_TOO_MANY_FILTERS', title: 'That is more filters than I can apply at once', body: `I can apply up to ${QUERY_MAX_PREDICATES} conditions to one question. Ask with fewer, or in two steps, so I do not answer only part of what you asked.` };
   // A qualifier the plan did not turn into a predicate must not be silently dropped ("how many OPEN claims" answered as "how many claims" would be a wrong answer): such a question gets no plan.
   if (template.id === 'tasks' && /\b(open|active|outstanding|incomplete)\b/.test(text) && !excludesClosed) { excludesClosed = true; }
   const stray = /\b(open|active|current|upcoming|recent|unresolved|outstanding|incomplete|late|broken|failing|unpaid|expensive|valuable)\b/.exec(text);
@@ -276,7 +304,7 @@ export function planDataPointQuery(message: string, now: Date = new Date()): Que
       if (groupBy) touched.add(groupBy);
       return { kind: 'PLAN', plan: { shape: 'AGGREGATE', template, predicates, sort: null, limit: QUERY_MAX_LIMIT, aggregate: { fn: 'COUNT', field: null, groupBy }, touched: [...touched], showField: null, excludesClosed } };
     }
-    const measure = fieldNamed(template, text, undefined); const measureKey = measure && template.fields[measure].measure ? measure : null;
+    const measure = fieldNamed(template, text, undefined, (x) => x.measure); const measureKey = measure && template.fields[measure].measure ? measure : null;
     if (!measureKey) {
       const measures = Object.entries(template.fields).filter(([, v]) => v.measure).map(([, v]) => v.label);
       if (!measures.length) return { kind: 'NONE' };
@@ -293,7 +321,7 @@ export function planDataPointQuery(message: string, now: Date = new Date()): Que
     if (/oldest|newest|youngest/.test(word)) key = template.fields.installedOn ? 'installedOn' : null;
     else if (/soonest|earliest|first|next|latest/.test(word) || /expire|due/.test(word)) key = template.dateField;
     else if (/expensive|priciest|costliest|costly|cheapest|largest|highest|lowest|biggest/.test(word)) {
-      const named = fieldNamed(template, text, undefined);
+      const named = fieldNamed(template, text, undefined, (x) => x.measure);
       const namedField = named ? template.fields[named] : null;
       if (namedField && namedField.measure) key = named;
       else {
