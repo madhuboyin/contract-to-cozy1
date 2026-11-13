@@ -20,7 +20,7 @@ test('planning: absence, service gap, no warranty, change over time; ordinary qu
   assert.equal(shape('How has my property tax changed over the years?'), 'TIME_SERIES');
   assert.equal(planShape789('How has my assessed value changed?').pointId, 'taxAssessment.totalAssessedValue');
   assert.equal(shape('Compare my property tax to last year'), 'TIME_SERIES');
-  for (const m of ['what is the serial number of my fridge', 'What is my property tax?', 'Which appliances are older than 10 years?', 'Which appliances have a warranty?', 'How often should I service my HVAC?', 'Which appliances have no flux capacitor?']) assert.equal(shape(m), null, m);
+  for (const m of ['what is the serial number of my fridge', 'What is my property tax?', 'Which appliances are older than 10 years?', 'Which appliances have a warranty?', 'How often should I service my HVAC?', 'Which appliances have no flux capacitor?', 'Which items are missing warranty coverage?', 'What coverage gaps does my home have?']) assert.equal(shape(m), null, m);
   assert.equal(planShape789('which appliances have I not serviced in over 60 years'), null);
 });
 test('routing: these questions reach DATA_POINT_READ', () => {

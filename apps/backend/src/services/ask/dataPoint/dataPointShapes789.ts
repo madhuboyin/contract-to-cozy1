@@ -37,10 +37,11 @@ export function planShape789(message: string, now: Date = new Date()): Shape789P
   const count = COUNT.test(text);
 
   // Shape 9: an item with no warranty record ("which appliances have no warranty", "appliances that are out of warranty").
-  if (enabled.crossEntity && ITEM_NOUN.test(text) && /\bwarrant(?:y|ies)\b/.test(text)) {
+  // "missing warranty coverage" / "coverage gaps" is the coverage-gaps analysis (COVERAGE_GAPS), not a record lookup: wording about coverage is never claimed here.
+  if (enabled.crossEntity && ITEM_NOUN.test(text) && /\bwarrant(?:y|ies)\b/.test(text) && !/\bcover(?:age|ed|s)?\b/.test(text)) {
     const rel = CROSS_ENTITY_RELATION_REGISTRY.find((r) => r.from === 'InventoryItem' && r.to === 'Warranty');
     const outside = /\b(?:outside|out of|not under|no longer under|expired|off)\b/.test(text);
-    const none = NO_VALUE.test(text) || /\bnot (?:covered|under)\b/.test(text);
+    const none = NO_VALUE.test(text) || /\bnot under\b/.test(text);
     if (rel && (outside || none)) return { shape: 'NO_WARRANTY', relationId: rel.relationId, currentOnly: outside, count };
   }
   // Shape 8 (service gap): "appliances I haven't serviced in over a year", "never been serviced".
