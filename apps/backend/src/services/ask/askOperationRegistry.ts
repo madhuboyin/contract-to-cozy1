@@ -1637,22 +1637,30 @@ const capabilityPattern = /\b(tool|something available|what can help|do you have
 /** A question frame (what/when/who/which/how much/how old/tell me) about "my"/"the" something; the detail itself is decided by the reviewed catalogue, not by this pattern. */
 const dataPointQuestionPattern = /^\s*(?:what(?:'s|s)?|when(?:'s)?|who|which|how (?:much|old|long|many|big|large)|tell me|show me)\b.*\b(?:my|our|the|i|we)\b/i;
 
+/**
+ * The deterministic RULE that produced a resolution (FR-FAST-1): every `return resolved('OP', confidence, 'DET_OP_NN')` site in resolveAskOperation is one rule with a stable id. Kept beside the resolution (a WeakMap, so the
+ * resolution objects, which are spread and compared everywhere, are unchanged). scripts/ask-fast-path-rules.js assigns the ids and hashes each rule.
+ */
+const RESOLUTION_RULE_IDS = new WeakMap<object, string>();
+export const ruleIdOfResolution = (resolution: object): string | null => RESOLUTION_RULE_IDS.get(resolution) ?? null;
+
 export function resolveAskOperation(message: string): AskOperationResolution {
-  const resolved = (operationId: AskOperationId, confidence: number): AskOperationResolution => ({
-    ...getAskOperationDefinition(operationId),
-    confidence,
-  });
+  const resolved = (operationId: AskOperationId, confidence: number, ruleId?: string): AskOperationResolution => {
+    const resolution: AskOperationResolution = { ...getAskOperationDefinition(operationId), confidence };
+    if (ruleId) RESOLUTION_RULE_IDS.set(resolution, ruleId);
+    return resolution;
+  };
   if (emergencyPattern.test(message) || activeEmergencyPattern.test(message)) {
-    return resolved('EMERGENCY_BOUNDARY', 1);
+    return resolved('EMERGENCY_BOUNDARY', 1, 'DET_EMERGENCY_BOUNDARY_01');
   }
   if (unsafeRestrictedPattern.test(message)) {
-    return resolved('UNSAFE_RESTRICTED_BOUNDARY', 0.99);
+    return resolved('UNSAFE_RESTRICTED_BOUNDARY', 0.99, 'DET_UNSAFE_RESTRICTED_BOUNDARY_01');
   }
   if (unauthorizedDataAccessPattern.test(message)) {
-    return resolved('UNSAFE_RESTRICTED_BOUNDARY', 0.99);
+    return resolved('UNSAFE_RESTRICTED_BOUNDARY', 0.99, 'DET_UNSAFE_RESTRICTED_BOUNDARY_02');
   }
   if (outOfScopePattern.test(message)) {
-    return resolved('OUT_OF_SCOPE_BOUNDARY', 0.99);
+    return resolved('OUT_OF_SCOPE_BOUNDARY', 0.99, 'DET_OUT_OF_SCOPE_BOUNDARY_01');
   }
   // Home Buyer FRD §13.3: checked ahead of every generic pattern below (incl.
   // maintenanceCompletePattern and homeActionsPattern) since buyer phrasing
@@ -1660,68 +1668,68 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   // be captured by their broader keyword sets.
   // An explicit add/create of a closing task comes first: "add a closing task to get the survey done" contains "done" but completes nothing.
   // Exporting the home record (FRD v1.2 §1.2): an explicit export verb, checked ahead of the generic record and warranty patterns it would otherwise match.
-  if (isHomeRecordExportShareRequest(message)) return resolved('HOME_RECORD_EXPORT_SHARE', 0.96);
-  if (isHomeRecordExportStatusRequest(message)) return resolved('HOME_RECORD_EXPORT_STATUS', 0.96);
-  if (isHomeRecordExportRequest(message)) return resolved('HOME_RECORD_EXPORT', 0.96);
+  if (isHomeRecordExportShareRequest(message)) return resolved('HOME_RECORD_EXPORT_SHARE', 0.96, 'DET_HOME_RECORD_EXPORT_SHARE_01');
+  if (isHomeRecordExportStatusRequest(message)) return resolved('HOME_RECORD_EXPORT_STATUS', 0.96, 'DET_HOME_RECORD_EXPORT_STATUS_01');
+  if (isHomeRecordExportRequest(message)) return resolved('HOME_RECORD_EXPORT', 0.96, 'DET_HOME_RECORD_EXPORT_01');
   if (buyerTaskCreatePattern.test(message)) {
-    return resolved('BUYER_TASK_CREATE', 0.96);
+    return resolved('BUYER_TASK_CREATE', 0.96, 'DET_BUYER_TASK_CREATE_01');
   }
   if (buyerTaskCompletePattern.test(message)) {
-    return resolved('BUYER_TASK_COMPLETE', 0.97);
+    return resolved('BUYER_TASK_COMPLETE', 0.97, 'DET_BUYER_TASK_COMPLETE_01');
   }
   if (buyerDeadlinesPattern.test(message)) {
-    return resolved('BUYER_DEADLINES', 0.96);
+    return resolved('BUYER_DEADLINES', 0.96, 'DET_BUYER_DEADLINES_01');
   }
   if (buyerDocumentReadinessPattern.test(message)) {
-    return resolved('BUYER_DOCUMENT_READINESS', 0.96);
+    return resolved('BUYER_DOCUMENT_READINESS', 0.96, 'DET_BUYER_DOCUMENT_READINESS_01');
   }
   if (buyerInspectionReviewPattern.test(message)) {
-    return resolved('BUYER_INSPECTION_REVIEW', 0.95);
+    return resolved('BUYER_INSPECTION_REVIEW', 0.95, 'DET_BUYER_INSPECTION_REVIEW_01');
   }
   if (buyerPlanStatusPattern.test(message)) {
-    return resolved('BUYER_PLAN_STATUS', 0.95);
+    return resolved('BUYER_PLAN_STATUS', 0.95, 'DET_BUYER_PLAN_STATUS_01');
   }
   if (buyerTaskUpdatePattern.test(message)) {
-    return resolved('BUYER_TASK_UPDATE', 0.96);
+    return resolved('BUYER_TASK_UPDATE', 0.96, 'DET_BUYER_TASK_UPDATE_01');
   }
   if (buyerMoveStatusPattern.test(message)) {
-    return resolved('BUYER_MOVE_STATUS', 0.95);
+    return resolved('BUYER_MOVE_STATUS', 0.95, 'DET_BUYER_MOVE_STATUS_01');
   }
   if (buyerFinancingReadinessPattern.test(message)) {
-    return resolved('BUYER_FINANCING_READINESS', 0.95);
+    return resolved('BUYER_FINANCING_READINESS', 0.95, 'DET_BUYER_FINANCING_READINESS_01');
   }
   if (buyerTitleEscrowReadinessPattern.test(message)) {
-    return resolved('BUYER_TITLE_ESCROW_READINESS', 0.95);
+    return resolved('BUYER_TITLE_ESCROW_READINESS', 0.95, 'DET_BUYER_TITLE_ESCROW_READINESS_01');
   }
   if (buyerWalkthroughReadinessPattern.test(message)) {
-    return resolved('BUYER_WALKTHROUGH_READINESS', 0.95);
+    return resolved('BUYER_WALKTHROUGH_READINESS', 0.95, 'DET_BUYER_WALKTHROUGH_READINESS_01');
   }
   if (buyerDisclosureFundsReadinessPattern.test(message)) {
-    return resolved('BUYER_DISCLOSURE_FUNDS_READINESS', 0.95);
+    return resolved('BUYER_DISCLOSURE_FUNDS_READINESS', 0.95, 'DET_BUYER_DISCLOSURE_FUNDS_READINESS_01');
   }
   if (buyerClosingDayReadinessPattern.test(message)) {
-    return resolved('BUYER_CLOSING_DAY_READINESS', 0.95);
+    return resolved('BUYER_CLOSING_DAY_READINESS', 0.95, 'DET_BUYER_CLOSING_DAY_READINESS_01');
   }
   if (buyerFindingDispositionPattern.test(message)) {
-    return resolved('BUYER_FINDING_DISPOSITION', 0.96);
+    return resolved('BUYER_FINDING_DISPOSITION', 0.96, 'DET_BUYER_FINDING_DISPOSITION_01');
   }
   if (buyerLifecycleUpdatePattern.test(message)) {
-    return resolved('BUYER_LIFECYCLE_UPDATE', 0.96);
+    return resolved('BUYER_LIFECYCLE_UPDATE', 0.96, 'DET_BUYER_LIFECYCLE_UPDATE_01');
   }
   if (buyerContractTimelinePattern.test(message)) {
-    return resolved('BUYER_CONTRACT_TIMELINE', 0.95);
+    return resolved('BUYER_CONTRACT_TIMELINE', 0.95, 'DET_BUYER_CONTRACT_TIMELINE_01');
   }
   if (buyerNegotiationReadinessPattern.test(message)) {
-    return resolved('BUYER_NEGOTIATION_READINESS', 0.95);
+    return resolved('BUYER_NEGOTIATION_READINESS', 0.95, 'DET_BUYER_NEGOTIATION_READINESS_01');
   }
   if (buyerInsuranceReadinessPattern.test(message)) {
-    return resolved('BUYER_INSURANCE_READINESS', 0.94);
+    return resolved('BUYER_INSURANCE_READINESS', 0.94, 'DET_BUYER_INSURANCE_READINESS_01');
   }
   if (buyerLoanEstimatesPattern.test(message) && !/\brefinanc|\brefi\b/i.test(message)) {
-    return resolved('BUYER_LOAN_ESTIMATES', 0.94);
+    return resolved('BUYER_LOAN_ESTIMATES', 0.94, 'DET_BUYER_LOAN_ESTIMATES_01');
   }
   if (buyerCostReadinessPattern.test(message)) {
-    return resolved('BUYER_COST_READINESS', 0.95);
+    return resolved('BUYER_COST_READINESS', 0.95, 'DET_BUYER_COST_READINESS_01');
   }
   // Ask Intelligence FRD Phase 8A: checked ahead of quoteComparisonReviewPattern
   // and replacementPattern below, since both are generic enough to otherwise
@@ -1734,359 +1742,361 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   // decision from my home actions" reaches the Specialist runtime rather than
   // the direct decisionThreadService path.
   if (hvacSpecialistEngagePattern.test(message)) {
-    return resolved('HVAC_SPECIALIST_ENGAGE', 0.95);
+    return resolved('HVAC_SPECIALIST_ENGAGE', 0.95, 'DET_HVAC_SPECIALIST_ENGAGE_01');
   }
   if (hvacDecisionContinuePattern.test(message)) {
-    return resolved('HVAC_DECISION_CONTINUE', 0.97);
+    return resolved('HVAC_DECISION_CONTINUE', 0.97, 'DET_HVAC_DECISION_CONTINUE_01');
   }
   if (hvacDecisionScenarioPattern.test(message)) {
-    return resolved('HVAC_DECISION_SCENARIO', 0.96);
+    return resolved('HVAC_DECISION_SCENARIO', 0.96, 'DET_HVAC_DECISION_SCENARIO_01');
   }
   if (hvacPreferenceForgetPattern.test(message)) {
-    return resolved('HVAC_PREFERENCE_FORGET', 0.96);
+    return resolved('HVAC_PREFERENCE_FORGET', 0.96, 'DET_HVAC_PREFERENCE_FORGET_01');
   }
   if (hvacPreferenceSaveVerbPattern.test(message) && hvacPreferenceSaveSubjectPattern.test(message)) {
-    return resolved('HVAC_PREFERENCE_SAVE', 0.95);
+    return resolved('HVAC_PREFERENCE_SAVE', 0.95, 'DET_HVAC_PREFERENCE_SAVE_01');
   }
   if (hvacDecisionAbandonPattern.test(message)) {
-    return resolved('HVAC_DECISION_ABANDON', 0.97);
+    return resolved('HVAC_DECISION_ABANDON', 0.97, 'DET_HVAC_DECISION_ABANDON_01');
   }
   if (hvacDecisionOutcomeUnlinkPattern.test(message)) {
-    return resolved('HVAC_DECISION_OUTCOME_UNLINK', 0.96);
+    return resolved('HVAC_DECISION_OUTCOME_UNLINK', 0.96, 'DET_HVAC_DECISION_OUTCOME_UNLINK_01');
   }
   if (hvacDecisionOutcomeReportPattern.test(message)) {
-    return resolved('HVAC_DECISION_OUTCOME_REPORT', 0.95);
+    return resolved('HVAC_DECISION_OUTCOME_REPORT', 0.95, 'DET_HVAC_DECISION_OUTCOME_REPORT_01');
   }
   if (hvacDecisionOutcomeViewPattern.test(message)) {
-    return resolved('HVAC_DECISION_OUTCOME_VIEW', 0.94);
+    return resolved('HVAC_DECISION_OUTCOME_VIEW', 0.94, 'DET_HVAC_DECISION_OUTCOME_VIEW_01');
   }
   if (hvacDecisionStartPattern.test(message)) {
-    return resolved('HVAC_DECISION_START', 0.96);
+    return resolved('HVAC_DECISION_START', 0.96, 'DET_HVAC_DECISION_START_01');
   }
   if (roomRenamePattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('ROOM_RENAME', 0.97);
+    return resolved('ROOM_RENAME', 0.97, 'DET_ROOM_RENAME_01');
   }
   if (warrantyCorrectPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('WARRANTY_UPDATE', 0.97);
+    return resolved('WARRANTY_UPDATE', 0.97, 'DET_WARRANTY_UPDATE_01');
   }
   if (materialSpecUpdatePattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('MATERIAL_SPEC_UPDATE', 0.97);
+    return resolved('MATERIAL_SPEC_UPDATE', 0.97, 'DET_MATERIAL_SPEC_UPDATE_01');
   }
   if (homeEventUpdatePattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('HOME_EVENT_UPDATE', 0.97);
+    return resolved('HOME_EVENT_UPDATE', 0.97, 'DET_HOME_EVENT_UPDATE_01');
   }
   if (homeEventCorrectPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('HOME_EVENT_CORRECT', 0.97);
+    return resolved('HOME_EVENT_CORRECT', 0.97, 'DET_HOME_EVENT_CORRECT_01');
   }
   if (homeEventVisibilityPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('HOME_EVENT_VISIBILITY', 0.97);
+    return resolved('HOME_EVENT_VISIBILITY', 0.97, 'DET_HOME_EVENT_VISIBILITY_01');
   }
   if (inventoryMissingDetailsContinuationPattern.test(message)) {
-    return resolved(/\bfor\s+(?:this\s+)?inventory\s+item\b/i.test(message) ? 'INVENTORY_ITEM_CORRECT' : 'INVENTORY_LOOKUP', 0.99);
+    // Two operations behind one guard: split into two return sites so each deterministic rule names exactly one operation (FR-FAST-1).
+    if (/\bfor\s+(?:this\s+)?inventory\s+item\b/i.test(message)) return resolved('INVENTORY_ITEM_CORRECT', 0.99, 'DET_INVENTORY_ITEM_CORRECT_01');
+    return resolved('INVENTORY_LOOKUP', 0.99, 'DET_INVENTORY_LOOKUP_01');
   }
   if (inventoryItemCorrectPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('INVENTORY_ITEM_CORRECT', 0.97);
+    return resolved('INVENTORY_ITEM_CORRECT', 0.97, 'DET_INVENTORY_ITEM_CORRECT_02');
   }
   // "Add $500 to my reserve fund", "recalculate my reserve plan", "use the conservative posture" and "change my reserve plan" are requests to the
   // governed Reserve Fund command, never an inventory item and never the plan read. Ahead of the inventory pattern below, whose "add <anything>"
   // would otherwise take the first, and ahead of capitalReservePattern, which would take the rest as the read.
   if (parseReserveFundMessage(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('RESERVE_FUND_COMMAND', 0.97);
+    return resolved('RESERVE_FUND_COMMAND', 0.97, 'DET_RESERVE_FUND_COMMAND_01');
   }
   // Before the generic "create <anything>" inventory command: "Create a quote comparison workspace" names a workspace, not an item.
   if (quoteComparisonCreatePattern.test(message)) {
-    return resolved('QUOTE_COMPARISON_CREATE', 0.97);
+    return resolved('QUOTE_COMPARISON_CREATE', 0.97, 'DET_QUOTE_COMPARISON_CREATE_01');
   }
   if (inventoryCreatePattern.test(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message)) {
-    return resolved('INVENTORY_ITEM_CREATE', 0.97);
+    return resolved('INVENTORY_ITEM_CREATE', 0.97, 'DET_INVENTORY_ITEM_CREATE_01');
   }
   if ((maintenanceCompletePattern.test(message) || maintenanceCompletePassivePattern.test(message)) && !explicitCapabilityPattern.test(message)) {
-    return resolved('MAINTENANCE_TASK_COMPLETE', 0.97);
+    return resolved('MAINTENANCE_TASK_COMPLETE', 0.97, 'DET_MAINTENANCE_TASK_COMPLETE_01');
   }
   // A read question ("Which maintenance tasks are high priority?", "How often do I change my furnace filter?") is not an edit, even though it names a priority or a change.
   if ((maintenanceUpdatePattern.test(message) || maintenanceCostEditPattern.test(message)) && !remindMeToPattern.test(message) && !hypotheticalQuestionPattern.test(message)
     && !/^\s*(?:which|what(?:'s|s)?|how (?:many|often|much|long)|when(?:'s)?|who)\b/i.test(message)) {
-    return resolved('MAINTENANCE_TASK_UPDATE', 0.97);
+    return resolved('MAINTENANCE_TASK_UPDATE', 0.97, 'DET_MAINTENANCE_TASK_UPDATE_01');
   }
   if (guidanceJourneyCreatePattern.test(message)) {
-    return resolved('GUIDANCE_JOURNEY_CREATE', 0.97);
+    return resolved('GUIDANCE_JOURNEY_CREATE', 0.97, 'DET_GUIDANCE_JOURNEY_CREATE_01');
   }
   // Naming the tool wins over the quote-comparison phrasings below ("my negotiation shield case for the roof quote");
   // starting a case is the page's write.
   // Starting a review is its own command: naming the tool with a start verb used to be kept off the list read and then fell to guidance.
   if (isNegotiationShieldStartRequest(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('NEGOTIATION_SHIELD_CASE_START', 0.96);
+    return resolved('NEGOTIATION_SHIELD_CASE_START', 0.96, 'DET_NEGOTIATION_SHIELD_CASE_START_01');
   }
   if (negotiationShieldNamedPattern.test(message) && !negotiationShieldCreatePattern.test(message)) {
-    return resolved('NEGOTIATION_SHIELD_CASES', 0.96);
+    return resolved('NEGOTIATION_SHIELD_CASES', 0.96, 'DET_NEGOTIATION_SHIELD_CASES_01');
   }
   if (quoteComparisonReviewPattern.test(message) && !explicitCapabilityPattern.test(message) && !/\bcan you help me\b/i.test(message)
     && !quoteReviewOtherOwnerPattern.test(message)) {
-    return resolved('QUOTE_COMPARISON_REVIEW', 0.97);
+    return resolved('QUOTE_COMPARISON_REVIEW', 0.97, 'DET_QUOTE_COMPARISON_REVIEW_01');
   }
   // "Tell me the priority of my gutter task" asks for a detail; it is not a request to be notified about a deadline.
   if (homeDeadlineMonitorPattern.test(message) && !(dataPointQuestionPattern.test(message) && isDataPointDetailQuestion(message))) {
-    return resolved('HOME_DEADLINE_MONITOR', 0.97);
+    return resolved('HOME_DEADLINE_MONITOR', 0.97, 'DET_HOME_DEADLINE_MONITOR_01');
   }
   if (propertyTaxAppealPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('PROPERTY_TAX_APPEAL_READINESS', 0.98);
+    return resolved('PROPERTY_TAX_APPEAL_READINESS', 0.98, 'DET_PROPERTY_TAX_APPEAL_READINESS_01');
   }
   // "If I replace my roof in 5 years, how much do I need and how much more should I save?" names an item and a saving goal. Ahead of the plan read (which
   // is whole-home) and of the repair-or-replace rule (which would answer a verdict and ignore the date and the saving).
   // "How much of my reserve is set aside for the roof": what is already set aside, a STANDARD read; the how-much-to-save questions stay with the funding goal.
   if (isItemReserveAllocationMessage(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('ITEM_RESERVE_ALLOCATION', 0.96);
+    return resolved('ITEM_RESERVE_ALLOCATION', 0.96, 'DET_ITEM_RESERVE_ALLOCATION_01');
   }
   if (isItemFundingGoalMessage(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('CAPITAL_ITEM_FUNDING_GOAL', 0.97);
+    return resolved('CAPITAL_ITEM_FUNDING_GOAL', 0.97, 'DET_CAPITAL_ITEM_FUNDING_GOAL_01');
   }
   // "How much does a new roof cost" (with or without a date): a STANDARD read of the capital timeline's estimate for the recorded item, through the shared
   // cost function. The funding goal above keeps every question that asks how much to save.
   if (isItemCostMessage(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('ITEM_REPLACEMENT_COST', 0.95);
+    return resolved('ITEM_REPLACEMENT_COST', 0.95, 'DET_ITEM_REPLACEMENT_COST_01');
   }
   // One recorded figure of the reserve fund ("what is my reserve shortfall") is a data point; the reserve plan is the analysis (how much to save, whether to raise the contribution).
   if (capitalReservePattern.test(message) && !explicitCapabilityPattern.test(message) && !(dataPointQuestionPattern.test(message) && isReserveFactQuestion(message))
     && !/\b(?:set|change|update|edit|adjust|raise|lower)\b.{0,30}\breserve (?:contribution|balance)/i.test(message)) {
-    return resolved('CAPITAL_RESERVE_PLAN', 0.97);
+    return resolved('CAPITAL_RESERVE_PLAN', 0.97, 'DET_CAPITAL_RESERVE_PLAN_01');
   }
   if (applianceFailureRiskPattern.test(message) && !applianceFailureRiskOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('APPLIANCE_FAILURE_RISK', 0.96);
+    return resolved('APPLIANCE_FAILURE_RISK', 0.96, 'DET_APPLIANCE_FAILURE_RISK_01');
   }
   if ((maintenanceBudgetPattern.test(message) || (maintenanceBudgetWordingPattern.test(message) && !multiYearHorizonPattern.test(message))) && !maintenanceBudgetOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('MAINTENANCE_BUDGET_FORECAST', 0.96);
+    return resolved('MAINTENANCE_BUDGET_FORECAST', 0.96, 'DET_MAINTENANCE_BUDGET_FORECAST_01');
   }
   if (doNothingPattern.test(message) && !doNothingOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('DO_NOTHING_SIMULATION', 0.96);
+    return resolved('DO_NOTHING_SIMULATION', 0.96, 'DET_DO_NOTHING_SIMULATION_01');
   }
   if (priceFinalizationsPattern.test(message) && !priceFinalizationsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('PRICE_FINALIZATIONS_LIST', 0.96);
+    return resolved('PRICE_FINALIZATIONS_LIST', 0.96, 'DET_PRICE_FINALIZATIONS_LIST_01');
   }
   if (hoaCompliancePattern.test(message) && !hoaComplianceOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('HOA_COMPLIANCE_STATUS', 0.96);
+    return resolved('HOA_COMPLIANCE_STATUS', 0.96, 'DET_HOA_COMPLIANCE_STATUS_01');
   }
   // "Start a renovation case" is its own command; without this, "start" + "renovation" below reads it as "can I start my renovation".
   if (isRenovationCaseStartRequest(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('RENOVATION_CASE_START', 0.96);
+    return resolved('RENOVATION_CASE_START', 0.96, 'DET_RENOVATION_CASE_START_01');
   }
   // Equity, a HELOC and "what would a $X project cost to finance" are the Financing read and calculator; refinancing the existing mortgage is excluded.
   if (isFinancingRequest(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('FINANCING_OVERVIEW', 0.96);
+    return resolved('FINANCING_OVERVIEW', 0.96, 'DET_FINANCING_OVERVIEW_01');
   }
   // "Show my permits" lists the recorded permits; "do I need a permit" / "is my renovation ready" stays the readiness question below.
   if (isPermitTrackerReadRequest(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('PERMIT_TRACKER_STATUS', 0.96);
+    return resolved('PERMIT_TRACKER_STATUS', 0.96, 'DET_PERMIT_TRACKER_STATUS_01');
   }
   if ((renovationPermitPattern.test(message) || isRenovationCaseOverviewRequest(message) || isRenovationRequirementsRequest(message) || isRenovationComplianceRequest(message) || isRenovationRetroactiveRequest(message)) && !explicitCapabilityPattern.test(message)) {
-    return resolved('RENOVATION_PERMIT_READINESS', 0.97);
+    return resolved('RENOVATION_PERMIT_READINESS', 0.97, 'DET_RENOVATION_PERMIT_READINESS_01');
   }
   if (sellerPrepItemDecisionPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('SELLER_PREP_ITEM_DECISION', 0.97);
+    return resolved('SELLER_PREP_ITEM_DECISION', 0.97, 'DET_SELLER_PREP_ITEM_DECISION_01');
   }
   // A single recorded detail of the sale prep profile ("what condition is the paint in for my seller prep") is a data point; the checklist read lists items and never states the profile's own values.
   if (sellerPrepChecklistPattern.test(message) && !explicitCapabilityPattern.test(message) && !(dataPointQuestionPattern.test(message) && isSaleProfileQuestion(message))) {
-    return resolved('SELLER_PREP_CHECKLIST', 0.97);
+    return resolved('SELLER_PREP_CHECKLIST', 0.97, 'DET_SELLER_PREP_CHECKLIST_01');
   }
   if (sellUpgradeValuePattern.test(message) && sellWordPattern.test(message) && !holdOrRentWordPattern.test(message) && !itemAttributeWriteIntentPattern.test(message.replace(/\badd(?:s|ed)? (?:the )?(?:most |more )?value\b/gi, '')) && !explicitCapabilityPattern.test(message)) {
-    return resolved('SELLER_PREP_CHECKLIST', 0.95);
+    return resolved('SELLER_PREP_CHECKLIST', 0.95, 'DET_SELLER_PREP_CHECKLIST_02');
   }
   if (majorEventPattern.test(message)) {
-    return resolved('MAJOR_EVENT_ENTRY', 0.96);
+    return resolved('MAJOR_EVENT_ENTRY', 0.96, 'DET_MAJOR_EVENT_ENTRY_01');
   }
   if (maintenanceCreatePattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('MAINTENANCE_TASK_CREATE', 0.97);
+    return resolved('MAINTENANCE_TASK_CREATE', 0.97, 'DET_MAINTENANCE_TASK_CREATE_01');
   }
   if (maintenanceForecastPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('MAINTENANCE_FORECAST', 0.96);
+    return resolved('MAINTENANCE_FORECAST', 0.96, 'DET_MAINTENANCE_FORECAST_01');
   }
   // "What loss-prevention work matters most?" is the saved plan, not the coverage review or a coverage comparison.
   if (isRiskMitigationPlanRequest(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('RISK_MITIGATION_PLAN', 0.96);
+    return resolved('RISK_MITIGATION_PLAN', 0.96, 'DET_RISK_MITIGATION_PLAN_01');
   }
   if (coverageReviewPattern.test(message) && !coverageComparisonPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('COVERAGE_REVIEW_STATUS', 0.96);
+    return resolved('COVERAGE_REVIEW_STATUS', 0.96, 'DET_COVERAGE_REVIEW_STATUS_01');
   }
   if (coverageComparisonPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('COVERAGE_COMPARISON_STATUS', 0.96);
+    return resolved('COVERAGE_COMPARISON_STATUS', 0.96, 'DET_COVERAGE_COMPARISON_STATUS_01');
   }
   // Query shapes 4-6 (filter, top-k, aggregate) over warranties, policies, inventory and claims are computed by the generic reader; the lookups below only list, so they could not honor the predicate. Maintenance tasks keep their own status operation.
-  if (isDataPointComputedQuery(message) && !explicitCapabilityPattern.test(message)) return resolved('DATA_POINT_READ', 0.93);
+  if (isDataPointComputedQuery(message) && !explicitCapabilityPattern.test(message)) return resolved('DATA_POINT_READ', 0.93, 'DET_DATA_POINT_READ_01');
   // A detail only the data point can give (a buyer task or milestone, a sale item, a record version, a claim's amounts, number or children) is not answered by any list operation: "what is the status of my buyer task" must not
   // be read as a MAINTENANCE question. These entities have no dedicated read operation of their own, so the compound-cue point wins here.
-  if (dataPointQuestionPattern.test(message) && isDataPointOnlyQuestion(message) && !explicitCapabilityPattern.test(message)) return resolved('DATA_POINT_READ', 0.93);
+  if (dataPointQuestionPattern.test(message) && isDataPointOnlyQuestion(message) && !explicitCapabilityPattern.test(message)) return resolved('DATA_POINT_READ', 0.93, 'DET_DATA_POINT_READ_02');
   if (warrantyLookupPattern.test(message) && !warrantyLookupOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('WARRANTY_LOOKUP', 0.96);
+    return resolved('WARRANTY_LOOKUP', 0.96, 'DET_WARRANTY_LOOKUP_01');
   }
   // The homeowner's own insurance policies as records (list, add, edit, delete); comparison, review, monitor, claim and savings phrasing matched above.
-  if (insurancePoliciesPattern.test(message) && !insurancePoliciesOtherIntentPattern.test(message)) return resolved('COVERAGE_GAPS', 0.96);
+  if (insurancePoliciesPattern.test(message) && !insurancePoliciesOtherIntentPattern.test(message)) return resolved('COVERAGE_GAPS', 0.96, 'DET_COVERAGE_GAPS_01');
   if (coveragePattern.test(message)) {
-    return resolved('COVERAGE_GAPS', 0.96);
+    return resolved('COVERAGE_GAPS', 0.96, 'DET_COVERAGE_GAPS_02');
   }
-  if (claimTransitionPattern.test(message) && !claimOutcomeQuestionPattern.test(message)) return resolved('CLAIM_TRANSITION', 0.98);
+  if (claimTransitionPattern.test(message) && !claimOutcomeQuestionPattern.test(message)) return resolved('CLAIM_TRANSITION', 0.98, 'DET_CLAIM_TRANSITION_01');
   // "When did I file my water damage claim?" asks about a past filing; it is not a request to file one.
-  if (claimFilePattern.test(message) && !/^\s*(?:when|what|how|who|which)\b.*\b(?:did|have|had) (?:i|we) (?:file|filed|submit|submitted|start|started|open|opened)\b/i.test(message)) return resolved('CLAIM_FILE', 0.98);
-  if (incidentContinuationPattern.test(message)) return resolved('INCIDENT_CONTINUATION', 0.97);
+  if (claimFilePattern.test(message) && !/^\s*(?:when|what|how|who|which)\b.*\b(?:did|have|had) (?:i|we) (?:file|filed|submit|submitted|start|started|open|opened)\b/i.test(message)) return resolved('CLAIM_FILE', 0.98, 'DET_CLAIM_FILE_01');
+  if (incidentContinuationPattern.test(message)) return resolved('INCIDENT_CONTINUATION', 0.97, 'DET_INCIDENT_CONTINUATION_01');
   if (incidentClaimStatusPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('INCIDENT_CLAIM_STATUS', 0.95);
+    return resolved('INCIDENT_CLAIM_STATUS', 0.95, 'DET_INCIDENT_CLAIM_STATUS_01');
   }
-  if (inspectionFindingUpdatePattern.test(message)) return resolved('INSPECTION_FINDING_UPDATE', 0.98);
-  if (inspectionFindingsPattern.test(message)) return resolved('INSPECTION_FINDINGS', 0.96);
-  if (inspectionReportsPattern.test(message)) return resolved('INSPECTION_REPORTS', 0.95);
-  if (homeWorkItemsPattern.test(message)) return resolved('HOME_WORK_ITEMS', 0.95);
-  if (isNotificationSettingsCommandRequest(message)) return resolved('NOTIFICATION_SETTINGS_COMMAND', 0.96);
-  if (isNotificationSettingsOverviewRequest(message)) return resolved('NOTIFICATION_SETTINGS_OVERVIEW', 0.96);
-  if (isNotificationsOverviewRequest(message)) return resolved('NOTIFICATIONS_OVERVIEW', 0.95);
-  if (workOverviewPattern.test(message)) return resolved('WORK_OVERVIEW', 0.95);
-  if (savedResultsPattern.test(message)) return resolved('SAVED_RESULTS', 0.95);
-  if (recallMatchUpdatePattern.test(message)) return resolved('RECALL_MATCH_UPDATE', 0.98);
+  if (inspectionFindingUpdatePattern.test(message)) return resolved('INSPECTION_FINDING_UPDATE', 0.98, 'DET_INSPECTION_FINDING_UPDATE_01');
+  if (inspectionFindingsPattern.test(message)) return resolved('INSPECTION_FINDINGS', 0.96, 'DET_INSPECTION_FINDINGS_01');
+  if (inspectionReportsPattern.test(message)) return resolved('INSPECTION_REPORTS', 0.95, 'DET_INSPECTION_REPORTS_01');
+  if (homeWorkItemsPattern.test(message)) return resolved('HOME_WORK_ITEMS', 0.95, 'DET_HOME_WORK_ITEMS_01');
+  if (isNotificationSettingsCommandRequest(message)) return resolved('NOTIFICATION_SETTINGS_COMMAND', 0.96, 'DET_NOTIFICATION_SETTINGS_COMMAND_01');
+  if (isNotificationSettingsOverviewRequest(message)) return resolved('NOTIFICATION_SETTINGS_OVERVIEW', 0.96, 'DET_NOTIFICATION_SETTINGS_OVERVIEW_01');
+  if (isNotificationsOverviewRequest(message)) return resolved('NOTIFICATIONS_OVERVIEW', 0.95, 'DET_NOTIFICATIONS_OVERVIEW_01');
+  if (workOverviewPattern.test(message)) return resolved('WORK_OVERVIEW', 0.95, 'DET_WORK_OVERVIEW_01');
+  if (savedResultsPattern.test(message)) return resolved('SAVED_RESULTS', 0.95, 'DET_SAVED_RESULTS_01');
+  if (recallMatchUpdatePattern.test(message)) return resolved('RECALL_MATCH_UPDATE', 0.98, 'DET_RECALL_MATCH_UPDATE_01');
   if (recallReviewPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('RECALL_REVIEW', 0.96);
+    return resolved('RECALL_REVIEW', 0.96, 'DET_RECALL_REVIEW_01');
   }
-  if (documentPromotionConfirmPattern.test(message)) return resolved('DOCUMENT_PROMOTION_CONFIRM', 0.98);
-  if (documentPromotionReviewPattern.test(message)) return resolved('DOCUMENT_PROMOTION_REVIEW', 0.96);
+  if (documentPromotionConfirmPattern.test(message)) return resolved('DOCUMENT_PROMOTION_CONFIRM', 0.98, 'DET_DOCUMENT_PROMOTION_CONFIRM_01');
+  if (documentPromotionReviewPattern.test(message)) return resolved('DOCUMENT_PROMOTION_REVIEW', 0.96, 'DET_DOCUMENT_PROMOTION_REVIEW_01');
   if (documentLookupPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('DOCUMENT_LOOKUP', 0.95);
+    return resolved('DOCUMENT_LOOKUP', 0.95, 'DET_DOCUMENT_LOOKUP_01');
   }
-  if (operationalWorkUpdatePattern.test(message)) return resolved('OPERATIONAL_WORK_UPDATE', 0.98);
+  if (operationalWorkUpdatePattern.test(message)) return resolved('OPERATIONAL_WORK_UPDATE', 0.98, 'DET_OPERATIONAL_WORK_UPDATE_01');
   if ((diyProjectsBrowseWordingPattern.test(message) || (diyProjectsPattern.test(message) && !diyProjectsOtherIntentPattern.test(message))) && !explicitCapabilityPattern.test(message)) {
-    return resolved('DIY_PROJECTS', 0.96);
+    return resolved('DIY_PROJECTS', 0.96, 'DET_DIY_PROJECTS_01');
   }
   if (guidanceJourneysPattern.test(message) && !guidanceJourneysOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('GUIDANCE_JOURNEYS_LIST', 0.96);
+    return resolved('GUIDANCE_JOURNEYS_LIST', 0.96, 'DET_GUIDANCE_JOURNEYS_LIST_01');
   }
   if (propertyBriefsPattern.test(message) && !propertyBriefsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('PROPERTY_BRIEFS_LIST', 0.96);
+    return resolved('PROPERTY_BRIEFS_LIST', 0.96, 'DET_PROPERTY_BRIEFS_LIST_01');
   }
   if ((materialSpecsPattern.test(message) || materialSpecsRoomColourPattern.test(message)) && !materialSpecsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('MATERIAL_SPECS_LIST', 0.96);
+    return resolved('MATERIAL_SPECS_LIST', 0.96, 'DET_MATERIAL_SPECS_LIST_01');
   }
   if (homeTimelinePattern.test(message) && !homeTimelineOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('HOME_TIMELINE_EVENTS', 0.96);
+    return resolved('HOME_TIMELINE_EVENTS', 0.96, 'DET_HOME_TIMELINE_EVENTS_01');
   }
   if (servicePriceChecksPattern.test(message) && !servicePriceChecksOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('SERVICE_PRICE_CHECKS', 0.96);
+    return resolved('SERVICE_PRICE_CHECKS', 0.96, 'DET_SERVICE_PRICE_CHECKS_01');
   }
   if (trackedProjectsPattern.test(message) && !trackedProjectsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('PROJECT_TRACKER_PROJECTS', 0.96);
+    return resolved('PROJECT_TRACKER_PROJECTS', 0.96, 'DET_PROJECT_TRACKER_PROJECTS_01');
   }
   if (homeUpgradeScenariosPattern.test(message) && !homeUpgradeScenariosOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('HOME_UPGRADE_SCENARIOS', 0.96);
+    return resolved('HOME_UPGRADE_SCENARIOS', 0.96, 'DET_HOME_UPGRADE_SCENARIOS_01');
   }
   if (negotiationShieldCasesPattern.test(message) && !negotiationShieldOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('NEGOTIATION_SHIELD_CASES', 0.96);
+    return resolved('NEGOTIATION_SHIELD_CASES', 0.96, 'DET_NEGOTIATION_SHIELD_CASES_02');
   }
-  if (roomPlantRecommendationPattern.test(message) && !explicitCapabilityPattern.test(message)) return resolved('ROOM_PLANT_RECOMMENDATIONS', 0.98);
+  if (roomPlantRecommendationPattern.test(message) && !explicitCapabilityPattern.test(message)) return resolved('ROOM_PLANT_RECOMMENDATIONS', 0.98, 'DET_ROOM_PLANT_RECOMMENDATIONS_01');
   if (plantCareOutlookPattern.test(message) && !plantCareOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('PLANT_CARE_OUTLOOK', 0.96);
+    return resolved('PLANT_CARE_OUTLOOK', 0.96, 'DET_PLANT_CARE_OUTLOOK_01');
   }
   if (homeDigitalWillPattern.test(message) && !homeDigitalWillOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('HOME_DIGITAL_WILL', 0.96);
+    return resolved('HOME_DIGITAL_WILL', 0.96, 'DET_HOME_DIGITAL_WILL_01');
   }
   if (homeHabitsPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('HOME_HABITS', 0.96);
+    return resolved('HOME_HABITS', 0.96, 'DET_HOME_HABITS_01');
   }
   if (homeBriefingPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('HOME_BRIEFING_VIEW', 0.96);
+    return resolved('HOME_BRIEFING_VIEW', 0.96, 'DET_HOME_BRIEFING_VIEW_01');
   }
   if (homeStatusBoardPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('HOME_STATUS_BOARD', 0.96);
+    return resolved('HOME_STATUS_BOARD', 0.96, 'DET_HOME_STATUS_BOARD_01');
   }
   if (pastHazardExposurePattern.test(message) && !pastHazardOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('PAST_HAZARD_EXPOSURE', 0.96);
+    return resolved('PAST_HAZARD_EXPOSURE', 0.96, 'DET_PAST_HAZARD_EXPOSURE_01');
   }
   if (environmentReportPattern.test(message) && !environmentReportOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('ENVIRONMENT_REPORT', 0.96);
+    return resolved('ENVIRONMENT_REPORT', 0.96, 'DET_ENVIRONMENT_REPORT_01');
   }
   if (neighborhoodChangePattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('NEIGHBORHOOD_CHANGE_FEED', 0.96);
+    return resolved('NEIGHBORHOOD_CHANGE_FEED', 0.96, 'DET_NEIGHBORHOOD_CHANGE_FEED_01');
   }
   if (breakEvenAnalysisPattern.test(message) && !breakEvenOtherSensePattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('BREAK_EVEN_ANALYSIS', 0.96);
+    return resolved('BREAK_EVEN_ANALYSIS', 0.96, 'DET_BREAK_EVEN_ANALYSIS_01');
   }
   if (savingsOpportunitiesPattern.test(message)) {
-    return resolved('SAVINGS_OPPORTUNITIES', 0.97);
+    return resolved('SAVINGS_OPPORTUNITIES', 0.97, 'DET_SAVINGS_OPPORTUNITIES_01');
   }
   if ((ownershipCostsPattern.test(message) || ownershipExpensesPattern.test(message)) && !explicitCapabilityPattern.test(message)) {
-    return resolved('OWNERSHIP_COSTS', 0.97);
+    return resolved('OWNERSHIP_COSTS', 0.97, 'DET_OWNERSHIP_COSTS_01');
   }
   if (homeEventRadarFeedPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('HOME_EVENT_RADAR_FEED', 0.96);
+    return resolved('HOME_EVENT_RADAR_FEED', 0.96, 'DET_HOME_EVENT_RADAR_FEED_01');
   }
   if (scopedEnvelopeObservationPattern.test(message)) {
-    return resolved('INTELLIGENCE_ENVELOPE_QUERY', 0.96);
+    return resolved('INTELLIGENCE_ENVELOPE_QUERY', 0.96, 'DET_INTELLIGENCE_ENVELOPE_QUERY_01');
   }
   if (propertyFactQuestionPattern.test(message) && !propertyFactOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('PROPERTY_SUMMARY', 0.96);
+    return resolved('PROPERTY_SUMMARY', 0.96, 'DET_PROPERTY_SUMMARY_01');
   }
   if ((roomContentsPattern.test(message) || (EACH_ROOM_PATTERN.test(message) && roomItemWordsPattern.test(message)))
     && !roomContentsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('INVENTORY_LOOKUP', 0.96);
+    return resolved('INVENTORY_LOOKUP', 0.96, 'DET_INVENTORY_LOOKUP_02');
   }
   if (itemHistoryPattern.test(message) && !itemAttributeWriteIntentPattern.test(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message)) {
-    return resolved('INVENTORY_LOOKUP', 0.96);
+    return resolved('INVENTORY_LOOKUP', 0.96, 'DET_INVENTORY_LOOKUP_03');
   }
   if (inventoryLookupPattern.test(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message)) {
-    return resolved('INVENTORY_LOOKUP', 0.96);
+    return resolved('INVENTORY_LOOKUP', 0.96, 'DET_INVENTORY_LOOKUP_04');
   }
   if (propertyAreaCaptureCommandPattern.test(message)) {
-    return resolved('PROPERTY_CONTEXT_AREA_CAPTURE', 1);
+    return resolved('PROPERTY_CONTEXT_AREA_CAPTURE', 1, 'DET_PROPERTY_CONTEXT_AREA_CAPTURE_01');
   }
   if ((propertySummaryPattern.test(message) || roomSummaryPattern.test(message) || isPropertyCompletenessRequest(message)) && !explicitCapabilityPattern.test(message)) {
-    return resolved('PROPERTY_SUMMARY', 0.96);
+    return resolved('PROPERTY_SUMMARY', 0.96, 'DET_PROPERTY_SUMMARY_02');
   }
   if ((homeActionsPattern.test(message) || (homeConcernsPattern.test(message) && !homeConcernsOtherSubjectPattern.test(message))) && !explicitCapabilityPattern.test(message) && !maintenancePattern.test(message)) {
-    return resolved('HOME_ACTIONS', 0.96);
+    return resolved('HOME_ACTIONS', 0.96, 'DET_HOME_ACTIONS_01');
   }
   if (seasonalHomeCarePattern.test(message) && !seasonalHomeCareRecordedIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('SEASONAL_HOME_CARE', 0.98);
+    return resolved('SEASONAL_HOME_CARE', 0.98, 'DET_SEASONAL_HOME_CARE_01');
   }
   if (homeBasicsGuidePattern.test(message) && !seasonalHomeCareRecordedIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('HOME_BASICS_GUIDE', 0.97);
+    return resolved('HOME_BASICS_GUIDE', 0.97, 'DET_HOME_BASICS_GUIDE_01');
   }
   if (maintenancePattern.test(message) && !maintenanceBudgetWordingPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('MAINTENANCE_STATUS', 0.94);
+    return resolved('MAINTENANCE_STATUS', 0.94, 'DET_MAINTENANCE_STATUS_01');
   }
   if (homeChangeSummaryPattern.test(message) && !explicitCapabilityPattern.test(message) && !/\bdecision\b/i.test(message)) {
-    return resolved('HOME_CHANGE_SUMMARY', 0.9);
+    return resolved('HOME_CHANGE_SUMMARY', 0.9, 'DET_HOME_CHANGE_SUMMARY_01');
   }
   if (itemKeepOrReplacePattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('REPLACEMENT_GUIDANCE', 0.95);
+    return resolved('REPLACEMENT_GUIDANCE', 0.95, 'DET_REPLACEMENT_GUIDANCE_01');
   }
   if (replacementPattern.test(message)) {
-    return resolved('REPLACEMENT_GUIDANCE', 0.96);
+    return resolved('REPLACEMENT_GUIDANCE', 0.96, 'DET_REPLACEMENT_GUIDANCE_02');
   }
   if (itemReplacementCostPattern.test(message) && !itemAttributeWriteIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('REPLACEMENT_GUIDANCE', 0.95);
+    return resolved('REPLACEMENT_GUIDANCE', 0.95, 'DET_REPLACEMENT_GUIDANCE_03');
   }
   if (itemAttributePattern.test(message) && !itemAttributeWriteIntentPattern.test(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message)) {
-    return resolved('INVENTORY_LOOKUP', 0.96);
+    return resolved('INVENTORY_LOOKUP', 0.96, 'DET_INVENTORY_LOOKUP_05');
   }
   if (refinanceMonitorPattern.test(message)) {
-    return resolved('REFINANCE_RATE_MONITOR', 0.98);
+    return resolved('REFINANCE_RATE_MONITOR', 0.98, 'DET_REFINANCE_RATE_MONITOR_01');
   }
   if (refinanceAnalysisPattern.test(message)) {
-    return resolved('REFINANCE_ANALYSIS', 0.97);
+    return resolved('REFINANCE_ANALYSIS', 0.97, 'DET_REFINANCE_ANALYSIS_01');
   }
   if (sellHoldRentAnalysisPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('SELL_HOLD_RENT_ANALYSIS', 0.96);
+    return resolved('SELL_HOLD_RENT_ANALYSIS', 0.96, 'DET_SELL_HOLD_RENT_ANALYSIS_01');
   }
   if (householdInvitationPattern.test(message)) {
-    return resolved('HOUSEHOLD_INVITATION', 0.98);
+    return resolved('HOUSEHOLD_INVITATION', 0.98, 'DET_HOUSEHOLD_INVITATION_01');
   }
   if (householdAccessSummaryPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('HOUSEHOLD_ACCESS_SUMMARY', 0.96);
+    return resolved('HOUSEHOLD_ACCESS_SUMMARY', 0.96, 'DET_HOUSEHOLD_ACCESS_SUMMARY_01');
   }
   if (explicitCapabilityPattern.test(message) || capabilityPattern.test(message)) {
-    return resolved('CAPABILITY_DISCOVERY', 0.88);
+    return resolved('CAPABILITY_DISCOVERY', 0.88, 'DET_CAPABILITY_DISCOVERY_01');
   }
   // Community (FRD v1.479): events, city alerts and trash pickup for the home's city. Last before the fallback, so every more specific route above wins.
   if (communityPattern.test(message) && !communityOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('COMMUNITY_UPDATES', 0.95);
+    return resolved('COMMUNITY_UPDATES', 0.95, 'DET_COMMUNITY_UPDATES_01');
   }
   // Understanding reliability FRD D12 (Phase 1b): a question about ONE recorded detail of a named item ("what did I pay for my dryer", "when was my furnace installed").
   // Last before the fallback so every more specific route above wins; the handler resolves the detail from the reviewed catalogue and the item from the home inventory.
   if ((dataPointQuestionPattern.test(message) && (resolveDataPoint(message) || resolveDataPointsMulti(message).length >= 2)) || isDataPointQuery(message)) {
-    return resolved('DATA_POINT_READ', 0.9);
+    return resolved('DATA_POINT_READ', 0.9, 'DET_DATA_POINT_READ_03');
   }
-  return resolved('GROUNDED_GUIDANCE', 0.55);
+  return resolved('GROUNDED_GUIDANCE', 0.55, 'DET_GROUNDED_GUIDANCE_01');
 }

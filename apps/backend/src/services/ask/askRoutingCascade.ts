@@ -13,7 +13,7 @@ import { classifyAskCandidates, normalizeAskMessage, retrieveAskOperationCandida
 import { ASK_DEFAULT_LANGUAGE, requireCertifiedAskLanguage, type AskLanguageCode } from './askLanguageRegistry';
 import type { AskConfidenceBand } from './askTrust.contract';
 import { resolveAskEntityState, type AskEntityResolutionResult } from './askEntityResolution';
-import { fastPathRuleForOperation, isFastPathCertified } from './fastPath/fastPathCertificates';
+import { fastPathRuleForResolution, isFastPathCertified } from './fastPath/fastPathCertificates';
 
 // "Which upgrades are worth doing" says nothing about what they are for. Worth depends on the goal, so the homeowner picks one rather than Ask guessing.
 const UPGRADE_OBJECTIVE_PATTERN = /\b(?:which|what)\b.{0,12}\b(?:upgrades?|improvements?|renovations?|projects?)\b.{0,30}\b(?:worth (?:doing|it|making)|best to (?:do|make))\b|\b(?:upgrades?|improvements?|renovations?)\b.{0,12}\bworth (?:doing|it|making)\b/i;
@@ -81,7 +81,7 @@ export function resolveAskRoutingCascade(rawMessage: string, options: {
   const rawDirect = resolveAskOperation(correctKnownMisspellings(rawMessage));
   const message = isSafetyBoundary(rawDirect.operationId) ? correctKnownMisspellings(rawMessage) : normalizeForRouting(rawMessage, options.knownNames);
   const direct = isSafetyBoundary(rawDirect.operationId) ? rawDirect : resolveAskOperation(message);
-  const directRule = direct.operationId === 'GROUNDED_GUIDANCE' || isSafetyBoundary(direct.operationId) ? null : fastPathRuleForOperation(direct.operationId);
+  const directRule = direct.operationId === 'GROUNDED_GUIDANCE' || isSafetyBoundary(direct.operationId) ? null : fastPathRuleForResolution(direct);
   if (direct.operationId === 'EMERGENCY_BOUNDARY' || direct.operationId === 'UNSAFE_RESTRICTED_BOUNDARY' || direct.operationId === 'OUT_OF_SCOPE_BOUNDARY') {
     return { language, operation: direct, stage: 'SAFETY', candidates: [{ operationId: direct.operationId, language, confidence: direct.confidence, confidenceBand: 'HIGH' }], requiresClarification: false, entityResolution: null };
   }

@@ -3,6 +3,7 @@ import { getAskOperationDefinition, isReadOnlyOperation, type AskOperationId, ty
 import type { AskAnswerTrustResult } from './askTrust.contract';
 import { validateAskSemanticAnswerRelevance, type AskSemanticAnswerRelevanceResult } from './askSemanticAnswerValidator';
 import type { AskLanguageCode } from './askLanguageRegistry';
+import type { AskEntityResolutionResult } from './askEntityResolution';
 import type { HouseholdRole } from '@prisma/client';
 import { ASK_NAMING_HINT, ASK_UNVERIFIABLE_ANSWER_TEXT } from './askRemoteFallbackTypedClaims';
 import { clarificationLabelFor } from './support/clarificationLabels';
@@ -360,6 +361,9 @@ export function validateAskAnswerTrustPipeline(input: {
   routingAlternatives?: ReadonlyArray<{ operationId: AskOperationId; confidence: number }>;
   /** The request reached `operationId` by a certain (deterministic) rule, not by a score; see isAskHonestLimitationResult. */
   routedDeterministically?: boolean;
+  /** FR-GATE-3: the routing decision's entity state and whether decomposition certified the full-message segmentation; both limit when a canonical answer may skip the relevance check. */
+  entityResolution?: AskEntityResolutionResult | null;
+  segmentationCertified?: boolean;
 }): { result: AskOperationResult; trust: AskAnswerTrustResult; semantic: AskSemanticAnswerRelevanceResult | null; repaired: boolean } {
   const deterministic = validateAskAnswerTrust(input);
   if (!input.semanticEnabled || (input.routedDeterministically && isAskHonestLimitationResult(deterministic.result))) return { ...deterministic, semantic: null };
@@ -370,6 +374,8 @@ export function validateAskAnswerTrustPipeline(input: {
     language: input.language,
     operationConfirmedByUser: input.operationConfirmedByUser,
     routedDeterministically: input.routedDeterministically,
+    entityResolution: input.entityResolution,
+    segmentationCertified: input.segmentationCertified,
   });
   const semanticFailed = semantic.outcome === 'FAIL' || semantic.outcome === 'UNKNOWN';
   const trust: AskAnswerTrustResult = {

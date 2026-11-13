@@ -284,8 +284,11 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
   // ordinary typed question qualifies (no declared operation, no selected suggestion, not itself a component); every other turn is unchanged. A message the
   // decomposer does not compose (one part, a safety phrase, a part that is not a composable read) takes the single-operation path below.
   let declinedComposition: { reason: string; clauseCount: number } | null = null;
+  // FR-GATE-3 c1: set only when deterministic decomposition positively certified that every clause of the full message routes to the one operation answering it.
+  let segmentationCertified = false;
   if (!internal.composition && executionPropertyId && !input.launchContext?.operationId && !input.suggestedActionSelection) {
     const decomposition = decomposeForComposition(input.message, { eligibleOperationIds: new Set(eligibleOperationIds) });
+    segmentationCertified = decomposition.kind === 'SINGLE' && decomposition.reason === 'SAME_OPERATION';
     const plannerRoutingDecision = resolveAskRoutingCascade(input.message, { knownNames });
     const plannerMayRun = plannerRoutingDecision.stage === 'REMOTE_FALLBACK' || plannerRoutingDecision.stage === 'CLARIFICATION';
     const modelPlan = !plannerMayRun || decomposition.kind === 'COMPOSE' || decomposition.kind === 'SINGLE' && decomposition.reason === 'FULL_MESSAGE_GATE'
@@ -720,7 +723,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     const declaredOperationRan = Boolean(declaredItemActionOperationId) && operation.operationId === declaredItemActionOperationId;
     const validation = routingDecision.requiresClarification
       ? null
-      : validateAskAnswerTrustPipeline({ question: routingMessage, operationId: operation.operationId, result: presentedResult, propertyId: executionPropertyId, semanticEnabled: controls.semanticResponseValidatorEnabled && !declaredOperationRan, language: routingDecision.language, routedDeterministically: routingDecision.stage === 'DETERMINISTIC', routingAlternatives: routingDecision.stage === 'LOCAL_CLASSIFIER' ? routingDecision.candidates.map((candidate) => ({ operationId: candidate.operationId, confidence: candidate.confidence })) : undefined });
+      : validateAskAnswerTrustPipeline({ question: routingMessage, operationId: operation.operationId, result: presentedResult, propertyId: executionPropertyId, semanticEnabled: controls.semanticResponseValidatorEnabled && !declaredOperationRan, language: routingDecision.language, routedDeterministically: routingDecision.stage === 'DETERMINISTIC', entityResolution: routingDecision.entityResolution, segmentationCertified, routingAlternatives: routingDecision.stage === 'LOCAL_CLASSIFIER' ? routingDecision.candidates.map((candidate) => ({ operationId: candidate.operationId, confidence: candidate.confidence })) : undefined });
     let result = validation?.result ?? presentedResult;
     // The generic fallback found nothing (or could not match its answer to the question): offer the local router's best candidates instead of a dead end.
     if (isAskUnansweredFallbackResult(operation.operationId, result)) {

@@ -17,7 +17,8 @@ const rel = (f) => path.relative(askDir, f);
 const handlerFiles = (key) => [...source].filter(([, text]) => text.includes(`registerCapabilityHandler('${key}'`)).map(([f]) => rel(f)).sort();
 // operations that have a typed contract: the semantic validator tests `operationId === 'X' && matches...AnswerContract`
 const semantic = source.get(path.join(askDir, 'askSemanticAnswerValidator.ts'));
-const typedContracts = new Map(); for (const m of semantic.matchAll(/operationId === '([A-Z0-9_]+)'\s*&&\s*(matches\w+AnswerContract)\(/g)) typedContracts.set(m[1], m[2]);
+// The typed contracts are the rows of TYPED_ANSWER_CONTRACTS (`OPERATION: (i) => matchesXAnswerContract(...)`), the first matcher named in a row is the one recorded.
+const typedContracts = new Map(); for (const m of semantic.matchAll(/^\s+([A-Z][A-Z0-9_]+): \(i\) => [^\n]*?(matches\w+AnswerContract)\(/gm)) typedContracts.set(m[1], m[2]);
 const { blockIds } = require('./lib/askBlockIdScan');
 // Tier evidence a test or declared constant already provides (FR-GATE-2): CODE_PATH_CONTRACT = a conformance test reads the handler against a declared block-id constant.
 const CONFORMANCE_TESTED = new Set(['INVENTORY_LOOKUP', 'CAPITAL_RESERVE_PLAN']);

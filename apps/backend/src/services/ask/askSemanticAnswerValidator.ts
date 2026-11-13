@@ -1,4 +1,6 @@
 import { canonicalBypassAllowed, matchesCanonicalAnswerBlocks } from './support/canonicalAnswerBlocks';
+import { canonicalBypassDecision } from './support/answerGateBypass';
+import type { AskEntityResolutionResult } from './askEntityResolution';
 import { isAskHonestNoAnswerResult } from './askRemoteFallbackTypedClaims';
 import { getAskOperationDefinition, type AskOperationId, type AskOperationResult } from './askOperationRegistry';
 import { askSemanticTextSimilarity, retrieveAskOperationCandidates } from './askSemanticRouter';
@@ -46,6 +48,30 @@ const AUTHORED_GUIDE_RESULT_CODES: Partial<Record<AskOperationId, readonly strin
   HIRING_GUIDE: ['HIRING_GUIDE_READY'],
 };
 
+/**
+ * Typed answer contracts (one per operation that has one): the stable, adapter-owned shape of that operation's normal answer. A match proves the handler produced its normal output; whether that may SKIP the relevance
+ * check is a separate decision (canonicalBypassDecision, FR-GATE-3), because a canonical answer does not prove the question was about this entity or was a single question.
+ */
+const TYPED_ANSWER_CONTRACTS: Readonly<Partial<Record<AskOperationId, (i: { question: string; result: AskOperationResult }) => boolean>>> = {
+  INVENTORY_LOOKUP: (i) => matchesInventoryAnswerContract(i.question, i.result),
+  PROPERTY_SUMMARY: (i) => matchesPropertySummaryAnswerContract(i.result),
+  WORK_OVERVIEW: (i) => matchesWorkOverviewAnswerContract(i.result),
+  SAVED_RESULTS: (i) => matchesSavedResultsAnswerContract(i.result),
+  MAINTENANCE_STATUS: (i) => matchesMaintenanceStatusAnswerContract(i.result),
+  COVERAGE_GAPS: (i) => matchesCoverageGapsAnswerContract(i.result),
+  SAVINGS_OPPORTUNITIES: (i) => matchesSavingsOpportunitiesAnswerContract(i.result),
+  OWNERSHIP_COSTS: (i) => matchesOwnershipCostsAnswerContract(i.result),
+  HOME_ACTIONS: (i) => matchesHomeActionsAnswerContract(i.result),
+  HOME_CHANGE_SUMMARY: (i) => matchesHomeChangeSummaryAnswerContract(i.result),
+  HOME_STATUS_BOARD: (i) => matchesStatusBoardAnswerContract(i.result),
+  SELLER_PREP_CHECKLIST: (i) => matchesSellerPrepChecklistAnswerContract(i.result),
+  QUOTE_COMPARISON_REVIEW: (i) => matchesQuoteComparisonReviewAnswerContract(i.result),
+  CAPITAL_RESERVE_PLAN: (i) => matchesCapitalPlanAnswerContract(i.result),
+  REFINANCE_ANALYSIS: (i) => (matchesRefinanceScenarioAnswerContract(i.result) || matchesRefinanceAnalysisAnswerContract(i.result)),
+  HOME_UPGRADE_SCENARIOS: (i) => matchesHomeUpgradeScenariosAnswerContract(i.result),
+  ENVIRONMENT_REPORT: (i) => i.result.blocks.some((block) => block.type === 'ENVIRONMENT_REPORT'),
+};
+
 export function validateAskSemanticAnswerRelevance(input: {
   question: string;
   operationId: AskOperationId;
@@ -53,16 +79,22 @@ export function validateAskSemanticAnswerRelevance(input: {
   language?: AskLanguageCode;
   operationConfirmedByUser?: boolean;
   routedDeterministically?: boolean;
+  /** The routing decision's entity state (FR-GATE-3 b): a canonical answer may skip the relevance check only when the entity and every required slot were resolved. Omitted = not applicable. */
+  entityResolution?: AskEntityResolutionResult | null;
+  /** FR-GATE-3 c1: deterministic decomposition positively certified the full-message segmentation, so a compound message may keep the canonical bypass. */
+  segmentationCertified?: boolean;
 }): AskSemanticAnswerRelevanceResult {
   const startedAt = process.hrtime.bigint();
   const language = input.language ?? ASK_DEFAULT_LANGUAGE;
   requireCertifiedAskLanguage(language);
+  const bypassDenialCodes: string[] = [];
   const finish = (result: Omit<AskSemanticAnswerRelevanceResult, 'latencyMs' | 'schemaVersion' | 'validatorVersion' | 'language'>): AskSemanticAnswerRelevanceResult => ({
     schemaVersion: '1.0',
     language,
     validatorVersion: ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION,
     latencyMs: Number((Number(process.hrtime.bigint() - startedAt) / 1_000_000).toFixed(3)),
     ...result,
+    reasonCodes: [...result.reasonCodes, ...bypassDenialCodes],
   });
   if (!SUCCESS_STATUSES.has(input.result.status)) {
     return finish({
@@ -96,158 +128,20 @@ export function validateAskSemanticAnswerRelevance(input: {
       reasonCodes: ['ANSWER_SOURCE_OPERATION_MISMATCH'],
     });
   }
-  if (input.operationId === 'INVENTORY_LOOKUP'
-    && matchesInventoryAnswerContract(input.question, input.result)) {
+  // FR-GATE-3: a canonical answer (typed contract, authored guide, canonical blocks) may skip the relevance check only when the entity and every slot were resolved and the message is not an unsegmented compound
+  // or conditional one. Otherwise the ordinary relevance check below decides, and the reason the bypass was withheld is recorded on the result.
+  const bypass = canonicalBypassDecision({ question: input.question, entityResolution: input.entityResolution, segmentationCertified: input.segmentationCertified });
+  const canonicalMatch = Boolean(TYPED_ANSWER_CONTRACTS[input.operationId]?.({ question: input.question, result: input.result }))
+    || Boolean(AUTHORED_GUIDE_RESULT_CODES[input.operationId]?.includes(input.result.reasonCode ?? ''))
+    || (matchesCanonicalAnswerBlocks(input.operationId, input.result) && canonicalBypassAllowed(input.operationId, input));
+  if (canonicalMatch && bypass.permitted) {
     return finish({
       outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
       selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
       reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
     });
   }
-  if (input.operationId === 'PROPERTY_SUMMARY'
-    && matchesPropertySummaryAnswerContract(input.result)) {
-    return finish({
-      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
-      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
-      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
-    });
-  }
-  if (input.operationId === 'WORK_OVERVIEW'
-    && matchesWorkOverviewAnswerContract(input.result)) {
-    return finish({
-      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
-      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
-      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
-    });
-  }
-  if (input.operationId === 'SAVED_RESULTS'
-    && matchesSavedResultsAnswerContract(input.result)) {
-    return finish({
-      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
-      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
-      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
-    });
-  }
-  if (input.operationId === 'MAINTENANCE_STATUS'
-    && matchesMaintenanceStatusAnswerContract(input.result)) {
-    return finish({
-      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
-      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
-      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
-    });
-  }
-  if (input.operationId === 'COVERAGE_GAPS'
-    && matchesCoverageGapsAnswerContract(input.result)) {
-    return finish({
-      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
-      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
-      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
-    });
-  }
-  if (input.operationId === 'SAVINGS_OPPORTUNITIES'
-    && matchesSavingsOpportunitiesAnswerContract(input.result)) {
-    return finish({
-      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
-      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
-      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
-    });
-  }
-  if (input.operationId === 'OWNERSHIP_COSTS'
-    && matchesOwnershipCostsAnswerContract(input.result)) {
-    return finish({
-      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
-      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
-      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
-    });
-  }
-  if (input.operationId === 'HOME_ACTIONS'
-    && matchesHomeActionsAnswerContract(input.result)) {
-    return finish({
-      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
-      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
-      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
-    });
-  }
-  if (input.operationId === 'HOME_CHANGE_SUMMARY'
-    && matchesHomeChangeSummaryAnswerContract(input.result)) {
-    return finish({
-      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
-      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
-      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
-    });
-  }
-  if (input.operationId === 'HOME_STATUS_BOARD'
-    && matchesStatusBoardAnswerContract(input.result)) {
-    return finish({
-      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
-      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
-      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
-    });
-  }
-  if (input.operationId === 'SELLER_PREP_CHECKLIST'
-    && matchesSellerPrepChecklistAnswerContract(input.result)) {
-    return finish({
-      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
-      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
-      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
-    });
-  }
-  if (input.operationId === 'QUOTE_COMPARISON_REVIEW'
-    && matchesQuoteComparisonReviewAnswerContract(input.result)) {
-    return finish({
-      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
-      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
-      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
-    });
-  }
-  if (input.operationId === 'CAPITAL_RESERVE_PLAN'
-    && matchesCapitalPlanAnswerContract(input.result)) {
-    return finish({
-      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
-      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
-      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
-    });
-  }
-  if (input.operationId === 'REFINANCE_ANALYSIS'
-    && (matchesRefinanceScenarioAnswerContract(input.result) || matchesRefinanceAnalysisAnswerContract(input.result))) {
-    return finish({
-      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
-      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
-      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
-    });
-  }
-  if (input.operationId === 'HOME_UPGRADE_SCENARIOS'
-    && matchesHomeUpgradeScenariosAnswerContract(input.result)) {
-    return finish({
-      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
-      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
-      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
-    });
-  }
-  if (input.operationId === 'ENVIRONMENT_REPORT'
-    && input.result.blocks.some((block) => block.type === 'ENVIRONMENT_REPORT')) {
-    return finish({
-      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
-      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
-      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
-    });
-  }
-  // Authored guide operations are reached by their own narrow deterministic wording (or a starter's launch), and their text is evergreen
-  // guidance that shares little vocabulary with the question, so word similarity cannot confirm it. Their own canonical result is the match.
-  if (AUTHORED_GUIDE_RESULT_CODES[input.operationId]?.includes(input.result.reasonCode ?? '')) {
-    return finish({
-      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
-      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
-      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
-    });
-  }
-  if (matchesCanonicalAnswerBlocks(input.operationId, input.result) && canonicalBypassAllowed(input.operationId, input)) {
-    return finish({
-      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
-      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
-      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
-    });
-  }
+  if (canonicalMatch && bypass.denial) bypassDenialCodes.push(`CANONICAL_BYPASS_WITHHELD_${bypass.denial}`);
   const definition = getAskOperationDefinition(input.operationId);
   const semantic = definition.semantic.languagePacks[language];
   if (!semantic) {
