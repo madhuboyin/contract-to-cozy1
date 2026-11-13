@@ -1,7 +1,8 @@
 // Composition FRD §4.2: decide whether a typed message is a composed (two-component) question, before anything runs. Pure: routing, safety and the
 // operation registry are the only inputs, so every rule is tested without a database. Nothing here executes an operation.
-import { COMPOSITION_PURE_VARIANTS, getAskOperationDefinition, resolveAskOperation, type AskOperationId } from '../askOperationRegistry';
+import { COMPOSITION_PURE_VARIANTS, getAskOperationDefinition, isReadOnlyOperation, resolveAskOperation, type AskOperationId } from '../askOperationRegistry';
 import { resolveAskRoutingCascade } from '../askRoutingCascade';
+import { clarificationLabelFor } from '../support/clarificationLabels';
 import { operationCoversClause, resolveClauseOperation, splitQuestionClauses, standalone, subjectOf } from '../support/alsoAnswer';
 import { parseTargetDate } from '../support/targetDate';
 import { COVERAGE_DECLARATIONS, coverageSkips } from './quantities';
@@ -22,7 +23,24 @@ export interface ComposedClause {
   dependsOn?: readonly string[];
 }
 /** FR-DEC-4a: a part that was NOT run. It is named in the answer with the reason, never dropped and never guessed. */
-export interface DeferredClause { clause: string; reason: 'NOT_ROUTED' | 'LOW_CONFIDENCE' | 'NOT_ELIGIBLE' | 'NOT_COMPOSABLE' | 'OVER_LIMIT'; operationId: AskOperationId | null }
+export interface ClarificationOption { operationId: AskOperationId; label: string }
+/** `NEEDS_CLARIFICATION` (FR-FACET-9b): the part is plausibly more than one thing, so it is asked about inline (one question, up to three options) beside the parts that were answered, instead of being dropped. */
+export interface DeferredClause { clause: string; reason: 'NOT_ROUTED' | 'LOW_CONFIDENCE' | 'NOT_ELIGIBLE' | 'NOT_COMPOSABLE' | 'OVER_LIMIT' | 'NEEDS_CLARIFICATION'; operationId: AskOperationId | null; options?: readonly ClarificationOption[] }
+
+const MAX_CLARIFICATION_OPTIONS = 3;
+/** The read operations a clause could plausibly mean, when the router itself could not choose between two or more (never fewer than two, never a write, never an operation this home cannot run). */
+function clarificationOptionsFor(clause: string, eligible: ReadonlySet<AskOperationId> | undefined): ClarificationOption[] {
+  const decision = resolveAskRoutingCascade(clause);
+  if (decision.stage !== 'CLARIFICATION' || decision.candidates.length < 2) return [];
+  const options: ClarificationOption[] = [];
+  for (const candidate of decision.candidates) {
+    const id = candidate.operationId as AskOperationId;
+    if (id === 'GROUNDED_GUIDANCE' || (eligible && !eligible.has(id)) || !isReadOnlyOperation(id) || options.some((o) => o.operationId === id)) continue;
+    options.push({ operationId: id, label: clarificationLabelFor(id) });
+    if (options.length === MAX_CLARIFICATION_OPTIONS) break;
+  }
+  return options.length >= 2 ? options : [];
+}
 
 export type DecompositionOutcome =
   | { kind: 'SINGLE'; reason: 'ONE_CLAUSE' | 'FULL_MESSAGE_GATE' | 'SAME_OPERATION' }
@@ -70,9 +88,9 @@ export function decomposeForComposition(message: string, options: DecomposeOptio
         ? { operationId: 'CAPITAL_ITEM_FUNDING_GOAL' as const, family: 'DECISION_ANALYSIS', confidence: MIN_CLAUSE_CONFIDENCE }
         : null
     );
-    if (!resolved) { refuse('CLAUSE_NOT_COMPOSABLE', `“${part}” did not route to a known read.`); deferred.push({ clause: tail(clause), reason: 'NOT_ROUTED', operationId: null }); continue; }
+    if (!resolved) { refuse('CLAUSE_NOT_COMPOSABLE', `“${part}” did not route to a known read.`); const choices = clarificationOptionsFor(clause, options.eligibleOperationIds); deferred.push(choices.length ? { clause: tail(clause), reason: 'NEEDS_CLARIFICATION', operationId: null, options: choices } : { clause: tail(clause), reason: 'NOT_ROUTED', operationId: null }); continue; }
     // FR-DEC-3: confident routing to an operation on the composable allowlist, eligible for this user and property.
-    if (resolved.confidence < MIN_CLAUSE_CONFIDENCE) { refuse('LOW_CONFIDENCE', `“${part}” routed with low confidence.`); deferred.push({ clause: tail(clause), reason: 'LOW_CONFIDENCE', operationId: resolved.operationId }); continue; }
+    if (resolved.confidence < MIN_CLAUSE_CONFIDENCE) { refuse('LOW_CONFIDENCE', `“${part}” routed with low confidence.`); const choices = clarificationOptionsFor(clause, options.eligibleOperationIds); deferred.push(choices.length ? { clause: tail(clause), reason: 'NEEDS_CLARIFICATION', operationId: resolved.operationId, options: choices } : { clause: tail(clause), reason: 'LOW_CONFIDENCE', operationId: resolved.operationId }); continue; }
     // D17: an operation that persists runs inside a composed answer as its pure variant. Eligibility is judged on the operation the homeowner asked for.
     const requestedOperationId = resolved.operationId;
     const operationId = COMPOSITION_PURE_VARIANTS[requestedOperationId] ?? requestedOperationId;

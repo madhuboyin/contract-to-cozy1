@@ -14,6 +14,8 @@ import {
 import { quantitiesOf } from './quantities';
 import { COMPOSABLE_SOURCE_AUTHORIZATION, type CompositeSourceReference } from './sourceAuthorization';
 import { extractSlots, sanitizeSlots } from './slots';
+import { withheldDetail, withheldRuns } from './withholding';
+import { clarificationLabelFor } from '../support/clarificationLabels';
 import type { ComposedClause, DeferredClause } from './decompose';
 import {
   applyAttemptMutation, childClientRequestId, componentKeyOf, nextAttemptNumber, requireVersion, retryAllowed, selectAttempt, AssemblyInvariantError,
@@ -21,7 +23,7 @@ import {
 } from './attempts';
 import {
   applyAuthorizationGate, assembleComposite, componentStateOf, decideStatus, projectForDelivery, validateComposite,
-  type AuthorizationView, type ComponentOutcome, type CompositeResult, type DeliveredComposite,
+  type AuthorizationView, type ComponentOutcome, type ComponentState, type CompositeResult, type DeliveredComposite,
 } from './compositeResult';
 
 export type CreateChild = (
@@ -253,7 +255,15 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   // request-plan DAG rather than flattening it into an unordered batch.
   const pending = new Set(runs);
   const settledFacetIds = new Set<string>();
+  // FR-FACET-9(c): the settled state of a run that has run, from its latest attempt; null when it has not run (so a dependent of a clarifying or failed facet is held back, not run on a guess).
+  const settledStateOf = async (): Promise<(key: string) => ComponentState | null> => {
+    const stored = storedOf((await db.askExecution.findUnique({ where: { id: parent.id } }))!).attempts;
+    return (key) => { const mine = stored.filter((a) => a.componentKey === key); const latest = latestOf(mine); return latest ? componentStateOf(latest.status, true) : null; };
+  };
   while (pending.size) {
+    const held = withheldRuns(runs.map((run) => ({ key: run.key, facetId: run.clause.facetId, dependsOn: run.clause.dependsOn })), await settledStateOf());
+    for (const run of [...pending]) if (held.has(run.key)) { pending.delete(run); if (run.clause.facetId) settledFacetIds.add(run.clause.facetId); }
+    if (!pending.size) break;
     const ready = [...pending].filter((run) => (run.clause.dependsOn ?? []).every((dependency) => settledFacetIds.has(dependency)));
     if (!ready.length) throw new AssemblyInvariantError('validated request plan contains an unresolved dependency');
     await Promise.all(ready.map(executeRun));
@@ -284,7 +294,12 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
     const latest = [...mine].sort((a, b) => b.number - a.number)[0] ?? null;
     return { run, selected: selection.attempt, selectedReason: selection.reason, latest, selection: { ...selection, attempt: selection.attempt ?? latest } };
   });
-  const states = selections.map(({ selection }) => (selection.attempt ? componentStateOf(selection.attempt.status, true) : 'FAILED' as const));
+  // A facet that never ran because its predecessor needs a clarification or failed is WITHHELD (named, not guessed); derived from the stored attempts so recovery and refresh agree with the first run.
+  const withheldNow = withheldRuns(runs.map((run) => ({ key: run.key, facetId: run.clause.facetId, dependsOn: run.clause.dependsOn })), (key) => {
+    const mine = attempts.filter((a) => a.componentKey === key); const latest = [...mine].sort((a, b) => b.number - a.number)[0];
+    return latest ? componentStateOf(latest.status, true) : null;
+  });
+  const states = selections.map(({ run, selection }) => (selection.attempt ? componentStateOf(selection.attempt.status, true) : withheldNow.has(run.key) ? 'WITHHELD' as const : 'FAILED' as const));
   const decision = decideStatus(states);
   // FR-PER-15(f): for EVERY component, the selected attempt and selection reason when a genuinely selectable attempt exists (LOWEST_SUCCESSFUL,
   // EXPLICIT_REFRESH or ONLY_TERMINAL_LIMITED), and otherwise state PENDING with both left null. The latest attempt is kept separately as audit evidence, so a
@@ -295,7 +310,7 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
     selectedAttemptId: selected?.executionId ?? null, selectedAttemptNumber: selected?.number ?? null, selectionReason: selected ? selectedReason : null,
     // A component with no selectable attempt reports the state of its latest attempt WITHOUT the retries-exhausted conversion: still running or retryable-failed is
     // PENDING, a clarification is CLARIFICATION, and none at all is PENDING.
-    state: componentStateOf((selected ?? latest)?.status ?? 'RUNNING'),
+    state: (selected ?? latest) ? componentStateOf((selected ?? latest)!.status) : withheldNow.has(run.key) ? 'WITHHELD' as const : componentStateOf('RUNNING'),
     latestAttemptId: latest?.executionId ?? null, latestAttemptNumber: latest?.number ?? null, latestAttemptStatus: latest?.status ?? null,
   }));
   // The envelope delivered to the homeowner: attempt and selection evidence of components whose section was redacted (or withheld) is left out; it stays in
@@ -379,10 +394,11 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   });
   // An independent clarification keeps its own focused question beside the answered section; it is not reported as a generic failure.
   const clarificationBlocks: AskPresentationBlock[] = [];
-  const notAnswered = selections.flatMap(({ run, selection }) => {
+  const notAnswered: Array<{ clause: string; reasonCode: string; detail: string; startAction?: Record<string, unknown> }> = selections.flatMap(({ run, selection }) => {
     const attempt = selection.attempt;
     const state = attempt ? componentStateOf(attempt.status, true) : 'FAILED';
     if (state === 'ANSWERED' || state === 'LIMITED') return [];
+    if (!attempt && withheldNow.has(run.key)) return [{ clause: run.clause.clause, reasonCode: `WITHHELD_${withheldNow.get(run.key)}`, detail: withheldDetail(withheldNow.get(run.key)!) }];
     if (state === 'CLARIFICATION') {
       clarificationBlocks.push(...blocksOf(childById.get(attempt!.executionId)).slice(0, 1));
       return [{ clause: run.clause.clause, reasonCode: 'NEEDS_CLARIFICATION', detail: 'I need one more detail for this part — see the question below.' }];
@@ -391,7 +407,20 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   });
   // FR-DEC-4a: the parts that were never run are named beside the parts that were, with the reason, so nothing the homeowner asked is silently dropped.
   for (const part of input.deferred ?? storedDeferredOf(input.parent)) {
-    notAnswered.push({ clause: part.clause, reasonCode: `DEFERRED_${part.reason}`, detail: part.reason === 'OVER_LIMIT' ? 'I answer up to six parts at a time, so I stopped before this one. Ask it on its own.' : part.reason === 'NOT_COMPOSABLE' ? 'This part makes or saves a decision, so I answer it on its own. Ask it separately.' : 'I couldn’t match this part to something I can answer together with the others. Ask it on its own.' });
+    // FR-FACET-9(b): a part that could be more than one thing is asked about right here, once, with its options, beside the parts that were answered.
+    if (part.reason === 'NEEDS_CLARIFICATION' && part.options && part.options.length >= 2) {
+      clarificationBlocks.push({
+        type: 'SUMMARY', id: `composite-clarify-${clarificationBlocks.length + 1}`, title: 'Which did you mean?', body: `“${part.clause}” could mean more than one thing. Pick the one you want and I’ll answer it.`, tone: 'CAUTION',
+        actions: part.options.slice(0, 3).map((option, index) => ({ id: `composite-clarify-option-${index + 1}`, label: option.label.slice(0, 160), message: part.clause.slice(0, 300), operationId: option.operationId, style: index === 0 ? 'PRIMARY' : 'SECONDARY' })),
+      } as AskPresentationBlock);
+      notAnswered.push({ clause: part.clause, reasonCode: 'NEEDS_CLARIFICATION', detail: 'I need one more detail for this part — see the question below.' });
+      continue;
+    }
+    // FR-FACET-9(e): a part that makes or saves something is never started inside a composed answer; it gets its own control, which opens it as its own turn (with its own preview and confirmation), so the read parts are not held up.
+    const startAction = part.reason === 'NOT_COMPOSABLE' && part.operationId
+      ? { id: `composite-start-${notAnswered.length + 1}`, label: `Start: ${clarificationLabelFor(part.operationId)}`.slice(0, 160), message: part.clause.slice(0, 300), operationId: part.operationId, style: 'SECONDARY' }
+      : undefined;
+    notAnswered.push({ ...(startAction ? { startAction } : {}), clause: part.clause, reasonCode: `DEFERRED_${part.reason}`, detail: part.reason === 'OVER_LIMIT' ? 'I answer up to six parts at a time, so I stopped before this one. Ask it on its own.' : part.reason === 'NOT_COMPOSABLE' ? 'This part makes or saves a decision, so I answer it on its own. Ask it separately.' : 'I couldn’t match this part to something I can answer together with the others. Ask it on its own.' });
   }
   for (const entry of notAnswered) askCompositionUnansweredTotal.inc({ reason: entry.reasonCode === 'AskExecutionTimeoutError' ? 'timeout' : entry.reasonCode.startsWith('COMPONENT_') ? 'component_failed' : entry.reasonCode.startsWith('DEFERRED_') ? 'deferred' : 'needs_clarification' });
   if (notAnswered.some((entry) => entry.reasonCode === 'AskExecutionTimeoutError')) askCompositionTimeoutsTotal.inc();
@@ -462,7 +491,7 @@ const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString('en-
 
 /** The stored result of a composed parent: ordinary `blocks` (so every existing renderer works) plus the composite state that replay, refresh and the gate read. */
 export function compositeEnvelope(
-  composite: CompositeResult | null, delivered: DeliveredComposite | null, notAnswered: ReadonlyArray<{ clause: string; reasonCode: string; detail: string }>,
+  composite: CompositeResult | null, delivered: DeliveredComposite | null, notAnswered: ReadonlyArray<{ clause: string; reasonCode: string; detail: string; startAction?: Record<string, unknown> }>,
   attempts: Attempt[], withheld = false, validationIssues: string[] = [], clarificationBlocks: AskPresentationBlock[] = [], selection: unknown[] = [],
 ) {
   const blocks: AskPresentationBlock[] = [];
@@ -481,13 +510,14 @@ export function compositeEnvelope(
   for (const section of delivered?.sections ?? []) blocks.push(...section.blocks);
   blocks.push(...clarificationBlocks);
   if (notAnswered.length) {
-    const onlyClarifying = notAnswered.every((n) => n.reasonCode === 'NEEDS_CLARIFICATION');
+    // A part held back only because it waits on a clarification is part of that clarification, not a failure: no capability-discovery action.
+    const onlyClarifying = notAnswered.every((n) => n.reasonCode === 'NEEDS_CLARIFICATION' || n.reasonCode === 'WITHHELD_WAITING_FOR_CLARIFICATION');
     // Composition FRD §10 step 4 and FR-ACT-4: when a part cannot be answered the response states the limitation plainly and exposes capability discovery.
     // Nothing is guessed from general knowledge, and no nearest operation is offered below the calibration floor.
     blocks.push({
       type: 'SUMMARY', id: 'composite-not-answered', title: onlyClarifying ? (notAnswered.length === 1 ? 'One part needs a detail' : 'These parts need a detail') : notAnswered.length === 1 ? 'One part could not be answered' : 'These parts could not be answered',
       body: notAnswered.map((n) => `“${n.clause}” — ${n.detail}`).join(' '), tone: 'CAUTION',
-      actions: onlyClarifying ? [] : [{ id: 'composite-explore-capabilities', label: 'See what Ask can do', interactionType: 'START_WORKFLOW', message: 'What can Ask help me with?', operationId: 'CAPABILITY_DISCOVERY', style: 'SECONDARY' }],
+      actions: onlyClarifying ? [] : [...notAnswered.flatMap((n) => (n.startAction ? [n.startAction] : [])).slice(0, 2), { id: 'composite-explore-capabilities', label: 'See what Ask can do', interactionType: 'START_WORKFLOW', message: 'What can Ask help me with?', operationId: 'CAPABILITY_DISCOVERY', style: 'SECONDARY' }],
     } as AskPresentationBlock);
   }
   return {

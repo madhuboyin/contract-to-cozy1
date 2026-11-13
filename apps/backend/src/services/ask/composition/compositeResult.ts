@@ -90,7 +90,8 @@ export function freshnessOf(provenance: readonly Provenance[]): { freshestAt: st
 }
 
 // ---- component state mapping (§5.2.1) -----------------------------------------------------------------------------------------------------------------
-export type ComponentState = 'ANSWERED' | 'LIMITED' | 'FAILED' | 'PENDING' | 'CLARIFICATION' | 'VIOLATION';
+/** WITHHELD (FR-FACET-9c): a facet that was not run because a facet it depends on needs a clarification (or failed). It is named in the answer with the reason; it never runs on a guessed value. */
+export type ComponentState = 'ANSWERED' | 'LIMITED' | 'FAILED' | 'PENDING' | 'CLARIFICATION' | 'VIOLATION' | 'WITHHELD';
 
 /** Maps an existing execution status to its contribution to the parent. FAILED_RETRYABLE is NOT terminal: it is PENDING until its retry policy is exhausted. */
 export function componentStateOf(status: string, retriesExhausted = false): ComponentState {
@@ -120,12 +121,14 @@ export type StatusDecision =
 export function decideStatus(states: readonly ComponentState[], dependsOn: readonly boolean[] = states.map(() => false)): StatusDecision {
   if (states.some((state) => state === 'PENDING')) return { kind: 'PENDING' };
   const clarifying = states.map((state, index) => (state === 'CLARIFICATION' ? index : -1)).filter((index) => index >= 0);
-  if (clarifying.length) {
-    // An unresolved clause another clause depends on, or a clarification that could change which operations are safe, is asked alone and nothing runs.
-    const blocking = clarifying.filter((index) => dependsOn[index]);
-    if (blocking.length || clarifying.length === states.length) return { kind: 'CLARIFY_ALONE', clauseIndex: (blocking.length ? blocking : clarifying)[0] };
-  }
   const answered = states.filter((state) => state === 'ANSWERED' || state === 'LIMITED');
+  if (clarifying.length) {
+    // FR-FACET-9: independent facets that answered are delivered with the clarification beside them, and the facets that depend on the unresolved one are WITHHELD (they are never run on a guess), so a clarification is
+    // asked ALONE only when no facet answered. `dependsOn` (a facet another facet needs) keeps the older guarantee for a caller that did run a dependent: nothing is shown as answered beside its blocker.
+    const blocking = clarifying.filter((index) => dependsOn[index]);
+    if (blocking.length) return { kind: 'CLARIFY_ALONE', clauseIndex: blocking[0] };
+    if (!answered.length) return { kind: 'CLARIFY_ALONE', clauseIndex: clarifying[0] };
+  }
   if (!answered.length) return { kind: 'NONE_ANSWERED' };
   const allAnswered = answered.length === states.length;
   const anyLimited = states.includes('LIMITED');
