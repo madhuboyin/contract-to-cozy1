@@ -17,7 +17,7 @@ const toNumber = (v: unknown): number | null => (v === null || v === undefined ?
 const CLOSED_TASK = ['COMPLETED', 'CANCELLED'];
 
 /** The Prisma where for a plan. Exported so tests can assert exactly what would be sent. */
-export function buildWhere(propertyId: string, plan: QueryPlan, extra: Record<string, unknown> = {}): Record<string, unknown> {
+export function buildWhere(propertyId: string, plan: QueryPlan, extra: Record<string, unknown> = {}, role?: string): Record<string, unknown> {
   const t = plan.template;
   if (plan.predicates.length > QUERY_MAX_PREDICATES) throw new Error('too many predicates');
   const and: Array<Record<string, unknown>> = [];
@@ -26,10 +26,11 @@ export function buildWhere(propertyId: string, plan: QueryPlan, extra: Record<st
     if (!field) throw new Error(`predicate on undeclared field ${p.field}`);
     if (!OPERATORS_BY_TYPE[field.type].includes(p.op)) throw new Error(`operator ${p.op} is not allowed on ${field.type}`);
     const value = field.type === 'date' ? new Date(String(p.value)) : p.value;
+    if (p.op === 'in' && !(Array.isArray(p.value) && p.value.every((x) => typeof x === 'string'))) throw new Error('an in predicate needs a list of values');
     and.push({ [field.column]: p.op === 'equals' ? value : { [p.op]: value } });
   }
   if (plan.excludesClosed && t.fields.status) and.push({ [t.fields.status.column]: { notIn: CLOSED_TASK } });
-  return { ...(t.scopeWhere ? t.scopeWhere(propertyId) : { propertyId }), ...(t.baseWhere ?? {}), ...(and.length ? { AND: and } : {}), ...extra };
+  return { ...(t.scopeWhere ? t.scopeWhere(propertyId, role) : { propertyId }), ...(t.baseWhere ?? {}), ...(and.length ? { AND: and } : {}), ...extra };
 }
 
 function labelOf(t: QueryTemplate, row: any): string {
@@ -40,10 +41,10 @@ function labelOf(t: QueryTemplate, row: any): string {
   return t.singular;
 }
 
-export async function runDataPointQuery(propertyId: string, plan: QueryPlan): Promise<QueryRun> {
+export async function runDataPointQuery(propertyId: string, plan: QueryPlan, role?: string): Promise<QueryRun> {
   const t = plan.template; const delegate = (prisma as any)[t.delegate];
   if (!delegate) throw new Error(`no delegate ${t.delegate}`);
-  const where = buildWhere(propertyId, plan);
+  const where = buildWhere(propertyId, plan, {}, role);
 
   if (plan.shape === 'AGGREGATE') {
     const agg = plan.aggregate!;

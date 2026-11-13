@@ -3,12 +3,15 @@
 // floor is applied to every field the plan touches), the operators allowed by field type, a maximum predicate count (5), a maximum result limit (100), a maximum relative date range (50 years) and the measures an aggregate may use.
 // Anything outside a template yields no plan. A plan never contains free text from the message except validated numbers, years and enum words.
 import { DATA_POINT_BY_ID, type DataPointDefinition, type DataPointEntity } from './dataPointCatalogue';
+import { visibleRecordWhere } from '../../homeRecordsAccess';
 
 export type QueryShape = 'LIST' | 'FILTER' | 'TOP_K' | 'AGGREGATE';
 export type FieldType = 'date' | 'money' | 'dollars' | 'percent' | 'enum';
 export type Operator = 'lt' | 'lte' | 'gt' | 'gte' | 'equals' | 'in';
 export type AggregateFn = 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX';
 
+/** The claim statuses that mean "open". Must equal OPEN_CLAIM_STATUSES in the claims handler (a test asserts it). */
+export const OPEN_CLAIM_STATES: readonly string[] = Object.freeze(['DRAFT', 'IN_PROGRESS', 'SUBMITTED', 'UNDER_REVIEW']);
 export const QUERY_MAX_PREDICATES = 5;
 export const QUERY_MAX_LIMIT = 100;
 export const QUERY_DEFAULT_SHOWN = 10;
@@ -49,7 +52,9 @@ export interface QueryTemplate {
   /** An optional base filter (for example a task that is not cancelled). */
   readonly baseWhere?: Record<string, unknown>;
   /** The property scope for entities with no plain propertyId (a child reached through its property-scoped parent). Default: { propertyId }. */
-  readonly scopeWhere?: (propertyId: string) => Record<string, unknown>;
+  readonly scopeWhere?: (propertyId: string, role?: string) => Record<string, unknown>;
+  /** True when the scope depends on the caller's role (record visibility), so the runner must be given it. */
+  readonly roleScoped?: boolean;
   /** True when a singular noun still means the whole kind for an aggregate ("my average property tax bill": there is one bill per year on record). */
   readonly singularAggregate?: boolean;
   /** How a row's label is written when it is not a plain column value (for example "2025 tax bill"). */
@@ -171,6 +176,29 @@ export const QUERY_TEMPLATES: readonly QueryTemplate[] = Object.freeze([
     },
     dateField: 'dueAt',
   },
+  // Steps of a claim's checklist (a child of a claim in this property). The step TITLE is free-form and OWNER-only, so rows are not labelled by it: a count or a status breakdown is what this template answers.
+  {
+    id: 'claimChecklist', entity: 'ClaimChecklistItem', delegate: 'claimChecklistItem', nouns: ['claim checklist steps', 'claim checklist items', 'steps on my claim checklist', 'steps left on my claim checklist', 'steps are left on my claim checklist', 'items on my claim checklist', 'items left on my claim checklist', 'items are left on my claim checklist'], singularNouns: ['claim checklist step'], plural: 'claim checklist steps', singular: 'claim checklist step',
+    labelSelect: { orderIndex: true }, labelFields: ['orderIndex'], labelFormat: (n) => `Checklist step ${Number(n) + 1}`, countFloor: 'CONTRIBUTOR', scopeWhere: (propertyId) => ({ claim: { propertyId } }),
+    fields: {
+      status: f('claimChecklist.status', 'enum', 'status', ['status'], 'status', { sortable: false, groupable: true }),
+      completedAt: f('claimChecklist.completedDate', 'date', 'completedAt', ['completed'], 'completed'),
+    },
+    enumWords: { status: { open: 'OPEN', left: 'OPEN', remaining: 'OPEN', incomplete: 'OPEN', done: 'DONE', complete: 'DONE', completed: 'DONE', 'not applicable': 'NOT_APPLICABLE' } },
+    dateField: 'completedAt',
+  },
+  // Home Records (documents): only questions with a CONDITION (expired, expiring, verified) are computed here; a plain list or count stays with the document lookup, which shows the list with its own filters. The caller's
+  // record visibility is part of the scope, exactly as for the point reads.
+  {
+    id: 'records', entity: 'PropertyRecord', delegate: 'propertyRecord', nouns: ['documents', 'home records'], singularNouns: [], plural: 'documents', singular: 'document',
+    labelSelect: { title: true }, labelFields: ['title'], countFloor: 'VIEWER', roleScoped: true, scopeWhere: (propertyId, role) => ({ propertyId, lifecycleStatus: 'ACTIVE', trashedAt: null, ...visibleRecordWhere((role ?? 'VIEWER') as never) }),
+    fields: {
+      verification: f('record.verification', 'enum', 'verificationStatus', ['verified', 'verification'], 'verification', { sortable: false, groupable: true }),
+      effectiveTo: f('record.effectiveTo', 'date', 'effectiveTo', ['expire', 'expires', 'expiring', 'expired', 'effective until', 'valid until'], 'effective until'),
+    },
+    enumWords: { verification: { verified: 'VERIFIED', unverified: 'UNVERIFIED', rejected: 'REJECTED' } },
+    dateField: 'effectiveTo',
+  },
   {
     id: 'claims', entity: 'Claim', delegate: 'claim', nouns: ['claims', 'insurance claims'], singularNouns: ['claim'], plural: 'claims', singular: 'claim',
     labelSelect: { type: true }, labelFields: ['type'], countFloor: 'CONTRIBUTOR',
@@ -179,7 +207,7 @@ export const QUERY_TEMPLATES: readonly QueryTemplate[] = Object.freeze([
       type: f('claim.type', 'enum', 'type', ['type'], 'type', { sortable: false, groupable: true }),
       openedAt: f('claim.openedDate', 'date', 'openedAt', ['opened', 'open date'], 'opened'),
       incidentAt: f('claim.incidentDate', 'date', 'incidentAt', ['incident', 'happened', 'loss date'], 'incident date'),
-      settlement: f('claim.settlement', 'dollars', 'settlementAmount', ['settlement', 'settled', 'payout', 'paid out'], 'settlement', { measure: true }),
+      settlement: f('claim.settlement', 'dollars', 'settlementAmount', ['settlement', 'settled', 'payout', 'paid out', 'paid', 'received'], 'settlement', { measure: true }),
       deductible: f('claim.deductible', 'dollars', 'deductibleAmount', ['deductible'], 'deductible', { measure: true }),
     },
     enumWords: {
@@ -190,7 +218,7 @@ export const QUERY_TEMPLATES: readonly QueryTemplate[] = Object.freeze([
   },
 ] as QueryTemplate[]);
 
-export interface Predicate { readonly field: string; readonly op: Operator; readonly value: string | number; readonly describe: string }
+export interface Predicate { readonly field: string; readonly op: Operator; readonly value: string | number | readonly string[]; readonly describe: string }
 export interface QueryPlan {
   readonly shape: QueryShape;
   readonly template: QueryTemplate;
@@ -275,7 +303,7 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
   const timeZone = validZone(timeZoneIn) ? timeZoneIn : 'UTC';
   const text = norm(message);
   // "claim checklist step", "claim timeline event", "claim document" name a child of one claim (a point read), not the kind "claims".
-  if (/\bclaim (?:checklist|timeline|events?|documents?|steps?|attachments?)\b/.test(text)) return { kind: 'NONE' };
+  if (/\bclaim (?:checklist|timeline|events?|documents?|steps?|attachments?)\b/.test(text) && !QUERY_TEMPLATES.find((t) => t.id === 'claimChecklist')!.nouns.some((n) => text.includes(` ${n} `))) return { kind: 'NONE' };
   const picked = pickTemplate(text);
   if (!picked) return { kind: 'NONE' };
   if (picked === 'AMBIGUOUS') return { kind: 'CLARIFY', reasonCode: 'DATA_POINT_QUERY_AMBIGUOUS_KIND', title: 'Which records do you mean?', body: 'Your question could be about more than one kind of record. Name one, for example “my warranties” or “my insurance policies”.' };
@@ -348,10 +376,12 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
   }
 
   if (overflow) return { kind: 'CLARIFY', reasonCode: 'DATA_POINT_QUERY_TOO_MANY_FILTERS', title: 'That is more filters than I can apply at once', body: `I can apply up to ${QUERY_MAX_PREDICATES} conditions to one question. Ask with fewer, or in two steps, so I do not answer only part of what you asked.` };
+  // "open claims": a claim is open in any of the states the claims status read calls open (an `in` predicate), so a count of open claims matches the list.
+  if (template.id === 'claims' && /\bopen\b/.test(text) && !predicates.some((p) => p.field === 'status')) push({ field: 'status', op: 'in', value: OPEN_CLAIM_STATES, describe: 'open' });
   // A qualifier the plan did not turn into a predicate must not be silently dropped ("how many OPEN claims" answered as "how many claims" would be a wrong answer): such a question gets no plan.
   if ((template.id === 'tasks' || template.id === 'buyerTasks') && /\b(open|active|outstanding|incomplete|left|remaining)\b/.test(text) && !excludesClosed && !predicates.some((p) => p.field === 'status')) { excludesClosed = true; }
   const stray = /\b(open|active|current|upcoming|recent|unresolved|outstanding|incomplete|late|broken|failing|unpaid|expensive|valuable)\b/.exec(text);
-  const strayConsumed = stray && ((Object.values(template.enumWords).some((words) => stray[1] in words) && predicates.some((p) => p.op === 'equals')) || ((template.id === 'tasks' || template.id === 'buyerTasks') && /open|active|outstanding|incomplete/.test(stray[1])) || (/expensive|valuable/.test(stray[1]) && /\b(most|least) (expensive|valuable)\b|\bexpensive\b.*\b(than|over|under)\b/.test(text)));
+  const strayConsumed = stray && ((template.id === 'claims' && stray[1] === 'open' && predicates.some((p) => p.op === 'in')) || (Object.values(template.enumWords).some((words) => stray[1] in words) && predicates.some((p) => p.op === 'equals')) || ((template.id === 'tasks' || template.id === 'buyerTasks') && /open|active|outstanding|incomplete/.test(stray[1])) || (/expensive|valuable/.test(stray[1]) && /\b(most|least) (expensive|valuable)\b|\bexpensive\b.*\b(than|over|under)\b/.test(text)));
   if (stray && !strayConsumed) return { kind: 'NONE' };
 
   // A singular noun names ONE record ("my claim roof hail", "my warranty"): only a superlative ("the oldest appliance", "which warranty expires first") may use it; everything else needs the plural kind.
@@ -363,7 +393,7 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
   // "claim number of my claim" and "serial number of my fridge" are point reads, not counts: "number of" counts only over a plural noun.
   const countQ = /\bhow many\b|\bcount\b/.test(text) || (plural && /\bnumber of\b/.test(text));
   // "total assessed value" is a FIELD NAME, not a request to add up: "total" counts as a sum word only when it is not followed by "assessed".
-  const sumQ = /\b(total(?! assessed)|sum|combined|altogether|add up|spen[dt])\b/.test(text);
+  const sumQ = /\b(total(?! assessed)|sum|combined|altogether|add up|spen[dt])\b|\bhow much (?:have|did) (?:i|we) (?:been )?(?:paid|received|get|got)\b/.test(text);
   const avgQ = /\b(average|mean|typical)\b/.test(text);
   const superlative = /\b(most expensive|most valuable|priciest|costliest|most costly|least expensive|cheapest|oldest|newest|youngest|largest|highest|lowest|biggest|soonest|earliest|latest|next to expire|expires? (?:first|soonest|next)|expiring (?:first|soonest|next)|due (?:first|soonest|next)|first to expire)\b/.exec(text);
   const listQ = /\b(list|show|what|which)\b.*\b(?:do i have|have i got|are there|i have|i own)\b|\b(?:list|show) (?:all )?(?:of )?(?:my|our|the)\b/.test(text);
@@ -446,6 +476,9 @@ export function isDataPointComputedQuery(message: string, now: Date = new Date()
   const { plan } = o;
   // Counts, rankings and totals are never what a list operation answers. A plain FILTER over warranties, policies or tasks is left to the dedicated operation that already filters by date or status (warranty and coverage lookups, the maintenance
   // status read) UNLESS it filters by an amount, which none of them can do. The inventory lookup and the claims status read only list, so their filters are computed here.
+  // The claims status read already lists open and closed claims; a document list is the document lookup's; only a CONDITION on documents (expired, verified) is computed here.
+  if (plan.template.id === 'claims' && plan.shape === 'FILTER' && plan.predicates.every((p) => p.op === 'in')) return false;
+  if (plan.template.id === 'records' && plan.predicates.length === 0) return false;
   if (plan.shape === 'FILTER' && ['warranties', 'policies', 'tasks', 'buyerTasks'].includes(plan.template.id)) return plan.predicates.some((p) => plan.template.fields[p.field]?.measure || (plan.template.id === 'tasks' && p.field === 'priority'));
   return true;
 }

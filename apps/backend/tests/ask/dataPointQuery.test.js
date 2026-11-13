@@ -8,6 +8,7 @@ const { buildWhere } = require('../../src/services/ask/dataPoint/dataPointQueryR
 const { dataPointReadResult } = require('../../src/services/ask/handlers/dataPointRead.handler.ts');
 const { DATA_POINT_BY_ID, READABLE_FIELDS } = require('../../src/services/ask/dataPoint/dataPointCatalogue.ts');
 const { resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');
+const { resolveDataPoint } = require('../../src/services/ask/dataPoint/dataPointCatalogue.ts');
 const NOW = new Date('2026-11-13T12:00:00Z');
 const p = (m) => plan.planDataPointQuery(m, NOW);
 const get = (m) => { const o = p(m); assert.equal(o.kind, 'PLAN', `${m} -> ${o.kind}`); return o.plan; };
@@ -17,9 +18,10 @@ test('FR-DATA-16 conformance: every template field is a catalogued data point of
   for (const t of plan.QUERY_TEMPLATES) {
     assert.ok(t.nouns.length && t.countFloor, t.id);
     const model = Prisma.dmmf.datamodel.models.find((m) => m.name === t.entity);
-    if (t.scopeWhere) { // a child reached through its property-scoped parent (declared in RELATION_ENTITIES)
+    if (t.scopeWhere && t.roleScoped) { assert.ok(model.fields.some((f) => f.name === 'propertyId' && f.kind === 'scalar'), `${t.entity} keeps its plain propertyId`); assert.ok('visibility' in t.scopeWhere('p1', 'VIEWER') && !('visibility' in t.scopeWhere('p1', 'OWNER')), 'the record visibility rule is part of the scope and widens for the owner'); }
+    else if (t.scopeWhere) { // a child reached through its property-scoped parent (declared in RELATION_ENTITIES)
       const rel = require('../../src/services/ask/dataPoint/dataPointCatalogue.ts').RELATION_ENTITIES[t.entity]; assert.ok(rel, `${t.entity} declares its relation path`);
-      assert.ok(['saleCase', 'checklist'].includes(Object.keys(t.scopeWhere('p1'))[0]), 'the scope goes through the declared parent'); assert.equal(JSON.stringify(t.scopeWhere('p1')).includes('"propertyId":"p1"'), true);
+      assert.ok(['saleCase', 'checklist', 'claim'].includes(Object.keys(t.scopeWhere('p1'))[0]), 'the scope goes through the declared parent'); assert.equal(JSON.stringify(t.scopeWhere('p1')).includes('"propertyId":"p1"'), true);
     } else assert.ok(model.fields.some((f) => f.name === 'propertyId' && f.kind === 'scalar'), `${t.entity} is property-scoped`);
     for (const [key, field] of Object.entries(t.fields)) {
       const point = DATA_POINT_BY_ID.get(field.point);
@@ -72,7 +74,7 @@ test('shape 6 aggregate: count, sum, average over declared measures, optionally 
 });
 
 test('no plan: bare nouns, singular lookups, unknown qualifiers, out-of-range windows, tie between kinds', () => {
-  for (const m of ['how many items do I have', 'what tasks are overdue', 'what is the serial number of my fridge', 'when does my warranty expire', 'how many open claims do I have', 'which appliances are older than 99 years', 'what is the weather', 'what is the claim number of my claim', 'what is the status of my claim roof hail', 'what is the policy number of my policy', 'what is the settlement on my claim']) assert.equal(p(m).kind, 'NONE', m);
+  for (const m of ['how many items do I have', 'what tasks are overdue', 'what is the serial number of my fridge', 'when does my warranty expire', 'which appliances are older than 99 years', 'what is the weather', 'what is the claim number of my claim', 'what is the status of my claim roof hail', 'what is the policy number of my policy', 'what is the settlement on my claim']) assert.equal(p(m).kind, 'NONE', m);
   assert.equal(get('how many open maintenance tasks do I have').excludesClosed, true, 'open tasks is a real predicate');
   assert.equal(p('how many insurance policies and warranties do I have').kind, 'CLARIFY', 'two kinds are asked about, never merged or guessed');
 });
@@ -239,4 +241,24 @@ test('the runner scopes tax records to ACTIVE non-superseded rows and sale items
     const call = w.calls.find((c) => c[0] === 'saleReadinessItem' && c[1] === 'findMany')[2]; assert.deepEqual(call.where.saleCase, { propertyId: 'p1' });
     assert.deepEqual(Object.keys(call.select).sort(), ['dueAt', 'id', 'title'], 'no detail, cost or waiver text is selected');
   } finally { w.restore(); }
+});
+
+// ---- claims open/paid, claim checklist steps, document conditions (2026-11-13) ----
+test('open claims are an `in` predicate over the claims-status definition of open; paid and closed wording; claim checklist counts; document conditions with record visibility', async () => {
+  const { OPEN_CLAIM_STATES } = require('../../src/services/ask/dataPoint/dataPointQueryPlan.ts'); const { OPEN_CLAIM_STATUSES } = require('../../src/services/ask/handlers/claims.handler.ts');
+  assert.deepEqual([...OPEN_CLAIM_STATES], OPEN_CLAIM_STATUSES, 'the planner and the claims status read agree on what open means');
+  const open = get('how many claims do I have open'); assert.deepEqual([open.predicates[0].op, open.predicates[0].value], ['in', OPEN_CLAIM_STATES]); assert.deepEqual(buildWhere('p1', open).AND, [{ status: { in: OPEN_CLAIM_STATES } }]);
+  assert.throws(() => buildWhere('p1', { ...open, predicates: [{ field: 'status', op: 'in', value: 'OPEN', describe: 'x' }] }), /list of values/);
+  assert.equal(resolveAskOperation('Which claims are still open?').operationId, 'INCIDENT_CLAIM_STATUS', 'a plain open-claims list stays with the claims status read'); assert.equal(resolveAskOperation('How many claims do I have open?').operationId, 'DATA_POINT_READ');
+  const paid = get('how much have I been paid on claims'); assert.deepEqual([paid.aggregate.fn, paid.aggregate.field], ['SUM', 'settlement']);
+  assert.equal(resolveDataPoint('When did I close my fire claim?')?.id, 'claim.closedDate');
+  const steps = get('how many steps are left on my claim checklist'); assert.deepEqual([steps.template.id, steps.predicates[0].value, steps.template.countFloor], ['claimChecklist', 'OPEN', 'CONTRIBUTOR']); assert.deepEqual(buildWhere('p1', steps).claim, { propertyId: 'p1' });
+  assert.equal(p('what is the status of claim checklist step 2 on my claim').kind, 'NONE', 'a numbered step is still a point read');
+  const exp = get('which documents have expired'); assert.deepEqual([exp.template.id, exp.predicates[0].field, exp.predicates[0].op], ['records', 'effectiveTo', 'lt']);
+  assert.equal(get('which documents are verified').predicates[0].value, 'VERIFIED'); assert.equal(get('how many documents are unverified').shape, 'AGGREGATE');
+  assert.equal(resolveAskOperation('What documents do I have?').operationId, 'DOCUMENT_LOOKUP'); assert.equal(resolveAskOperation('How many documents do I have?').operationId, 'DOCUMENT_LOOKUP'); assert.equal(resolveAskOperation('Which documents have expired?').operationId, 'DATA_POINT_READ');
+  // the record visibility rule travels with the query: a contributor/viewer's where is filtered, the owner's is not
+  const rw = (role) => buildWhere('p1', exp, {}, role); assert.equal(rw('VIEWER').visibility, 'HOUSEHOLD'); assert.equal(rw('OWNER').visibility, undefined); assert.equal(rw('OWNER').lifecycleStatus, 'ACTIVE'); assert.equal(rw('OWNER').trashedAt, null);
+  const w = stub('VIEWER', { claimChecklistItem: { count: () => 4 }, property: { findUnique: () => ({ timezone: 'UTC' }) } });
+  try { assert.equal((await dataPointReadResult('u1', 'p1', 'how many steps are left on my claim checklist')).reasonCode, 'DATA_POINT_RESTRICTED', 'claim checklist steps need a contributor'); assert.equal(w.calls.some((c) => c[0] === 'claimChecklistItem'), false, 'the table is not queried'); } finally { w.restore(); }
 });

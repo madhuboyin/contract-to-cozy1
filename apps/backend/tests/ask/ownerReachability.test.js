@@ -15,7 +15,7 @@ test('every canonical query-shape question plans to the intended shape for the f
   assert.deepEqual(m.queryRows.filter((r) => !r.ok).map((r) => r.message), []);
   const unrouted = m.queryRows.filter((r) => r.operation !== 'DATA_POINT_READ').map((r) => `${r.template}/${r.shape}`);
   // only plain lists and date filters owned by dedicated operations (warranty and coverage lookups, the maintenance status read) may stay with them
-  for (const u of unrouted) assert.match(u, /^(warranties|policies|tasks|buyerTasks)\/(LIST|FILTER)$/, `${u} must be owned by a dedicated operation`);
+  for (const u of unrouted) assert.match(u, /^((warranties|policies|tasks|buyerTasks)\/(LIST|FILTER)|records\/(LIST|AGGREGATE|FILTER))$/, `${u} must be owned by a dedicated operation`);
 });
 
 // ---- maintenance phrasing fixes (2026-11-13) ----

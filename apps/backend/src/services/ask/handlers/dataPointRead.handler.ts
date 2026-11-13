@@ -77,7 +77,7 @@ async function dataPointQueryResult(propertyId: string, role: string, plan: Quer
     const copy = audienceFloorCopy(t.countFloor);
     return notice('DATA_POINT_RESTRICTED', 'data-point-restricted', copy.title, `Your ${t.plural} are only shown to ${copy.who}. Ask the home’s owner if you need them.`);
   }
-  const run = await runDataPointQuery(propertyId, plan);
+  const run = await runDataPointQuery(propertyId, plan, role);
   const minRole = RANK_ROLE[floor] !== 'VIEWER' ? { minRole: RANK_ROLE[floor] } : {};
   const where = ENTITY_COPY[t.entity];
   const conditions = [...new Set(plan.predicates.map((p) => p.describe))].filter((d) => d !== 'from today');
