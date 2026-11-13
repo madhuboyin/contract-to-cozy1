@@ -2,6 +2,7 @@ import type { AskOperationId } from '../askOperationRegistry';
 import type { ComposedClause, DeferredClause } from '../composition/decompose';
 import { guardedPlan, type UnderstandingProvider } from './understandingProvider';
 import { isUnderstandingStratumCertified } from './calibration';
+import type { KnownName } from '../privacy/promptMinimizer';
 
 export interface RuntimeUnderstandingControls {
   enabled: boolean;
@@ -19,13 +20,15 @@ export async function planRuntimeUnderstanding(input: {
   eligibleOperationIds: ReadonlySet<AskOperationId>;
   controls: RuntimeUnderstandingControls;
   provider: UnderstandingProvider;
+  /** The authorised property's own names, protected by the minimiser before anything is sent (FR-PRV-1). */
+  knownNames?: ReadonlyArray<KnownName>;
 }): Promise<RuntimeUnderstandingOutcome> {
   if (!input.controls.enabled) return { kind: 'DISABLED', reason: 'FEATURE_OFF' };
   if (!input.controls.providerTermsRecorded) return { kind: 'DISABLED', reason: 'PROVIDER_TERMS_NOT_RECORDED' };
   if (!input.controls.homeownerTextApproved) return { kind: 'DISABLED', reason: 'HOMEOWNER_TEXT_NOT_APPROVED' };
   if (!isUnderstandingStratumCertified('SINGLE_STAGE_READ_PLAN')) return { kind: 'DISABLED', reason: 'STRATUM_NOT_CERTIFIED' };
   const outcome = await guardedPlan({
-    message: input.message, provider: input.provider, providerTermsRecorded: true,
+    message: input.message, provider: input.provider, providerTermsRecorded: true, knownNames: input.knownNames,
     planContext: { eligibleOperationIds: input.eligibleOperationIds },
   });
   if (outcome.kind !== 'PLANNED') return { kind: 'UNAVAILABLE', reason: outcome.reason };

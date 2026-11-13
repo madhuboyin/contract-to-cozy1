@@ -42,6 +42,7 @@ import { decomposeForComposition } from '../composition/decompose';
 import { recoverComposedTurn, runComposedTurn } from '../composition/runComposedTurn';
 import { GeminiUnderstandingProvider } from '../modelRouting/understandingProvider';
 import { planRuntimeUnderstanding } from '../modelRouting/runtimeUnderstanding';
+import { loadKnownNames } from '../privacy/knownNames';
 import { buildAuthorizationView } from '../composition/authorizationView';
 import { resolveSlotFollowUp } from '../composition/slotContext';
 import { extractSlots, sanitizeSlots } from '../composition/slots';
@@ -161,6 +162,8 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     propertyId: executionPropertyId, propertyAccess: initialPropertyAccess, controls,
   });
   await enterAskPropertyTimezoneContext(executionPropertyId);
+  // FR-NRM-1 / FR-PRV-1: the authorised property's own names (insurers, contractors, lenders, household members) are protected from spelling correction and from the model payload. Loaded only AFTER the property is authorised.
+  const knownNames = executionPropertyId && initialPropertyAccess ? await loadKnownNames(executionPropertyId) : [];
   const duplicate = await prisma.askExecution.findUnique({ where: { userId_clientRequestId: { userId, clientRequestId: input.clientRequestId } } });
   if (duplicate) {
     // Without this, a retry that reuses the same clientRequestId (the
@@ -283,7 +286,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
   let declinedComposition: { reason: string; clauseCount: number } | null = null;
   if (!internal.composition && executionPropertyId && !input.launchContext?.operationId && !input.suggestedActionSelection) {
     const decomposition = decomposeForComposition(input.message, { eligibleOperationIds: new Set(eligibleOperationIds) });
-    const plannerRoutingDecision = resolveAskRoutingCascade(input.message);
+    const plannerRoutingDecision = resolveAskRoutingCascade(input.message, { knownNames });
     const plannerMayRun = plannerRoutingDecision.stage === 'REMOTE_FALLBACK' || plannerRoutingDecision.stage === 'CLARIFICATION';
     const modelPlan = !plannerMayRun || decomposition.kind === 'COMPOSE' || decomposition.kind === 'SINGLE' && decomposition.reason === 'FULL_MESSAGE_GATE'
       ? null
@@ -296,6 +299,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
           homeownerTextApproved: controls.understandingHomeownerTextApproved,
         },
         provider: new GeminiUnderstandingProvider(),
+        knownNames,
       });
     if (modelPlan?.kind === 'UNAVAILABLE' || modelPlan?.kind === 'DISABLED' && modelPlan.reason !== 'FEATURE_OFF') {
       await prisma.askExecutionEvent.create({ data: {
@@ -437,6 +441,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       eligibleOperationIds,
       propertyId: executionPropertyId,
       launchEntityId: input.launchContext?.entityId,
+      knownNames,
     });
   const launchCapabilityOperationId = input.launchContext?.capabilityId
     ? ASK_CAPABILITY_UNIQUE_OPERATION[input.launchContext.capabilityId]
