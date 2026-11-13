@@ -9,6 +9,8 @@ import { humanDate, money } from '../askFormatting';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { audienceFloorCopy, resolveDataPoint, roleMayRead, type DataPointDefinition } from '../dataPoint/dataPointCatalogue';
 import { namedTaxYears, readDataPoint } from '../dataPoint/dataPointReader';
+import { planDataPointQuery, pointOf, type QueryPlan } from '../dataPoint/dataPointQueryPlan';
+import { runDataPointQuery } from '../dataPoint/dataPointQueryRunner';
 
 const ENTITY_COPY: Record<string, { plural: string; singular: string; collection: string; record: string; none?: string }> = {
   InventoryItem: { plural: 'items', singular: 'inventory', collection: 'inventory', record: 'Home inventory record' },
@@ -45,9 +47,75 @@ const notice = (reasonCode: string, id: string, title: string, body: string): As
   status: 'READY_WITH_LIMITATIONS', reasonCode, parameters: { sources: [] }, blocks: [{ type: 'SUMMARY', id, title, body, tone: 'CAUTION', actions: [] } as AskPresentationBlock], suggestions: [],
 });
 
+const ROLE_RANK: Record<string, number> = { VIEWER: 0, CONTRIBUTOR: 1, OWNER: 2 };
+const RANK_ROLE = ['VIEWER', 'CONTRIBUTOR', 'OWNER'] as const;
+const NUMBER_FAMILY_LABEL = (family: string, value: unknown) => formatDataPointValue({ family } as unknown as DataPointDefinition, value);
+
+/** Shapes 3-6 (list, filter, sort/top-k, aggregate), FR-DATA-10/15. The plan is allowlisted and pure (dataPointQueryPlan); the audience floor of EVERY field the plan touches is checked here before anything is read. */
+async function dataPointQueryResult(propertyId: string, role: string, plan: QueryPlan): Promise<AskOperationResult> {
+  const t = plan.template;
+  const touchedFields = [...new Set([...plan.touched, ...(plan.showField ? [plan.showField] : []), ...(plan.aggregate?.field ? [plan.aggregate.field] : [])])];
+  let floor = ROLE_RANK[t.countFloor];
+  for (const field of touchedFields) {
+    const point = pointOf(t, field);
+    floor = Math.max(floor, ROLE_RANK[point.audience]);
+    if (!roleMayRead(role, point)) {
+      const copy = audienceFloorCopy(point.audience);
+      return notice('DATA_POINT_RESTRICTED', 'data-point-restricted', copy.title, `${point.label} is only shown to ${copy.who}, so I can't filter, rank or total by it for you. Ask the home’s owner if you need it.`);
+    }
+  }
+  if ((ROLE_RANK[role] ?? 0) < ROLE_RANK[t.countFloor]) {
+    const copy = audienceFloorCopy(t.countFloor);
+    return notice('DATA_POINT_RESTRICTED', 'data-point-restricted', copy.title, `Your ${t.plural} are only shown to ${copy.who}. Ask the home’s owner if you need them.`);
+  }
+  const run = await runDataPointQuery(propertyId, plan);
+  const minRole = RANK_ROLE[floor] !== 'VIEWER' ? { minRole: RANK_ROLE[floor] } : {};
+  const where = ENTITY_COPY[t.entity];
+  const conditions = [...new Set(plan.predicates.map((p) => p.describe))].filter((d) => d !== 'from today');
+  const qualifier = conditions.length ? ` (${conditions.join(', ')})` : '';
+  const noun = (n: number) => (n === 1 ? t.singular : t.plural);
+  const showFam = plan.showField ? pointOf(t, plan.showField).family : null;
+  const valueText = (v: unknown) => (v === null || v === undefined ? 'not recorded' : NUMBER_FAMILY_LABEL(showFam ?? 'text', v));
+  const lines: string[] = []; let title = ''; let limited = false;
+  if (plan.shape === 'AGGREGATE') {
+    const a = run.aggregate!;
+    if (a.fn === 'COUNT') {
+      title = `${run.total} ${noun(run.total)}`;
+      lines.push(`You have ${run.total} ${noun(run.total)}${qualifier}.`);
+      if (run.groups) lines.push(`By ${plan.aggregate!.groupBy}: ${run.groups.map((g) => `${g.key.toLowerCase().replace(/_/g, ' ')} ${g.count}`).join(', ')}.`);
+    } else {
+      const fam = pointOf(t, a.field!).family; const label = t.fields[a.field!].label;
+      title = a.value === null ? `No ${label} recorded` : `${a.fn === 'SUM' ? 'Total' : 'Average'} ${label}: ${formatDataPointValue({ family: fam } as unknown as DataPointDefinition, a.value)}`;
+      lines.push(a.value === null ? `None of your ${t.plural}${qualifier} has a ${label} recorded, so there is nothing to ${a.fn === 'SUM' ? 'add up' : 'average'}.` : `The ${a.fn === 'SUM' ? 'total' : 'average'} ${label} across your ${t.plural}${qualifier} is ${formatDataPointValue({ family: fam } as unknown as DataPointDefinition, a.value)}, from ${a.counted} ${noun(a.counted)} with a recorded value.`);
+      if (run.unrecorded > 0) { limited = true; lines.push(`${run.unrecorded} ${noun(run.unrecorded)} ${run.unrecorded === 1 ? 'has' : 'have'} no ${label} recorded and ${run.unrecorded === 1 ? 'is' : 'are'} not included.`); }
+    }
+  } else {
+    const shown = run.rows.slice(0, 10);
+    const sorted = plan.shape === 'TOP_K';
+    title = run.total === 0 ? `No ${t.plural} match` : sorted ? (plan.limit === 1 ? `Top ${t.singular}: ${shown[0]?.label}` : `Top ${Math.min(plan.limit, run.total)} ${t.plural}`) : `${run.total} ${noun(run.total)}${qualifier}`;
+    if (run.total === 0) lines.push(`No ${t.plural}${qualifier} match.`);
+    else {
+      lines.push(`${sorted ? `Ranked${plan.sort ? ` by ${t.fields[plan.sort.field].label}, ${plan.sort.dir === 'desc' ? 'highest' : 'lowest'} first` : ''}: ` : `${run.total} ${noun(run.total)}${qualifier}: `}${shown.map((r) => (plan.showField ? `${r.label} (${valueText(r.value)})` : r.label)).join('; ')}${run.total > shown.length ? `; and ${run.total - shown.length} more` : ''}.`);
+    }
+    if (run.unrecorded > 0) { limited = true; lines.push(`${run.unrecorded} ${noun(run.unrecorded)} ${run.unrecorded === 1 ? 'has' : 'have'} no ${t.fields[plan.sort!.field].label} recorded, so ${run.unrecorded === 1 ? 'it is' : 'they are'} not ranked.`); }
+  }
+  const sources = plan.shape === 'AGGREGATE' || !run.rows.length ? [{ ...sourceRef('Property', propertyId), ...minRole }] : run.rows.slice(0, 10).map((r) => ({ ...sourceRef(t.entity as CompositeSourceType, r.id), ...minRole }));
+  return {
+    status: limited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: limited ? 'DATA_POINT_QUERY_PARTIAL' : undefined, parameters: { sources },
+    blocks: [
+      { type: 'SUMMARY', id: 'data-point-query-summary', title, body: lines.join(' '), tone: limited ? 'CAUTION' : 'DEFAULT', actions: [] },
+      { type: 'EVIDENCE', id: 'data-point-evidence', title: 'Where this comes from', items: [{ label: `Your ${t.plural}`, source: where?.record ?? t.entity, observedAt: null }] },
+    ] as AskPresentationBlock[],
+    suggestions: [],
+  };
+}
+
 export async function dataPointReadResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const role = String(access.role);
+  const queryOutcome = planDataPointQuery(message);
+  if (queryOutcome.kind === 'CLARIFY') return notice(queryOutcome.reasonCode, 'data-point-query-clarify', queryOutcome.title, queryOutcome.body);
+  if (queryOutcome.kind === 'PLAN') return dataPointQueryResult(propertyId, role, queryOutcome.plan);
   const point = resolveDataPoint(message);
   if (!point) return notice('DATA_POINT_NOT_IDENTIFIED', 'data-point-unidentified', 'Which detail do you mean?', 'Tell me the detail and the item, for example “the serial number of my refrigerator” or “when my furnace was installed”.');
   if (!roleMayRead(role, point)) {

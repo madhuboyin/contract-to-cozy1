@@ -1,4 +1,5 @@
 import { resolveDataPoint } from './dataPoint/dataPointCatalogue';
+import { isDataPointComputedQuery, isDataPointQuery } from './dataPoint/dataPointQueryPlan';
 import { isWriteCapableOperation } from './support/writeCapability';
 import { isItemCostMessage, isItemFundingGoalMessage, isItemReserveAllocationMessage } from './support/itemFundingWording';
 import { validateCoverageDeclarations } from './composition/quantities';
@@ -1893,6 +1894,8 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (coverageComparisonPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('COVERAGE_COMPARISON_STATUS', 0.96);
   }
+  // Query shapes 4-6 (filter, top-k, aggregate) over warranties, policies, inventory and claims are computed by the generic reader; the lookups below only list, so they could not honor the predicate. Maintenance tasks keep their own status operation.
+  if (isDataPointComputedQuery(message) && !explicitCapabilityPattern.test(message)) return resolved('DATA_POINT_READ', 0.93);
   if (warrantyLookupPattern.test(message) && !warrantyLookupOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('WARRANTY_LOOKUP', 0.96);
   }
@@ -2063,7 +2066,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   // Understanding reliability FRD D12 (Phase 1b): a question about ONE recorded detail of a named item ("what did I pay for my dryer", "when was my furnace installed").
   // Last before the fallback so every more specific route above wins; the handler resolves the detail from the reviewed catalogue and the item from the home inventory.
-  if (dataPointQuestionPattern.test(message) && resolveDataPoint(message)) {
+  if ((dataPointQuestionPattern.test(message) && resolveDataPoint(message)) || isDataPointQuery(message)) {
     return resolved('DATA_POINT_READ', 0.9);
   }
   return resolved('GROUNDED_GUIDANCE', 0.55);
