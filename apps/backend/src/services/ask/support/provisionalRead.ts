@@ -141,13 +141,34 @@ export function groundedStatusBoardVerdict(question: string, result: AskOperatio
 }
 const statusBoardRouteGuard = (message: string): boolean => BOARD_TOPIC.test(message) && !BOARD_OTHER_JOB.test(message);
 
+// ---- home basics guide --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// Authored, evergreen guidance that reads no recorded data ("what should I check each month"). It is delivered when (1) the question asks for home safety basics or a monthly routine and is not asking to schedule, remind or
+// record anything, and (2) the guide shown is the one the question asked for: the monthly checklist for a monthly question, the safety basics for a safety question, never the other way round.
+const BASICS_TOPIC = /\b(?:safety basics|(?:each|every) month|monthly|this month|month['\u2019]s)\b/i;
+const BASICS_OTHER_JOB = /\b(?:remind|reminder|schedule|recurring|repeat|automatic|automate|add|create|save|record|log|track|cost|price|quote|hire|book|overdue|due|history|completed|did i)\b/i;
+const BASICS_ASKS_SAFETY = /\bsafety\b/i;
+export function groundedHomeBasicsVerdict(question: string, result: AskOperationResult): GroundedReadVerdict {
+  const fail = (code: string): GroundedReadVerdict => ({ outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', code] });
+  if (!BASICS_TOPIC.test(question)) return fail('QUESTION_NOT_ABOUT_HOME_BASICS');
+  if (BASICS_OTHER_JOB.test(question) && !/\b(?:start|begin|do|run)\b/i.test(question)) return fail('ANOTHER_OPERATION_OWNS_THE_QUESTION');
+  if (result.status !== 'ANSWERED') return fail('ANSWER_IS_NOT_A_DELIVERABLE_STATUS');
+  const ids = result.blocks.map((block) => String((block as { id?: string }).id ?? ''));
+  if (!ids.includes('home-basics-summary') || !ids.includes('home-basics-items') || !ids.includes('home-basics-boundary')) return fail('ANSWER_IS_NOT_A_VERIFIED_VARIANT');
+  const list = result.blocks.find((block) => (block as { id?: string }).id === 'home-basics-items') as { sections?: Array<{ id?: string }> } | undefined;
+  const shown = String(list?.sections?.[0]?.id ?? '');
+  const wanted = BASICS_ASKS_SAFETY.test(question) ? 'home-basics-safety_basics' : 'home-basics-monthly_routine';
+  if (shown !== wanted) return fail('GUIDE_SHOWN_IS_NOT_THE_ONE_ASKED_FOR');
+  return { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] };
+}
+const homeBasicsRouteGuard = (message: string): boolean => BASICS_TOPIC.test(message) && !(BASICS_OTHER_JOB.test(message) && !/\b(?:start|begin|do|run)\b/i.test(message));
+
 // ---- which operations may be tried provisionally --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 export type GroundedReadCheck = (question: string, result: AskOperationResult) => GroundedReadVerdict;
 /** FR-GATE-8: an operation may be tried provisionally only together with a grounded delivery check. This table IS the allowlist (fastPathCertificates derives PROVISIONAL_READ_OPERATIONS from it). */
-export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict, WARRANTY_LOOKUP: groundedWarrantyVerdict, HOME_STATUS_BOARD: groundedStatusBoardVerdict });
+export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict, WARRANTY_LOOKUP: groundedWarrantyVerdict, HOME_STATUS_BOARD: groundedStatusBoardVerdict, HOME_BASICS_GUIDE: groundedHomeBasicsVerdict });
 export const hasGroundedReadCheck = (operationId: AskOperationId): boolean => operationId in GROUNDED_READ_CHECKS;
 /** Checked before a provisional read is started: false means the rule's match is not the request this read answers, so the turn keeps the strict path. */
-export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ MAINTENANCE_STATUS: maintenanceRouteGuard, WARRANTY_LOOKUP: warrantyRouteGuard, HOME_STATUS_BOARD: statusBoardRouteGuard });
+export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ MAINTENANCE_STATUS: maintenanceRouteGuard, WARRANTY_LOOKUP: warrantyRouteGuard, HOME_STATUS_BOARD: statusBoardRouteGuard, HOME_BASICS_GUIDE: homeBasicsRouteGuard });
 export const provisionalRouteAllowed = (operationId: AskOperationId, message: string): boolean => (GROUNDED_READ_ROUTE_GUARDS[operationId]?.(message) ?? true);
 export function groundedVerdictFor(operationId: AskOperationId, question: string, result: AskOperationResult): GroundedReadVerdict {
   const check = GROUNDED_READ_CHECKS[operationId];

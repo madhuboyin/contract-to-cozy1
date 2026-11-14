@@ -1806,7 +1806,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "HOME_BASICS_GUIDE",
   "confidence": 0.97,
   "order": 134,
-  "hash": "83701e2430d3a5ac",
+  "hash": "0952562fccfa86a0",
   "condition": "homeBasicsGuidePattern.test(message) && !seasonalHomeCareRecordedIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
