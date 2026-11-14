@@ -39,6 +39,16 @@ const ENTITY_COPY: Record<string, { plural: string; singular: string; collection
   PropertyTaxAssessmentRecord: { plural: 'property tax assessments', singular: 'property tax assessment', collection: 'property tax assessments', record: 'Property tax assessment record', none: 'No property tax assessment is recorded yet' },
 };
 const words = (v: unknown) => String(v).toLowerCase().replace(/_/g, ' ');
+/** "How old is it": the recorded install date (or year) read back as an approximate age. Only for the install-date points, only when the question asks for an age, and never for a date in the future. */
+export function ageSentence(point: DataPointDefinition, value: unknown, message: string, now: Date = new Date()): string {
+  if (!/\bhow old\b|\bage\b/i.test(message)) return '';
+  let years: number | null = null;
+  if (point.id === 'item.installedOn') { const when = value instanceof Date ? value : new Date(String(value)); if (!Number.isNaN(when.getTime())) years = (now.getTime() - when.getTime()) / (365.25 * 86_400_000); }
+  else if (point.id === 'home.roofReplacementYear') years = now.getUTCFullYear() - Number(value);
+  if (years === null || !Number.isFinite(years) || years < 0) return '';
+  const whole = Math.floor(years);
+  return whole < 1 ? ' That is less than a year ago.' : ` That makes it about ${whole} ${whole === 1 ? 'year' : 'years'} old.`;
+}
 export function formatDataPointValue(point: DataPointDefinition, value: unknown): string {
   switch (point.family) {
     case 'date': return humanDate(value instanceof Date ? value : new Date(String(value))) ?? '';
@@ -245,7 +255,7 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
     return notice('DATA_POINT_NOT_RECORDED', 'data-point-not-recorded', `${readPoint.label.replace(/^The /, 'The ')} for your ${names} isn’t recorded`, `Nothing is saved for this yet. You can add it by editing the record, and then I can tell you.`);
   }
   // A cancelled / not-needed child is worded as a recorded past value, never as a current obligation ("is due" is not used for it).
-  const sentences = present.map((r) => (r.historicalStatus ? `Your ${r.name} is ${r.historicalStatus}. Its recorded ${readPoint.family === 'date' ? 'date' : 'value'} was ${formatDataPointValue(readPoint, r.value)}.` : `Your ${r.name} ${readPoint.sentence} ${formatDataPointValue(readPoint, r.value)}.`));
+  const sentences = present.map((r) => (r.historicalStatus ? `Your ${r.name} is ${r.historicalStatus}. Its recorded ${readPoint.family === 'date' ? 'date' : 'value'} was ${formatDataPointValue(readPoint, r.value)}.` : `Your ${r.name} ${readPoint.sentence} ${formatDataPointValue(readPoint, r.value)}.${ageSentence(readPoint, r.value, message)}`));
   const missing = read.rows.length - present.length;
   if (missing > 0) sentences.push(`${missing === 1 ? 'One matching item has' : `${missing} matching items have`} nothing recorded for this.`);
   // Provenance/confidence limitation (FR-REC-2): a low-confidence or self-entered record is not stated plainly.

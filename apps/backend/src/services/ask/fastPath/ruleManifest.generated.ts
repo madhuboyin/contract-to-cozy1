@@ -1120,7 +1120,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "DATA_POINT_READ",
   "confidence": 0.93,
   "order": 80,
-  "hash": "de844b715279c9c2",
+  "hash": "1879017613fc42ed",
   "condition": "dataPointQuestionPattern.test(message) && isDataPointOnlyQuestion(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:dataPointQuestionPattern",
@@ -1983,7 +1983,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "DATA_POINT_READ",
   "confidence": 0.9,
   "order": 148,
-  "hash": "f031b722d5e93c92",
+  "hash": "899bda6c0cc338db",
   "condition": "(dataPointQuestionPattern.test(message) && (resolveDataPoint(message) || resolveDataPointsMulti(message).length >= 2)) || isDataPointQuer...",
   "references": [
    "../homeRecordsAccess.ts:visibleRecordWhere",

@@ -231,8 +231,10 @@ export const FAST_PATH_ADJACENCY: Readonly<Record<string, Readonly<Record<string
   ]
  },
  "APPLIANCE_FAILURE_RISK": {
+  "DATA_POINT_READ": [
+   "Which dishwasher brand should I buy?"
+  ],
   "INVENTORY_LOOKUP": [
-   "Which dishwasher brand should I buy?",
    "Show my inventory"
   ],
   "REPLACEMENT_GUIDANCE": [
@@ -485,7 +487,7 @@ export const FAST_PATH_ADJACENCY: Readonly<Record<string, Readonly<Record<string
   "CAPITAL_RESERVE_PLAN": [
    "Show my capital plan for all major replacements"
   ],
-  "INVENTORY_LOOKUP": [
+  "DATA_POINT_READ": [
    "How old is my roof?"
   ],
   "REPLACEMENT_GUIDANCE": [
@@ -496,7 +498,7 @@ export const FAST_PATH_ADJACENCY: Readonly<Record<string, Readonly<Record<string
   "CAPITAL_RESERVE_PLAN": [
    "How much should I save for my roof?"
   ],
-  "INVENTORY_LOOKUP": [
+  "DATA_POINT_READ": [
    "How old is my roof?"
   ],
   "MAINTENANCE_BUDGET_FORECAST": [

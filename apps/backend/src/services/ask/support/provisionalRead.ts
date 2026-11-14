@@ -269,13 +269,35 @@ export function groundedWorkOverviewVerdict(question: string, result: AskOperati
 }
 const workOverviewRouteGuard = (message: string): boolean => WORK_TOPIC.test(message) && !WORK_OTHER_JOB.test(message);
 
+// ---- replacement cost of a named item ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// "How much would a new furnace cost?" is a planning figure from the home's capital timeline. It is delivered when (1) the question asks what a new or replacement item costs and is not a funding, saving, financing, repair,
+// quote or coverage question, (2) the answer is a figure with the planning-figure boundary, or an honest notice that states no figure (no timeline, item not on it), and (3) a question that names a date gets the figure grown
+// to that date. The handler picks the item from the question's own words; this check only refuses a shape or a date it did not honour.
+const COST_TOPIC = /\b(?:cost|costs|price|priced|how much)\b/i;
+const COST_NEW = /\b(?:new|replacement|replace|replacing|replaced)\b/i;
+const COST_OTHER_JOB = /\b(?:save|saving|savings|fund|funding|set aside|afford|finance|financing|loan|repair|repairing|should i|worth|quote|quotes|compare|reserve|per month|monthly|budget|insurance|cover|covered|warranty|paid|pay|spent|spend|did i)\b/i;
+const COST_DATED = /\b(?:in \d+ years?|in (?:a|one|two|three|four|five|ten) years?|next year|by (?:20\d\d)|in 20\d\d)\b/i;
+export function groundedItemCostVerdict(question: string, result: AskOperationResult): GroundedReadVerdict {
+  const fail = (code: string): GroundedReadVerdict => ({ outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', code] });
+  if (!COST_TOPIC.test(question) || !COST_NEW.test(question)) return fail('QUESTION_NOT_ABOUT_THE_COST_OF_A_NEW_ITEM');
+  if (COST_OTHER_JOB.test(question)) return fail('ANOTHER_OPERATION_OWNS_THE_QUESTION');
+  if (result.status !== 'ANSWERED' && result.status !== 'READY_WITH_LIMITATIONS') return fail('ANSWER_IS_NOT_A_DELIVERABLE_STATUS');
+  const ids = result.blocks.map((block) => String((block as { id?: string }).id ?? ''));
+  if (ids.includes('item-cost-no-timeline') || ids.includes('item-cost-no-item')) return { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] };
+  if (!ids.includes('item-cost-summary') || !ids.includes('item-cost-boundary')) return fail('ANSWER_IS_NOT_A_VERIFIED_VARIANT');
+  const summary = result.blocks.find((block) => (block as { id?: string }).id === 'item-cost-summary') as { body?: string } | undefined;
+  if (COST_DATED.test(question) && !/Grown to/.test(String(summary?.body ?? ''))) return fail('NAMED_DATE_WAS_NOT_APPLIED');
+  return { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] };
+}
+const itemCostRouteGuard = (message: string): boolean => COST_TOPIC.test(message) && COST_NEW.test(message) && !COST_OTHER_JOB.test(message);
+
 // ---- which operations may be tried provisionally --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 export type GroundedReadCheck = (question: string, result: AskOperationResult) => GroundedReadVerdict;
 /** FR-GATE-8: an operation may be tried provisionally only together with a grounded delivery check. This table IS the allowlist (fastPathCertificates derives PROVISIONAL_READ_OPERATIONS from it). */
-export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict, WARRANTY_LOOKUP: groundedWarrantyVerdict, HOME_STATUS_BOARD: groundedStatusBoardVerdict, HOME_BASICS_GUIDE: groundedHomeBasicsVerdict, PROPERTY_SUMMARY: groundedPropertySummaryVerdict, INCIDENT_CLAIM_STATUS: groundedClaimStatusVerdict, SAVED_RESULTS: groundedSavedResultsVerdict, WORK_OVERVIEW: groundedWorkOverviewVerdict });
+export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict, WARRANTY_LOOKUP: groundedWarrantyVerdict, HOME_STATUS_BOARD: groundedStatusBoardVerdict, HOME_BASICS_GUIDE: groundedHomeBasicsVerdict, PROPERTY_SUMMARY: groundedPropertySummaryVerdict, INCIDENT_CLAIM_STATUS: groundedClaimStatusVerdict, SAVED_RESULTS: groundedSavedResultsVerdict, WORK_OVERVIEW: groundedWorkOverviewVerdict, ITEM_REPLACEMENT_COST: groundedItemCostVerdict });
 export const hasGroundedReadCheck = (operationId: AskOperationId): boolean => operationId in GROUNDED_READ_CHECKS;
 /** Checked before a provisional read is started: false means the rule's match is not the request this read answers, so the turn keeps the strict path. */
-export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ MAINTENANCE_STATUS: maintenanceRouteGuard, WARRANTY_LOOKUP: warrantyRouteGuard, HOME_STATUS_BOARD: statusBoardRouteGuard, HOME_BASICS_GUIDE: homeBasicsRouteGuard, PROPERTY_SUMMARY: propertySummaryRouteGuard, INCIDENT_CLAIM_STATUS: claimStatusRouteGuard, SAVED_RESULTS: savedResultsRouteGuard, WORK_OVERVIEW: workOverviewRouteGuard });
+export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ MAINTENANCE_STATUS: maintenanceRouteGuard, WARRANTY_LOOKUP: warrantyRouteGuard, HOME_STATUS_BOARD: statusBoardRouteGuard, HOME_BASICS_GUIDE: homeBasicsRouteGuard, PROPERTY_SUMMARY: propertySummaryRouteGuard, INCIDENT_CLAIM_STATUS: claimStatusRouteGuard, SAVED_RESULTS: savedResultsRouteGuard, WORK_OVERVIEW: workOverviewRouteGuard, ITEM_REPLACEMENT_COST: itemCostRouteGuard });
 export const provisionalRouteAllowed = (operationId: AskOperationId, message: string): boolean => (GROUNDED_READ_ROUTE_GUARDS[operationId]?.(message) ?? true);
 export function groundedVerdictFor(operationId: AskOperationId, question: string, result: AskOperationResult): GroundedReadVerdict {
   const check = GROUNDED_READ_CHECKS[operationId];

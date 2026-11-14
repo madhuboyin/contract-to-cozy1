@@ -170,15 +170,15 @@ test('source authorization: a restricted source is redacted once the role drops,
   assert.deepEqual(seen.at(-1), ['PropertyMaintenanceTask', { id: 't1', propertyId: 'p1' }]);
 });
 
-test('owner approval (2026-11-12) covers exactly the 106 catalogued ids at catalogue version 11 (33 at v1 + 14 reserve-ownership-costs + 12 seller-prep/buyer + 4 record + 4 buyerTask + 4 buyerMilestone + 4 saleItem + 4 recordVersion + 11 claim + 5 claim-child + 11 home-profile); any unapproved id or version drift fails', () => {
+test('owner approval (2026-11-12) covers exactly the 107 catalogued ids at catalogue version 12 (33 at v1 + 14 reserve-ownership-costs + 12 seller-prep/buyer + 4 record + 4 buyerTask + 4 buyerMilestone + 4 saleItem + 4 recordVersion + 11 claim + 5 claim-child + 12 home-profile); any unapproved id or version drift fails', () => {
   assert.equal(DATA_POINT_CATALOGUE_VERSION, DATA_POINT_APPROVAL.catalogueVersion, 'a new catalogue version needs a new approval record');
   const ids = DATA_POINT_DEFINITIONS.map((p) => p.id);
   assert.equal(new Set(ids).size, ids.length, 'ids are unique');
   assert.deepEqual(ids.filter((id) => !APPROVED_DATA_POINT_IDS.includes(id)), [], 'every catalogued id must be owner-approved');
   assert.deepEqual(APPROVED_DATA_POINT_IDS.filter((id) => !ids.includes(id)), [], 'an approved id that is no longer catalogued must be removed from the approval');
-  assert.equal(ids.length, 106); assert.equal(DATA_POINT_CATALOGUE_VERSION, 11);
+  assert.equal(ids.length, 107); assert.equal(DATA_POINT_CATALOGUE_VERSION, 12);
   const by = (d) => DATA_POINT_DEFINITIONS.filter((p) => p.domain === d).length;
-  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance'), by('reserve-ownership-costs'), by('seller-prep'), by('buyer'), by('documents-records'), by('claims'), by('home-profile')], [14, 5, 7, 7, 14, 13, 11, 8, 16, 11]);
+  assert.deepEqual([by('appliances-inventory'), by('warranties'), by('insurance'), by('maintenance'), by('reserve-ownership-costs'), by('seller-prep'), by('buyer'), by('documents-records'), by('claims'), by('home-profile')], [14, 5, 7, 7, 14, 13, 11, 8, 16, 12]);
 });
 test('the restriction copy is generated from the field floor, so it never names a different audience than the check enforces', async () => {
   assert.match(audienceFloorCopy('CONTRIBUTOR').title, /contributors and owners/);

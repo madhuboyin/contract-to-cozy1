@@ -158,7 +158,7 @@ test('routing: query questions reach DATA_POINT_READ; existing specific operatio
   const op = (m) => resolveAskOperation(m).operationId;
   for (const m of ['which appliances are older than ten years', 'how many warranties expire in the next 60 days', 'what is my most expensive appliance to replace']) assert.equal(op(m), 'DATA_POINT_READ', m);
   assert.equal(op('what is the serial number of my refrigerator'), 'DATA_POINT_READ', 'a detail the inventory lookup never states (serial number) is read by the data point');
-  assert.equal(op('what is the model number of my dishwasher'), 'INVENTORY_LOOKUP', 'a detail the lookup does state stays with the lookup (the routing ratchets own it)');
+  assert.equal(op('what is the model number of my dishwasher'), 'DATA_POINT_READ', 'a single recorded fact of a named item is read by the data point, which states exactly that fact (2026-11-13: the lookup is not a provisional read, so the owner\'s "model number of my refrigerator" went to a clarification)');
   assert.equal(op('what is the status of my buyer task'), 'DATA_POINT_READ', 'a buyer task is not a maintenance task');
   assert.notEqual(op('what is the weather like'), 'DATA_POINT_READ');
   assert.equal(op('what are my overdue maintenance tasks'), resolveAskOperation('what are my overdue maintenance tasks').operationId); // tasks keep their own status route
