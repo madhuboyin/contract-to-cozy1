@@ -197,7 +197,8 @@ function mergeFacetResults(results: AskOperationResult[]): AskOperationResult {
   const seen = new Set<string>(); const uniqueSources = sources.filter((x) => { const k = JSON.stringify(x); if (seen.has(k)) return false; seen.add(k); return true; });
   const allAnswered = results.every((r) => r.status === 'ANSWERED');
   return {
-    status: allAnswered ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: results.find((r) => r.reasonCode)?.reasonCode, parameters: { sources: uniqueSources },
+    status: allAnswered ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: results.find((r) => r.reasonCode)?.reasonCode,
+    parameters: { dataPointRead: { pointIds: [...new Set(results.flatMap((r) => ((r.parameters as { dataPointRead?: { pointIds?: string[] } } | undefined)?.dataPointRead?.pointIds ?? [])))] }, sources: uniqueSources },
     blocks: [
       { type: 'SUMMARY', id: 'data-point-summary', title: summaries.map((x) => x?.title ?? '').filter(Boolean).join(' · '), body: summaries.map((x) => x?.body ?? '').filter(Boolean).join(' '), tone: allAnswered ? 'DEFAULT' : 'CAUTION', actions: [] },
       { type: 'EVIDENCE', id: 'data-point-evidence', title: 'Where this comes from', items: evidence },
@@ -252,7 +253,8 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
   sentences.push(...limits);
   return {
     status: missing > 0 || limits.length ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: missing > 0 ? 'DATA_POINT_PARTIAL' : limits.length ? 'DATA_POINT_LIMITED_PROVENANCE' : undefined,
-    parameters: { sources: present.map((r) => ({ ...sourceRef((r.sourceType ?? readPoint.entity) as CompositeSourceType, r.id), ...(readPoint.audience !== 'VIEWER' ? { minRole: readPoint.audience } : {}) })) },
+    // `dataPointRead` names the reviewed data point(s) whose VALUE this answer states, so the delivery gate can check the answer against the question without a text-similarity guess.
+    parameters: { dataPointRead: { pointIds: [readPoint.id] }, sources: present.map((r) => ({ ...sourceRef((r.sourceType ?? readPoint.entity) as CompositeSourceType, r.id), ...(readPoint.audience !== 'VIEWER' ? { minRole: readPoint.audience } : {}) })) },
     blocks: [
       { type: 'SUMMARY', id: 'data-point-summary', title: `${readPoint.label}: ${present.map((r) => formatDataPointValue(readPoint, r.value)).join('; ')}`, body: sentences.join(' '), tone: missing > 0 || limits.length ? 'CAUTION' : 'DEFAULT', actions: [] },
       { type: 'EVIDENCE', id: 'data-point-evidence', title: 'Where this comes from', items: present.map((r) => ({ label: r.name, source: `${where.record}${r.roomName ? ` (${r.roomName})` : ''}`, observedAt: null })) },

@@ -758,9 +758,12 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     // competing-operation score must not turn the clicked control into a
     // "which request did you mean?" clarification. Deterministic checks still run.
     const declaredOperationRan = Boolean(declaredItemActionOperationId) && operation.operationId === declaredItemActionOperationId;
+    // FR-GATE-3(a): a capability card the homeowner chose names its operation (the card maps to exactly one), so that operation was confirmed by the homeowner, not inferred from text. Without this a card-launched answer
+    // would face the relevance check as if routing had guessed it.
+    const operationChosenByCard = Boolean(launchCapabilityOperationId) && forcedOperationId === launchCapabilityOperationId && operation.operationId === launchCapabilityOperationId;
     const validation = routingDecision.requiresClarification
       ? null
-      : validateAskAnswerTrustPipeline({ question: routingMessage, operationId: operation.operationId, result: presentedResult, propertyId: executionPropertyId, semanticEnabled: controls.semanticResponseValidatorEnabled && !declaredOperationRan, language: routingDecision.language, routedDeterministically: routingDecision.stage === 'DETERMINISTIC', entityResolution: routingDecision.entityResolution, segmentationCertified, routingAlternatives: routingDecision.stage === 'LOCAL_CLASSIFIER' ? routingDecision.candidates.map((candidate) => ({ operationId: candidate.operationId, confidence: candidate.confidence })) : undefined });
+      : validateAskAnswerTrustPipeline({ question: routingMessage, operationId: operation.operationId, result: presentedResult, propertyId: executionPropertyId, semanticEnabled: controls.semanticResponseValidatorEnabled && !declaredOperationRan, language: routingDecision.language, routedDeterministically: routingDecision.stage === 'DETERMINISTIC', operationConfirmedByUser: operationChosenByCard, provisionalRead: routingDecision.stage === 'PROVISIONAL' && operation.operationId === routingDecision.operation.operationId, entityResolution: routingDecision.entityResolution, segmentationCertified, routingAlternatives: routingDecision.stage === 'LOCAL_CLASSIFIER' ? routingDecision.candidates.map((candidate) => ({ operationId: candidate.operationId, confidence: candidate.confidence })) : undefined });
     let result = validation?.result ?? presentedResult;
     // The generic fallback found nothing (or could not match its answer to the question): offer the local router's best candidates instead of a dead end.
     if (isAskUnansweredFallbackResult(operation.operationId, result)) {

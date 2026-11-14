@@ -35,3 +35,15 @@ test('the validator: a canonical answer passes for a clean single question, and 
   const untrusted = run({ entityResolution: resolved });
   assert.ok(!untrusted.reasonCodes.includes('CANONICAL_TYPED_ANSWER_CONTRACT_MATCH')); assert.ok(untrusted.reasonCodes.includes('CANONICAL_BYPASS_WITHHELD_ROUTE_NOT_TRUSTED'));
 });
+
+test('route trust (FR-GATE-3 a): a typed answer to an operation nobody confirmed keeps the relevance check; one the homeowner confirmed, or chose by a capability card, passes on its canonical shape', () => {
+  const fs = require('node:fs'); const path = require('node:path');
+  const result = { status: 'ANSWERED', reasonCode: 'HOME_BASICS_READY', blocks: [{ type: 'SUMMARY', id: 'home-basics-guide', title: 'A short monthly routine', body: 'Check smoke alarms, filters and under-sink pipes.', tone: 'DEFAULT', actions: [] }], suggestions: [] };
+  const typed = validateAskSemanticAnswerRelevance({ question: 'what should I check around my home each month', operationId: 'HOME_BASICS_GUIDE', result });
+  assert.ok(typed.reasonCodes.includes('CANONICAL_BYPASS_WITHHELD_ROUTE_NOT_TRUSTED'), JSON.stringify(typed.reasonCodes));
+  const confirmed = validateAskSemanticAnswerRelevance({ question: 'what should I check around my home each month', operationId: 'HOME_BASICS_GUIDE', result, operationConfirmedByUser: true });
+  assert.equal(confirmed.outcome, 'PASS'); assert.deepEqual(confirmed.reasonCodes, ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH']);
+  const src = fs.readFileSync(path.join(__dirname, '../../src/services/ask/execution/createAskExecution.ts'), 'utf8');
+  assert.match(src, /const operationChosenByCard = Boolean\(launchCapabilityOperationId\) && forcedOperationId === launchCapabilityOperationId && operation\.operationId === launchCapabilityOperationId;/);
+  assert.match(src, /operationConfirmedByUser: operationChosenByCard/);
+});

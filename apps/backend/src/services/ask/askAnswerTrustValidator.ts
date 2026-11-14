@@ -364,6 +364,8 @@ export function validateAskAnswerTrustPipeline(input: {
   /** FR-GATE-3: the routing decision's entity state and whether decomposition certified the full-message segmentation; both limit when a canonical answer may skip the relevance check. */
   entityResolution?: AskEntityResolutionResult | null;
   segmentationCertified?: boolean;
+  /** An uncertified deterministic rule started this harmless read: it must pass the grounded read check and gets no canonical bypass. */
+  provisionalRead?: boolean;
 }): { result: AskOperationResult; trust: AskAnswerTrustResult; semantic: AskSemanticAnswerRelevanceResult | null; repaired: boolean } {
   const deterministic = validateAskAnswerTrust(input);
   if (!input.semanticEnabled || (input.routedDeterministically && isAskHonestLimitationResult(deterministic.result))) return { ...deterministic, semantic: null };
@@ -376,6 +378,7 @@ export function validateAskAnswerTrustPipeline(input: {
     routedDeterministically: input.routedDeterministically,
     entityResolution: input.entityResolution,
     segmentationCertified: input.segmentationCertified,
+    provisionalRead: input.provisionalRead,
   });
   const semanticFailed = semantic.outcome === 'FAIL' || semantic.outcome === 'UNKNOWN';
   const trust: AskAnswerTrustResult = {

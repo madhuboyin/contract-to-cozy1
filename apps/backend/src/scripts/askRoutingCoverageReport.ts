@@ -83,7 +83,7 @@ const MECHANISM = 'Local classifier = feature hashing (384 dimensions, FNV-1a) o
 function classify(fixture: AskRoutingCertificationFixture, corpus: FixtureOutcome['corpus']): FixtureOutcome {
   const language = ASK_DEFAULT_LANGUAGE;
   const decision = resolveAskRoutingCascade(fixture.message, { language, embeddingRetrievalEnabled: true });
-  const resolvedStage = decision.stage === 'DETERMINISTIC' || decision.stage === 'LOCAL_CLASSIFIER';
+  const resolvedStage = decision.stage === 'DETERMINISTIC' || decision.stage === 'PROVISIONAL' || decision.stage === 'LOCAL_CLASSIFIER';
   const selected = resolvedStage && !decision.requiresClarification ? decision.operation.operationId : null;
   const selectedCandidate = selected ? decision.candidates.find((candidate) => candidate.operationId === selected) : undefined;
 
@@ -105,7 +105,7 @@ function classify(fixture: AskRoutingCertificationFixture, corpus: FixtureOutcom
     if (outcome === 'CORRECT') band = 'FALLBACK_BY_DESIGN';
   } else {
     outcome = selected === fixture.operationId ? 'CORRECT' : 'FALSE_ROUTE';
-    band = decision.stage === 'DETERMINISTIC' ? 'DIRECT_PATTERN' : (selectedCandidate?.confidenceBand ?? 'NONE') as SelectedBand;
+    band = decision.stage === 'DETERMINISTIC' || decision.stage === 'PROVISIONAL' ? 'DIRECT_PATTERN' : (selectedCandidate?.confidenceBand ?? 'NONE') as SelectedBand;
   }
 
   let clarificationReason: ClarificationReason | null = null;

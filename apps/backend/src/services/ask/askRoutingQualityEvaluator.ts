@@ -81,7 +81,7 @@ export function evaluateAskRoutingQuality(
       selected,
       confidence: decision.operation.confidence,
       highConfidence: decision.candidates.find((candidate) => candidate.operationId === decision.operation.operationId)?.confidenceBand === 'HIGH'
-        || (decision.stage === 'DETERMINISTIC' && decision.operation.confidence >= 0.9),
+        || ((decision.stage === 'DETERMINISTIC' || decision.stage === 'PROVISIONAL') && decision.operation.confidence >= 0.9),
       clarification: decision.requiresClarification,
     };
   });

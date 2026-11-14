@@ -13,7 +13,7 @@ import { classifyAskCandidates, normalizeAskMessage, retrieveAskOperationCandida
 import { ASK_DEFAULT_LANGUAGE, requireCertifiedAskLanguage, type AskLanguageCode } from './askLanguageRegistry';
 import type { AskConfidenceBand } from './askTrust.contract';
 import { resolveAskEntityState, type AskEntityResolutionResult } from './askEntityResolution';
-import { fastPathRuleForResolution, isFastPathCertified } from './fastPath/fastPathCertificates';
+import { fastPathRuleForResolution, isFastPathCertified, isProvisionalReadOperation, ruleLineageOfResolution } from './fastPath/fastPathCertificates';
 
 // "Which upgrades are worth doing" says nothing about what they are for. Worth depends on the goal, so the homeowner picks one rather than Ask guessing.
 const UPGRADE_OBJECTIVE_PATTERN = /\b(?:which|what)\b.{0,12}\b(?:upgrades?|improvements?|renovations?|projects?)\b.{0,30}\b(?:worth (?:doing|it|making)|best to (?:do|make))\b|\b(?:upgrades?|improvements?|renovations?)\b.{0,12}\bworth (?:doing|it|making)\b/i;
@@ -25,7 +25,8 @@ const HOME_VALUE_GROWTH_PATTERN = /\b(?:increase|raise|boost|grow|improve|add to
 // record has nothing on it.
 const SMALL_TALK_PATTERN = /^\s*(?:hi|hello|hey|good (?:morning|afternoon|evening|night)|thanks?|thank you(?: so much| very much)?|ok(?:ay)?|cool|great|how are you(?: doing)?(?: today)?|how'?s it going|how is my day(?: going| been| so far)?|how'?s my day(?: going| been| so far)?|how is your day(?: going)?|what'?s up|tell me a joke)\b[\s\S]{0,20}$/i;
 
-export type AskRoutingStage = 'SAFETY' | 'DETERMINISTIC' | 'LOCAL_CLASSIFIER' | 'MODEL_CLASSIFIER' | 'CLARIFICATION' | 'REMOTE_FALLBACK';
+/** PROVISIONAL: an uncertified deterministic rule matched a harmless read. The read may run, but its result must pass the full delivery gate and never gets the canonical bypass (FR-FAST, FR-GATE). */
+export type AskRoutingStage = 'SAFETY' | 'DETERMINISTIC' | 'PROVISIONAL' | 'LOCAL_CLASSIFIER' | 'MODEL_CLASSIFIER' | 'CLARIFICATION' | 'REMOTE_FALLBACK';
 
 export interface AskRoutingCandidate {
   operationId: AskOperationId;
@@ -90,6 +91,18 @@ export function resolveAskRoutingCascade(rawMessage: string, options: {
     if (rule && isFastPathCertified(rule.id)) {
       return { language, operation: direct, stage: 'DETERMINISTIC', candidates: [{ operationId: direct.operationId, language, confidence: direct.confidence, confidenceBand: 'HIGH', reasonCodes: ['FAST_PATH_CERTIFIED'] }], requiresClarification: false, entityResolution: resolveAskEntityState({ message, operationId: direct.operationId, propertyId: options.propertyId, launchEntityId: options.launchEntityId, requiresProperty: direct.requiresProperty }), fastPathLineage: { ruleId: rule.id, version: rule.version, status: 'CERTIFIED' } };
     }
+  }
+  // Provisional read execution: the rule is not certified, so it may not CLAIM the turn, but a harmless read it matched may be tried and then judged by the delivery gate. A rule that selects a write, a decision or anything else
+  // keeps the demoted behaviour below.
+  if (direct.operationId !== 'GROUNDED_GUIDANCE' && isProvisionalReadOperation(direct.operationId) && (!options.eligibleOperationIds || [...options.eligibleOperationIds].includes(direct.operationId))) {
+    const lineage = ruleLineageOfResolution(direct);
+    return {
+      language, operation: direct, stage: 'PROVISIONAL',
+      candidates: [{ operationId: direct.operationId, language, confidence: direct.confidence, confidenceBand: 'MEDIUM', reasonCodes: ['FAST_PATH_PROVISIONAL_READ'], retrievalPath: 'DETERMINISTIC_CANDIDATE' }],
+      requiresClarification: false,
+      entityResolution: resolveAskEntityState({ message, operationId: direct.operationId, propertyId: options.propertyId, launchEntityId: options.launchEntityId, requiresProperty: direct.requiresProperty }),
+      fastPathLineage: lineage,
+    };
   }
   if (options.localRoutingEnabled === false) {
     const fallback = resolution('GROUNDED_GUIDANCE', ASK_OPERATION_DEFINITIONS.GROUNDED_GUIDANCE.confidence);

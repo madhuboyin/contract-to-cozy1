@@ -1,0 +1,257 @@
+[
+ {
+  "question": "How much did I pay for my furnace?",
+  "accept": [
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "What is the serial number of my fridge?",
+  "accept": [
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "When was my furnace installed?",
+  "accept": [
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "When was my water heater last serviced?",
+  "accept": [
+   "DATA_POINT_READ",
+   "INVENTORY_LOOKUP"
+  ]
+ },
+ {
+  "question": "What condition is my dishwasher in?",
+  "accept": [
+   "DATA_POINT_READ",
+   "INVENTORY_LOOKUP"
+  ]
+ },
+ {
+  "question": "What year was my house built?",
+  "accept": [
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "How many bedrooms does my house have?",
+  "accept": [
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "What is the square footage of my home?",
+  "accept": [
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "What kind of heating system do I have?",
+  "accept": [
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "What is my roof type?",
+  "accept": [
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "What is my zip code?",
+  "accept": [
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "What is my insurance deductible?",
+  "accept": [
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "Who is my insurance carrier?",
+  "accept": [
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "When does my insurance policy expire?",
+  "accept": [
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "What is my homeowners premium?",
+  "accept": [
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "When does my roof warranty expire?",
+  "accept": [
+   "DATA_POINT_READ",
+   "WARRANTY_LOOKUP"
+  ]
+ },
+ {
+  "question": "How much did I pay for my dishwasher warranty?",
+  "accept": [
+   "DATA_POINT_READ",
+   "WARRANTY_LOOKUP"
+  ]
+ },
+ {
+  "question": "What is my property tax bill?",
+  "accept": [
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "What is my assessed value?",
+  "accept": [
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "What is my reserve balance?",
+  "accept": [
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "How much am I short on my reserve?",
+  "accept": [
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "When is my gutter cleaning due?",
+  "accept": [
+   "DATA_POINT_READ",
+   "MAINTENANCE_STATUS"
+  ]
+ },
+ {
+  "question": "What is my target close date?",
+  "accept": [
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "What is my claim status?",
+  "accept": [
+   "DATA_POINT_READ",
+   "INCIDENT_CLAIM_STATUS"
+  ]
+ },
+ {
+  "question": "Which appliances have no serial number recorded?",
+  "accept": [
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "Which appliances have no warranty?",
+  "accept": [
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "How has my property tax changed over the years?",
+  "accept": [
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "How many maintenance tasks are overdue?",
+  "accept": [
+   "DATA_POINT_READ",
+   "MAINTENANCE_STATUS"
+  ]
+ },
+ {
+  "question": "What is the total replacement cost of everything in my home?",
+  "accept": [
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "What should I check around my home each month?",
+  "accept": [
+   "HOME_BASICS_GUIDE"
+  ]
+ },
+ {
+  "question": "Show my maintenance tasks",
+  "accept": [
+   "MAINTENANCE_STATUS"
+  ]
+ },
+ {
+  "question": "What maintenance is overdue?",
+  "accept": [
+   "MAINTENANCE_STATUS"
+  ]
+ },
+ {
+  "question": "Show my warranties",
+  "accept": [
+   "WARRANTY_LOOKUP"
+  ]
+ },
+ {
+  "question": "Which warranties expire this year?",
+  "accept": [
+   "WARRANTY_LOOKUP",
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "What appliances do I have?",
+  "accept": [
+   "INVENTORY_LOOKUP",
+   "DATA_POINT_READ"
+  ]
+ },
+ {
+  "question": "Tell me about my home",
+  "accept": [
+   "PROPERTY_SUMMARY"
+  ]
+ },
+ {
+  "question": "Show my status board",
+  "accept": [
+   "HOME_STATUS_BOARD"
+  ]
+ },
+ {
+  "question": "What coverage gaps does my home have?",
+  "accept": [
+   "COVERAGE_GAPS"
+  ]
+ },
+ {
+  "question": "What are my home actions?",
+  "accept": [
+   "HOME_ACTIONS"
+  ]
+ },
+ {
+  "question": "How is my home record doing?",
+  "accept": [
+   "PROPERTY_SUMMARY"
+  ]
+ },
+ {
+  "question": "Show my saved results",
+  "accept": [
+   "SAVED_RESULTS"
+  ]
+ }
+]

@@ -1,5 +1,6 @@
 import { canonicalBypassAllowed, matchesCanonicalAnswerBlocks } from './support/canonicalAnswerBlocks';
 import { canonicalBypassDecision } from './support/answerGateBypass';
+import { groundedReadVerdict } from './support/provisionalRead';
 import type { AskEntityResolutionResult } from './askEntityResolution';
 import { isAskHonestNoAnswerResult } from './askRemoteFallbackTypedClaims';
 import { getAskOperationDefinition, type AskOperationId, type AskOperationResult } from './askOperationRegistry';
@@ -83,6 +84,8 @@ export function validateAskSemanticAnswerRelevance(input: {
   entityResolution?: AskEntityResolutionResult | null;
   /** FR-GATE-3 c1: deterministic decomposition positively certified the full-message segmentation, so a compound message may keep the canonical bypass. */
   segmentationCertified?: boolean;
+  /** True when an UNCERTIFIED deterministic rule started this harmless read (FR-FAST): the result must pass the grounded check and gets no canonical bypass (FR-GATE). */
+  provisionalRead?: boolean;
 }): AskSemanticAnswerRelevanceResult {
   const startedAt = process.hrtime.bigint();
   const language = input.language ?? ASK_DEFAULT_LANGUAGE;
@@ -130,6 +133,15 @@ export function validateAskSemanticAnswerRelevance(input: {
   }
   // FR-GATE-3: a canonical answer (typed contract, authored guide, canonical blocks) may skip the relevance check only when the entity and every slot were resolved and the message is not an unsegmented compound
   // or conditional one. Otherwise the ordinary relevance check below decides, and the reason the bypass was withheld is recorded on the result.
+  // A provisional read (an uncertified rule started this harmless read) earns delivery on grounded evidence: what the answer says it read must be what the question asked for. There is no canonical bypass here.
+  if (input.provisionalRead && input.operationId === 'DATA_POINT_READ') {
+    const verdict = groundedReadVerdict(input.question, input.result);
+    return finish({
+      outcome: verdict.outcome, selectedOperationId: input.operationId, competingOperationId: null,
+      selectedOperationScore: verdict.outcome === 'PASS' ? 1 : 0, competingOperationScore: 0, questionAnswerScore: verdict.outcome === 'PASS' ? 1 : 0,
+      reasonCodes: [...verdict.reasonCodes],
+    });
+  }
   const bypass = canonicalBypassDecision({ question: input.question, entityResolution: input.entityResolution, segmentationCertified: input.segmentationCertified });
   const canonicalShapeMatch = Boolean(TYPED_ANSWER_CONTRACTS[input.operationId]?.({ question: input.question, result: input.result }))
     || Boolean(AUTHORED_GUIDE_RESULT_CODES[input.operationId]?.includes(input.result.reasonCode ?? ''))

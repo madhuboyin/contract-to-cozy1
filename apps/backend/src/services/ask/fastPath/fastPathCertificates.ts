@@ -1,4 +1,5 @@
 import { ASK_OPERATION_DEFINITIONS, ruleIdOfResolution, type AskOperationId } from '../askOperationRegistry';
+import { isWriteCapableOperation } from '../support/writeCapability';
 import { FAST_PATH_RULE_MANIFEST } from './ruleManifest.generated';
 import { FAST_PATH_ADJACENCY } from './adjacencyManifest.generated';
 
@@ -40,6 +41,22 @@ export const FAST_PATH_RULES: readonly FastPathRule[] = Object.freeze(FAST_PATH_
 export const fastPathPoolOf = (operationId: string): readonly string[] => FAST_PATH_RULES.filter((rule) => rule.operationId === operationId).map((rule) => rule.id).sort();
 /** The operation-owned adjacency (FR-FAST-9): the operations that resolve this operation's own hard negatives. */
 export const fastPathAdjacentOperations = (operationId: string): readonly string[] => Object.keys(FAST_PATH_ADJACENCY[operationId] ?? {}).sort();
+
+/**
+ * FR-FAST (provisional execution): an UNCERTIFIED deterministic rule may not make a final claim, but it may START the execution of an operation that is a harmless read: it cannot write, decide, start a workflow, or reach
+ * the homeowner through anything but its own read. Starting is not trusting: the result still has to pass the complete delivery gate (entity and slots, authorization, source lineage, clause coverage and a grounded
+ * relevance check) and never receives the canonical-answer bypass. An operation is added here only when it has such a grounded delivery check. Slice 1: the reviewed data-point reads.
+ */
+export const PROVISIONAL_READ_OPERATIONS: ReadonlySet<AskOperationId> = new Set<AskOperationId>(['DATA_POINT_READ']);
+export function isProvisionalReadOperation(operationId: AskOperationId): boolean {
+  const definition = ASK_OPERATION_DEFINITIONS[operationId];
+  return PROVISIONAL_READ_OPERATIONS.has(operationId) && Boolean(definition) && definition.semantic.effect === 'READ' && !definition.safetyClass.endsWith('_BOUNDARY') && !isWriteCapableOperation(operationId);
+}
+/** The rule that matched a resolution, from the generated manifest (a rule need not be a certifiable fast-path rule to be named in lineage). */
+export function ruleLineageOfResolution(resolution: object): { ruleId: string; version: string; status: 'DEMOTED' } | null {
+  const id = ruleIdOfResolution(resolution); const entry = id ? FAST_PATH_RULE_MANIFEST.find((rule) => rule.id === id) : undefined;
+  return entry ? { ruleId: entry.id, version: entry.hash, status: 'DEMOTED' } : null;
+}
 
 export const MAX_INCORRECT_HIGH_CONFIDENCE_RATE = 0.01;
 export const MIN_SEALED_FAMILIES_FOR_CLAIM = 381;
