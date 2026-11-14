@@ -1,6 +1,6 @@
 # Ask Cozy — Cross-Domain Semantic Request Architecture FRD
 
-**Status:** Draft v1.4 for owner review
+**Status:** Draft v1.5 for owner review
 
 **Date:** 2026-11-14
 
@@ -19,6 +19,8 @@
 **v1.3 amendment:** Defines bounded and intersected relation authorization, replay-time reauthorization, indexed protected-span mapping, deterministic/provider invocation and reconciliation, the query-versus-presentation boundary, canonical duplicate-field semantics, Boolean query logic, and complete six-facet retrieval under bounded provider budgets. It also corrects stale baseline and delivery statements that implied the public child-execution contract still capped composition below six.
 
 **v1.4 amendment:** Makes Phase 1 structural admission implementable without weakening evidence independence; specifies the deterministic parser pipeline; converts post-slice rollout into end-to-end domain waves with per-domain enablement; requires facet-aware stage-one segmentation or union target retrieval; defines projection behavior for conflicted records; and requires batched or safely version-gated replay reauthorization.
+
+**v1.5 amendment:** Replaces the temporary per-family structural verifier with the first shared-lexicon typed-grammar subset in Phase 1; moves provider integration to an optional early parallel track after the vertical slice; defines exclusive facet ownership during mixed new/legacy migration; adds offline model-assisted lexicon enrichment governance; and separates correctness for a declared domain scope from measured homeowner-language coverage.
 
 ---
 
@@ -406,6 +408,10 @@ Registry construction shall derive, where mechanically knowable, stable model an
 
 The shared semantic lexicon shall be generated from these approved registries and overrides. No producer or handler may maintain a competing general-purpose synonym list. Narrow aliases may exist only as registry-owned overrides with lineage and collision tests.
 
+Lexicon breadth shall be maintained through a governed offline enrichment pipeline. Candidate aliases, abbreviations, inflections, projection phrases and adjacent negatives may be collected from sealed-suite misses, unsupported-demand telemetry, domain terminology, approved synthetic paraphrases, or proposals from an offline model. Model-proposed vocabulary shall never ship directly or create a runtime dependency. Candidates shall be classified by semantic role, normalized, deduplicated, checked for cross-domain/job/entity/relation collisions, reviewed in auditable batches, approved by a named human owner, versioned, and accompanied by positive and adjacent-negative fixtures before lexicon generation. The record shall retain proposal source, reviewer, decision, semantic identity and retirement history.
+
+Broad context-dependent words shall not receive unrestricted global mappings merely to increase recall. For example, an abbreviation such as `w/o` is a negation annotation, “details of” is a projection phrase, “equipment” may be an entity/category alias, and “things” requires contextual resolution. The same generated artifact shall remain the only general homeowner vocabulary consumed at runtime.
+
 Schema or catalogue changes that make a generated registry or lexicon stale shall fail conformance until regenerated and reviewed.
 
 ### FR-ONT-7 — Duplicate-definition governance
@@ -589,11 +595,9 @@ Admission shall converge incrementally by capability family. A deterministic can
 
 The repository shall not place every operation labelled `READ` on a provisional allowlist. Source-scan-only answer contracts do not satisfy this requirement.
 
-For this requirement, two signals are independent only when their evidence origins and likely failure modes differ materially. Acceptable combinations include a deterministic typed-grammar plan and a structured provider plan; a semantic plan and separately resolved property entity/slot applicability; an exact registered command grammar and current workflow-state validation; or an explicit homeowner clarification selection and the original candidate generator. The execution receipt is independent evidence about result entailment, not independent evidence that the original intent was selected correctly.
+For this requirement, two signals are independent only when their evidence-generation algorithms and likely failure modes differ materially. They may consume the same approved shared lexicon and canonical registry identities; vocabulary governance and evidence independence are separate concerns. A legacy sentence recognizer and a compositional typed grammar can therefore be independent when the grammar constructs and validates the complete semantic plan without consuming the recognizer's selected operation, captures or score. Acceptable combinations also include a deterministic typed-grammar plan and a structured provider plan; a semantic plan and separately resolved property entity/slot applicability; an exact registered command grammar and current workflow-state validation; or an explicit homeowner clarification selection and the original candidate generator. The execution receipt is independent evidence about result entailment, not independent evidence that the original intent was selected correctly.
 
-Before the general typed grammar is available, a Phase 1 read family may use an **Independent Structural Intent Verifier** as its second signal. That verifier shall re-derive, from the raw question, the semantic job or relation, subject, polarity, projection, material filters and required slots; compare them with the proposed target and eventual receipt; and expose distinct evidence lineage in telemetry. It shall be implemented separately from the candidate-producing rule and shall not consume that rule's selected operation, captures or score. Sharing a generated canonical registry identity is permitted; sharing operation-specific aliases, sentence patterns or the same untyped classifier is not. The verifier may gate delivery after a harmless authorised read, but the receipt remains result-entailment evidence and does not itself establish intent.
-
-Existing provisional-read families are not grandfathered. Each shall pass the verifier contract with adjacent-negative and cross-family fixtures, migrate to the typed grammar, obtain a valid deterministic certificate, or remain demoted.
+Existing provisional-read families are not grandfathered. Each shall obtain agreement from the Phase 1 typed-grammar subset, migrate fully to the typed grammar, obtain a valid deterministic certificate, or remain demoted.
 
 The following do not count as independent: two scores derived from the same alias/example table; a regex and feature-hash classifier built from the same vocabulary; two outputs of one provider call; a route and answer generated by the same handler; or candidate selection and validation using the same untyped similarity function. Every admitted capability family shall declare the allowed evidence combination and its lineage in telemetry.
 
@@ -681,6 +685,19 @@ Provider outage, privacy disallowance, timeout or budget exhaustion shall not di
 After raw-message safety evaluation and context authorization, the deterministic parser shall run synchronously first. When it produces a complete validated plan covering every meaningful source span and admission policy permits execution, the runtime may skip the provider. When any span is unresolved, ambiguous, outside declared deterministic coverage, or requires broader multi-facet recall, the provider shall receive the complete approved minimised context plus explicit unresolved-span markers; it shall not receive only a fragment that removes dependency context.
 
 Producer outputs shall reconcile by stable raw source span and semantic identity, not by array position or score alone. Equivalent facets merge with lineage from both producers. Non-equivalent claims over the same span are a material disagreement and shall be resolved through independently calibrated evidence or a focused clarification. Stable facet ids shall be allocated before target retrieval so dependencies survive batching and cross-domain merging. Offline evaluation shall run both producers on all eligible sealed scenarios even when production short-circuiting would skip the provider, so incremental coverage and disagreements remain measurable.
+
+### FR-UND-8 — Mixed-stack migration ownership
+
+During domain waves, raw safety boundaries and the new semantic parser shall inspect the complete message first. Every meaningful source span shall have exactly one execution owner:
+
+1. a validated facet within an `ENABLED_FOR_DECLARED_SCOPE` family uses the new query/capability architecture;
+2. a facet in a `PARTIAL` domain uses the new architecture only when its semantic family is explicitly enabled;
+3. an unowned remainder may be offered to a legacy recognizer only when the migration manifest assigns that recognizer exclusive ownership of the span and family;
+4. legacy output shall adapt into the canonical plan, authorization, receipt and answer-verification contracts before composition;
+5. the new and legacy stacks shall never execute the same span; and
+6. unsupported, unresolved, unavailable and non-enabled facets shall be reported explicitly and never dropped.
+
+A dependency between new-stack and legacy-stack facets may execute only when both sides have stable semantic identities, compatible typed receipts and validated authorization. Otherwise the dependent facet shall clarify or remain withheld. Telemetry shall record the owner and migration status of every facet.
 
 ---
 
@@ -848,8 +865,10 @@ The system shall report separately:
 26. replay-time reauthorization/redaction accuracy;
 27. six-facet retrieval completeness, overflow disclosure and cross-domain dependency accuracy;
 28. conflicted-population projection accuracy;
-29. Independent Structural Intent Verifier agreement, false-admission and lineage results; and
-30. replay authorization query counts by page/session size.
+29. legacy-recognizer versus typed-grammar agreement, false-admission and lineage results;
+30. replay authorization query counts by page/session size;
+31. per-domain deterministic resolved rate, provider-incremental resolved rate and combined resolved rate; and
+32. per-domain `IN_DOMAIN_NOT_UNDERSTOOD`, unsupported and false-decline rates.
 
 ### FR-EVAL-4 — Product gates
 
@@ -877,6 +896,8 @@ Before claiming the architecture meets the product objective, the sealed suite s
 | Dead-end or unrelated fallback | ≤ 1% |
 
 No result may be described as “90% of real homeowner prompts” until a representative adjudicated real-traffic distribution exists. Offline results shall be labelled sealed-proxy results.
+
+Correctness and language coverage shall be reported separately. Passing exact-result, authorization and incorrect-high-confidence gates proves correctness only for admitted semantic families; it does not establish broad paraphrase coverage. Every domain report shall state its independently authored answerable scenario count, deterministic resolved rate, provider-incremental resolved rate, combined resolved rate, `IN_DOMAIN_NOT_UNDERSTOOD` rate, unsupported rate, false-decline rate and confidence intervals.
 
 ### FR-EVAL-5 — Metamorphic invariants
 
@@ -960,16 +981,17 @@ Implementation shall be incremental by architectural seam, not by adding prompt 
 - Separate warranty, insurance, policy, coverage, and claim semantic tokens.
 - Remove any answer-gate bypass based only on source-scan contracts.
 - Introduce the standardized minimal read receipt and structural grounded-validator interface.
-- Migrate the Phase 1 basic-read set to that interface and add an Independent Structural Intent Verifier so a validated deterministic candidate can execute without sentence-rule certification. The set shall be selected reproducibly: include the known warranty/inventory, maintenance, item-cost and saved-result false-decline families plus at least one already-supported safe `DETAIL`, `LIST`, `COUNT`, `EXISTS` or missing-relation family from each §5 domain group where the required canonical read exists. Prioritization shall use seeded answerability, cross-domain reuse and measured diagnostic false declines—not presumed user popularity. The selected and deferred families, with reasons, shall be recorded in the Phase 1 evidence artifact.
+- Build the first shared-lexicon typed-grammar subset for the Phase 1 basic-read set, using the token-annotation and slot-assembly design in FR-PLAN-7. The set shall be selected reproducibly: include the known warranty/inventory, maintenance, item-cost and saved-result false-decline families plus at least one already-supported safe `DETAIL`, `LIST`, `COUNT`, `EXISTS` or missing-relation family from each §5 domain group where the required canonical read exists. Prioritization shall use seeded answerability, cross-domain reuse and measured diagnostic false declines—not presumed user popularity. The selected and deferred families, with reasons, shall be recorded in the Phase 1 evidence artifact.
+- Migrate those reads to the receipt interface. Until the typed grammar becomes the sole producer for a family, a legacy candidate may execute only when the independently constructed grammar plan agrees on semantic job/relation, subject, polarity, projection, material filters and required slots.
 - Require semantic job, target entity, parameters and required slots to validate before any uncertified command candidate opens a preview.
 - Humanize registered enums and internal codes at the shared rendering boundary, and remove retry actions from deterministic contract or entailment failures.
 
-**Exit:** known contradictory and unrelated-answer paths are closed; every selected Phase 1 family uses an independently evidenced structural admission path or remains demoted; no existing provisional family is grandfathered; no blanket read or write allowlist exists.
+**Exit:** known contradictory and unrelated-answer paths are closed; the selected Phase 1 families produce complete typed-grammar plans from the single shared lexicon and use structural receipts, or remain demoted; no existing provisional family is grandfathered; no throwaway verifier vocabulary or blanket read/write allowlist exists.
 
 ### Phase 2A — Thin end-to-end semantic slice
 
 - Implement the minimum Entity, Field, Relation and Capability registry subset for inventory, warranty and maintenance.
-- Generate the corresponding lexicon subset and typed grammar from reviewed registry metadata.
+- Extend the Phase 1 lexicon and typed grammar to the complete inventory, warranty and maintenance slice.
 - Extend the understanding contract with `QUERY`, `CAPABILITY` and `COMMAND` facets; preserve raw/normalized/minimized text; implement indexed typed placeholders and the raw/protected/minimised span map.
 - Run one complete path through deterministic semantic-job/query selection, property-backed entity resolution, plan validation, query or capability adapter, typed receipt, structural answer verification, homeowner rendering and semantic follow-up.
 - The slice shall include: inventory fact/detail/count; positive, negative, unknown and conflicted warranty states; maintenance due-date and item relations; Boolean `AND`/`OR`/`NOT`; bounded relation traversal; one analysis such as replacement guidance; one confirmed command preview; one follow-up refinement; and replay after an authorization change.
@@ -977,6 +999,18 @@ Implementation shall be incremental by architectural seam, not by adding prompt 
 - Record abstraction changes discovered by the slice before expanding registry generation to other domains.
 
 **Exit:** all three target kinds execute through the same plan boundary in the slice; exact seeded results, adjacent negatives and the slice metamorphic suite for inflection, negation, coordination, typos and word order pass; provider absence does not break declared deterministic coverage; no slice-specific vocabulary bypasses the registry.
+
+### Phase 2P — Early provider expansion track
+
+After Phase 2A, provider integration shall proceed in parallel with domain waves once provider/homeowner-text approval and latency/cost budgets in §22 are recorded. It is not a prerequisite for deterministic correctness or provider-independent availability.
+
+- Connect the provider through the canonical plan schema, indexed-placeholder minimization boundary and span-mapping validator for the slice domains first.
+- Implement deterministic-first invocation, unresolved-span provider expansion, semantic reconciliation and conforming facet-aware or union two-stage retrieval.
+- Run both producers on every eligible slice scenario, including cases production would short-circuit, and measure deterministic coverage, provider incremental coverage and disagreement.
+- Feed observed long-tail misses and disagreements back into grammar, lexicon, plan and wave design before later domains are enabled.
+- Add each subsequent wave's eligible catalogue to both producers and repeat the same evidence report.
+
+**Exit:** the slice has measured provider-incremental coverage and disagreement outcomes, or the track records the specific unresolved owner decision that prevents provider use without blocking deterministic waves.
 
 ### Phases 2B–5 — End-to-end domain waves
 
@@ -996,21 +1030,20 @@ Each wave shall carry its selected domain group from registration to trusted hom
 
 Shared generators and compiler infrastructure may be improved between waves, but a wave shall incorporate the resulting correction before it is enabled. No domain is considered delivered merely because its registry entries, parser vocabulary, adapter or answer contract exists in isolation.
 
-**Per-domain enablement states:**
+**Per-domain correctness states:**
 
-- `ENABLED` — every included entity, field, relation, semantic job, projection and exclusion is declared; deterministic coverage and unsupported boundaries are measured; exact result, authorization, replay, receipt, answer, presentation and domain risk gates pass; and every legacy recognizer has a governed disposition.
+- `ENABLED_FOR_DECLARED_SCOPE` — every included entity, field, relation, semantic job, projection and exclusion is declared; exact result, authorization, replay, receipt, answer, presentation and domain risk gates pass for those families; and every legacy recognizer has a governed disposition. This state is not a claim of broad homeowner-language coverage.
 - `PARTIAL` — the enabled semantic families and missing dependencies are explicitly listed; unsupported prompts recover honestly and the product does not imply domain-wide coverage.
 - `NOT_ENABLED` — the new architecture shall not claim or advertise semantic coverage for that domain.
 
-A per-domain record shall include registry/lexicon/parser versions, supported query and capability families, excluded data, seeded and metamorphic evidence, false-decline and incorrect-high-confidence results, replay query-count evidence, legacy-recognizer disposition and unresolved P0/P1 items.
+Every record shall separately publish a coverage profile: registry/lexicon/parser versions; supported and excluded semantic families; independently authored answerable scenario count; deterministic resolved rate; provider-incremental and combined resolved rates when available; `IN_DOMAIN_NOT_UNDERSTOOD`, unsupported and false-decline rates; confidence intervals; incorrect-high-confidence results; seeded and metamorphic evidence; replay query-count evidence; legacy-recognizer disposition; and unresolved P0/P1 items. Product copy and progress reporting shall name the correctness state and coverage profile separately.
 
-**Wave exit:** at least one domain reaches `ENABLED`; all other domains retain their prior honest behavior or are explicitly `PARTIAL`/`NOT_ENABLED`; no cross-domain regression is hidden by aggregate metrics. The phases repeat until every approved §5 domain reaches its intended state and the global completion definition can be evaluated.
+**Wave exit:** at least one domain reaches `ENABLED_FOR_DECLARED_SCOPE`; all other domains retain their prior honest behavior or are explicitly `PARTIAL`/`NOT_ENABLED`; no cross-domain regression or low phrasing coverage is hidden by aggregate metrics. The phases repeat until every approved §5 domain reaches its intended state and the global completion definition can be evaluated.
 
-### Phase 6 — Provider, calibration, and end-to-end evaluation
+### Phase 6 — Full calibration and end-to-end evaluation
 
-- Connect the real provider through the canonical plan schema, indexed-placeholder minimization boundary, and span-mapping validator.
-- Implement deterministic-first invocation, unresolved-span provider expansion, semantic reconciliation, and two-stage domain/capability retrieval.
-- Ensure all detected facets receive bounded retrieval or an explicit `DOMAIN_NOT_SEARCHED` overflow result; preserve stable cross-domain dependencies.
+- Complete any provider catalogue expansion not already delivered by Phase 2P and the domain waves.
+- Verify all detected facets receive bounded retrieval or an explicit `DOMAIN_NOT_SEARCHED` overflow result and preserve stable cross-domain dependencies.
 - Calibrate by semantic risk stratum.
 - Execute both producers over the sealed cross-domain suite, including production-short-circuited cases, and publish layer metrics.
 
@@ -1052,11 +1085,14 @@ The implementation is incomplete until the repository contains:
 28. producer invocation/reconciliation and stable-facet-identity contract;
 29. six-facet retrieval, overflow and cross-domain dependency fixtures;
 30. receipt replay reauthorization/redaction harness;
-31. Independent Structural Intent Verifier contract, family manifest and evidence-lineage tests;
+31. Phase 1 typed-grammar subset, family manifest and legacy-versus-grammar agreement tests;
 32. deterministic token-annotation and typed-slot grammar specification;
 33. facet-aware stage-one schema or documented union-stage-two implementation with stable-id fixtures;
-34. domain-wave manifest and per-domain enablement records; and
-35. conflict-projection and replay query-count fixtures.
+34. domain-wave manifest and per-domain enablement records;
+35. conflict-projection and replay query-count fixtures;
+36. offline lexicon-enrichment proposal, review, collision and lineage artifacts;
+37. mixed-stack facet-ownership manifest and transition fixtures; and
+38. per-domain correctness-state and language-coverage reports.
 
 Generated inventories shall be checked into or reproducibly generated by repository scripts. Hand-maintained totals in prose are informative only.
 
@@ -1080,6 +1116,7 @@ The following examples illustrate plan equivalence. They are not a phrase allowl
 | “how much did I spend on repairs last year?” | aggregate actual repair cost over last calendar year in property timezone |
 | “compare this year's tax bill with last year's” | `COMPARE` two registered periods and compute deterministic delta |
 | “what claims are open and what documents are missing?” | two related facets with claim entity dependency and explicit partial-completion behavior |
+| “which appliances are out of warranty and what's my deductible?” during a mixed migration wave | one exclusive owner per facet; the enabled warranty facet uses the new stack, an eligible non-enabled insurance facet uses its manifest-assigned legacy adapter, and any unresolved remainder is labelled rather than dropped |
 | “show open claims, missing claim documents, overdue maintenance, expired warranties, unpaid tax bills, and active projects” | six stable facets; every facet receives bounded retrieval or an explicit overflow state, and cross-domain dependencies use stable facet ids |
 | “tell me about my water heater: age, warranty, replacement cost, and whether to repair or replace” | four preliminary facet spans with stable server ids before fan-out, or one union target-planning call that owns segmentation and dependencies |
 | “show the documents for my water-damage claim” | registered bounded claim-to-document path; claim and document authorization are both enforced, and an invisible document is not counted or disclosed |
@@ -1133,10 +1170,14 @@ For every row, seeded data shall assert the exact plan, records, counts, missing
 27. **Boolean query meaning:** conjunction, disjunction and negation are represented as a typed AST and ambiguous coordination clarifies.
 28. **Complete facet accounting:** provider budgets cannot silently discard any of the six supported facets or their cross-domain dependencies.
 29. **Replay is a new disclosure:** saved receipts and answer history are reauthorized and redacted against current visibility before display.
-30. **No provisional grandfathering:** an existing provisional read must satisfy the independent verifier, typed grammar or certification requirements before it can remain admitted.
+30. **No provisional grandfathering:** an existing provisional read must obtain an agreeing complete typed-grammar plan, migrate fully to the grammar, or satisfy certification requirements before it can remain admitted.
 31. **Domain-wave delivery:** post-slice implementation completes usable domain verticals rather than horizontally finishing one layer for every domain.
 32. **Facet-aware staging:** provider fan-out requires stage-one facet spans; a flat domain stage one requires union target planning.
 33. **Conflict populations:** confirmed, unknown and conflicted records remain separate in every projection.
+34. **One runtime lexicon:** Phase 1 uses the first shared-lexicon typed grammar rather than a temporary verifier vocabulary.
+35. **Early provider learning:** approved provider expansion begins after the slice and informs later waves without becoming a deterministic availability dependency.
+36. **Exclusive transition ownership:** every facet has one new-stack, legacy-stack or unresolved owner during migration.
+37. **Correctness is not coverage:** domain enablement for a declared scope and homeowner-language resolution rates are reported separately.
 
 ---
 
@@ -1165,7 +1206,7 @@ It is complete only when:
 - all required artifacts in §19 exist;
 - the deterministic semantic parser and generated shared lexicon cover their declared low-risk grammar without provider access;
 - every registered domain is represented in the ontology and sealed suite;
-- every approved domain has a current `ENABLED`, `PARTIAL` or `NOT_ENABLED` record, and only `ENABLED` families contribute to supported-coverage claims;
+- every approved domain has a current `ENABLED_FOR_DECLARED_SCOPE`, `PARTIAL` or `NOT_ENABLED` correctness record plus a separate language-coverage profile, and only supported families within the declared scope contribute to correctness claims;
 - every owner-visible included datum has a deterministic authorised read path;
 - registered relations use one canonical definition;
 - every traversable relation path is bounded and applies intersected authorization at every node;
@@ -1177,12 +1218,14 @@ It is complete only when:
 - Boolean connective semantics and interpreted populations pass seeded assertions;
 - receipt replay, saved results, exports and refreshed cards pass current authorization and redaction checks;
 - replay authorization uses bounded batching or a verified unchanged-version fast path and passes query-count assertions;
-- every admitted pre-grammar read family satisfies the Independent Structural Intent Verifier contract, and no provisional family is grandfathered;
+- every admitted Phase 1 read family has a complete typed-grammar plan or valid deterministic certificate, and no provisional family is grandfathered;
 - deterministic families pass their token-annotation, slot-assembly and metamorphic invariants;
 - conflicted records remain outside confirmed positive/negative populations in every projection;
 - query, capability, analysis and writer code paths consume registry-owned relationship adapters, with no unexplained duplicate definition;
 - every executable relationship predicate and writer carries the required meaning tags;
 - every legacy recognizer has been migrated, explicitly retained as a safety/certified optimization, or retired under FR-ONT-8;
+- every mixed-stack facet has one recorded execution owner and no meaningful source span is silently dropped;
+- the offline lexicon-enrichment pipeline preserves human approval, collision evidence and one generated runtime vocabulary;
 - every routable capability has a typed execution and answer contract;
 - every answer variant passes homeowner-facing presentation conformance;
 - provider output is advisory and fully validated;
