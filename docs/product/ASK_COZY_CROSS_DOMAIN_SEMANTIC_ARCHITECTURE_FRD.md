@@ -1,6 +1,6 @@
 # Ask Cozy — Cross-Domain Semantic Request Architecture FRD
 
-**Status:** Draft v1.0 for owner review
+**Status:** Draft v1.1 for owner review
 
 **Date:** 2026-11-14
 
@@ -11,6 +11,8 @@
 **Supersedes:** The target-understanding, query-planning, capability-selection, answer-verification, and evaluation design in `ASK_COZY_UNDERSTANDING_RELIABILITY_FRD.md` where this document is more specific
 
 **Does not supersede:** Existing authentication, property authorisation, privacy, safety-boundary, consequential-action confirmation, domain business rules, or canonical domain-service requirements
+
+**v1.1 amendment:** Makes the deterministic plan producer and generated shared lexicon mandatory; adds early structural admission convergence, schema-derived registry governance, capability-wide canonical-relation enforcement, an in-domain-not-understood recovery, presentation-quality requirements, cardinality-first warranty modelling, and broader cross-domain acceptance examples. It does not authorize blanket execution of regex-matched reads or writes.
 
 ---
 
@@ -23,7 +25,7 @@ The system shall no longer treat a prompt as a sentence that must resemble a reg
 1. a **Data Query Planner** for facts, lists, details, counts, comparisons, aggregates, missing-data questions, and relations; or
 2. a **Capability Planner** for calculations, assessments, recommendations, workflows, and commands.
 
-The semantic interpreter may propose meaning. It may not query arbitrary tables, invent fields or capabilities, bypass authorisation, execute a write, or compose the final factual answer. Deterministic code remains authoritative for validation, execution, provenance, and effect control.
+Two producers shall emit the same versioned plan contract: a mandatory deterministic semantic parser for explicit, common and low-risk meanings, and a structured-output provider for broader wording and multi-facet recall. Either producer may propose meaning. Neither may query arbitrary tables, invent fields or capabilities, bypass authorisation, execute a write, or compose the final factual answer. Deterministic code remains authoritative for validation, execution, provenance, and effect control.
 
 This architecture applies across Ask Cozy. Warranty prompts are regression examples, not the design boundary.
 
@@ -116,6 +118,10 @@ Independently written prompts that request the same plan, including grammatical 
 
 The typed, immutable result of a query or capability execution. It records the validated plan, resolved entities, applied filters, result rows or measures, missing-data states, authorisation decision, provenance, and answer-contract variant.
 
+### 4.8 Shared semantic lexicon
+
+A versioned, generated artifact consumed by every plan producer and resolver. It contains approved homeowner labels and aliases for registered domains, semantic jobs, entities, fields, relations, projections, time expressions and enum values. It is generated from the registries plus reviewed overrides; it is not a second hand-maintained prompt catalogue.
+
 ---
 
 ## 5. Product-domain scope
@@ -156,8 +162,11 @@ RAW HOMEOWNER MESSAGE
   │
   ├─ 3. protect identifiers; create raw + normalised + minimised representations
   │
-  ├─ 4. semantic interpreter
-  │       └─ typed Semantic Request Plan with source spans and alternatives
+  ├─ 4. semantic plan producers
+  │       ├─ deterministic semantic parser (mandatory baseline)
+  │       └─ structured-output provider (broader recall)
+  │               ↓
+  │          typed Semantic Request Plan with source spans and alternatives
   │
   ├─ 5. deterministic plan validator
   │       ├─ ontology membership
@@ -268,6 +277,25 @@ Clause splitting shall be semantic, not limited to a fixed list of second-clause
 
 If a qualifier, field, relation, time constraint, entity, or requested facet cannot be represented or validated, it shall be reported as unresolved. The system shall not execute the representable subset while presenting it as a complete answer.
 
+### FR-PLAN-6 — Multiple producers, one contract
+
+The deterministic parser and every provider adapter shall emit the same versioned plan schema. Producer output shall include lineage and version. A deterministic plan may execute without a provider only when it passes the same ontology, entity, relation, slot, authorisation and admission validation as a provider plan. When producers disagree materially, the decision policy shall use independently calibrated evidence or clarify; it shall not silently prefer the higher numerical score.
+
+### FR-PLAN-7 — Mandatory deterministic coverage
+
+The deterministic parser shall cover explicit, low-risk meanings that can be derived from the approved lexicon and typed grammar, including:
+
+- request projection;
+- positive and negative relation predicates;
+- registered entity and field names;
+- property-backed entity references;
+- bounded comparisons and aggregates;
+- calendar and relative time expressions;
+- follow-up refinements of an existing validated plan; and
+- exact registered command language that opens a confirmation preview.
+
+Its grammar shall operate over semantic annotations and registry identities, not operation-specific sentence regexes. Unsupported or ambiguous meanings shall remain unresolved rather than being coerced into the closest plan.
+
 ---
 
 ## 8. Semantic ontology and registries
@@ -309,6 +337,8 @@ Relations shall be first-class, directional declarations. Each relation shall de
 
 Equivalent business relationships shall have one canonical storage and query definition. In particular, item-to-warranty status shall not be computed through competing links or handler-specific predicates.
 
+Every query compiler, capability handler, analysis service, answer verifier and writer that evaluates or changes a registered business relationship shall use the registry-owned predicate or writer adapter. Reimplementing the same relationship in a handler-local query is a conformance failure.
+
 ### FR-ONT-4 — Capability Registry
 
 Every routable capability shall declare:
@@ -338,6 +368,18 @@ Operation ids remain execution implementation details. The semantic interpreter 
 Build-time governance shall fail when an owner-visible field has no data-point registration, a declared relation has no compiler, a routable capability has no execution contract, or a registered answer variant is not produced by its handler code path.
 
 Source scanning alone shall not establish conformance.
+
+### FR-ONT-6 — Schema-derived defaults and reviewed overrides
+
+Registry construction shall derive, where mechanically knowable, stable model and field identities, types, nullability, enum values, relation candidates and storage cardinality from Prisma; it shall derive existing audience, sensitivity, provenance and product-data identities from the approved data-point and property-context catalogues. Human-reviewed overrides shall own homeowner labels, aliases, business null semantics, canonical relationship meaning, exclusions, safe display fields and domain applicability.
+
+The shared semantic lexicon shall be generated from these approved registries and overrides. No producer or handler may maintain a competing general-purpose synonym list. Narrow aliases may exist only as registry-owned overrides with lineage and collision tests.
+
+Schema or catalogue changes that make a generated registry or lexicon stale shall fail conformance until regenerated and reviewed.
+
+### FR-ONT-7 — Duplicate-definition governance
+
+The repository shall maintain a generated cross-domain report of every code path that reads, writes or derives a registered relationship. The check shall flag direct storage queries outside the registry-owned adapters and multiple predicates that claim the same business meaning. An explicitly approved specialized derivation may consume a canonical predicate and add domain logic; it may not redefine the underlying relationship.
 
 ---
 
@@ -461,9 +503,21 @@ A read capability may execute only when it has either:
 
 An operation's `READ` label alone is insufficient. Conversely, a valid deterministic match shall not be discarded merely because a sentence-specific fast-path certificate is absent; it remains candidate evidence for semantic validation and normal capability selection.
 
+Admission shall converge incrementally by capability family. A deterministic candidate may execute before sentence-rule certification only when all of the following hold:
+
+1. the registered effect is an exact, reversible property-scoped read;
+2. a second independent semantic signal agrees with its semantic job, or the deterministic plan itself validates completely against the typed grammar;
+3. required entity, relation, polarity, projection and slots resolve;
+4. the operation has a typed receipt or capability-specific grounded check that verifies those dimensions; and
+5. authorization, lifecycle and source-availability checks pass.
+
+The repository shall not place every operation labelled `READ` on a provisional allowlist. Source-scan-only answer contracts do not satisfy this requirement.
+
 ### FR-CAP-4 — Commands and effects
 
 A command plan may open only the matching confirmation preview. The pre-effect step shall recheck property membership, role, lifecycle, record version, required slots, and idempotency. No model confidence can authorize an effect.
+
+An uncertified sentence match alone shall not open a write preview. The semantic job, target entity, command parameters and required slots must first validate. Preview generation remains non-executing; the existing confirmation and pre-effect checks still govern the effect.
 
 ### FR-CAP-5 — Capability absence
 
@@ -475,7 +529,7 @@ If the requested analysis or workflow is not registered, Ask shall preserve the 
 
 ### FR-UND-1 — Interpreter implementation
 
-The architecture shall support a real structured-output understanding provider. A deterministic semantic parser may produce or supplement the same plan contract. Provider-specific schemas shall adapt into the canonical plan; downstream execution shall not depend on provider-native output.
+The architecture shall implement both a deterministic semantic parser and a real structured-output understanding provider. Both shall consume the same eligible registry and generated semantic lexicon and produce the same plan contract. The deterministic parser is the always-available baseline for its declared grammar; the provider expands recall and multi-facet interpretation. Provider-specific schemas shall adapt into the canonical plan; downstream execution shall not depend on provider-native output.
 
 ### FR-UND-2 — Two-stage retrieval
 
@@ -524,6 +578,10 @@ The system shall not require the same evidence budget for a reversible list quer
 ### FR-UND-5 — Deterministic fast paths
 
 A certified deterministic rule may bypass semantic interpretation only when its stable id, hash, ownership, positive families, adjacent negatives, cross-operation collisions, entity requirements, and telemetry lineage are current. An uncertified rule may nominate candidates but may not establish route trust by itself.
+
+### FR-UND-6 — Provider-independent availability
+
+Provider outage, privacy disallowance, timeout or budget exhaustion shall not disable meanings within the deterministic parser's declared coverage. Telemetry shall report deterministic-plan success, provider-expanded success, producer disagreement and unresolved prompts separately. The product shall not claim provider-independent coverage beyond the measured deterministic grammar.
 
 ---
 
@@ -574,6 +632,19 @@ The public response contract shall represent up to the supported six child facet
 
 Remote fallback claim selection shall initialize with no selected claims. Provider error, timeout, schema failure, or zero verified matches shall not cause arbitrary grounded facts to be shown. Fallback may use only structurally relevant facts and must preserve the requested intent.
 
+### FR-ANS-6 — Homeowner-facing presentation
+
+Every registry field, enum and relationship state shown to a homeowner shall use its approved homeowner label. Internal enum tokens, operation ids, field keys, reason codes and implementation wording shall not appear as answer copy. A genuine user-recorded value may remain verbatim when changing it would alter the record; the renderer shall distinguish such values from system-authored labels.
+
+Retry behavior shall match the failure class:
+
+- transient provider, source or runtime unavailability may offer retry;
+- a deterministic contract, plan-entailment or presentation-conformance failure shall not offer the same request as a likely remedy;
+- a resolvable semantic mismatch shall produce a focused clarification or candidate choice; and
+- an internal deterministic defect shall produce a non-fabricating unavailable response and telemetry, not blame the homeowner for insufficient wording.
+
+Presentation conformance shall be tested for every answer variant, including humanized enum values, units, dates, money, unknown/missing distinctions, truncation, provenance labels and action applicability.
+
 ---
 
 ## 14. Privacy, security, and authorization
@@ -609,6 +680,7 @@ Every unresolved turn shall end in exactly one typed recovery:
 | Missing record data | name the missing field/relation and offer an authorized capture path |
 | Ambiguous entity | show materially distinct matching entities |
 | Ambiguous meaning | ask one question that distinguishes the competing plans |
+| In-domain but not understood | state the verified subject/domain evidence, offer no more than three materially distinct candidate jobs when supported, and ask one focused clarification; otherwise say what detail is needed without showing unrelated home facts |
 | Unauthorized | state that the action/data is unavailable to this role and who can act, without leaking data |
 | Lifecycle-inapplicable | explain why and offer the applicable alternative |
 | Capability absent | preserve the requested job and record unsupported demand |
@@ -618,6 +690,8 @@ Every unresolved turn shall end in exactly one typed recovery:
 | Safety/restricted | governing safety response |
 
 A one-option clarification loop, unrelated guidance card, or false “which records?” prompt when the relation is expressible is a failure.
+
+`IN_DOMAIN_NOT_UNDERSTOOD` is distinct from `CAPABILITY_ABSENT`, `OUT_OF_DOMAIN`, provider failure and ambiguous meaning. It applies when the message is clearly about the authorised home but no producer yields a validated plan and the evidence is insufficient to present competing plans safely. It shall be recorded as an understanding-coverage defect.
 
 ---
 
@@ -659,7 +733,11 @@ The system shall report separately:
 13. provider unavailability and fallback outcomes;
 14. end-to-end resolved rate;
 15. wrong-answer and false-decline rates;
-16. latency by route.
+16. deterministic-parser coverage and correctness;
+17. provider-expanded incremental coverage;
+18. producer-disagreement rate and outcome;
+19. presentation-conformance accuracy; and
+20. latency by producer and route.
 
 ### FR-EVAL-4 — Product gates
 
@@ -673,6 +751,7 @@ Before claiming the architecture meets the product objective, the sealed suite s
 | Entity, relation/polarity, and projection accuracy | each ≥ 95% |
 | Exact query result correctness | ≥ 99% on deterministic seeded scenarios |
 | Answer structural entailment | ≥ 99% |
+| Presentation conformance | ≥ 99% and zero internal identifiers in seeded homeowner-visible answers |
 | False decline on supported, answerable prompts | ≤ 1% |
 | Incorrect high-confidence selection | upper 95% confidence bound < 1% per risk stratum |
 | Wrong write routing or unconfirmed effect | zero observed; statistical bound reported |
@@ -714,7 +793,11 @@ Known high-priority correctness gaps to address during implementation include:
 6. incomplete positive/negative relation symmetry;
 7. source-scan answer contracts;
 8. default-disabled model understanding and certification policy not differentiated by semantic risk;
-9. follow-up handling bound to specific operations and sentence patterns.
+9. follow-up handling bound to specific operations and sentence patterns;
+10. no mandatory provider-independent producer of the cross-domain semantic plan;
+11. no generated shared lexicon or schema-to-registry drift contract;
+12. deterministic candidates discarded before structurally verified capability-family admission; and
+13. inconsistent humanization and retry behavior across answer variants.
 
 These are cross-domain examples of missing abstractions. Fixing them individually without the registries, plan contract, planners, receipts, and evaluation system in this FRD does not satisfy the architecture.
 
@@ -727,6 +810,8 @@ Implementation shall be incremental by architectural seam, not by adding prompt 
 ### Phase 0 — Baseline and invariants
 
 - Generate authoritative operation, domain, entity, field, relation, capability, and answer-variant inventories.
+- Generate a cross-domain duplicate-definition report for relationship reads, writes and derived analyses, including direct storage access outside canonical adapters.
+- Derive candidate entity, field, enum and storage-relation metadata from Prisma and reconcile it with the data-point and property-context catalogues.
 - Reconcile counts and archive superseded implementation-ledger rows.
 - Define seeded scenarios and independent semantic families across all domains.
 - Add exact current failures as regression tests, labelled containment rather than coverage proof.
@@ -735,21 +820,28 @@ Implementation shall be incremental by architectural seam, not by adding prompt 
 
 ### Phase 1 — Immediate correctness containment
 
-- Select one canonical item-to-warranty relation and update all readers/writers; define reconciliation for existing rows.
+- Define the business meanings and cardinalities of item-specific warranties and property/whole-home coverage before selecting canonical storage; then update all readers, writers and analyses to use registry-owned predicates and define reconciliation for existing rows.
 - Make remote fallback fail closed with an empty selection on error.
 - Separate warranty, insurance, policy, coverage, and claim semantic tokens.
 - Remove any answer-gate bypass based only on source-scan contracts.
+- Introduce the standardized minimal read receipt and structural grounded-validator interface.
+- Migrate the highest-demand basic read families to that interface so a fully validated deterministic candidate can execute without sentence-rule certification.
+- Require semantic job, target entity, parameters and required slots to validate before any uncertified command candidate opens a preview.
+- Humanize registered enums and internal codes at the shared rendering boundary, and remove retry actions from deterministic contract or entailment failures.
 
-**Exit:** known contradictory and unrelated-answer paths are closed.
+**Exit:** known contradictory and unrelated-answer paths are closed; selected high-demand read families use structural admission; no blanket read or write allowlist exists.
 
 ### Phase 2 — Ontology and typed plan
 
 - Implement Entity, Field, Relation, and Capability registries.
+- Implement schema-derived registry generation plus reviewed overrides and drift checks.
+- Generate the versioned shared semantic lexicon from the approved registries.
 - Extend the understanding contract with `QUERY`, `CAPABILITY`, and `COMMAND` facets.
+- Implement the mandatory deterministic semantic parser over that contract and lexicon.
 - Preserve raw/normalized/minimized text and source spans.
 - Add property-backed entity resolution and semantic conversation state.
 
-**Exit:** representative prompts from every domain produce validated plans without execution.
+**Exit:** representative explicit, low-risk prompts from every domain produce validated plans without a provider; unsupported meanings remain unresolved; deterministic/provider adapters share one contract.
 
 ### Phase 3 — Data Query Planner
 
@@ -764,6 +856,7 @@ Implementation shall be incremental by architectural seam, not by adding prompt 
 
 - Introduce semantic jobs and hierarchical capability retrieval.
 - Adapt eligible operations through stable capability adapters.
+- Require capability handlers and analyses to consume registry-owned canonical relationship predicates.
 - Require typed receipts/grounded checks before read execution.
 - Preserve preview and confirmation for commands.
 
@@ -773,6 +866,7 @@ Implementation shall be incremental by architectural seam, not by adding prompt 
 
 - Replace source-scan trust with handler-owned typed variants.
 - Verify relation, polarity, projection, fields, rows, counts, and provenance from receipts.
+- Enforce homeowner-facing labels, value formatting and failure-class-appropriate retry behavior for every variant.
 - Support six child executions in the public contract.
 
 **Exit:** every routable capability has a code-path contract and the answer gate has no bag-of-words trust path.
@@ -793,19 +887,24 @@ Implementation shall be incremental by architectural seam, not by adding prompt 
 The implementation is incomplete until the repository contains:
 
 1. versioned semantic plan schemas;
-2. generated entity/field/relation/capability registry manifests;
-3. safe query compiler and registry-owned adapters;
-4. capability planner and operation adapters;
-5. property-backed entity resolver;
-6. semantic conversation-state contract;
-7. typed execution-receipt schemas;
-8. handler-owned answer-variant manifests and conformance checks;
-9. cross-domain sealed evaluation manifest;
-10. seeded property scenario catalogue;
-11. metamorphic paraphrase runner;
-12. per-layer measurement report;
-13. unsupported-demand telemetry;
-14. current requirement-to-evidence matrix.
+2. mandatory deterministic semantic parser;
+3. versioned generated shared semantic lexicon;
+4. generated entity/field/relation/capability registry manifests;
+5. schema/catalogue registry generator, reviewed overrides and drift check;
+6. cross-domain duplicate relationship-definition report and conformance check;
+7. safe query compiler and registry-owned adapters;
+8. capability planner and operation adapters;
+9. property-backed entity resolver;
+10. semantic conversation-state contract;
+11. typed execution-receipt schemas and structural admission checks;
+12. handler-owned answer-variant manifests and conformance checks;
+13. presentation-label/format registry and presentation conformance checks;
+14. cross-domain sealed evaluation manifest;
+15. seeded property scenario catalogue;
+16. metamorphic paraphrase runner;
+17. per-layer and per-producer measurement report;
+18. unsupported-demand and in-domain-not-understood telemetry; and
+19. current requirement-to-evidence matrix.
 
 Generated inventories shall be checked into or reproducibly generated by repository scripts. Hand-maintained totals in prose are informative only.
 
@@ -830,6 +929,13 @@ The following examples illustrate plan equivalence. They are not a phrase allowl
 | “what claims are open and what documents are missing?” | two related facets with claim entity dependency and explicit partial-completion behavior |
 | “do I have recalls and which items are affected?” | recall-review capability plus affected-item receipt, not generic guidance |
 | “should I repair the furnace or replace it?” | registered decision capability with resolved furnace and required cost/condition slots |
+| “what buyer deadlines are due before closing?” | `QUERY BuyerTask LIST` filtered to open deadlines before the resolved closing date |
+| “what do I still need to finish before listing the house?” | seller-preparation capability or registered readiness query with current sale-case context |
+| “would refinancing break even within three years?” | refinance break-even capability with the current loan, candidate terms and a three-year horizon; missing financial slots are requested, not invented |
+| “which active projects still need a permit?” | `QUERY Project LIST relation Permit HAS_NONE_OR_UNRESOLVED`, preserving unknown versus confirmed-not-required |
+| “compare these two kitchen contractor quotes” | quote-comparison capability with two resolved quote entities and declared comparison fields |
+| “what environmental risks affect this home this week?” | environment/risk capability scoped to the property and calendar week, with source availability and freshness in the receipt |
+| “which inspection findings still need action?” | `QUERY InspectionFinding LIST` filtered to unresolved/actionable state with source report provenance |
 | “what about the kitchen?” after an inventory list | prior plan refined by room relation, with inherited projection |
 
 For every row, seeded data shall assert the exact plan, records, counts, missingness semantics, and answer variant.
@@ -848,12 +954,17 @@ For every row, seeded data shall assert the exact plan, records, counts, missing
 8. **Risk-stratified calibration:** reversible data reads and consequential actions use different thresholds and controls.
 9. **Typed receipts:** answer correctness is verified structurally against execution.
 10. **Cross-domain evaluation:** completion is gated macro-by-domain and cannot be inferred from routing examples.
+11. **Provider-independent baseline:** a deterministic semantic parser and generated shared lexicon are required, not optional.
+12. **Structural admission convergence:** high-demand read families may execute before sentence-rule certification only after typed plan, entity and grounded-result validation; no blanket read bypass is permitted.
+13. **Capability-wide canonical relations:** queries, analyses, handlers and writers consume the same registry-owned business predicates.
+14. **Generated registry foundation:** mechanically knowable schema metadata is derived, while homeowner language and business meaning remain reviewed overrides.
+15. **Presentation is correctness:** internal codes and inappropriate retry actions are answer-contract failures.
 
 ---
 
 ## 22. Owner decisions still required before implementation changes behavior
 
-1. Which persisted item-to-warranty relation becomes canonical, and how existing conflicting rows are reconciled.
+1. Which distinct warranty/coverage business relationships exist, including the cardinality and semantics of item-specific warranties versus property or whole-home plans; only then which persisted relation is canonical for each meaning and how conflicting rows are reconciled.
 2. The final list of owner-visible entities/fields deliberately excluded from Ask, if any.
 3. Provider and homeowner-text processing approval for semantic interpretation.
 4. Latency and cost budgets for single-stage and two-stage interpretation.
@@ -871,10 +982,13 @@ This FRD is not complete because a new provider is connected, because several ex
 It is complete only when:
 
 - all required artifacts in §19 exist;
+- the deterministic semantic parser and generated shared lexicon cover their declared low-risk grammar without provider access;
 - every registered domain is represented in the ontology and sealed suite;
 - every owner-visible included datum has a deterministic authorised read path;
 - registered relations use one canonical definition;
+- query, capability, analysis and writer code paths consume registry-owned relationship adapters, with no unexplained duplicate definition;
 - every routable capability has a typed execution and answer contract;
+- every answer variant passes homeowner-facing presentation conformance;
 - provider output is advisory and fully validated;
 - exact seeded result and safety tests pass;
 - all gates in §16 pass with reported confidence intervals; and
