@@ -94,7 +94,7 @@ export function resolveAskRoutingCascade(rawMessage: string, options: {
   }
   // Provisional read execution: the rule is not certified, so it may not CLAIM the turn, but a harmless read it matched may be tried and then judged by the delivery gate. A rule that selects a write, a decision or anything else
   // keeps the demoted behaviour below.
-  if (direct.operationId !== 'GROUNDED_GUIDANCE' && isProvisionalReadOperation(direct.operationId) && (!options.eligibleOperationIds || [...options.eligibleOperationIds].includes(direct.operationId))) {
+  if (direct.operationId !== 'GROUNDED_GUIDANCE' && isProvisionalReadOperation(direct.operationId, message) && (!options.eligibleOperationIds || [...options.eligibleOperationIds].includes(direct.operationId))) {
     const lineage = ruleLineageOfResolution(direct);
     return {
       language, operation: direct, stage: 'PROVISIONAL',

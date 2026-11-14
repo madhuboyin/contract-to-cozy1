@@ -45,7 +45,7 @@ test('aggregate certification is a separate mandatory gate', () => {
 });
 
 test('an uncertified deterministic match cannot make a DETERMINISTIC final claim and carries lineage', () => {
-  const decision = resolveAskRoutingCascade('Show my maintenance tasks', { localRoutingEnabled: false });
+  const decision = resolveAskRoutingCascade('Show my warranties', { localRoutingEnabled: false });
   assert.equal(decision.stage, 'REMOTE_FALLBACK');
   assert.equal(decision.operation.operationId, 'GROUNDED_GUIDANCE');
   assert.equal(decision.fastPathLineage.status, 'DEMOTED');
@@ -56,13 +56,13 @@ test('an uncertified deterministic match cannot make a DETERMINISTIC final claim
 
 test('the cascade attributes a deterministic match to the ONE rule that fired, so its lineage names that rule and its own hash', () => {
   const { resolveAskOperation, ruleIdOfResolution } = require('../../src/services/ask/askOperationRegistry.ts');
-  const resolution = resolveAskOperation('Show my maintenance tasks');
+  const resolution = resolveAskOperation('Show my warranties');
   const rule = fastPathRuleForResolution(resolution);
   assert.ok(rule); assert.equal(rule.id, ruleIdOfResolution(resolution)); assert.equal(rule.operationId, resolution.operationId);
-  const decision = resolveAskRoutingCascade('Show my maintenance tasks', { localRoutingEnabled: false });
+  const decision = resolveAskRoutingCascade('Show my warranties', { localRoutingEnabled: false });
   assert.equal(decision.fastPathLineage.ruleId, rule.id); assert.equal(decision.fastPathLineage.version, rule.version);
   // two different phrasings of one operation can be two different rules
-  const ids = new Set(['Show my maintenance tasks', 'What maintenance is due?', 'Is my maintenance overdue?'].map((m) => ruleIdOfResolution(resolveAskOperation(m))).filter(Boolean));
+  const ids = new Set(['Show my warranties', 'What maintenance is due?', 'Is my maintenance overdue?'].map((m) => ruleIdOfResolution(resolveAskOperation(m))).filter(Boolean));
   assert.ok(ids.size >= 1);
   assert.equal(fastPathRuleForResolution({ operationId: 'GROUNDED_GUIDANCE' }), null);
 });
