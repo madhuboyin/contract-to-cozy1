@@ -48,7 +48,7 @@ export function groundedReadVerdict(question: string, result: AskOperationResult
     const shape = planShape789(question);
     const plan = planDataPointQuery(question);
     const receipt = SemanticReadReceiptSchema.safeParse((result.parameters as { semanticExecutionReceipt?: unknown } | undefined)?.semanticExecutionReceipt);
-    if (shape?.shape === 'NO_WARRANTY') {
+    if (shape?.shape === 'NO_WARRANTY' || shape?.shape === 'HAS_WARRANTY') {
       const agreement = warrantyShapeGrammarAgreement(question, shape);
       if (agreement.outcome !== 'AGREE') return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'TYPED_GRAMMAR_DISAGREES'] };
       if (!receipt.success) return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'SEMANTIC_RECEIPT_INVALID'] };

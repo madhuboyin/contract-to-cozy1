@@ -19,12 +19,13 @@ test('planning: absence, service gap, no warranty, change over time; ordinary qu
   assert.equal(shape('Which appliances have I not serviced in over a year?'), 'STALE_SERVICE');
   assert.equal(planShape789('Which appliances have never been serviced?').cutoff, null);
   assert.equal(shape('Which appliances have no warranty?'), 'NO_WARRANTY');
+  assert.equal(shape('Which appliances have a warranty?'), 'HAS_WARRANTY');
   assert.equal(planShape789('Which appliances are out of warranty?').currentOnly, true);
   assert.equal(planShape789('Which appliances have no warranty?').currentOnly, false);
   assert.equal(shape('How has my property tax changed over the years?'), 'TIME_SERIES');
   assert.equal(planShape789('How has my assessed value changed?').pointId, 'taxAssessment.totalAssessedValue');
   assert.equal(shape('Compare my property tax to last year'), 'TIME_SERIES');
-  for (const m of ['what is the serial number of my fridge', 'What is my property tax?', 'Which appliances are older than 10 years?', 'Which appliances have a warranty?', 'How often should I service my HVAC?', 'Which appliances have no flux capacitor?', 'Which items are missing warranty coverage?', 'What coverage gaps does my home have?']) assert.equal(shape(m), null, m);
+  for (const m of ['what is the serial number of my fridge', 'What is my property tax?', 'Which appliances are older than 10 years?', 'How often should I service my HVAC?', 'Which appliances have no flux capacitor?', 'Which items are missing warranty coverage?', 'What coverage gaps does my home have?']) assert.equal(shape(m), null, m);
   assert.equal(planShape789('which appliances have I not serviced in over 60 years'), null);
 });
 test('routing: these questions reach DATA_POINT_READ', () => {
@@ -52,6 +53,7 @@ test('handler: absence, no warranty and service gap answers name the items and w
       { id: 'i2', name: 'Furnace', warrantyId: null, coverageEvidenceStatus: 'NONE', linkedWarranties: [] },
       { id: 'i3', name: 'Washer', warrantyId: 'w-1', coverageEvidenceStatus: 'UNKNOWN', linkedWarranties: [{ id: 'w-2' }] },
       { id: 'i4', name: 'Dryer', warrantyId: null, coverageEvidenceStatus: 'NOT_SURE', linkedWarranties: [] },
+      { id: 'i5', name: 'Range', warrantyId: null, coverageEvidenceStatus: 'UNKNOWN', linkedWarranties: [{ id: 'w-3' }] },
     ];
     return [{ id: 'i1', name: 'Dishwasher', lastServicedOn: null }, { id: 'i2', name: 'Furnace', lastServicedOn: new Date('2023-01-01') }];
   }, count: async (a) => (a.where.lastServicedOn === null ? 1 : 2) };
@@ -73,6 +75,11 @@ test('handler: absence, no warranty and service gap answers name the items and w
   const forged = structuredClone(noWarranty);
   forged.parameters.semanticExecutionReceipt.population.confirmedCount = 99;
   assert.deepEqual(verifySemanticReadReceiptEntailment(forged).reasonCodes, ['SEMANTIC_RECEIPT_NOT_ENTAILED', 'CONFIRMED_POPULATION_MISMATCH']);
+  const hasWarranty = await dataPointReadResult('u1', 'p1', 'Which appliances have a warranty?');
+  assert.match(hasWarranty.blocks[0].title, /1 item has a linked warranty record/);
+  assert.match(hasWarranty.blocks[0].body, /A linked record does not by itself establish/);
+  assert.deepEqual(hasWarranty.parameters.semanticExecutionReceipt.predicateIds, ['predicate.inventory_item.has_warranty_record']);
+  assert.equal(verifySemanticReadReceiptEntailment(hasWarranty).outcome, 'PASS');
   prisma.inventoryItem = { findMany: async () => [], count: async () => 0 };
   const none = await dataPointReadResult('u1', 'p1', 'Which appliances have no serial number recorded?');
   assert.match(none.blocks[0].title, /Every item has its serial number/);

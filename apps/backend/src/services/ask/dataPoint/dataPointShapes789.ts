@@ -16,7 +16,8 @@ export type Shape789Plan =
   | { readonly shape: 'TIME_SERIES'; readonly pointId: string; readonly entity: 'PropertyTaxBillRecord' | 'PropertyTaxAssessmentRecord'; readonly column: string; readonly maxPeriods: number; readonly label: string }
   | { readonly shape: 'ABSENCE'; readonly pointId: string; readonly column: string; readonly label: string; readonly count: boolean }
   | { readonly shape: 'STALE_SERVICE'; readonly pointId: string; readonly column: string; readonly cutoff: Date | null; readonly windowText: string; readonly count: boolean }
-  | { readonly shape: 'NO_WARRANTY'; readonly relationId: string; readonly currentOnly: boolean; readonly count: boolean };
+  | { readonly shape: 'NO_WARRANTY'; readonly relationId: string; readonly currentOnly: boolean; readonly count: boolean }
+  | { readonly shape: 'HAS_WARRANTY'; readonly relationId: string; readonly count: boolean };
 
 const point = (id: string): DataPointDefinition | undefined => DATA_POINT_BY_ID.get(id);
 
@@ -44,6 +45,8 @@ export function planShape789(message: string, now: Date = new Date()): Shape789P
     const outside = /\b(?:outside|out of|not under|no longer under|expired|off)\b/.test(text);
     const none = NO_VALUE.test(text) || /\bnot under\b/.test(text);
     if (rel && (outside || none)) return { shape: 'NO_WARRANTY', relationId: rel.relationId, currentOnly: outside, count };
+    const positive = /\b(?:have|has|having|with)\b/.test(text);
+    if (rel && positive) return { shape: 'HAS_WARRANTY', relationId: rel.relationId, count };
   }
   // Shape 8 (service gap): "appliances I haven't serviced in over a year", "never been serviced".
   if (enabled.absence && ITEM_NOUN.test(text) && /\b(?:never (?:been )?serviced|not (?:been )?serviced|haven'?t (?:been )?serviced|hasn'?t (?:been )?serviced|have not (?:been )?serviced|no service)\b|\bunserviced\b|\bserviced? (?:in|for) (?:over|more than)\b/.test(text) === true) {
@@ -96,6 +99,7 @@ export function shapeWhere(propertyId: string, plan: Shape789Plan, now: Date = n
   if (plan.shape === 'ABSENCE') return { propertyId, ...(point(plan.pointId)?.family === 'text' ? { OR: [{ [plan.column]: null }, { [plan.column]: '' }] } : { [plan.column]: null }) };
   if (plan.shape === 'STALE_SERVICE') return { propertyId, ...(plan.cutoff ? { OR: [{ [plan.column]: null }, { [plan.column]: { lt: plan.cutoff } }] } : { [plan.column]: null }) };
   if (plan.shape === 'NO_WARRANTY') return { propertyId, linkedWarranties: { none: plan.currentOnly ? { expiryDate: { gte: now } } : {} } };
+  if (plan.shape === 'HAS_WARRANTY') return { propertyId, linkedWarranties: { some: {} } };
   throw new Error('not an inventory shape');
 }
 
@@ -106,10 +110,12 @@ export async function runShape789(propertyId: string, plan: Shape789Plan, now: D
     const series = rows.reverse().map((r) => ({ id: String(r.id), year: Number(r.taxYear), value: toNumber(r[plan.column]) }));
     return { total: series.length, rows: [], series };
   }
-  if (plan.shape === 'NO_WARRANTY') {
+  if (plan.shape === 'NO_WARRANTY' || plan.shape === 'HAS_WARRANTY') {
     const states = await readTransitionalWarrantyLinks(propertyId);
     const row = (entry: typeof states[number]): ShapeRow => ({ id: entry.inventoryItemId, label: entry.label, detail: entry.state });
-    const rows = states.filter((entry) => entry.state === 'NO_LINK_RECORDED' || entry.state === 'EXPLICIT_NO_COVERAGE').map(row);
+    const rows = states.filter((entry) => plan.shape === 'NO_WARRANTY'
+      ? entry.state === 'NO_LINK_RECORDED' || entry.state === 'EXPLICIT_NO_COVERAGE'
+      : entry.state === 'ITEM_WARRANTY_LINKED' || entry.state === 'PROPERTY_PLAN_LINKED' || entry.state === 'BOTH_CONSISTENT').map(row);
     const conflictedRows = states.filter((entry) => entry.state === 'CONFLICTED_LINKS').map(row);
     const unknownRows = states.filter((entry) => entry.state === 'UNKNOWN').map(row);
     return { total: rows.length, rows, conflictedRows, unknownRows };
@@ -126,6 +132,6 @@ export async function runShape789(propertyId: string, plan: Shape789Plan, now: D
 
 /** The points a plan touches, for the caller's audience floor. */
 export function shapePointIds(plan: Shape789Plan): string[] {
-  if (plan.shape === 'NO_WARRANTY') return ['warranty.expiryDate'];
+  if (plan.shape === 'NO_WARRANTY' || plan.shape === 'HAS_WARRANTY') return ['warranty.expiryDate'];
   return [plan.pointId];
 }

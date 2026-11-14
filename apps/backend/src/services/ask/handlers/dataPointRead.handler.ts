@@ -180,7 +180,7 @@ async function shape789Result(propertyId: string, role: string, plan: Shape789Pl
     title = run.total === 0 ? 'Nothing is overdue for service' : `${run.total} ${plural(run.total, 'item', 'items')} not serviced ${plan.cutoff ? `in over ${plan.windowText}` : 'ever'}`;
     lines.push(run.total === 0 ? `Every item with a service date was serviced ${plan.cutoff ? `within ${plan.windowText}` : 'at some point'}.` : `${plan.count ? `${run.total} of your items` : names(run.total)} ${plan.cutoff ? `${plural(run.total, 'was', 'were')} last serviced more than ${plan.windowText} ago or ${plural(run.total, 'has', 'have')} no service recorded` : `${plural(run.total, 'has', 'have')} no service recorded`}.`);
     if (plan.cutoff && never > 0) { limited = true; lines.push(`${never} of these ${plural(never, 'has', 'have')} no service date at all, so ${plural(never, 'it may', 'they may')} have been serviced without being recorded.`); }
-  } else {
+  } else if (plan.shape === 'NO_WARRANTY') {
     const conflicted = run.conflictedRows?.length ?? 0;
     const unknown = run.unknownRows?.length ?? 0;
     title = run.total === 0 ? 'No items have a confirmed missing warranty record' : `${run.total} ${plural(run.total, 'item has', 'items have')} no linked warranty record`;
@@ -191,9 +191,20 @@ async function shape789Result(propertyId: string, role: string, plan: Shape789Pl
     if (unknown > 0) lines.push(`${unknown} ${plural(unknown, 'item has', 'items have')} an unknown warranty state and ${plural(unknown, 'is', 'are')} not counted as having or not having a linked warranty.`);
     limited = conflicted > 0 || unknown > 0;
     lines.push('This describes links recorded for each item; it does not decide whether warranty terms cover the item.');
+  } else {
+    const conflicted = run.conflictedRows?.length ?? 0;
+    const unknown = run.unknownRows?.length ?? 0;
+    title = run.total === 0 ? 'No items have a confirmed linked warranty record' : `${run.total} ${plural(run.total, 'item has', 'items have')} a linked warranty record`;
+    lines.push(run.total === 0
+      ? 'No inventory item is confirmed in the requested linked-warranty population.'
+      : `${plan.count ? `${run.total} of your items` : names(run.total)} ${plural(run.total, 'has', 'have')} a warranty linked in your home record.`);
+    if (conflicted > 0) lines.push(`${conflicted} ${plural(conflicted, 'item has', 'items have')} conflicting warranty links and ${plural(conflicted, 'is', 'are')} shown separately from the confirmed count.`);
+    if (unknown > 0) lines.push(`${unknown} ${plural(unknown, 'item has', 'items have')} an unknown warranty state and ${plural(unknown, 'is', 'are')} not counted as having or not having a linked warranty.`);
+    limited = conflicted > 0 || unknown > 0;
+    lines.push('A linked record does not by itself establish that warranty terms cover the item.');
   }
   const sources = run.rows.length ? run.rows.slice(0, 10).map((r) => sourceRef('InventoryItem', r.id)) : [sourceRef('Property', propertyId)];
-  const receipt = plan.shape === 'NO_WARRANTY' && agreement?.outcome === 'AGREE' && agreement.facet ? {
+  const receipt = (plan.shape === 'NO_WARRANTY' || plan.shape === 'HAS_WARRANTY') && agreement?.outcome === 'AGREE' && agreement.facet ? {
     schemaVersion: ASK_SEMANTIC_RECEIPT_VERSION,
     planVersion: agreement.plan.schemaVersion,
     facetId: agreement.facet.id,
@@ -255,7 +266,7 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
   if (!forcedPoint) {
     const shapePlan = planShape789(message);
     if (shapePlan) {
-      if (shapePlan.shape === 'NO_WARRANTY') {
+      if (shapePlan.shape === 'NO_WARRANTY' || shapePlan.shape === 'HAS_WARRANTY') {
         const agreement = warrantyShapeGrammarAgreement(message, shapePlan);
         if (agreement.outcome !== 'AGREE') return notice('DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED', 'data-point-semantic-agreement-required', 'I need a clearer warranty-record question', 'I could not verify the item, warranty relationship, polarity and answer shape independently, so I did not run this read.');
         return shape789Result(propertyId, role, shapePlan, agreement);
