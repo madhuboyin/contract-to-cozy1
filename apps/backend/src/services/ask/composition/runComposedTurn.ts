@@ -530,6 +530,22 @@ const sourcesOf = (operationId: string, row?: AskExecution): CompositeSourceRefe
 
 const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString('en-US')}`;
 
+/**
+ * The sentence under the answer-first line when there is no cost basis or note to state. It counts what was asked: a composed answer can carry one, two or up to six parts, and parts that were held back, asked about or not
+ * answered are named after the answered ones, so "both" is only said of exactly two answered parts.
+ */
+export function answerFirstFallback(answeredParts: number, otherParts: number, anySectionLimited: boolean): string {
+  const total = answeredParts + otherParts; const answered = !anySectionLimited;
+  const limits = ', including the limits of what is recorded for this home';
+  if (!otherParts) {
+    if (answeredParts <= 1) return answered ? 'Your question is answered below.' : `Your question is addressed below${limits}.`;
+    const which = answeredParts === 2 ? 'Both parts' : `All ${answeredParts} parts`;
+    return answered ? `${which} of your question are answered below.` : `${which} are addressed below${limits}.`;
+  }
+  const lead = `${answeredParts} of your ${total} parts ${answered ? 'are answered' : 'are addressed'} below${answered ? '' : limits}`;
+  return `${lead}. The rest ${otherParts === 1 ? 'is' : 'are'} explained after ${answeredParts === 1 ? 'it' : 'them'}.`;
+}
+
 /** The stored result of a composed parent: ordinary `blocks` (so every existing renderer works) plus the composite state that replay, refresh and the gate read. */
 export function compositeEnvelope(
   composite: CompositeResult | null, delivered: DeliveredComposite | null, notAnswered: ReadonlyArray<{ clause: string; reasonCode: string; detail: string; startAction?: Record<string, unknown> }>,
@@ -541,9 +557,7 @@ export function compositeEnvelope(
   }
   if (composite?.answerFirst) {
     const basisText = (composite.basis?.lines ?? []).map((line) => `${line.itemKey.charAt(0)}${line.itemKey.slice(1).toLowerCase()} replacement ${line.basisLabel}: ${line.minCents === line.maxCents ? money(line.minCents) : `${money(line.minCents)}–${money(line.maxCents)}`}.`).join(' ');
-    const fallback = composite.status === 'ANSWERED'
-      ? 'Both parts of your question are answered below.'
-      : 'Both parts are addressed below, including the limits of what is recorded for this home.';
+    const fallback = answerFirstFallback(delivered?.sections.length ?? composite.sections.length, notAnswered.length, composite.sections.some((section) => section.status === 'READY_WITH_LIMITATIONS'));
     blocks.push({ type: 'SUMMARY', id: 'composite-answer-first', title: composite.answerFirst, body: [basisText, ...(composite.basis?.notes ?? []), ...(composite.basis?.contradictions ?? [])].filter(Boolean).join(' ') || fallback, tone: composite.status === 'ANSWERED' ? 'DEFAULT' : 'CAUTION', actions: [] } as AskPresentationBlock);
   } else if (validationIssues.length) {
     blocks.push({ type: 'SUMMARY', id: 'composite-combined-unavailable', title: 'The combined view is unavailable', body: 'Each part is shown below as it was answered, without a combined summary.', tone: 'CAUTION', actions: [] } as AskPresentationBlock);
