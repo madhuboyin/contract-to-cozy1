@@ -243,13 +243,39 @@ export function groundedSavedResultsVerdict(question: string, result: AskOperati
 }
 const savedResultsRouteGuard = (message: string): boolean => SAVED_TOPIC.test(message) && !SAVED_OTHER_JOB.test(message);
 
+// ---- work overview ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// "What needs me" lists the home's open work by lifecycle view. It is delivered when (1) the question is about work or what needs the homeowner and is not a command (start, continue, cancel, retry, approve), (2) the answer is a
+// known variant (summary and list, or the restriction notice, which states no value) and (3) the lifecycle view applied is the one the question named (needs you by default). The view words are the handler's own, in the same
+// most-specific-first order; a drift between the two can only withhold an answer, never deliver a wrong one.
+const WORK_TOPIC = /\b(?:work|things?|items?|tasks?|projects?)\b.{0,40}\b(?:needs?|waiting|open|active|scheduled|completed|finished|archived)\b|\b(?:needs?|waiting on) me\b|\bsummari[sz]e\b.{0,20}\b(?:work|tasks)\b|\bmy (?:open |active |scheduled |completed )?work\b/i;
+const WORK_OTHER_JOB = /\b(?:start|begin|continue|resume|cancel|retry|approve|deny|add|create|delete|remove|schedule|reschedule|book|hire|remind|snooze|mark|assign|cost|price|how much)\b/i;
+const WORK_VIEW_WORDS: ReadonlyArray<[string, RegExp]> = [
+  ['NEEDS_YOU', /\b(?:needs? (?:me|my|you)|waiting on me|for me to (?:do|decide|answer)|needs? (?:my )?attention|awaiting me)\b/i], ['COMPLETED', /\b(?:completed|finished|done|closed)\b/i], ['ARCHIVED', /\b(?:archived|set aside|lapsed)\b/i],
+  ['SCHEDULED', /\b(?:scheduled|upcoming|coming up|ahead)\b/i], ['WAITING', /\b(?:waiting|on hold|blocked|waiting on (?:someone|others?))\b/i], ['ACTIVE', /\b(?:active|under ?way|in progress|in flight|ongoing)\b/i],
+];
+export function groundedWorkOverviewVerdict(question: string, result: AskOperationResult): GroundedReadVerdict {
+  const fail = (code: string): GroundedReadVerdict => ({ outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', code] });
+  if (!WORK_TOPIC.test(question)) return fail('QUESTION_NOT_ABOUT_WORK');
+  if (WORK_OTHER_JOB.test(question)) return fail('ANOTHER_OPERATION_OWNS_THE_QUESTION');
+  if (result.status !== 'ANSWERED' && result.status !== 'READY_WITH_LIMITATIONS') return fail('ANSWER_IS_NOT_A_DELIVERABLE_STATUS');
+  const ids = result.blocks.map((block) => String((block as { id?: string }).id ?? ''));
+  if (ids.includes('work-overview-restricted')) return { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] };
+  if (!ids.includes('work-overview-summary') || !ids.includes('work-overview-results')) return fail('ANSWER_IS_NOT_A_VERIFIED_VARIANT');
+  const applied = (result.parameters as { viewState?: { statusFilter?: string } } | undefined)?.viewState?.statusFilter;
+  if (!applied) return fail('ANSWER_CARRIES_NO_VIEW');
+  const wanted = WORK_VIEW_WORDS.find(([, pattern]) => pattern.test(question))?.[0] ?? 'NEEDS_YOU';
+  if (applied !== wanted) return fail('VIEW_DOES_NOT_MATCH_THE_QUESTION');
+  return { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] };
+}
+const workOverviewRouteGuard = (message: string): boolean => WORK_TOPIC.test(message) && !WORK_OTHER_JOB.test(message);
+
 // ---- which operations may be tried provisionally --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 export type GroundedReadCheck = (question: string, result: AskOperationResult) => GroundedReadVerdict;
 /** FR-GATE-8: an operation may be tried provisionally only together with a grounded delivery check. This table IS the allowlist (fastPathCertificates derives PROVISIONAL_READ_OPERATIONS from it). */
-export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict, WARRANTY_LOOKUP: groundedWarrantyVerdict, HOME_STATUS_BOARD: groundedStatusBoardVerdict, HOME_BASICS_GUIDE: groundedHomeBasicsVerdict, PROPERTY_SUMMARY: groundedPropertySummaryVerdict, INCIDENT_CLAIM_STATUS: groundedClaimStatusVerdict, SAVED_RESULTS: groundedSavedResultsVerdict });
+export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict, WARRANTY_LOOKUP: groundedWarrantyVerdict, HOME_STATUS_BOARD: groundedStatusBoardVerdict, HOME_BASICS_GUIDE: groundedHomeBasicsVerdict, PROPERTY_SUMMARY: groundedPropertySummaryVerdict, INCIDENT_CLAIM_STATUS: groundedClaimStatusVerdict, SAVED_RESULTS: groundedSavedResultsVerdict, WORK_OVERVIEW: groundedWorkOverviewVerdict });
 export const hasGroundedReadCheck = (operationId: AskOperationId): boolean => operationId in GROUNDED_READ_CHECKS;
 /** Checked before a provisional read is started: false means the rule's match is not the request this read answers, so the turn keeps the strict path. */
-export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ MAINTENANCE_STATUS: maintenanceRouteGuard, WARRANTY_LOOKUP: warrantyRouteGuard, HOME_STATUS_BOARD: statusBoardRouteGuard, HOME_BASICS_GUIDE: homeBasicsRouteGuard, PROPERTY_SUMMARY: propertySummaryRouteGuard, INCIDENT_CLAIM_STATUS: claimStatusRouteGuard, SAVED_RESULTS: savedResultsRouteGuard });
+export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ MAINTENANCE_STATUS: maintenanceRouteGuard, WARRANTY_LOOKUP: warrantyRouteGuard, HOME_STATUS_BOARD: statusBoardRouteGuard, HOME_BASICS_GUIDE: homeBasicsRouteGuard, PROPERTY_SUMMARY: propertySummaryRouteGuard, INCIDENT_CLAIM_STATUS: claimStatusRouteGuard, SAVED_RESULTS: savedResultsRouteGuard, WORK_OVERVIEW: workOverviewRouteGuard });
 export const provisionalRouteAllowed = (operationId: AskOperationId, message: string): boolean => (GROUNDED_READ_ROUTE_GUARDS[operationId]?.(message) ?? true);
 export function groundedVerdictFor(operationId: AskOperationId, question: string, result: AskOperationResult): GroundedReadVerdict {
   const check = GROUNDED_READ_CHECKS[operationId];
