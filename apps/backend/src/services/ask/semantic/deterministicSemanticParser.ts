@@ -64,7 +64,11 @@ export function parseDeterministicSemanticRequest(rawText: string): SemanticRequ
   const subject = annotations.find((annotation) => annotation.lexeme.semanticId === 'entity.inventory_item');
   const relation = annotations.find((annotation) => annotation.lexeme.semanticId === 'relation.inventory_item.warranty');
   const projectionAnnotation = first(annotations, 'PROJECTION');
-  const polarityAnnotation = first(annotations, 'POLARITY');
+  // Explicit negation governs the relation even when an affirmative auxiliary
+  // is also present ("have no warranty", "does not have"). This is scope
+  // resolution over semantic annotations, not lexicon insertion order.
+  const polarityAnnotation = annotations.find((annotation) => annotation.lexeme.semanticId === 'polarity.negative')
+    ?? annotations.find((annotation) => annotation.lexeme.semanticId === 'polarity.positive');
   const unresolvedSpans = unresolved(tokens, annotations);
   if (!subject || !relation) return SemanticRequestPlanSchema.parse({ ...base, outcome: 'NONE_FITS', facets: [], unresolvedSpans });
 

@@ -5,6 +5,8 @@ require('ts-node/register/transpile-only');
 const { SemanticRequestPlanSchema } = require('../../src/services/ask/semantic/semanticRequestPlan.ts');
 const { ASK_SHARED_SEMANTIC_LEXICON, generateSharedSemanticLexicon } = require('../../src/services/ask/semantic/sharedSemanticLexicon.ts');
 const { parseDeterministicSemanticRequest } = require('../../src/services/ask/semantic/deterministicSemanticParser.ts');
+const { warrantyShapeGrammarAgreement } = require('../../src/services/ask/semantic/legacyGrammarAgreement.ts');
+const { SemanticReadReceiptSchema } = require('../../src/services/ask/semantic/semanticExecutionReceipt.ts');
 
 test('the generated shared lexicon is stable and keeps warranty separate from insurance and claims', () => {
   assert.deepEqual(generateSharedSemanticLexicon(), ASK_SHARED_SEMANTIC_LEXICON);
@@ -39,4 +41,15 @@ test('unsupported questions remain unmatched rather than selecting a nearby oper
   const plan = parseDeterministicSemanticRequest('what claims are still open?');
   assert.equal(plan.outcome, 'NONE_FITS');
   assert.deepEqual(plan.facets, []);
+});
+
+test('legacy warranty reads execute only when the independently built grammar agrees', () => {
+  const count = { shape: 'NO_WARRANTY', relationId: 'inventory-warranty', currentOnly: false, count: true };
+  assert.equal(warrantyShapeGrammarAgreement('how many appliances have no warranty?', count).outcome, 'AGREE');
+  assert.equal(warrantyShapeGrammarAgreement('provide details of appliances without warranty', { ...count, count: false }).reasonCode, 'GRAMMAR_PROJECTION_MISMATCH');
+  assert.equal(warrantyShapeGrammarAgreement('which appliances are out of warranty?', { ...count, currentOnly: true, count: false }).outcome, 'DISAGREE');
+});
+
+test('the minimal receipt rejects missing structural evidence', () => {
+  assert.equal(SemanticReadReceiptSchema.safeParse({ schemaVersion: '1.0.0' }).success, false);
 });

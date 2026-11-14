@@ -15,6 +15,8 @@ import { safeTimezone } from '../support/propertyContext';
 import { runDataPointQuery } from '../dataPoint/dataPointQueryRunner';
 import { applyLaunchHints } from '../dataPoint/dataPointLaunchHints';
 import { planShape789, runShape789, shapePointIds, type Shape789Plan } from '../dataPoint/dataPointShapes789';
+import { warrantyShapeGrammarAgreement, type LegacyGrammarAgreement } from '../semantic/legacyGrammarAgreement';
+import { ASK_SEMANTIC_RECEIPT_VERSION, type SemanticReadReceipt } from '../semantic/semanticExecutionReceipt';
 
 const ENTITY_COPY: Record<string, { plural: string; singular: string; collection: string; record: string; none?: string }> = {
   InventoryItem: { plural: 'items', singular: 'inventory', collection: 'inventory', record: 'Home inventory record' },
@@ -145,7 +147,7 @@ async function dataPointQueryResult(propertyId: string, role: string, plan: Quer
 const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 const fmtMoney = (v: number) => `$${v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 /** Shapes 7-9: change over tax years, a field not recorded / not serviced since, items with no warranty. Always a snapshot (never composable), as every computed answer is. */
-async function shape789Result(propertyId: string, role: string, plan: Shape789Plan): Promise<AskOperationResult> {
+async function shape789Result(propertyId: string, role: string, plan: Shape789Plan, agreement: LegacyGrammarAgreement | null = null): Promise<AskOperationResult> {
   for (const id of shapePointIds(plan)) {
     const p = DATA_POINT_BY_ID.get(id);
     if (p && !roleMayRead(role, p)) { const copy = audienceFloorCopy(p.audience); return notice('DATA_POINT_RESTRICTED', 'data-point-restricted', copy.title, `${p.label} is only shown to ${copy.who}, so I can't answer this for you. Ask the home’s owner if you need it.`); }
@@ -185,12 +187,33 @@ async function shape789Result(propertyId: string, role: string, plan: Shape789Pl
     if (run.total > 0) { limited = true; lines.push('This only reflects warranties saved against an item; a warranty that is recorded without being linked to the item is not counted.'); }
   }
   const sources = run.rows.length ? run.rows.slice(0, 10).map((r) => sourceRef('InventoryItem', r.id)) : [sourceRef('Property', propertyId)];
-  return snapshotResult(sources, plan.shape, title, lines, limited, evidenceLabel);
+  const receipt = plan.shape === 'NO_WARRANTY' && agreement?.outcome === 'AGREE' && agreement.facet ? {
+    schemaVersion: ASK_SEMANTIC_RECEIPT_VERSION,
+    planVersion: agreement.plan.schemaVersion,
+    facetId: agreement.facet.id,
+    requestClass: 'DATA_QUERY' as const,
+    target: { entityId: 'entity.inventory_item', operationAdapter: 'data-point-read.read' },
+    projection: agreement.facet.projection as 'COUNT' | 'LIST',
+    predicateIds: agreement.facet.relations.map((relation) => relation.predicateId),
+    resolvedRecordIds: run.rows.map((row) => row.id),
+    population: {
+      confirmedCount: run.total,
+      conflictedCount: 0,
+      unknownCount: 0,
+      totalMatchCount: run.total,
+      displayedCount: Math.min(run.rows.length, 10),
+      truncated: run.total > 10,
+    },
+    authorization: { propertyId, role, decision: 'ALLOWED' as const },
+    provenance: { sourceType: 'InventoryItem', observedAt: new Date().toISOString() },
+    answerVariantId: 'data-point-query-summary',
+  } satisfies SemanticReadReceipt : undefined;
+  return snapshotResult(sources, plan.shape, title, lines, limited, evidenceLabel, receipt);
 }
-function snapshotResult(sources: ReturnType<typeof sourceRef>[], shape: string, title: string, lines: string[], limited: boolean, evidenceLabel: string): AskOperationResult {
+function snapshotResult(sources: ReturnType<typeof sourceRef>[], shape: string, title: string, lines: string[], limited: boolean, evidenceLabel: string, semanticExecutionReceipt?: SemanticReadReceipt): AskOperationResult {
   return {
     status: limited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: limited ? 'DATA_POINT_QUERY_PARTIAL' : undefined,
-    parameters: { sources, dataPointQuery: { snapshot: true, shape, template: 'shape789', asOf: new Date().toISOString() } },
+    parameters: { sources, dataPointQuery: { snapshot: true, shape, template: 'shape789', asOf: new Date().toISOString() }, ...(semanticExecutionReceipt ? { semanticExecutionReceipt } : {}) },
     blocks: [
       { type: 'SUMMARY', id: 'data-point-query-summary', title, body: lines.join(' '), tone: limited ? 'CAUTION' : 'DEFAULT', actions: [] },
       { type: 'EVIDENCE', id: 'data-point-evidence', title: 'Where this comes from', items: [{ label: evidenceLabel, source: evidenceLabel, observedAt: new Date().toISOString() }] },
@@ -223,7 +246,17 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
   // The planner is pure: the property's timezone is read here and passed in, so calendar periods (this month, next week) use the property's calendar, not UTC.
   const timeZone = await propertyTimeZone(propertyId);
   const queryOutcome = forcedPoint ? ({ kind: 'NONE' } as const) : planDataPointQuery(message, new Date(), timeZone);
-  if (!forcedPoint) { const shapePlan = planShape789(message); if (shapePlan) return shape789Result(propertyId, role, shapePlan); }
+  if (!forcedPoint) {
+    const shapePlan = planShape789(message);
+    if (shapePlan) {
+      if (shapePlan.shape === 'NO_WARRANTY') {
+        const agreement = warrantyShapeGrammarAgreement(message, shapePlan);
+        if (agreement.outcome !== 'AGREE') return notice('DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED', 'data-point-semantic-agreement-required', 'I need a clearer warranty-record question', 'I could not verify the item, warranty relationship, polarity and answer shape independently, so I did not run this read.');
+        return shape789Result(propertyId, role, shapePlan, agreement);
+      }
+      return shape789Result(propertyId, role, shapePlan);
+    }
+  }
   // A multi-part question ("what is my deductible and when does my insurance policy expire") has several facets: each is read through the ordinary single-point path and all are answered in one summary.
   if (!forcedPoint && queryOutcome.kind === 'NONE') {
     const facets = resolveDataPointsMulti(message);

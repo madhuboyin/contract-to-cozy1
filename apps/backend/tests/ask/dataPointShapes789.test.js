@@ -52,6 +52,9 @@ test('handler: absence, no warranty and service gap answers name the items and w
   assert.equal(stale.status, 'READY_WITH_LIMITATIONS'); assert.match(stale.blocks[0].body, /no service date at all/);
   const noWarranty = await dataPointReadResult('u1', 'p1', 'How many appliances have no warranty?');
   assert.match(noWarranty.blocks[0].title, /2 items have no warranty record/); assert.match(noWarranty.blocks[0].body, /without being linked/);
+  assert.equal(noWarranty.parameters.semanticExecutionReceipt.projection, 'COUNT');
+  assert.equal(noWarranty.parameters.semanticExecutionReceipt.population.confirmedCount, 2);
+  assert.deepEqual(noWarranty.parameters.semanticExecutionReceipt.predicateIds, ['predicate.inventory_item.has_no_warranty_record']);
   prisma.inventoryItem = { findMany: async () => [], count: async () => 0 };
   const none = await dataPointReadResult('u1', 'p1', 'Which appliances have no serial number recorded?');
   assert.match(none.blocks[0].title, /Every item has its serial number/);

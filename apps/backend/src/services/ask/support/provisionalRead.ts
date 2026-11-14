@@ -7,6 +7,8 @@ import { matchesOperationAnswerContract } from '../answerContract/operationAnswe
 import { ALTERNATE_POINT, isSingleWarrantyFact, resolveDataPoint, resolveDataPointsMulti } from '../dataPoint/dataPointCatalogue';
 import { planDataPointQuery } from '../dataPoint/dataPointQueryPlan';
 import { planShape789 } from '../dataPoint/dataPointShapes789';
+import { warrantyShapeGrammarAgreement } from '../semantic/legacyGrammarAgreement';
+import { SemanticReadReceiptSchema } from '../semantic/semanticExecutionReceipt';
 
 export interface GroundedReadVerdict { readonly outcome: 'PASS' | 'FAIL'; readonly reasonCodes: readonly string[] }
 
@@ -14,6 +16,7 @@ export interface GroundedReadVerdict { readonly outcome: 'PASS' | 'FAIL'; readon
 export const DATA_POINT_LIMITATION_REASONS: ReadonlySet<string> = new Set([
   'DATA_POINT_NOT_RECORDED', 'DATA_POINT_ITEM_NOT_FOUND', 'DATA_POINT_NO_INVENTORY', 'DATA_POINT_AMBIGUOUS', 'DATA_POINT_NOT_IDENTIFIED', 'DATA_POINT_RESTRICTED',
   'DATA_POINT_PARAMETERS_UNSUPPORTED', 'DATA_POINT_REQUIRED_SLOT_MISSING', 'DATA_POINT_QUERY_AMBIGUOUS_KIND', 'DATA_POINT_QUERY_MEASURE_REQUIRED', 'DATA_POINT_QUERY_TOO_MANY_FILTERS',
+  'DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED',
 ]);
 
 /** The data points a question names: the single resolved point, every point of a multi-part question, and the alternate a point may fall back to. */
@@ -43,6 +46,17 @@ export function groundedReadVerdict(question: string, result: AskOperationResult
     const template = parameters.dataPointQuery.template;
     const shape = planShape789(question);
     const plan = planDataPointQuery(question);
+    const receipt = SemanticReadReceiptSchema.safeParse((result.parameters as { semanticExecutionReceipt?: unknown } | undefined)?.semanticExecutionReceipt);
+    if (shape?.shape === 'NO_WARRANTY') {
+      const agreement = warrantyShapeGrammarAgreement(question, shape);
+      if (agreement.outcome !== 'AGREE') return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'TYPED_GRAMMAR_DISAGREES'] };
+      if (!receipt.success) return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'SEMANTIC_RECEIPT_INVALID'] };
+      if (receipt.data.facetId !== agreement.facet?.id
+        || receipt.data.projection !== agreement.facet.projection
+        || !receipt.data.predicateIds.includes(agreement.facet.relations[0].predicateId)) {
+        return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'SEMANTIC_RECEIPT_PLAN_MISMATCH'] };
+      }
+    }
     const planned = template === 'shape789' ? shape !== null : plan.kind === 'PLAN' && plan.plan.template.id === template;
     return planned ? { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] } : { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'QUESTION_DOES_NOT_PLAN_TO_THIS_QUERY'] };
   }
