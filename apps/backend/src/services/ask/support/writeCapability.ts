@@ -1,5 +1,5 @@
-// FR-WRT-4 (reliability FRD): "can this operation change state" is decided by what the operation persists, NOT by the registry `effect` label, which the write trace
-// (docs/architecture/ASK_COZY_WRITE_SAFETY_TRACE.md) found wrong in both directions. The `effect` label still drives calibration and routing thresholds, so it is not relabelled.
+// FR-WRT-4 (reliability FRD): "can this operation change state" is decided by what the operation persists, not by inferring from its broad family. The write trace
+// (docs/architecture/ASK_COZY_WRITE_SAFETY_TRACE.md) found labels wrong in both directions; askTrust.contract.ts now carries explicit operation-owned effect overrides and the consistency test requires exact agreement.
 // `persistenceClass` is the separate attribute (owner advice 2026-11-11): it replaces the two permanent exception lists this file used to keep.
 import { getAskDomainCommandByOperation } from '../askDomainCommandRegistry';
 

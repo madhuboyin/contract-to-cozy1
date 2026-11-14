@@ -2,7 +2,7 @@
 // matched to the question), the local router's own best candidates are shown as choices. On the routing corpus the correct operation is among the local top
 // three for 68% of the messages the fallback receives, while the top one alone is right for 46% and loosening the confidence threshold routes about as many
 // wrong as right: so the homeowner is asked, which costs one click and no model call. A floor keeps near-zero scores from being offered.
-import { getAskOperationDefinition, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
+import { getAskOperationDefinition, isReadOnlyOperation, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
 import { isAskHonestNoAnswerResult } from '../askRemoteFallbackTypedClaims';
 import { clarificationLabelFor } from './clarificationLabels';
 import type { AskRoutingDecision } from '../askRoutingCascade';
@@ -45,7 +45,7 @@ export function didYouMeanOptions(candidates: ReadonlyArray<{ operationId: AskOp
     seen.add(id);
     const definition = getAskOperationDefinition(id);
     if (definition.safetyClass.endsWith('_BOUNDARY')) continue;
-    if (!allowWrites && definition.semantic.effect !== 'READ') continue;
+    if (!allowWrites && !isReadOnlyOperation(id)) continue;
     options.push(id);
     if (options.length === ASK_DID_YOU_MEAN_LIMIT) break;
   }

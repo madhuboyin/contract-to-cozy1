@@ -83,7 +83,16 @@ export interface AskAnswerTrustEvidence {
   sources: AskAuthoritativeSourceEvidence[];
 }
 
-function effectFor(definition: Pick<AskOperationDefinition, 'family' | 'safetyClass'>): AskOperationEffect {
+// FR-WRT-4: semantic effect must agree with the operation's traced persistence/command behavior. These operations' broad intent families point in the
+// opposite direction, so the operation-owned override is explicit and covered by the registry consistency test. Do not add an exception in that test.
+const EFFECT_OVERRIDES: Readonly<Partial<Record<AskOperationId, AskOperationEffect>>> = Object.freeze({
+  HOME_DEADLINE_MONITOR: 'WRITE', HVAC_DECISION_START: 'WRITE', HVAC_DECISION_SCENARIO: 'WRITE', REFINANCE_RATE_MONITOR: 'WRITE',
+  INCIDENT_CONTINUATION: 'READ', MAJOR_EVENT_ENTRY: 'READ',
+});
+
+function effectFor(definition: Pick<AskOperationDefinition, 'operationId' | 'family' | 'safetyClass'>): AskOperationEffect {
+  const override = EFFECT_OVERRIDES[definition.operationId];
+  if (override) return override;
   if (definition.safetyClass.endsWith('_BOUNDARY')) return 'BOUNDARY';
   if (definition.family === 'COMMAND' || definition.family === 'WORKFLOW_GUIDANCE') return 'WRITE';
   if (definition.family === 'MONITOR') return 'MONITOR';

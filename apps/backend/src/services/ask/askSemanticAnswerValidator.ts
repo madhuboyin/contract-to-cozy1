@@ -131,9 +131,10 @@ export function validateAskSemanticAnswerRelevance(input: {
   // FR-GATE-3: a canonical answer (typed contract, authored guide, canonical blocks) may skip the relevance check only when the entity and every slot were resolved and the message is not an unsegmented compound
   // or conditional one. Otherwise the ordinary relevance check below decides, and the reason the bypass was withheld is recorded on the result.
   const bypass = canonicalBypassDecision({ question: input.question, entityResolution: input.entityResolution, segmentationCertified: input.segmentationCertified });
-  const canonicalMatch = Boolean(TYPED_ANSWER_CONTRACTS[input.operationId]?.({ question: input.question, result: input.result }))
+  const canonicalShapeMatch = Boolean(TYPED_ANSWER_CONTRACTS[input.operationId]?.({ question: input.question, result: input.result }))
     || Boolean(AUTHORED_GUIDE_RESULT_CODES[input.operationId]?.includes(input.result.reasonCode ?? ''))
-    || (matchesCanonicalAnswerBlocks(input.operationId, input.result) && canonicalBypassAllowed(input.operationId, input));
+    || matchesCanonicalAnswerBlocks(input.operationId, input.result);
+  const canonicalMatch = canonicalShapeMatch && canonicalBypassAllowed(input.operationId, input);
   if (canonicalMatch && bypass.permitted) {
     return finish({
       outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
@@ -141,7 +142,8 @@ export function validateAskSemanticAnswerRelevance(input: {
       reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
     });
   }
-  if (canonicalMatch && bypass.denial) bypassDenialCodes.push(`CANONICAL_BYPASS_WITHHELD_${bypass.denial}`);
+  if (canonicalShapeMatch && !canonicalBypassAllowed(input.operationId, input)) bypassDenialCodes.push('CANONICAL_BYPASS_WITHHELD_ROUTE_NOT_TRUSTED');
+  else if (canonicalMatch && bypass.denial) bypassDenialCodes.push(`CANONICAL_BYPASS_WITHHELD_${bypass.denial}`);
   const definition = getAskOperationDefinition(input.operationId);
   const semantic = definition.semantic.languagePacks[language];
   if (!semantic) {

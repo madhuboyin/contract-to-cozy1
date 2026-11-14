@@ -24,14 +24,14 @@ const summary = { status: 'ANSWERED', reasonCode: undefined, parameters: {}, blo
 ], suggestions: [] };
 test('the validator: a canonical answer passes for a clean single question, and keeps the relevance check when the entity is unresolved or the message is compound', () => {
   const run = (extra) => validateAskSemanticAnswerRelevance({ question: 'give me a summary of my home', operationId: 'PROPERTY_SUMMARY', result: summary, ...extra });
-  const clean = run({ entityResolution: resolved });
+  const clean = run({ entityResolution: resolved, routedDeterministically: true });
   assert.equal(clean.outcome, 'PASS'); assert.deepEqual(clean.reasonCodes, ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH']);
-  const unresolved = run({ entityResolution: { ...resolved, outcome: 'MISSING' } });
+  const unresolved = run({ entityResolution: { ...resolved, outcome: 'MISSING' }, routedDeterministically: true });
   assert.ok(!unresolved.reasonCodes.includes('CANONICAL_TYPED_ANSWER_CONTRACT_MATCH')); assert.ok(unresolved.reasonCodes.includes('CANONICAL_BYPASS_WITHHELD_ENTITY_NOT_RESOLVED'));
-  const compound = validateAskSemanticAnswerRelevance({ question: 'give me a summary of my home and when does my warranty expire', operationId: 'PROPERTY_SUMMARY', result: summary, entityResolution: resolved });
+  const compound = validateAskSemanticAnswerRelevance({ question: 'give me a summary of my home and when does my warranty expire', operationId: 'PROPERTY_SUMMARY', result: summary, entityResolution: resolved, routedDeterministically: true });
   assert.ok(!compound.reasonCodes.includes('CANONICAL_TYPED_ANSWER_CONTRACT_MATCH')); assert.ok(compound.reasonCodes.includes('CANONICAL_BYPASS_WITHHELD_COMPOUND_NOT_SEGMENTED'));
-  const certified = validateAskSemanticAnswerRelevance({ question: 'give me a summary of my home and my rooms', operationId: 'PROPERTY_SUMMARY', result: summary, entityResolution: resolved, segmentationCertified: true });
+  const certified = validateAskSemanticAnswerRelevance({ question: 'give me a summary of my home and my rooms', operationId: 'PROPERTY_SUMMARY', result: summary, entityResolution: resolved, segmentationCertified: true, routedDeterministically: true });
   assert.equal(certified.outcome, 'PASS'); assert.deepEqual(certified.reasonCodes, ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH']);
-  // callers with no routing decision (the evaluators, tests) keep the previous behaviour for a clean question
-  assert.equal(run({}).outcome, 'PASS');
+  const untrusted = run({ entityResolution: resolved });
+  assert.ok(!untrusted.reasonCodes.includes('CANONICAL_TYPED_ANSWER_CONTRACT_MATCH')); assert.ok(untrusted.reasonCodes.includes('CANONICAL_BYPASS_WITHHELD_ROUTE_NOT_TRUSTED'));
 });

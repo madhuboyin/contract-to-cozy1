@@ -4,16 +4,10 @@ const { ASK_OPERATION_DEFINITIONS } = require('../../src/services/ask/askOperati
 const { isWriteCapableOperation, persistenceClassOf, PERSISTENCE_DECLARATIONS } = require('../../src/services/ask/support/writeCapability.ts');
 
 const routable = Object.values(ASK_OPERATION_DEFINITIONS).filter((d) => d.messageRoutable);
-// Known disagreements between the `effect` label and the command registry (write trace 2026-11-11). A NEW disagreement fails this test: label it or record it here.
-const LABELLED_WRITE_BUT_NOT_WRITE_CAPABLE = new Set(['INCIDENT_CONTINUATION', 'MAJOR_EVENT_ENTRY']);
-
-test('every WRITE-labelled routable operation is write-capable, except the two recorded reads', () => {
-  const missed = routable.filter((d) => d.semantic.effect === 'WRITE' && !isWriteCapableOperation(d.operationId) && !LABELLED_WRITE_BUT_NOT_WRITE_CAPABLE.has(d.operationId)).map((d) => d.operationId);
-  assert.deepEqual(missed, []);
-});
-test('write-capable operations labelled READ/MONITOR are exactly the recorded set (no silent new ones)', () => {
-  const found = routable.filter((d) => d.semantic.effect !== 'WRITE' && isWriteCapableOperation(d.operationId)).map((d) => d.operationId).sort();
-  assert.deepEqual(found, ['HOME_ACTIONS', 'HOME_CHANGE_SUMMARY', 'HOME_DEADLINE_MONITOR', 'HVAC_DECISION_SCENARIO', 'HVAC_DECISION_START', 'REFINANCE_RATE_MONITOR', 'REPLACEMENT_GUIDANCE', 'SELLER_PREP_CHECKLIST'].filter((id) => routable.some((d) => d.operationId === id && d.semantic.effect !== 'WRITE')).sort());
+test('FR-WRT-4: every routable semantic effect agrees with the presence of its domain command', () => {
+  const { getAskDomainCommandByOperation } = require('../../src/services/ask/askDomainCommandRegistry.ts');
+  const disagreements = routable.filter((d) => (d.semantic.effect === 'WRITE') !== Boolean(getAskDomainCommandByOperation(d.operationId))).map((d) => `${d.operationId}:${d.semantic.effect}`).sort();
+  assert.deepEqual(disagreements, []);
 });
 test('every declaration names a registered operation, a valid class and a reason, and none restates the derived default', () => {
   const classes = ['NONE', 'TECHNICAL', 'DERIVED', 'USER_VISIBLE', 'CONFIRMATION_REQUIRED'];

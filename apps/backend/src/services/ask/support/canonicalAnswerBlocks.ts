@@ -41,20 +41,12 @@ export const CANONICAL_ANSWER_BLOCK_ID_PREFIXES: Readonly<Partial<Record<AskOper
   DIY_PROJECTS: ['diy-summary$', 'diy-projects$', 'diy-active$', 'diy-limit$'],
 });
 
-// Owner decision 2026-11-09 (audit P1): a canonical block proves the handler produced its normal output, not that routing chose the right handler. For
-// these operations the block only skips the relevance check when intent is independently confirmed: the homeowner confirmed the operation, or the
-// operation is listed in AUDITED_DETERMINISTIC_CANONICAL_BYPASS and was reached by a deterministic rule. Declared actions never reach the check at all.
-// Classifier- and model-routed answers always keep the relevance check. The list starts empty: add an operation only with an operation-specific
-// collision test. The other operations in the map above keep their earlier unconditional bypass.
-export const CONFIRMED_ROUTE_ONLY_CANONICAL_OPERATIONS: ReadonlySet<AskOperationId> = new Set<AskOperationId>([
-  'APPLIANCE_FAILURE_RISK', 'WARRANTY_LOOKUP', 'INCIDENT_CLAIM_STATUS', 'RECALL_REVIEW', 'SELL_HOLD_RENT_ANALYSIS', 'PROPERTY_TAX_APPEAL_READINESS',
-  'BREAK_EVEN_ANALYSIS', 'DO_NOTHING_SIMULATION', 'HOA_COMPLIANCE_STATUS', 'SERVICE_PRICE_CHECKS', 'PROJECT_TRACKER_PROJECTS', 'DIY_PROJECTS',
-]);
-export const AUDITED_DETERMINISTIC_CANONICAL_BYPASS: ReadonlySet<AskOperationId> = new Set<AskOperationId>([]);
-
-export function canonicalBypassAllowed(operationId: AskOperationId, route: { operationConfirmedByUser?: boolean; routedDeterministically?: boolean }): boolean {
-  if (!CONFIRMED_ROUTE_ONLY_CANONICAL_OPERATIONS.has(operationId)) return true;
-  return Boolean(route.operationConfirmedByUser) || (Boolean(route.routedDeterministically) && AUDITED_DETERMINISTIC_CANONICAL_BYPASS.has(operationId));
+// FR-GATE-3(a): a canonical block proves only that the handler produced its normal output. It never proves that routing chose the right handler. Every
+// operation therefore needs independent route trust before its canonical result may skip relevance: either the homeowner explicitly confirmed the
+// operation, or a currently certified deterministic rule selected it. Classifier/model routes keep the relevance check. Declared actions bypass the
+// semantic validator earlier because their server-authored operation identity is validated at the action boundary.
+export function canonicalBypassAllowed(_operationId: AskOperationId, route: { operationConfirmedByUser?: boolean; routedDeterministically?: boolean }): boolean {
+  return Boolean(route.operationConfirmedByUser) || Boolean(route.routedDeterministically);
 }
 
 // A boundary or an evidence footer alone is not an answer.
