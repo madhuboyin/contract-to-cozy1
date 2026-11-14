@@ -1,0 +1,54 @@
+{
+ "version": 1,
+ "operations": {
+  "HOME_STATUS_BOARD": {
+   "test": "tests/ask/realPath.homeStatusBoard.test.js",
+   "variants": [
+    "allUnknown",
+    "board",
+    "boardOffersHiddenItems",
+    "hiddenList"
+   ],
+   "observedBlocks": [
+    "BOUNDARY:status-board-boundary",
+    "GROUPED_LIST:status-board-items",
+    "LIMITATION:status-board-limits",
+    "SUMMARY:status-board-summary"
+   ]
+  },
+  "MAINTENANCE_STATUS": {
+   "test": "tests/ask/realPath.maintenanceStatus.test.js",
+   "variants": [
+    "completedHistory",
+    "dueSoonViewer",
+    "noTasks",
+    "openByTiming",
+    "overdueViewer"
+   ],
+   "observedBlocks": [
+    "BOUNDARY:maintenance-record-boundary",
+    "EVIDENCE:maintenance-evidence",
+    "GROUPED_LIST:maintenance-groups",
+    "SUMMARY:maintenance-summary"
+   ]
+  },
+  "PROPERTY_SUMMARY": {
+   "test": "tests/ask/realPath.propertySummary.test.js",
+   "variants": [
+    "browseRecord",
+    "completeness",
+    "overview",
+    "overviewNoRecordedFacts",
+    "overviewViewer"
+   ],
+   "observedBlocks": [
+    "EVIDENCE:property-summary-evidence",
+    "GROUPED_LIST:property-completeness",
+    "GROUPED_LIST:property-record-index",
+    "PROGRESS:property-completeness-progress",
+    "SUMMARY:property-summary",
+    "TABLE:property-summary-facts"
+   ]
+  }
+ }
+}

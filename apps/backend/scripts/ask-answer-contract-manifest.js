@@ -22,6 +22,9 @@ const typedContracts = new Map(); for (const m of semantic.matchAll(/^\s+([A-Z][
 const { blockIds } = require('./lib/askBlockIdScan');
 // Tier evidence a test or declared constant already provides (FR-GATE-2): CODE_PATH_CONTRACT = a conformance test reads the handler against a declared block-id constant.
 const CONFORMANCE_TESTED = new Set(['INVENTORY_LOOKUP', 'CAPITAL_RESERVE_PLAN']);
+// FR-GATE-2 tier (1): operations whose REAL handler a real-path test runs for each variant (tests/ask/support/realPathContract.js). Their contract is the blocks those executions produced, not a scan of the handler file.
+const EVIDENCE_FILE = path.join(askDir, 'answerContract/realPathEvidence.json');
+const realPath = fs.existsSync(EVIDENCE_FILE) ? JSON.parse(fs.readFileSync(EVIDENCE_FILE, 'utf8')).operations : {};
 
 const operations = Object.values(reg.ASK_OPERATION_DEFINITIONS).filter((d) => reg.isAskMessageRoutableOperation(d.operationId)).sort((a, b) => a.operationId.localeCompare(b.operationId)).map((d) => {
   const hf = handlerFiles(d.adapterKey);
@@ -36,8 +39,9 @@ const operations = Object.values(reg.ASK_OPERATION_DEFINITIONS).filter((d) => re
     const emitted = ids.map((i) => i.split(':')[1]);
     contract = { file: cf ? rel(cf) : null, declaredIds: declared, emittedNotDeclared: emitted.filter((i) => !declared.includes(i) && !declared.includes(i.replace(/\*$/, ''))).sort(), declaredNeverEmitted: declared.filter((i) => !emitted.some((e) => e === i || (e.endsWith('*') && i.startsWith(e.slice(0, -1))))).sort() };
   }
-  const tier = CONFORMANCE_TESTED.has(d.operationId) ? 'CODE_PATH_CONTRACT' : typed ? 'TYPED_CONTRACT_UNTESTED_AGAINST_HANDLER' : 'SOURCE_SCAN_ONLY';
-  return { operationId: d.operationId, adapterKey: d.adapterKey, handlerFiles: hf, allowedBlockTypes: [...d.allowedBlockTypes].sort(), emittedBlockIds: ids, typedContract: typed, contract, evidenceTier: tier };
+  const evidence = realPath[d.operationId] ?? null;
+  const tier = evidence || CONFORMANCE_TESTED.has(d.operationId) ? 'CODE_PATH_CONTRACT' : typed ? 'TYPED_CONTRACT_UNTESTED_AGAINST_HANDLER' : 'SOURCE_SCAN_ONLY';
+  return { operationId: d.operationId, adapterKey: d.adapterKey, handlerFiles: hf, allowedBlockTypes: [...d.allowedBlockTypes].sort(), emittedBlockIds: evidence ? evidence.observedBlocks : ids, typedContract: typed, contract, evidenceTier: tier, ...(evidence ? { realPath: { test: evidence.test, variants: evidence.variants } } : {}) };
 });
 // A handler file often serves several operations (and command receipts of operations that are not message-routable), so the block ids scanned from it are attributed to the FILE, not to one operation. `attribution` says which.
 const fileUsers = new Map(); for (const o of operations) { const k = o.handlerFiles.join('|'); fileUsers.set(k, (fileUsers.get(k) ?? 0) + 1); }

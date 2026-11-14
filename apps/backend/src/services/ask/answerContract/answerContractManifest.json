@@ -2555,6 +2555,7 @@
    ],
    "emittedBlockIds": [
     "BOUNDARY:status-board-boundary",
+    "GROUPED_LIST:status-board-items",
     "LIMITATION:status-board-limits",
     "SUMMARY:status-board-summary"
    ],
@@ -2576,7 +2577,16 @@
      "status-board-items"
     ]
    },
-   "evidenceTier": "TYPED_CONTRACT_UNTESTED_AGAINST_HANDLER",
+   "evidenceTier": "CODE_PATH_CONTRACT",
+   "realPath": {
+    "test": "tests/ask/realPath.homeStatusBoard.test.js",
+    "variants": [
+     "allUnknown",
+     "board",
+     "boardOffersHiddenItems",
+     "hiddenList"
+    ]
+   },
    "attribution": "EXCLUSIVE_FILE"
   },
   {
@@ -3773,23 +3783,10 @@
     "WORKFLOW_PROGRESS"
    ],
    "emittedBlockIds": [
-    "BOUNDARY:maintenance-forecast-boundary",
-    "BOUNDARY:maintenance-purchase-date-missing",
     "BOUNDARY:maintenance-record-boundary",
-    "EMPTY_STATE:maintenance-forecast-empty",
     "EVIDENCE:maintenance-evidence",
-    "SUMMARY:maintenance-complete-empty",
-    "SUMMARY:maintenance-complete-permission",
-    "SUMMARY:maintenance-complete-review",
-    "SUMMARY:maintenance-complete-select",
-    "SUMMARY:maintenance-create-input",
-    "SUMMARY:maintenance-create-permission",
-    "SUMMARY:maintenance-create-review",
-    "SUMMARY:maintenance-forecast-summary",
-    "SUMMARY:maintenance-summary",
-    "SUMMARY:maintenance-template-unavailable",
-    "SUMMARY:maintenance-update-review",
-    "SUMMARY:maintenance-update-value"
+    "GROUPED_LIST:maintenance-groups",
+    "SUMMARY:maintenance-summary"
    ],
    "typedContract": "matchesMaintenanceStatusAnswerContract",
    "contract": {
@@ -3832,7 +3829,17 @@
      "seasonal-maintenance-summary"
     ]
    },
-   "evidenceTier": "TYPED_CONTRACT_UNTESTED_AGAINST_HANDLER",
+   "evidenceTier": "CODE_PATH_CONTRACT",
+   "realPath": {
+    "test": "tests/ask/realPath.maintenanceStatus.test.js",
+    "variants": [
+     "completedHistory",
+     "dueSoonViewer",
+     "noTasks",
+     "openByTiming",
+     "overdueViewer"
+    ]
+   },
    "attribution": "SHARED_FILE"
   },
   {
@@ -4516,9 +4523,9 @@
    ],
    "emittedBlockIds": [
     "EVIDENCE:property-summary-evidence",
+    "GROUPED_LIST:property-completeness",
     "GROUPED_LIST:property-record-index",
     "PROGRESS:property-completeness-progress",
-    "SUMMARY:area-capture-notice",
     "SUMMARY:property-summary",
     "TABLE:property-summary-facts"
    ],
@@ -4540,7 +4547,17 @@
      "property-rooms"
     ]
    },
-   "evidenceTier": "TYPED_CONTRACT_UNTESTED_AGAINST_HANDLER",
+   "evidenceTier": "CODE_PATH_CONTRACT",
+   "realPath": {
+    "test": "tests/ask/realPath.propertySummary.test.js",
+    "variants": [
+     "browseRecord",
+     "completeness",
+     "overview",
+     "overviewNoRecordedFacts",
+     "overviewViewer"
+    ]
+   },
    "attribution": "EXCLUSIVE_FILE"
   },
   {
