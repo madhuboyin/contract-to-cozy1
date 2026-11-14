@@ -67,6 +67,16 @@ export interface ComposedTurnInput {
 const MAX_CAS_RETRIES = 6;
 const json = (value: unknown) => JSON.parse(JSON.stringify(value));
 const normalizeClause = (clause: string) => clause.trim().replace(/\s+/g, ' ').toLowerCase();
+/**
+ * A component's identity (FR-PER-2): its operation and clause, and for a model-selected data point also WHICH point and entity. Two facets over one clause span ("when was my furnace installed and last serviced") are two
+ * components with their own attempts and sections; without the point in the key the second would only be another attempt of the first and its answer would never be delivered. A clause with no data point keeps the key it
+ * always had, so stored composites are unaffected.
+ */
+export const componentKeyOfClause = (clause: ComposedClause): string => componentKeyOf(clause.operationId, {
+  clause: normalizeClause(clause.clause),
+  ...(clause.dataPointId ? { dataPoint: clause.dataPointId } : {}),
+  ...(clause.dataPointId && clause.entityRef ? { entity: clause.entityRef } : {}),
+});
 
 interface Stored { attempts: Attempt[] }
 const storedOf = (row: AskExecution): Stored => {
@@ -193,7 +203,7 @@ export async function resumeClarifiedComposedTurn(input: Omit<ComposedTurnInput,
 export function exhaustedComponentKeys(row: AskExecution): string[] {
   const clauses = storedClausesOf(row);
   const attempts = storedOf(row).attempts;
-  return clauses.map((clause) => componentKeyOf(clause.operationId, { clause: normalizeClause(clause.clause) })).filter((key) => {
+  return clauses.map(componentKeyOfClause).filter((key) => {
     const mine = attempts.filter((a) => a.componentKey === key);
     const latest = [...mine].sort((a, b) => b.number - a.number)[0];
     return !!latest && latest.status === 'FAILED_RETRYABLE' && !selectAttempt(mine).attempt;
@@ -231,7 +241,7 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
   const { db, parent, clauses } = input;
   const now = input.now ?? (() => new Date());
   const startedAt = Date.now();
-  const runs: ComponentRun[] = clauses.map((clause) => ({ clause, key: componentKeyOf(clause.operationId, { clause: normalizeClause(clause.clause) }) }));
+  const runs: ComponentRun[] = clauses.map((clause) => ({ clause, key: componentKeyOfClause(clause) }));
 
   const callChild = async (run: ComponentRun, number: number): Promise<{ executionId: string; status: string }> => {
     const clientRequestId = childClientRequestId(parent.clientRequestId, run.key, number);

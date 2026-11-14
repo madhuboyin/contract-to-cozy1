@@ -13,6 +13,7 @@ import { planDataPointQuery, pointOf, type QueryPlan } from '../dataPoint/dataPo
 import { prisma } from '../../../lib/prisma';
 import { safeTimezone } from '../support/propertyContext';
 import { runDataPointQuery } from '../dataPoint/dataPointQueryRunner';
+import { applyLaunchHints } from '../dataPoint/dataPointLaunchHints';
 import { planShape789, runShape789, shapePointIds, type Shape789Plan } from '../dataPoint/dataPointShapes789';
 
 const ENTITY_COPY: Record<string, { plural: string; singular: string; collection: string; record: string; none?: string }> = {
@@ -260,7 +261,8 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
   };
 }
 
-registerCapabilityHandler('data-point-read.read', async (envelope) => {
+/** The data-point read capability, exported so it can be exercised directly. */
+export const handleDataPointRead: Parameters<typeof registerCapabilityHandler>[1] = async (envelope) => {
   const requestedId = envelope.launchContext?.dataPointId;
   const forcedPoint = requestedId ? DATA_POINT_BY_ID.get(requestedId) : undefined;
   // A server-authored launch id that is no longer catalogued fails closed; it
@@ -268,9 +270,10 @@ registerCapabilityHandler('data-point-read.read', async (envelope) => {
   if (requestedId && !forcedPoint) return notice('DATA_POINT_NOT_IDENTIFIED', 'data-point-unidentified', 'That home detail is not available', 'Ask for the detail again and I’ll use the current home-data catalogue.');
   const requiredSlots = envelope.launchContext?.dataPointRequiredSlots ?? [];
   if (requiredSlots.length) return notice('DATA_POINT_REQUIRED_SLOT_MISSING', 'data-point-required-slot', 'I need one more detail', `Tell me ${requiredSlots.join(' and ')} so I can read the right home record.`);
-  // Parameters are advisory until a reviewed query template validates them.
-  // Point/record reads require none; silently accepting arbitrary model keys
-  // would recreate the raw-predicate path FR-DATA-15 forbids.
-  if (Object.keys(envelope.launchContext?.dataPointParameters ?? {}).length) return notice('DATA_POINT_PARAMETERS_UNSUPPORTED', 'data-point-parameters-unsupported', 'I need a simpler question', 'Ask for the recorded detail directly. Filtered and grouped questions use only reviewed query templates.');
-  return dataPointReadResult(envelope.userId, envelope.propertyId!, envelope.message, forcedPoint);
-});
+  // The entity a plan carried across facets and a short allowlist of parameters (an item name, a tax year) are turned into words the ordinary reader already understands, so they are matched against the home's own records under
+  // this caller's authorization. Any other model-chosen key is refused, never guessed: that would recreate the raw-predicate path FR-DATA-15 forbids.
+  const hinted = applyLaunchHints(envelope.message, { entityRef: envelope.launchContext?.dataPointEntityRef, parameters: envelope.launchContext?.dataPointParameters });
+  if (hinted.kind === 'UNSUPPORTED') return notice('DATA_POINT_PARAMETERS_UNSUPPORTED', 'data-point-parameters-unsupported', 'I need a simpler question', 'Ask for the recorded detail directly. Filtered and grouped questions use only reviewed query templates.');
+  return dataPointReadResult(envelope.userId, envelope.propertyId!, hinted.message, forcedPoint);
+};
+registerCapabilityHandler('data-point-read.read', handleDataPointRead);
