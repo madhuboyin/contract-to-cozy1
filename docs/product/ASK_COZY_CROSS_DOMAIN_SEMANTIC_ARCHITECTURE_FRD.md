@@ -1,6 +1,6 @@
 # Ask Cozy — Cross-Domain Semantic Request Architecture FRD
 
-**Status:** Draft v1.2 for owner review
+**Status:** Draft v1.3 for owner review
 
 **Date:** 2026-11-14
 
@@ -15,6 +15,8 @@
 **v1.1 amendment:** Makes the deterministic plan producer and generated shared lexicon mandatory; adds early structural admission convergence, schema-derived registry governance, capability-wide canonical-relation enforcement, an in-domain-not-understood recovery, presentation-quality requirements, cardinality-first warranty modelling, and broader cross-domain acceptance examples. It does not authorize blanket execution of regex-matched reads or writes.
 
 **v1.2 amendment:** Adds deterministic semantic-job selection for analyses and workflows, migration and retirement governance for legacy recognizers, a thin end-to-end vertical slice before registry generalization, a formal independence rule for admission evidence, conflict-aware transitional warranty reads, and declared semantic meaning tags for relationship predicates.
+
+**v1.3 amendment:** Defines bounded and intersected relation authorization, replay-time reauthorization, indexed protected-span mapping, deterministic/provider invocation and reconciliation, the query-versus-presentation boundary, canonical duplicate-field semantics, Boolean query logic, and complete six-facet retrieval under bounded provider budgets. It also corrects stale baseline and delivery statements that implied the public child-execution contract still capped composition below six.
 
 ---
 
@@ -222,7 +224,7 @@ interface SemanticFacet {
   projection: 'EXISTS' | 'COUNT' | 'LIST' | 'DETAIL' |
               'AGGREGATE' | 'COMPARE' | 'TIMELINE' | 'ANALYSIS';
   fields: FieldReference[];
-  filters: FilterExpression[];
+  where: BooleanExpression | null;
   sort: SortExpression[];
   limit: number | null;
   time: TimeExpression | null;
@@ -270,6 +272,8 @@ Normalisation may annotate or derive canonical tokens, but shall preserve:
 - requested projection.
 
 The system shall never destructively strip a preamble if doing so can change meaning. Safety evaluation shall use the raw message and, where applicable, the normalized representation; either may trigger a boundary.
+
+Protected values shall use indexed, typed placeholders such as `[PERSON_1]`, `[CONTRACTOR_2]`, and `[POLICY_REF_1]`; repeated values of the same type shall never collapse to an indistinguishable token. The server shall retain a non-provider-visible `ProtectedSpanMap` containing, for each placeholder, its raw span, protected span, minimised span, semantic role, and any authorised entity candidate. Provider source spans shall be expressed and validated against the exact minimised payload sent to that provider, then mapped through this bijection to raw source spans and eligible entity candidates. A missing, overlapping, ambiguous, or non-bijective mapping is `SCHEMA_INVALID`; code shall not validate minimised offsets against the raw message.
 
 ### FR-PLAN-4 — Multi-facet semantics
 
@@ -326,6 +330,8 @@ Every queryable entity shall declare:
 
 Every queryable field shall declare its type, units, null semantics, enum vocabulary, supported operators, projection eligibility, sort/group/aggregate eligibility, audience floor, sensitivity, and canonical data-point identity.
 
+When persisted models contain duplicate or legacy representations of one business meaning, the registry shall additionally declare a stable semantic field id, authoritative storage field, legacy aliases, ordered coalescence rule, blank-versus-null handling, conflict behavior, write target, backfill/consolidation disposition, and provenance preference. A reader shall not silently prefer whichever duplicate field it happens to query. Conflicting non-empty values shall produce `CONFLICTED` with provenance unless a reviewed domain rule deterministically resolves them. Fields that merely look similar—such as brand versus manufacturer, or a property roof versus an inventoried roof component—shall remain separate until their business equivalence is explicitly approved.
+
 ### FR-ONT-3 — Relation Registry
 
 Relations shall be first-class, directional declarations. Each relation shall define:
@@ -340,6 +346,8 @@ Relations shall be first-class, directional declarations. Each relation shall de
 - authorisation propagation;
 - query compiler implementation;
 - seeded verification scenarios.
+
+Every traversable relation path shall have a stable path id and declare maximum depth, maximum parent cardinality, maximum child cardinality, maximum joined rows, cycle policy, filter placement, and authoritative property-scope parent. The default is one registered edge; deeper paths require an explicit reviewed declaration. Filters, audience floors, lifecycle rules, and property ownership shall apply at every node. When multiple parent chains can authorize a record, execution shall require the intersection of all applicable authorization constraints and use the strictest audience/sensitivity floor; one permissive parent shall never override another restrictive parent. An invisible intermediate or terminal record shall behave as not found and shall not leak through counts, existence, provenance, or error copy.
 
 Every executable relationship predicate or writer shall additionally declare a stable `predicateId`, its `semanticRelationId`, direction, state semantics, canonical adapter id, usage (`READ`, `WRITE` or `DERIVED`) and, for a specialized derivation, its canonical parent predicate. Untagged relationship logic is non-conformant.
 
@@ -438,7 +446,7 @@ Conversation state shall store semantic references, not only text:
 
 ### FR-ENT-4 — No context privilege escalation
 
-Inherited entities and filters shall be reauthorised on every turn and immediately before execution or preview.
+Inherited entities and filters shall be reauthorised on every turn and immediately before execution or preview. Reopening conversation history, saved results, execution details, exports, or refreshed answer cards shall re-resolve every record id and registered parent chain against current property membership, role, audience, lifecycle, sensitivity, and record visibility. Stored receipts are audit evidence, not continuing authorization. Records or fields no longer visible shall be redacted deterministically; a stale receipt shall never recreate a previously authorized disclosure.
 
 ---
 
@@ -460,6 +468,8 @@ TIME <property-timezone interval>
 ```
 
 No provider-generated SQL, Prisma object, delegate name, column name, or unrestricted expression may execute.
+
+`WHERE` shall be a typed Boolean AST containing only `AND`, `OR`, `NOT`, and registered `PREDICATE` nodes. Relation traversal shall reference stable registered path ids and remain within their declared depth, cardinality, joined-row, cycle, authorization, and lifecycle bounds. The compiler shall reject an unregistered or unbounded path rather than infer a storage join.
 
 ### FR-QUERY-2 — Required shapes
 
@@ -494,6 +504,8 @@ The result shall honor the requested projection:
 ### FR-QUERY-4 — Positive, negative, and unknown
 
 `HAS_NONE` shall be evaluated against a canonical relation and shall remain distinct from `UNKNOWN` and `MISSING_EVIDENCE`. Answers shall state which meaning was used—for example, “no warranty linked in your home record,” not “has no warranty” when the record cannot prove real-world absence.
+
+Connectives shall be represented rather than flattened. Coordinated values for one single-valued field, such as “plumbing and electrical tasks,” mean membership in the requested value set when the domain semantics permit it; predicates on different fields normally mean `AND`; explicit “either A or B” means `OR`; and “neither A nor B” means `NOT A AND NOT B`. Ambiguous negative coordination such as “without a manual or receipt” shall clarify unless the surrounding language or a reviewed product rule establishes whether the homeowner means missing either document or missing both. The receipt and renderer shall state the interpreted population.
 
 ### FR-QUERY-5 — Time semantics
 
@@ -562,6 +574,12 @@ An uncertified sentence match alone shall not open a write preview. The semantic
 
 If the requested analysis or workflow is not registered, Ask shall preserve the interpreted intent in its response, identify the missing capability without claiming the user asked something else, and record unsupported demand.
 
+### FR-CAP-6 — Query and presentation ownership
+
+The Data Query Planner owns retrieval semantics: entity population, Boolean predicates, relation traversal, projection, grouping, ordering, limits, time bounds, authorization, and the canonical execution receipt. A domain presentation adapter may convert that receipt into approved rich UI, including chips, grouped views, view state, explanatory labels, and authorized row actions; it shall not change the queried population or recompute business predicates independently.
+
+Existing list/detail/read operations shall either become presentation adapters over a canonical query receipt or be registered as explicit derived-read capabilities when they add domain assessment beyond retrieval. Derived coverage, readiness, risk, cost, or recommendation assessments remain capabilities with their own typed receipts. This boundary shall prevent the same homeowner question from reaching inconsistent data semantics merely because one route renders a richer card.
+
 ---
 
 ## 12. Understanding and confidence policy
@@ -575,11 +593,12 @@ The architecture shall implement both a deterministic semantic parser and a real
 For large catalogues, interpretation shall use bounded two-stage retrieval:
 
 1. choose up to four domain candidates plus overflow metadata;
-2. search capabilities, entities, fields, and relations inside up to three domain groups concurrently;
-3. merge candidates deterministically by facet and source span;
-4. validate every target against the full eligible registry.
+2. assign stable facet ids from source spans before target retrieval;
+3. search capabilities, entities, fields, and relations through a bounded union request, facet-centric requests, or domain-group requests;
+4. merge candidates deterministically by stable facet id, raw source span, and semantic identity; and
+5. validate every target against the full eligible registry.
 
-The limits are latency/cost controls, not permission to omit an independently requested facet without disclosure.
+Concurrency and provider-call limits are latency/cost controls, not permission to omit an independently requested facet. Every detected facet shall receive target retrieval or an explicit `DOMAIN_NOT_SEARCHED`/budget-overflow state in the plan and answer. A request may contain six facets even when the provider budget allows only three concurrent target calls; batching or a union call shall be preferred, and any remaining overflow shall produce an honest partial plan rather than disappear. Dependencies, including cross-domain dependencies, shall reference the stable facet ids allocated before stage two; provider-local array indexes are not dependency identities.
 
 ### FR-UND-3 — Confidence is multidimensional
 
@@ -622,6 +641,12 @@ A certified deterministic rule may bypass semantic interpretation only when its 
 
 Provider outage, privacy disallowance, timeout or budget exhaustion shall not disable meanings within the deterministic parser's declared coverage. Telemetry shall report deterministic-plan success, provider-expanded success, producer disagreement and unresolved prompts separately. The product shall not claim provider-independent coverage beyond the measured deterministic grammar.
 
+### FR-UND-7 — Producer invocation and reconciliation
+
+After raw-message safety evaluation and context authorization, the deterministic parser shall run synchronously first. When it produces a complete validated plan covering every meaningful source span and admission policy permits execution, the runtime may skip the provider. When any span is unresolved, ambiguous, outside declared deterministic coverage, or requires broader multi-facet recall, the provider shall receive the complete approved minimised context plus explicit unresolved-span markers; it shall not receive only a fragment that removes dependency context.
+
+Producer outputs shall reconcile by stable raw source span and semantic identity, not by array position or score alone. Equivalent facets merge with lineage from both producers. Non-equivalent claims over the same span are a material disagreement and shall be resolved through independently calibrated evidence or a focused clarification. Stable facet ids shall be allocated before target retrieval so dependencies survive batching and cross-domain merging. Offline evaluation shall run both producers on all eligible sealed scenarios even when production short-circuiting would skip the provider, so incremental coverage and disagreements remain measurable.
+
 ---
 
 ## 13. Execution receipts and answer correctness
@@ -639,6 +664,7 @@ Every executed query or capability shall produce a typed receipt containing:
 - missing/unknown/not-applicable states;
 - provenance and source timestamps;
 - authorization and applicability decision;
+- authorization-chain evidence, visibility/lifecycle versions, and receipt-currentness metadata sufficient for replay-time reauthorization;
 - answer variant id;
 - child execution ids for composed turns.
 
@@ -695,6 +721,8 @@ Safety, restricted-request, explicit-command, and emergency boundaries shall ins
 ### FR-SEC-2
 
 Known identifiers shall be protected before normalization. The final provider payload shall be minimized independently and checked for routing-meaning loss. Provider terms and homeowner-text processing approval shall be recorded before provider use.
+
+Protection shall use indexed typed placeholders and the server-only `ProtectedSpanMap` required by FR-PLAN-3. The provider shall receive neither the bijection nor raw identifiers. Provider spans shall validate against the exact payload sent, then map back to raw spans and authorised entity candidates on the server. Mapping failures, duplicate placeholder identities, or attempts to bind a placeholder to an ineligible record shall fail closed and shall be separately observable from ordinary semantic ambiguity.
 
 ### FR-SEC-3
 
@@ -778,7 +806,12 @@ The system shall report separately:
 19. deterministic semantic-job selection accuracy;
 20. recognizer-migration parity and collision rate;
 21. presentation-conformance accuracy; and
-22. latency by producer and route.
+22. latency by producer and route;
+23. Boolean-expression and interpreted-population accuracy;
+24. relation-bound and intersected-authorization conformance;
+25. protected-span round-trip and entity-binding accuracy;
+26. replay-time reauthorization/redaction accuracy; and
+27. six-facet retrieval completeness, overflow disclosure and cross-domain dependency accuracy.
 
 ### FR-EVAL-4 — Product gates
 
@@ -794,6 +827,10 @@ Before claiming the architecture meets the product objective, the sealed suite s
 | Exact query result correctness | ≥ 99% on deterministic seeded scenarios |
 | Answer structural entailment | ≥ 99% |
 | Presentation conformance | ≥ 99% and zero internal identifiers in seeded homeowner-visible answers |
+| Protected-span round trip | 100% on seeded repeated-placeholder and entity-binding cases |
+| Relation-bound and authorization conformance | 100%; zero cross-property or audience-floor disclosures |
+| Six-facet accounting | 100% retrieved or explicitly marked overflow/unavailable; zero silently dropped facets |
+| Replay reauthorization | 100% redaction after seeded role, membership, lifecycle, or visibility changes |
 | False decline on supported, answerable prompts | ≤ 1% |
 | Incorrect high-confidence selection | upper 95% confidence bound < 1% per risk stratum |
 | Wrong write routing or unconfirmed effect | zero observed; statistical bound reported |
@@ -818,12 +855,13 @@ The following figures are implementation baselines, not permanent requirements. 
 | Area | Current observed baseline (2026-11-14) | Consequence |
 |---|---:|---|
 | Registered operations | 231 total; 124 message-routable | a flat operation choice is too broad and counts must be derived |
-| Routing sweep | 708 prompts; 13.4% direct hit; 63.8% fallback; 3.4% misroute | current phrase coverage is not a correctness architecture |
+| Routing sweep | 708 prompts; 13.4% direct hit; 63.8% fallback; 3.4% misroute | post-demotion, pre-certification diagnostic; current phrase coverage is not a correctness architecture |
 | Data catalogue | 107 points across 10 catalogue domains | catalogue is useful but does not cover all owner-visible data |
 | Query templates | 11 | generic querying is sparse relative to the property model |
 | Weighted data reachability | 32% direct; 57% reachable | routing alone cannot reach the 90% objective |
 | Answer contracts | 5 code-path, 11 typed-but-untested, 108 source-scan-only | most operations lack structural answer evidence |
 | Human-confirmed sealed rows | 0 of 10,716 proposed | current certification claims are not established |
+| Composition response capacity | decomposition and public response contract permit up to six children | the remaining gap is semantic discovery, dependency preservation and honest overflow—not response-schema capacity |
 
 Known high-priority correctness gaps to address during implementation include:
 
@@ -843,7 +881,14 @@ Known high-priority correctness gaps to address during implementation include:
 14. deterministic parsing does not yet guarantee semantic-job selection for analyses and workflows;
 15. existing recognizers and vocabulary sources have no prompt-recognition retirement plan;
 16. correlated routing signals can be mistaken for independent evidence; and
-17. relationship predicates lack machine-checkable semantic meaning tags.
+17. relationship predicates lack machine-checkable semantic meaning tags;
+18. relation paths lack one governing bound and intersected-authorization contract;
+19. provider spans are not governed by a raw/protected/minimised offset bijection;
+20. deterministic/provider invocation, reconciliation and cross-domain dependency identities are underspecified;
+21. generic query semantics and rich domain presentation can diverge;
+22. duplicate persisted scalar fields can coalesce inconsistently or contradict one another;
+23. Boolean coordination and negative connective semantics are not represented consistently; and
+24. saved or replayed receipts do not yet have a complete reauthorization/redaction contract.
 
 These are cross-domain examples of missing abstractions. Fixing them individually without the registries, plan contract, planners, receipts, and evaluation system in this FRD does not satisfy the architecture.
 
@@ -856,8 +901,10 @@ Implementation shall be incremental by architectural seam, not by adding prompt 
 ### Phase 0 — Baseline and invariants
 
 - Generate authoritative operation, domain, entity, field, relation, capability, and answer-variant inventories.
+- Inventory duplicate/legacy scalar fields and classify each pair as one canonical semantic field with governed coalescence or as intentionally distinct business meanings.
 - Inventory every existing recognizer and vocabulary source and create the recognizer-retirement manifest required by FR-ONT-8.
 - Generate a cross-domain duplicate-definition report for relationship reads, writes and derived analyses, including direct storage access outside canonical adapters.
+- Inventory every traversable relation path, property-scope parent and current traversal/cardinality limit; flag unbounded paths and permissive dual-parent authorization.
 - Derive candidate entity, field, enum and storage-relation metadata from Prisma and reconcile it with the data-point and property-context catalogues.
 - Reconcile counts and archive superseded implementation-ledger rows.
 - Define seeded scenarios and independent semantic families across all domains.
@@ -883,9 +930,10 @@ Implementation shall be incremental by architectural seam, not by adding prompt 
 
 - Implement the minimum Entity, Field, Relation and Capability registry subset for inventory, warranty and maintenance.
 - Generate the corresponding lexicon subset and typed grammar from reviewed registry metadata.
-- Extend the understanding contract with `QUERY`, `CAPABILITY` and `COMMAND` facets and preserve raw/normalized/minimized text plus source spans.
+- Extend the understanding contract with `QUERY`, `CAPABILITY` and `COMMAND` facets; preserve raw/normalized/minimized text; implement indexed typed placeholders and the raw/protected/minimised span map.
 - Run one complete path through deterministic semantic-job/query selection, property-backed entity resolution, plan validation, query or capability adapter, typed receipt, structural answer verification, homeowner rendering and semantic follow-up.
-- The slice shall include: inventory fact/detail/count; positive, negative, unknown and conflicted warranty states; maintenance due-date and item relations; one analysis such as replacement guidance; one confirmed command preview; and one follow-up refinement.
+- The slice shall include: inventory fact/detail/count; positive, negative, unknown and conflicted warranty states; maintenance due-date and item relations; Boolean `AND`/`OR`/`NOT`; bounded relation traversal; one analysis such as replacement guidance; one confirmed command preview; one follow-up refinement; and replay after an authorization change.
+- Implement one query-backed rich presentation adapter and prove that it preserves the canonical receipt population and predicates.
 - Record abstraction changes discovered by the slice before expanding registry generation to other domains.
 
 **Exit:** all three target kinds execute through the same plan boundary in the slice; exact seeded results and adjacent negatives pass; provider absence does not break declared deterministic coverage; no slice-specific vocabulary bypasses the registry.
@@ -893,6 +941,7 @@ Implementation shall be incremental by architectural seam, not by adding prompt 
 ### Phase 2B — Ontology and typed-plan generalization
 
 - Generalize Entity, Field, Relation and Capability registries across all approved domains.
+- Generalize canonical scalar-field/coalescence manifests, relation-path bounds, intersected authorization and replay-time redaction across all approved domains.
 - Generalize schema-derived registry generation, reviewed overrides and drift checks.
 - Generate the complete versioned shared semantic lexicon from the approved registries.
 - Expand the mandatory deterministic parser to explicit low-risk queries, semantic jobs and commands across all domains.
@@ -903,9 +952,10 @@ Implementation shall be incremental by architectural seam, not by adding prompt 
 
 ### Phase 3 — Data Query Planner
 
-- Implement the safe query algebra and compiler.
+- Implement the safe Boolean query algebra, registered relation-path bounds and compiler.
 - Migrate current data-point queries into registered entities/relations.
 - Add symmetric positive/negative, absence, time-series, comparison, and cross-entity shapes.
+- Convert existing retrieval-style operations to query presentation adapters or explicitly register them as derived-read capabilities.
 - Produce typed query receipts and deterministic renderers.
 
 **Exit:** seeded query scenarios across every registered relation pass exact row/count assertions.
@@ -925,16 +975,17 @@ Implementation shall be incremental by architectural seam, not by adding prompt 
 - Replace source-scan trust with handler-owned typed variants.
 - Verify relation, polarity, projection, fields, rows, counts, and provenance from receipts.
 - Enforce homeowner-facing labels, value formatting and failure-class-appropriate retry behavior for every variant.
-- Support six child executions in the public contract.
+- Verify complete six-facet plans, stable cross-domain dependencies, and explicit partial/overflow states through the existing six-child public response capacity.
 
 **Exit:** every routable capability has a code-path contract and the answer gate has no bag-of-words trust path.
 
 ### Phase 6 — Provider, calibration, and end-to-end evaluation
 
-- Connect the real provider through the canonical plan schema and minimization boundary.
-- Run two-stage domain/capability retrieval.
+- Connect the real provider through the canonical plan schema, indexed-placeholder minimization boundary, and span-mapping validator.
+- Implement deterministic-first invocation, unresolved-span provider expansion, semantic reconciliation, and two-stage domain/capability retrieval.
+- Ensure all detected facets receive bounded retrieval or an explicit `DOMAIN_NOT_SEARCHED` overflow result; preserve stable cross-domain dependencies.
 - Calibrate by semantic risk stratum.
-- Execute the sealed cross-domain suite and publish layer metrics.
+- Execute both producers over the sealed cross-domain suite, including production-short-circuited cases, and publish layer metrics.
 
 **Exit:** all FR-EVAL gates pass, or the result identifies failed domains/strata without a completion claim.
 
@@ -965,7 +1016,15 @@ The implementation is incomplete until the repository contains:
 19. metamorphic paraphrase runner;
 20. per-layer and per-producer measurement report;
 21. unsupported-demand and in-domain-not-understood telemetry; and
-22. current requirement-to-evidence matrix.
+22. current requirement-to-evidence matrix;
+23. indexed-placeholder and protected-span-map contract with round-trip fixtures;
+24. registered relation-path manifest with depth, cardinality, joined-row, cycle and authorization bounds;
+25. canonical semantic-field/coalescence manifest with conflict and consolidation rules;
+26. query-backed domain presentation adapters and population-equivalence checks;
+27. Boolean expression AST, connective fixtures and interpreted-population assertions;
+28. producer invocation/reconciliation and stable-facet-identity contract;
+29. six-facet retrieval, overflow and cross-domain dependency fixtures; and
+30. receipt replay reauthorization/redaction harness.
 
 Generated inventories shall be checked into or reproducibly generated by repository scripts. Hand-maintained totals in prose are informative only.
 
@@ -984,10 +1043,12 @@ The following examples illustrate plan equivalence. They are not a phrase allowl
 | “what maintenance is due next month?” | `QUERY MaintenanceTask LIST status open, due next calendar month` |
 | “show plumbing and electrical tasks” | one query with category set `{PLUMBING,ELECTRICAL}` or two explicit facets; neither category dropped |
 | “which appliances have overdue maintenance?” | `QUERY InventoryItem LIST relation MaintenanceTask HAS_OVERDUE` |
-| “which appliances don't have a manual or receipt?” | registered document-relation predicate with explicit `OR` semantics |
+| “which appliances don't have a manual or receipt?” | focused clarification between “missing either document” and “missing both,” unless prior context or a reviewed domain rule makes the connective unambiguous |
 | “how much did I spend on repairs last year?” | aggregate actual repair cost over last calendar year in property timezone |
 | “compare this year's tax bill with last year's” | `COMPARE` two registered periods and compute deterministic delta |
 | “what claims are open and what documents are missing?” | two related facets with claim entity dependency and explicit partial-completion behavior |
+| “show open claims, missing claim documents, overdue maintenance, expired warranties, unpaid tax bills, and active projects” | six stable facets; every facet receives bounded retrieval or an explicit overflow state, and cross-domain dependencies use stable facet ids |
+| “show the documents for my water-damage claim” | registered bounded claim-to-document path; claim and document authorization are both enforced, and an invisible document is not counted or disclosed |
 | “do I have recalls and which items are affected?” | recall-review capability plus affected-item receipt, not generic guidance |
 | “should I repair the furnace or replace it?” | registered decision capability with resolved furnace and required cost/condition slots |
 | “how long until owning beats renting?” | deterministic semantic job `OWN_RENT_BREAK_EVEN` with required cost, horizon and housing-scenario slots resolved by the Capability Planner |
@@ -1030,6 +1091,14 @@ For every row, seeded data shall assert the exact plan, records, counts, missing
 19. **Evidence independence:** correlated matchers over the same vocabulary do not establish independent agreement.
 20. **Transitional warranty honesty:** legacy links are inspected conservatively and reported as record-link states, not treated as proof of coverage.
 21. **Declared relationship meaning:** semantic meaning tags make duplicate-predicate governance enforceable.
+22. **Bounded relation traversal:** every executable path has reviewed depth/cardinality/join/cycle bounds and authorization is intersected across applicable parent chains.
+23. **Protected-span bijection:** provider offsets are validated in minimised coordinates and mapped server-side to raw spans and eligible entities.
+24. **Deterministic-first topology:** complete validated deterministic plans may short-circuit production provider calls; unresolved spans invoke provider expansion and semantic reconciliation.
+25. **Query/presentation separation:** the query planner owns data semantics while domain presentation adapters own rich rendering without changing the receipt population.
+26. **Canonical scalar semantics:** duplicate persisted fields require one governed semantic identity/coalescence rule or an explicit declaration that they mean different things.
+27. **Boolean query meaning:** conjunction, disjunction and negation are represented as a typed AST and ambiguous coordination clarifies.
+28. **Complete facet accounting:** provider budgets cannot silently discard any of the six supported facets or their cross-domain dependencies.
+29. **Replay is a new disclosure:** saved receipts and answer history are reauthorized and redacted against current visibility before display.
 
 ---
 
@@ -1041,6 +1110,7 @@ For every row, seeded data shall assert the exact plan, records, counts, missing
 4. Latency and cost budgets for single-stage and two-stage interpretation.
 5. Whether `UNKNOWN` warranty/coverage state should default to a separate result group or be excluded unless explicitly requested. Recommendation: separate group.
 6. Which recommendation/analysis capabilities require additional materiality disclosures beyond their existing domain rules.
+7. Which currently duplicated scalar fields represent the same business meaning and which are intentionally distinct; until decided, conflicting non-empty values remain `CONFLICTED` rather than silently coalesced.
 
 These decisions do not block Phase 0 inventories, schema design, pure planners, seeded fixtures, or containment of known contradictory/fabricated-answer paths.
 
@@ -1059,6 +1129,14 @@ It is complete only when:
 - every registered domain is represented in the ontology and sealed suite;
 - every owner-visible included datum has a deterministic authorised read path;
 - registered relations use one canonical definition;
+- every traversable relation path is bounded and applies intersected authorization at every node;
+- provider protected spans round-trip through the indexed server-side mapping without validating minimised offsets against raw text;
+- deterministic and provider plans follow the declared invocation/reconciliation topology and retain stable facet/dependency identities;
+- all detected facets receive target retrieval or an explicit overflow state within the supported six-facet plan;
+- duplicate persisted scalar fields use an approved canonical/coalescence rule or remain explicitly distinct;
+- query-backed rich presentations preserve the canonical query receipt population and predicates;
+- Boolean connective semantics and interpreted populations pass seeded assertions;
+- receipt replay, saved results, exports and refreshed cards pass current authorization and redaction checks;
 - query, capability, analysis and writer code paths consume registry-owned relationship adapters, with no unexplained duplicate definition;
 - every executable relationship predicate and writer carries the required meaning tags;
 - every legacy recognizer has been migrated, explicitly retained as a safety/certified optimization, or retired under FR-ONT-8;
