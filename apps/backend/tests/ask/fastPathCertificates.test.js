@@ -45,7 +45,7 @@ test('aggregate certification is a separate mandatory gate', () => {
 });
 
 test('an uncertified deterministic match cannot make a DETERMINISTIC final claim and carries lineage', () => {
-  const decision = resolveAskRoutingCascade('Show my warranties', { localRoutingEnabled: false });
+  const decision = resolveAskRoutingCascade('Show my insurance policies', { localRoutingEnabled: false });
   assert.equal(decision.stage, 'REMOTE_FALLBACK');
   assert.equal(decision.operation.operationId, 'GROUNDED_GUIDANCE');
   assert.equal(decision.fastPathLineage.status, 'DEMOTED');

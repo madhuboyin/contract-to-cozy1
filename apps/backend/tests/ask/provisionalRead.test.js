@@ -24,9 +24,9 @@ test('an uncertified rule that matches a reviewed data-point read starts it prov
   }
 });
 test('nothing else changes: a write, a decision, a safety message, another read operation or an operation this home cannot run is never provisional', () => {
-  assert.ok(isProvisionalReadOperation('DATA_POINT_READ')); assert.deepEqual([...PROVISIONAL_READ_OPERATIONS].sort(), ['DATA_POINT_READ', 'MAINTENANCE_STATUS']);
-  for (const op of ['INVENTORY_ITEM_CORRECT', 'HVAC_DECISION_START', 'MAINTENANCE_TASK_CREATE', 'WARRANTY_LOOKUP', 'COVERAGE_GAPS', 'EMERGENCY_BOUNDARY', 'GROUNDED_GUIDANCE']) assert.equal(isProvisionalReadOperation(op), false, op);
-  for (const message of ['Add a task to clean the gutters', 'Show my warranties', 'Correct the model number of my dishwasher', 'What coverage gaps does my home have?']) assert.notEqual(route(message).stage, 'PROVISIONAL', message);
+  assert.ok(isProvisionalReadOperation('DATA_POINT_READ')); assert.deepEqual([...PROVISIONAL_READ_OPERATIONS].sort(), ['DATA_POINT_READ', 'MAINTENANCE_STATUS', 'WARRANTY_LOOKUP']);
+  for (const op of ['INVENTORY_ITEM_CORRECT', 'HVAC_DECISION_START', 'MAINTENANCE_TASK_CREATE', 'COVERAGE_GAPS', 'EMERGENCY_BOUNDARY', 'GROUNDED_GUIDANCE']) assert.equal(isProvisionalReadOperation(op), false, op);
+  for (const message of ['Add a task to clean the gutters', 'Show my insurance policies', 'Correct the model number of my dishwasher', 'What coverage gaps does my home have?']) assert.notEqual(route(message).stage, 'PROVISIONAL', message);
   assert.equal(route('My house is on fire').stage, 'SAFETY');
   assert.notEqual(route('How much did I pay for my furnace?', { eligibleOperationIds: ['INVENTORY_LOOKUP'] }).stage, 'PROVISIONAL', 'an operation outside the eligible set is not tried');
 });

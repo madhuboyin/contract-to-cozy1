@@ -92,13 +92,41 @@ function maintenanceRouteGuard(message: string): boolean {
   return !MAINTENANCE_OTHER_JOB.test(message) && !OTHER_OWNER.test(message);
 }
 
+// ---- warranty lookup --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// The warranty list is a record read. It may be delivered when (1) the question is about warranties and is not a command, claim, coverage-gap or cost request (another operation owns those), (2) the answer has the shape the real
+// handler produces (a summary block with a known id plus the "recorded information only" boundary), and (3) a status the homeowner named (expiring, expired) is the view that was applied, so a filtered question is never answered
+// with the unfiltered list or the other way round. The boundary block keeps the answer from deciding what is covered.
+const WARRANTY_TOPIC = /\bwarrant(?:y|ies)\b/i;
+const WARRANTY_OTHER_JOB = /\b(?:claims?|(?:file|filing) (?:a|an|my|our)|add|new|create|record a|save|buy|purchase|renew|cancel|extend|extended|register|transfer|correct|fix|change|update|edit|rename|delete|remove|missing|without|uncovered|gaps?|lack(?:s|ing)?|exposure|insurance|policy|premium|repair|replace|worth|should i|remind|notify|alert|warn|monitor|price|cost|quote|compare|coverage (?:analysis|review)|covered|cover|covers)\b/i;
+const WARRANTY_SUMMARY_IDS = new Set(['warranty-summary', 'warranty-empty', 'warranty-no-match']);
+const WARRANTY_ASKS_EXPIRED = /\b(?:already )?(?:expired|lapsed|ran out|run out)\b/i;
+const WARRANTY_ASKS_EXPIRING = /\b(?:expir(?:e|es|ing)|runs? out|running out|ends?|ending)\b/i;
+const warrantyBlockId = (block: unknown): string => String((block as { id?: string }).id ?? '');
+export function groundedWarrantyVerdict(question: string, result: AskOperationResult): GroundedReadVerdict {
+  const fail = (code: string): GroundedReadVerdict => ({ outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', code] });
+  if (!WARRANTY_TOPIC.test(question)) return fail('QUESTION_NOT_ABOUT_WARRANTIES');
+  if (WARRANTY_OTHER_JOB.test(question)) return fail('ANOTHER_OPERATION_OWNS_THE_QUESTION');
+  if (result.status !== 'ANSWERED' && result.status !== 'READY_WITH_LIMITATIONS') return fail('ANSWER_IS_NOT_A_DELIVERABLE_STATUS');
+  const ids = result.blocks.map(warrantyBlockId);
+  if (!ids.some((id) => WARRANTY_SUMMARY_IDS.has(id))) return fail('ANSWER_IS_NOT_A_VERIFIED_VARIANT');
+  if (!ids.includes('warranty-boundary')) return fail('ANSWER_LACKS_THE_RECORDED_INFORMATION_BOUNDARY');
+  const expired = WARRANTY_ASKS_EXPIRED.test(question); const expiring = !expired && WARRANTY_ASKS_EXPIRING.test(question);
+  const applied = (result.parameters as { viewState?: { statusFilter?: string } } | undefined)?.viewState?.statusFilter ?? null;
+  const noMatch = ids.includes('warranty-no-match') || ids.includes('warranty-empty');
+  if (expiring && !noMatch && applied !== 'EXPIRING') return fail('VIEW_DOES_NOT_MATCH_EXPIRING_QUESTION');
+  if (expired && !noMatch && applied !== 'EXPIRED') return fail('VIEW_DOES_NOT_MATCH_EXPIRED_QUESTION');
+  if (!expired && !expiring && applied && applied !== 'ALL') return fail('FILTERED_VIEW_FOR_AN_UNFILTERED_QUESTION');
+  return { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] };
+}
+const warrantyRouteGuard = (message: string): boolean => WARRANTY_TOPIC.test(message) && !WARRANTY_OTHER_JOB.test(message);
+
 // ---- which operations may be tried provisionally --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 export type GroundedReadCheck = (question: string, result: AskOperationResult) => GroundedReadVerdict;
 /** FR-GATE-8: an operation may be tried provisionally only together with a grounded delivery check. This table IS the allowlist (fastPathCertificates derives PROVISIONAL_READ_OPERATIONS from it). */
-export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict });
+export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict, WARRANTY_LOOKUP: groundedWarrantyVerdict });
 export const hasGroundedReadCheck = (operationId: AskOperationId): boolean => operationId in GROUNDED_READ_CHECKS;
 /** Checked before a provisional read is started: false means the rule's match is not the request this read answers, so the turn keeps the strict path. */
-export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ MAINTENANCE_STATUS: maintenanceRouteGuard });
+export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ MAINTENANCE_STATUS: maintenanceRouteGuard, WARRANTY_LOOKUP: warrantyRouteGuard });
 export const provisionalRouteAllowed = (operationId: AskOperationId, message: string): boolean => (GROUNDED_READ_ROUTE_GUARDS[operationId]?.(message) ?? true);
 export function groundedVerdictFor(operationId: AskOperationId, question: string, result: AskOperationResult): GroundedReadVerdict {
   const check = GROUNDED_READ_CHECKS[operationId];
