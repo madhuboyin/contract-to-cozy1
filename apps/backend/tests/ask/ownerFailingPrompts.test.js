@@ -60,3 +60,18 @@ test('"How much would a new furnace cost?" starts the cost read; a figure, a dat
   assert.equal(groundedItemCostVerdict('How much should I save for a new furnace?', figure).reasonCodes[1], 'ANOTHER_OPERATION_OWNS_THE_QUESTION');
   assert.equal(groundedItemCostVerdict('How much did I pay for my furnace?', figure).reasonCodes[1], 'QUESTION_NOT_ABOUT_THE_COST_OF_A_NEW_ITEM');
 });
+
+// ---- the owner's compound prompt (screenshot 2026-11-13): "How old is my furnace, and when does its warranty expire?" ----
+test('the compound furnace prompt: age from the purchase date when no install date is recorded, and the furnace warranty expiry date, not the 60-day filter', async () => {
+  const when = new Date(Date.UTC(2029, 2, 3));
+  propertyAccessService.resolvePropertyAccess = async () => ({ propertyId: 'p1', userId: 'u1', role: 'OWNER', isOwner: true });
+  prisma.inventoryItem = { findMany: async () => [{ id: 'f1', name: 'HVAC Furnace', installedOn: null, purchasedOn: new Date(Date.UTC(2016, 0, 1)), room: null }] };
+  prisma.warranty = { findMany: async () => [{ id: 'w1', expiryDate: when, providerName: 'Traine', category: 'HVAC', inventoryItem: { name: 'HVAC Furnace' } }] };
+  const q = 'How old is my furnace, and when does its warranty expire?';
+  const d = resolveAskRoutingCascade(q, { localRoutingEnabled: true }); assert.equal(d.operation.operationId, 'DATA_POINT_READ');
+  const answer = await handleDataPointRead({ userId: 'u1', propertyId: 'p1', message: q });
+  const text = JSON.stringify(answer.blocks); assert.match(text, /purchase date/); assert.match(text, /years old/); assert.match(text, /2029/); assert.doesNotMatch(text, /expiring within 60 days/);
+  const checked = validateAskAnswerTrustPipeline({ question: q, operationId: 'DATA_POINT_READ', result: attachAskAuthoritativeSourceEvidence(answer, [completedAskAuthoritativeSourceEvidence('DATA_POINT_READ')].flat()), propertyId: 'p1', semanticEnabled: true, provisionalRead: true });
+  assert.equal(checked.semantic.outcome, 'PASS', JSON.stringify(checked.semantic));
+  const single = await handleDataPointRead({ userId: 'u1', propertyId: 'p1', message: 'When does my furnace warranty expire?' }); assert.match(JSON.stringify(single.blocks), /2029/);
+});

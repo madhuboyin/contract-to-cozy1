@@ -1120,7 +1120,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "DATA_POINT_READ",
   "confidence": 0.93,
   "order": 80,
-  "hash": "1879017613fc42ed",
+  "hash": "bb1565a2de4a59a9",
   "condition": "dataPointQuestionPattern.test(message) && isDataPointOnlyQuestion(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:dataPointQuestionPattern",
@@ -1133,6 +1133,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
    "dataPoint/dataPointCatalogue.ts:WARRANTY_ONLY_IDS",
    "dataPoint/dataPointCatalogue.ts:escapeRe",
    "dataPoint/dataPointCatalogue.ts:isDataPointOnlyQuestion",
+   "dataPoint/dataPointCatalogue.ts:isSingleWarrantyFact",
    "dataPoint/dataPointCatalogue.ts:normalizeText",
    "dataPoint/dataPointCatalogue.ts:resolveDataPoint",
    "dataPoint/dataPointCatalogue.ts:resolveDataPointIn",

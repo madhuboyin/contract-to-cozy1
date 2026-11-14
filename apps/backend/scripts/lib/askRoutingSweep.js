@@ -8,7 +8,7 @@ const BASELINE_PATH = path.join(BACKEND, 'tests/fixtures/askRoutingSweepBaseline
 // Operations that would still give a correct answer for the same intent. Keep this short: every entry hides a real gap.
 const EQUIVALENT = {
   // 2026-11-13: a single recorded fact of a named item (model, age, last serviced) is read by the data point, which states exactly that fact; the lookup lists the item.
-  INVENTORY_LOOKUP: ['DATA_POINT_READ'],
+  INVENTORY_LOOKUP: ['DATA_POINT_READ'], WARRANTY_LOOKUP: ['DATA_POINT_READ'],
   WORK_OVERVIEW: ['HOME_ACTIONS', 'HOME_WORK_ITEMS'], HOME_ACTIONS: ['WORK_OVERVIEW', 'HOME_WORK_ITEMS'],
   APPLIANCE_FAILURE_RISK: ['HOME_STATUS_BOARD', 'MAINTENANCE_FORECAST', 'INVENTORY_LOOKUP'], MAINTENANCE_FORECAST: ['APPLIANCE_FAILURE_RISK'],
   REFINANCE_RATE_MONITOR: ['REFINANCE_ANALYSIS'], MAINTENANCE_BUDGET_FORECAST: ['CAPITAL_RESERVE_PLAN'], CAPITAL_RESERVE_PLAN: ['MAINTENANCE_BUDGET_FORECAST'],

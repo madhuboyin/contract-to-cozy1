@@ -408,9 +408,14 @@ const INVENTORY_ONLY_IDS: ReadonlySet<string> = new Set(['item.serial', 'item.pu
 const WARRANTY_ONLY_IDS: ReadonlySet<string> = new Set(['warranty.cost']);
 const TASK_ONLY_IDS: ReadonlySet<string> = new Set(['task.priority', 'task.frequency', 'task.estimatedCost', 'task.actualCost', 'task.lastCompletedDate']);
 const CLAIM_DETAIL_IDS: ReadonlySet<string> = new Set(['claim.deductible', 'claim.estimatedLoss', 'claim.settlement', 'claim.claimNumber', 'claim.incidentDate', 'claim.openedDate', 'claim.submittedDate', 'claim.closedDate', 'claim.nextFollowUp']);
+/** "When does my furnace warranty expire?": ONE warranty's fact, not the list of warranties expiring soon. The warranty lookup reads "expire" as the 60-day filter, so it must not own a single-warranty question (2026-11-13 owner screenshot). */
+export function isSingleWarrantyFact(message: string): boolean {
+  const point = resolveDataPoint(message);
+  return Boolean(point && (point.id === 'warranty.expiryDate' || point.id === 'warranty.startDate') && /\bwarranty\b/i.test(message) && !/\bwarranties\b|\bwithin\b|\bsoon\b|\bnext \d|\bexpiring\b|\ball my\b|\bwhich\b|\bhow many\b|\blist\b|\bshow\b/i.test(message));
+}
 export function isDataPointOnlyQuestion(message: string): boolean {
   const point = resolveDataPoint(message);
-  return Boolean(point && (DATA_POINT_ONLY_ENTITIES.has(point.entity) || CLAIM_DETAIL_IDS.has(point.id) || INVENTORY_ONLY_IDS.has(point.id) || TASK_ONLY_IDS.has(point.id) || WARRANTY_ONLY_IDS.has(point.id)));
+  return Boolean(point && (isSingleWarrantyFact(message) || DATA_POINT_ONLY_ENTITIES.has(point.entity) || CLAIM_DETAIL_IDS.has(point.id) || INVENTORY_ONLY_IDS.has(point.id) || TASK_ONLY_IDS.has(point.id) || WARRANTY_ONLY_IDS.has(point.id)));
 }
 
 /** Any question that resolves to a catalogued data point: a detail question, never a request to be notified about a deadline (used to keep the deadline monitor from taking "tell me the cost of my warranty"). */

@@ -43,7 +43,7 @@ const words = (v: unknown) => String(v).toLowerCase().replace(/_/g, ' ');
 export function ageSentence(point: DataPointDefinition, value: unknown, message: string, now: Date = new Date()): string {
   if (!/\bhow old\b|\bage\b/i.test(message)) return '';
   let years: number | null = null;
-  if (point.id === 'item.installedOn') { const when = value instanceof Date ? value : new Date(String(value)); if (!Number.isNaN(when.getTime())) years = (now.getTime() - when.getTime()) / (365.25 * 86_400_000); }
+  if (point.id === 'item.installedOn' || point.id === 'item.purchasedOn') { const when = value instanceof Date ? value : new Date(String(value)); if (!Number.isNaN(when.getTime())) years = (now.getTime() - when.getTime()) / (365.25 * 86_400_000); }
   else if (point.id === 'home.roofReplacementYear') years = now.getUTCFullYear() - Number(value);
   if (years === null || !Number.isFinite(years) || years < 0) return '';
   const whole = Math.floor(years);
@@ -239,6 +239,12 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
   }
   let readPoint = point;
   let read = await readDataPoint(propertyId, role, point, message);
+  // "How old is my furnace?" with no install date recorded: the purchase date is the nearest recorded start, said as such (never presented as the install date).
+  let ageFromPurchase = false;
+  if (point.id === 'item.installedOn' && /\bhow old\b|\bage\b/i.test(message) && read.status === 'NOT_RECORDED') {
+    const purchased = DATA_POINT_BY_ID.get('item.purchasedOn');
+    if (purchased && roleMayRead(role, purchased)) { const other = await readDataPoint(propertyId, role, purchased, message); if (other.rows.some((r) => r.value !== null && r.value !== '')) { read = other; readPoint = purchased; ageFromPurchase = true; } }
+  }
   // "When is my closing date?" is a buyer or a seller question: when the home has no record of the kind the wording leans to, the other kind answers it.
   const alternateId = ALTERNATE_POINT[point.id]; const alternate = alternateId ? DATA_POINT_BY_ID.get(alternateId) : undefined;
   if (read.status === 'ITEM_NOT_FOUND' && alternate && roleMayRead(role, alternate)) { const other = await readDataPoint(propertyId, role, alternate, message); if (other.status !== 'ITEM_NOT_FOUND') { read = other; readPoint = alternate; } }
@@ -256,6 +262,7 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
   }
   // A cancelled / not-needed child is worded as a recorded past value, never as a current obligation ("is due" is not used for it).
   const sentences = present.map((r) => (r.historicalStatus ? `Your ${r.name} is ${r.historicalStatus}. Its recorded ${readPoint.family === 'date' ? 'date' : 'value'} was ${formatDataPointValue(readPoint, r.value)}.` : `Your ${r.name} ${readPoint.sentence} ${formatDataPointValue(readPoint, r.value)}.${ageSentence(readPoint, r.value, message)}`));
+  if (ageFromPurchase) sentences.unshift('No install date is recorded, so this goes by the purchase date.');
   const missing = read.rows.length - present.length;
   if (missing > 0) sentences.push(`${missing === 1 ? 'One matching item has' : `${missing} matching items have`} nothing recorded for this.`);
   // Provenance/confidence limitation (FR-REC-2): a low-confidence or self-entered record is not stated plainly.

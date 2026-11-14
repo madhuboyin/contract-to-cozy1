@@ -4,7 +4,7 @@
 // question needed). Anything else, a value for a different point or a value with no source, is not grounded and is withheld.
 import type { AskOperationId, AskOperationResult } from '../askOperationRegistry';
 import { matchesOperationAnswerContract } from '../answerContract/operationAnswerContract';
-import { ALTERNATE_POINT, resolveDataPoint, resolveDataPointsMulti } from '../dataPoint/dataPointCatalogue';
+import { ALTERNATE_POINT, isSingleWarrantyFact, resolveDataPoint, resolveDataPointsMulti } from '../dataPoint/dataPointCatalogue';
 import { planDataPointQuery } from '../dataPoint/dataPointQueryPlan';
 import { planShape789 } from '../dataPoint/dataPointShapes789';
 
@@ -31,6 +31,8 @@ export function groundedReadVerdict(question: string, result: AskOperationResult
   // 1. a value: it must be the value of a point the question names, and it must come from a recorded source
   if (pointIds.length) {
     const named = pointsNamedBy(question);
+    // an age question with no install date recorded is answered from the purchase date, said as such by the handler
+    if (named.has('item.installedOn') && /\bhow old\b|\bage\b/i.test(question)) named.add('item.purchasedOn');
     const strays = pointIds.filter((id) => !named.has(id));
     if (strays.length) return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'ANSWERED_A_DIFFERENT_DATA_POINT'] };
     if (!Array.isArray(parameters.sources) || parameters.sources.length === 0) return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'NO_SOURCE_RECORD'] };
@@ -106,6 +108,7 @@ export function groundedWarrantyVerdict(question: string, result: AskOperationRe
   const fail = (code: string): GroundedReadVerdict => ({ outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', code] });
   if (!WARRANTY_TOPIC.test(question)) return fail('QUESTION_NOT_ABOUT_WARRANTIES');
   if (WARRANTY_OTHER_JOB.test(question)) return fail('ANOTHER_OPERATION_OWNS_THE_QUESTION');
+  if (isSingleWarrantyFact(question)) return fail('A_SINGLE_WARRANTY_FACT_IS_THE_DATA_POINTS');
   if (result.status !== 'ANSWERED' && result.status !== 'READY_WITH_LIMITATIONS') return fail('ANSWER_IS_NOT_A_DELIVERABLE_STATUS');
   const ids = result.blocks.map(warrantyBlockId);
   if (!ids.some((id) => WARRANTY_SUMMARY_IDS.has(id))) return fail('ANSWER_IS_NOT_A_VERIFIED_VARIANT');
@@ -118,7 +121,7 @@ export function groundedWarrantyVerdict(question: string, result: AskOperationRe
   if (!expired && !expiring && applied && applied !== 'ALL') return fail('FILTERED_VIEW_FOR_AN_UNFILTERED_QUESTION');
   return { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] };
 }
-const warrantyRouteGuard = (message: string): boolean => WARRANTY_TOPIC.test(message) && !WARRANTY_OTHER_JOB.test(message);
+const warrantyRouteGuard = (message: string): boolean => WARRANTY_TOPIC.test(message) && !WARRANTY_OTHER_JOB.test(message) && !isSingleWarrantyFact(message);
 
 // ---- home status board ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // The board is a read of recorded appliances and systems with estimated condition. It is delivered when (1) the question is about the board or the condition of appliances and systems and is not a command (hide, pin, refresh,
