@@ -187,13 +187,44 @@ export function groundedPropertySummaryVerdict(question: string, result: AskOper
 }
 const propertySummaryRouteGuard = (message: string): boolean => SUMMARY_TOPIC.test(message) && !SUMMARY_OTHER_JOB.test(message) && summaryWantsKnownView(message);
 
+// ---- incident and claim status ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// A read of the recorded incidents and claims. It is delivered when (1) the question is about claims or incidents and is not a command (file, start, submit, mark, close, approve), a cost/amount question or a coverage
+// decision, (2) the answer is a known variant of the handler (summary or empty state, the list or a restriction notice, and the "recorded information only" boundary), and (3) the scope and state the question named are the
+// ones shown: a claims question is never answered with incidents (nor the reverse), an "open" question shows no closed records and a "closed" question no open ones. A viewer's restriction notice states no value and passes.
+const CLAIM_TOPIC = /\b(?:claims?|incidents?)\b/i;
+const CLAIM_OTHER_JOB = /\b(?:file|start|submit|mark|move|close|reopen|approve|deny|add|create|delete|withdraw|cancel|update|edit|change|how much|amount|payout|pay|cost|worth|deductible|covered|cover|covers|coverage|should i|deadline|due|remind|checklist|document|upload|call|email|phone)\b/i;
+const CLAIM_ASKS_OPEN = /\b(?:open|active|pending|current|ongoing|in progress)\b/i;
+const CLAIM_ASKS_CLOSED = /\b(?:closed|resolved|past|old|previous|historical|history|settled)\b/i;
+export function groundedClaimStatusVerdict(question: string, result: AskOperationResult): GroundedReadVerdict {
+  const fail = (code: string): GroundedReadVerdict => ({ outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', code] });
+  if (!CLAIM_TOPIC.test(question)) return fail('QUESTION_NOT_ABOUT_CLAIMS_OR_INCIDENTS');
+  if (CLAIM_OTHER_JOB.test(question)) return fail('ANOTHER_OPERATION_OWNS_THE_QUESTION');
+  if (result.status !== 'ANSWERED' && result.status !== 'READY_WITH_LIMITATIONS') return fail('ANSWER_IS_NOT_A_DELIVERABLE_STATUS');
+  const ids = result.blocks.map((block) => String((block as { id?: string }).id ?? ''));
+  if (ids.includes('claim-details-restricted')) return { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] };
+  if (!ids.includes('claim-status-boundary')) return fail('ANSWER_LACKS_THE_RECORDED_INFORMATION_BOUNDARY');
+  if (!ids.some((id) => id === 'incident-claim-summary' || id === 'incident-claim-empty')) return fail('ANSWER_IS_NOT_A_VERIFIED_VARIANT');
+  const list = result.blocks.find((block) => (block as { id?: string }).id === 'incident-claim-list') as { sections?: Array<{ id?: string }> } | undefined;
+  const sections = (list?.sections ?? []).map((section) => String(section.id ?? ''));
+  const claims = /\bclaims?\b/i.test(question); const incidents = /\bincidents?\b/i.test(question);
+  if (claims && !incidents && sections.some((id) => id.includes('incidents'))) return fail('INCIDENTS_SHOWN_FOR_A_CLAIMS_QUESTION');
+  if (incidents && !claims && sections.some((id) => id.includes('claims'))) return fail('CLAIMS_SHOWN_FOR_AN_INCIDENTS_QUESTION');
+  // The state asked for must be present when the other state is: the handler lists open records first and may add closed ones for context, but an answer that shows only the other state does not answer the question.
+  const open = CLAIM_ASKS_OPEN.test(question); const closed = CLAIM_ASKS_CLOSED.test(question);
+  const openShown = sections.some((id) => id.startsWith('active-') || id.startsWith('open-')); const closedShown = sections.some((id) => id.startsWith('resolved-') || id.startsWith('closed-'));
+  if (open && !closed && closedShown && !openShown) return fail('ONLY_CLOSED_RECORDS_SHOWN_FOR_AN_OPEN_QUESTION');
+  if (closed && !open && openShown && !closedShown) return fail('ONLY_OPEN_RECORDS_SHOWN_FOR_A_CLOSED_QUESTION');
+  return { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] };
+}
+const claimStatusRouteGuard = (message: string): boolean => CLAIM_TOPIC.test(message) && !CLAIM_OTHER_JOB.test(message);
+
 // ---- which operations may be tried provisionally --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 export type GroundedReadCheck = (question: string, result: AskOperationResult) => GroundedReadVerdict;
 /** FR-GATE-8: an operation may be tried provisionally only together with a grounded delivery check. This table IS the allowlist (fastPathCertificates derives PROVISIONAL_READ_OPERATIONS from it). */
-export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict, WARRANTY_LOOKUP: groundedWarrantyVerdict, HOME_STATUS_BOARD: groundedStatusBoardVerdict, HOME_BASICS_GUIDE: groundedHomeBasicsVerdict, PROPERTY_SUMMARY: groundedPropertySummaryVerdict });
+export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict, WARRANTY_LOOKUP: groundedWarrantyVerdict, HOME_STATUS_BOARD: groundedStatusBoardVerdict, HOME_BASICS_GUIDE: groundedHomeBasicsVerdict, PROPERTY_SUMMARY: groundedPropertySummaryVerdict, INCIDENT_CLAIM_STATUS: groundedClaimStatusVerdict });
 export const hasGroundedReadCheck = (operationId: AskOperationId): boolean => operationId in GROUNDED_READ_CHECKS;
 /** Checked before a provisional read is started: false means the rule's match is not the request this read answers, so the turn keeps the strict path. */
-export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ MAINTENANCE_STATUS: maintenanceRouteGuard, WARRANTY_LOOKUP: warrantyRouteGuard, HOME_STATUS_BOARD: statusBoardRouteGuard, HOME_BASICS_GUIDE: homeBasicsRouteGuard, PROPERTY_SUMMARY: propertySummaryRouteGuard });
+export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ MAINTENANCE_STATUS: maintenanceRouteGuard, WARRANTY_LOOKUP: warrantyRouteGuard, HOME_STATUS_BOARD: statusBoardRouteGuard, HOME_BASICS_GUIDE: homeBasicsRouteGuard, PROPERTY_SUMMARY: propertySummaryRouteGuard, INCIDENT_CLAIM_STATUS: claimStatusRouteGuard });
 export const provisionalRouteAllowed = (operationId: AskOperationId, message: string): boolean => (GROUNDED_READ_ROUTE_GUARDS[operationId]?.(message) ?? true);
 export function groundedVerdictFor(operationId: AskOperationId, question: string, result: AskOperationResult): GroundedReadVerdict {
   const check = GROUNDED_READ_CHECKS[operationId];
