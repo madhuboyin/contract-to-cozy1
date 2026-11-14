@@ -162,13 +162,38 @@ export function groundedHomeBasicsVerdict(question: string, result: AskOperation
 }
 const homeBasicsRouteGuard = (message: string): boolean => BASICS_TOPIC.test(message) && !(BASICS_OTHER_JOB.test(message) && !/\b(?:start|begin|do|run)\b/i.test(message));
 
+// ---- property summary ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// "Tell me about my home" reads the recorded property facts. It is delivered when (1) the question is about the home, property or home record and is not a change, export, sale, value or cost request, (2) the answer is a variant the
+// real-path evidence produced, and (3) the variant is the one asked for: the completeness view only for a completeness question, the record index only for a browse question, the short overview otherwise.
+const SUMMARY_TOPIC = /\b(?:home|house|property|home record|living home record|profile)\b/i;
+const SUMMARY_OTHER_JOB = /\b(?:add|create|update|edit|change|correct|fix|delete|remove|set|export|download|share|invite|sell|selling|sale|list|worth|value|valuation|appraisal|cost|costs|price|budget|insur\w*|warrant\w*|maintenance|tasks?|inspect\w*|repair|replace|rooms?|inventory|items?)\b/i;
+const SUMMARY_ASKS_COMPLETE = /\bcomplete(?:ness)?\b|\bwhat(?:'s| is) missing\b/i;
+const SUMMARY_ASKS_BROWSE = /\bbrowse\b|\brecord index\b/i;
+/** A plain overview is only given to a question that reads like a request for one; any other question that merely mentions the property (signals, alerts, news) is not this read. */
+const SUMMARY_ASKS_OVERVIEW = /\b(?:tell me about|summar\w+|overview|what do you know about|short version|show me (?:my|the|this|our) (?:home|house|property)(?: record)?|(?:home|property|living home) (?:record )?(?:summary|overview|profile))\b/i;
+const summaryWantsKnownView = (m: string): boolean => SUMMARY_ASKS_COMPLETE.test(m) || SUMMARY_ASKS_BROWSE.test(m) || SUMMARY_ASKS_OVERVIEW.test(m);
+export function groundedPropertySummaryVerdict(question: string, result: AskOperationResult): GroundedReadVerdict {
+  const fail = (code: string): GroundedReadVerdict => ({ outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', code] });
+  if (!SUMMARY_TOPIC.test(question)) return fail('QUESTION_NOT_ABOUT_THE_HOME');
+  if (SUMMARY_OTHER_JOB.test(question) || !summaryWantsKnownView(question)) return fail('ANOTHER_OPERATION_OWNS_THE_QUESTION');
+  if (!matchesOperationAnswerContract('PROPERTY_SUMMARY', result)) return fail('ANSWER_IS_NOT_A_VERIFIED_VARIANT');
+  const ids = new Set(result.blocks.map((block) => String((block as { id?: string }).id ?? '')));
+  const complete = SUMMARY_ASKS_COMPLETE.test(question); const browse = SUMMARY_ASKS_BROWSE.test(question);
+  if (complete && !ids.has('property-completeness')) return fail('VIEW_DOES_NOT_MATCH_COMPLETENESS_QUESTION');
+  if (browse && !ids.has('property-record-index')) return fail('VIEW_DOES_NOT_MATCH_BROWSE_QUESTION');
+  if (!complete && ids.has('property-completeness')) return fail('COMPLETENESS_VIEW_FOR_A_QUESTION_THAT_DID_NOT_ASK_FOR_IT');
+  if (!browse && ids.has('property-record-index')) return fail('RECORD_INDEX_FOR_A_QUESTION_THAT_DID_NOT_ASK_FOR_IT');
+  return { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] };
+}
+const propertySummaryRouteGuard = (message: string): boolean => SUMMARY_TOPIC.test(message) && !SUMMARY_OTHER_JOB.test(message) && summaryWantsKnownView(message);
+
 // ---- which operations may be tried provisionally --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 export type GroundedReadCheck = (question: string, result: AskOperationResult) => GroundedReadVerdict;
 /** FR-GATE-8: an operation may be tried provisionally only together with a grounded delivery check. This table IS the allowlist (fastPathCertificates derives PROVISIONAL_READ_OPERATIONS from it). */
-export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict, WARRANTY_LOOKUP: groundedWarrantyVerdict, HOME_STATUS_BOARD: groundedStatusBoardVerdict, HOME_BASICS_GUIDE: groundedHomeBasicsVerdict });
+export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict, WARRANTY_LOOKUP: groundedWarrantyVerdict, HOME_STATUS_BOARD: groundedStatusBoardVerdict, HOME_BASICS_GUIDE: groundedHomeBasicsVerdict, PROPERTY_SUMMARY: groundedPropertySummaryVerdict });
 export const hasGroundedReadCheck = (operationId: AskOperationId): boolean => operationId in GROUNDED_READ_CHECKS;
 /** Checked before a provisional read is started: false means the rule's match is not the request this read answers, so the turn keeps the strict path. */
-export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ MAINTENANCE_STATUS: maintenanceRouteGuard, WARRANTY_LOOKUP: warrantyRouteGuard, HOME_STATUS_BOARD: statusBoardRouteGuard, HOME_BASICS_GUIDE: homeBasicsRouteGuard });
+export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ MAINTENANCE_STATUS: maintenanceRouteGuard, WARRANTY_LOOKUP: warrantyRouteGuard, HOME_STATUS_BOARD: statusBoardRouteGuard, HOME_BASICS_GUIDE: homeBasicsRouteGuard, PROPERTY_SUMMARY: propertySummaryRouteGuard });
 export const provisionalRouteAllowed = (operationId: AskOperationId, message: string): boolean => (GROUNDED_READ_ROUTE_GUARDS[operationId]?.(message) ?? true);
 export function groundedVerdictFor(operationId: AskOperationId, question: string, result: AskOperationResult): GroundedReadVerdict {
   const check = GROUNDED_READ_CHECKS[operationId];
