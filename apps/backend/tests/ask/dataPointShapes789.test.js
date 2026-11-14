@@ -6,6 +6,7 @@ const { resolveAskOperation } = require('../../src/services/ask/askOperationRegi
 const { prisma } = require('../../src/lib/prisma.ts');
 const propertyAccessService = require('../../src/services/propertyAccess.service.ts');
 const { dataPointReadResult } = require('../../src/services/ask/handlers/dataPointRead.handler.ts');
+const { verifySemanticReadReceiptEntailment } = require('../../src/services/ask/semantic/semanticReceiptEntailment.ts');
 
 test('planning: absence, service gap, no warranty, change over time; ordinary questions are left alone', () => {
   const shape = (m) => planShape789(m)?.shape ?? null;
@@ -68,6 +69,10 @@ test('handler: absence, no warranty and service gap answers name the items and w
   assert.equal(noWarranty.parameters.semanticExecutionReceipt.population.conflictedCount, 1);
   assert.equal(noWarranty.parameters.semanticExecutionReceipt.population.unknownCount, 1);
   assert.deepEqual(noWarranty.parameters.semanticExecutionReceipt.predicateIds, ['predicate.inventory_item.has_no_warranty_record']);
+  assert.equal(verifySemanticReadReceiptEntailment(noWarranty).outcome, 'PASS');
+  const forged = structuredClone(noWarranty);
+  forged.parameters.semanticExecutionReceipt.population.confirmedCount = 99;
+  assert.deepEqual(verifySemanticReadReceiptEntailment(forged).reasonCodes, ['SEMANTIC_RECEIPT_NOT_ENTAILED', 'CONFIRMED_POPULATION_MISMATCH']);
   prisma.inventoryItem = { findMany: async () => [], count: async () => 0 };
   const none = await dataPointReadResult('u1', 'p1', 'Which appliances have no serial number recorded?');
   assert.match(none.blocks[0].title, /Every item has its serial number/);

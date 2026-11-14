@@ -9,6 +9,7 @@ import { planDataPointQuery } from '../dataPoint/dataPointQueryPlan';
 import { planShape789 } from '../dataPoint/dataPointShapes789';
 import { warrantyShapeGrammarAgreement } from '../semantic/legacyGrammarAgreement';
 import { SemanticReadReceiptSchema } from '../semantic/semanticExecutionReceipt';
+import { verifySemanticReadReceiptEntailment } from '../semantic/semanticReceiptEntailment';
 
 export interface GroundedReadVerdict { readonly outcome: 'PASS' | 'FAIL'; readonly reasonCodes: readonly string[] }
 
@@ -56,6 +57,8 @@ export function groundedReadVerdict(question: string, result: AskOperationResult
         || !receipt.data.predicateIds.includes(agreement.facet.relations[0].predicateId)) {
         return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'SEMANTIC_RECEIPT_PLAN_MISMATCH'] };
       }
+      const entailment = verifySemanticReadReceiptEntailment(result);
+      if (entailment.outcome !== 'PASS') return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', ...entailment.reasonCodes] };
     }
     const planned = template === 'shape789' ? shape !== null : plan.kind === 'PLAN' && plan.plan.template.id === template;
     return planned ? { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] } : { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'QUESTION_DOES_NOT_PLAN_TO_THIS_QUERY'] };
