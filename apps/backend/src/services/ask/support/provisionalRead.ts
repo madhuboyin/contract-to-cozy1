@@ -120,13 +120,34 @@ export function groundedWarrantyVerdict(question: string, result: AskOperationRe
 }
 const warrantyRouteGuard = (message: string): boolean => WARRANTY_TOPIC.test(message) && !WARRANTY_OTHER_JOB.test(message);
 
+// ---- home status board ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// The board is a read of recorded appliances and systems with estimated condition. It is delivered when (1) the question is about the board or the condition of appliances and systems and is not a command (hide, pin, refresh,
+// add, fix, replace, cost) or another operation's job, (2) the answer is a variant the real handler produced (runtime contract from real-path evidence), and (3) the hidden-items list is only given to a question that asks about
+// hidden items, and the board is never replaced by it.
+const BOARD_TOPIC = /\b(?:status board|appliances?|systems?|equipment|home items?)\b/i;
+const BOARD_OTHER_JOB = /\b(?:add|create|hide|unhide|show again|pin|unpin|refresh|sync|update|edit|correct|change|delete|remove|fix|repair|replace|replacement|buy|cost|costs|price|quote|budget|warrant(?:y|ies)|insurance|claims?|recall|maintenance|tasks?|remind|schedule|book|hire)\b/i;
+const BOARD_ASKS_HIDDEN = /\bhidden\b/i;
+export function groundedStatusBoardVerdict(question: string, result: AskOperationResult): GroundedReadVerdict {
+  const fail = (code: string): GroundedReadVerdict => ({ outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', code] });
+  if (!BOARD_TOPIC.test(question)) return fail('QUESTION_NOT_ABOUT_THE_STATUS_BOARD');
+  if (BOARD_OTHER_JOB.test(question) && !BOARD_ASKS_HIDDEN.test(question)) return fail('ANOTHER_OPERATION_OWNS_THE_QUESTION');
+  if (!matchesOperationAnswerContract('HOME_STATUS_BOARD', result)) return fail('ANSWER_IS_NOT_A_VERIFIED_VARIANT');
+  const summary = result.blocks.find((block) => (block as { id?: string }).id === 'status-board-summary') as { title?: string } | undefined;
+  if (!summary) return fail('ANSWER_HAS_NO_BOARD_SUMMARY');
+  const hiddenOnly = /^(?:\d+ hidden |No items are hidden)/i.test(String(summary.title ?? ''));
+  if (hiddenOnly && !BOARD_ASKS_HIDDEN.test(question)) return fail('HIDDEN_LIST_FOR_A_QUESTION_THAT_DID_NOT_ASK_FOR_IT');
+  if (!hiddenOnly && BOARD_ASKS_HIDDEN.test(question)) return fail('BOARD_FOR_A_HIDDEN_ITEMS_QUESTION');
+  return { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] };
+}
+const statusBoardRouteGuard = (message: string): boolean => BOARD_TOPIC.test(message) && !BOARD_OTHER_JOB.test(message);
+
 // ---- which operations may be tried provisionally --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 export type GroundedReadCheck = (question: string, result: AskOperationResult) => GroundedReadVerdict;
 /** FR-GATE-8: an operation may be tried provisionally only together with a grounded delivery check. This table IS the allowlist (fastPathCertificates derives PROVISIONAL_READ_OPERATIONS from it). */
-export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict, WARRANTY_LOOKUP: groundedWarrantyVerdict });
+export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict, WARRANTY_LOOKUP: groundedWarrantyVerdict, HOME_STATUS_BOARD: groundedStatusBoardVerdict });
 export const hasGroundedReadCheck = (operationId: AskOperationId): boolean => operationId in GROUNDED_READ_CHECKS;
 /** Checked before a provisional read is started: false means the rule's match is not the request this read answers, so the turn keeps the strict path. */
-export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ MAINTENANCE_STATUS: maintenanceRouteGuard, WARRANTY_LOOKUP: warrantyRouteGuard });
+export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ MAINTENANCE_STATUS: maintenanceRouteGuard, WARRANTY_LOOKUP: warrantyRouteGuard, HOME_STATUS_BOARD: statusBoardRouteGuard });
 export const provisionalRouteAllowed = (operationId: AskOperationId, message: string): boolean => (GROUNDED_READ_ROUTE_GUARDS[operationId]?.(message) ?? true);
 export function groundedVerdictFor(operationId: AskOperationId, question: string, result: AskOperationResult): GroundedReadVerdict {
   const check = GROUNDED_READ_CHECKS[operationId];
