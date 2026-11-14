@@ -218,13 +218,38 @@ export function groundedClaimStatusVerdict(question: string, result: AskOperatio
 }
 const claimStatusRouteGuard = (message: string): boolean => CLAIM_TOPIC.test(message) && !CLAIM_OTHER_JOB.test(message);
 
+// ---- saved results ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// "Show my saved results" lists what the homeowner saved. It is delivered when (1) the question is about saved items, (2) the answer is a known variant (the summary, the list or the restriction notice, and the "saved only
+// finds and reopens" boundary), (3) an archived question gets the archived view and any other question the active one, and (4) a find/search question is answered with a search actually applied (never with the whole list
+// presented as though it had been searched). A restriction notice states no value and passes.
+const SAVED_TOPIC = /\bsaved\b|\bwhere did i save\b/i;
+const SAVED_OTHER_JOB = /\b(?:archive|restore|delete|remove|rename|save (?:this|that|it)|add|create|export|share|send|compare)\b/i;
+const SAVED_ASKS_ARCHIVED = /\barchived\b/i;
+const SAVED_ASKS_FIND = /\b(?:find|search(?: for)?|look(?:ing)? for|locate|where did i save)\b/i;
+export function groundedSavedResultsVerdict(question: string, result: AskOperationResult): GroundedReadVerdict {
+  const fail = (code: string): GroundedReadVerdict => ({ outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', code] });
+  if (!SAVED_TOPIC.test(question)) return fail('QUESTION_NOT_ABOUT_SAVED_RESULTS');
+  if (SAVED_OTHER_JOB.test(question)) return fail('ANOTHER_OPERATION_OWNS_THE_QUESTION');
+  if (result.status !== 'ANSWERED' && result.status !== 'READY_WITH_LIMITATIONS') return fail('ANSWER_IS_NOT_A_DELIVERABLE_STATUS');
+  const ids = result.blocks.map((block) => String((block as { id?: string }).id ?? ''));
+  if (ids.includes('saved-results-restricted')) return { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] };
+  if (!ids.includes('saved-results-summary') || !ids.includes('saved-results-list')) return fail('ANSWER_IS_NOT_A_VERIFIED_VARIANT');
+  const view = (result.parameters as { viewState?: { statusFilter?: string; roomScopePhrase?: string | null } } | undefined)?.viewState;
+  if (!view) return fail('ANSWER_CARRIES_NO_VIEW');
+  const archived = String(view.statusFilter ?? '').startsWith('ARCHIVED');
+  if (SAVED_ASKS_ARCHIVED.test(question) !== archived) return fail(archived ? 'ARCHIVED_VIEW_FOR_A_QUESTION_THAT_DID_NOT_ASK_FOR_IT' : 'VIEW_DOES_NOT_MATCH_ARCHIVED_QUESTION');
+  if (SAVED_ASKS_FIND.test(question) && !view.roomScopePhrase) return fail('SEARCH_WAS_NOT_APPLIED');
+  return { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] };
+}
+const savedResultsRouteGuard = (message: string): boolean => SAVED_TOPIC.test(message) && !SAVED_OTHER_JOB.test(message);
+
 // ---- which operations may be tried provisionally --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 export type GroundedReadCheck = (question: string, result: AskOperationResult) => GroundedReadVerdict;
 /** FR-GATE-8: an operation may be tried provisionally only together with a grounded delivery check. This table IS the allowlist (fastPathCertificates derives PROVISIONAL_READ_OPERATIONS from it). */
-export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict, WARRANTY_LOOKUP: groundedWarrantyVerdict, HOME_STATUS_BOARD: groundedStatusBoardVerdict, HOME_BASICS_GUIDE: groundedHomeBasicsVerdict, PROPERTY_SUMMARY: groundedPropertySummaryVerdict, INCIDENT_CLAIM_STATUS: groundedClaimStatusVerdict });
+export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict, WARRANTY_LOOKUP: groundedWarrantyVerdict, HOME_STATUS_BOARD: groundedStatusBoardVerdict, HOME_BASICS_GUIDE: groundedHomeBasicsVerdict, PROPERTY_SUMMARY: groundedPropertySummaryVerdict, INCIDENT_CLAIM_STATUS: groundedClaimStatusVerdict, SAVED_RESULTS: groundedSavedResultsVerdict });
 export const hasGroundedReadCheck = (operationId: AskOperationId): boolean => operationId in GROUNDED_READ_CHECKS;
 /** Checked before a provisional read is started: false means the rule's match is not the request this read answers, so the turn keeps the strict path. */
-export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ MAINTENANCE_STATUS: maintenanceRouteGuard, WARRANTY_LOOKUP: warrantyRouteGuard, HOME_STATUS_BOARD: statusBoardRouteGuard, HOME_BASICS_GUIDE: homeBasicsRouteGuard, PROPERTY_SUMMARY: propertySummaryRouteGuard, INCIDENT_CLAIM_STATUS: claimStatusRouteGuard });
+export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ MAINTENANCE_STATUS: maintenanceRouteGuard, WARRANTY_LOOKUP: warrantyRouteGuard, HOME_STATUS_BOARD: statusBoardRouteGuard, HOME_BASICS_GUIDE: homeBasicsRouteGuard, PROPERTY_SUMMARY: propertySummaryRouteGuard, INCIDENT_CLAIM_STATUS: claimStatusRouteGuard, SAVED_RESULTS: savedResultsRouteGuard });
 export const provisionalRouteAllowed = (operationId: AskOperationId, message: string): boolean => (GROUNDED_READ_ROUTE_GUARDS[operationId]?.(message) ?? true);
 export function groundedVerdictFor(operationId: AskOperationId, question: string, result: AskOperationResult): GroundedReadVerdict {
   const check = GROUNDED_READ_CHECKS[operationId];

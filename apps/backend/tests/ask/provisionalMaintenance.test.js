@@ -24,7 +24,7 @@ const invoke = (message) => capabilityInvoke('MAINTENANCE_STATUS', { userId: 'u1
 const gate = (question, result) => validateAskAnswerTrustPipeline({ question, operationId: 'MAINTENANCE_STATUS', propertyId: 'p1', semanticEnabled: true, provisionalRead: true, result: attachAskAuthoritativeSourceEvidence(result, [completedAskAuthoritativeSourceEvidence('MAINTENANCE_STATUS')]) });
 
 test('the allowlist is exactly the operations that have a grounded check, and each is a harmless read', () => {
-  assert.deepEqual([...PROVISIONAL_READ_OPERATIONS].sort(), Object.keys(GROUNDED_READ_CHECKS).sort()); assert.deepEqual([...PROVISIONAL_READ_OPERATIONS].sort(), ['DATA_POINT_READ', 'HOME_BASICS_GUIDE', 'HOME_STATUS_BOARD', 'INCIDENT_CLAIM_STATUS', 'MAINTENANCE_STATUS', 'PROPERTY_SUMMARY', 'WARRANTY_LOOKUP']);
+  assert.deepEqual([...PROVISIONAL_READ_OPERATIONS].sort(), Object.keys(GROUNDED_READ_CHECKS).sort()); assert.deepEqual([...PROVISIONAL_READ_OPERATIONS].sort(), ['DATA_POINT_READ', 'HOME_BASICS_GUIDE', 'HOME_STATUS_BOARD', 'INCIDENT_CLAIM_STATUS', 'MAINTENANCE_STATUS', 'PROPERTY_SUMMARY', 'SAVED_RESULTS', 'WARRANTY_LOOKUP']);
   for (const op of PROVISIONAL_READ_OPERATIONS) assert.equal(isProvisionalReadOperation(op), true, op);
   for (const message of ['Show my maintenance tasks', 'What maintenance is overdue?']) { const d = resolveAskRoutingCascade(message, { localRoutingEnabled: true }); assert.equal(d.stage, 'PROVISIONAL', message); assert.equal(d.operation.operationId, 'MAINTENANCE_STATUS', message); }
   // a rule that matched a command, a cost or forecast question or a snoozed-items question is not asking for the list: the read is never started
