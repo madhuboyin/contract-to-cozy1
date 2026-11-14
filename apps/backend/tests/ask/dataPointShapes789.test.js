@@ -44,16 +44,29 @@ function stub(role = 'OWNER') { propertyAccessService.resolvePropertyAccess = as
 test('handler: absence, no warranty and service gap answers name the items and what "not recorded" means', async () => {
   stub();
   const calls = [];
-  prisma.inventoryItem = { findMany: async (a) => { calls.push(a); return [{ id: 'i1', name: 'Dishwasher', lastServicedOn: null }, { id: 'i2', name: 'Furnace', lastServicedOn: new Date('2023-01-01') }]; }, count: async (a) => (a.where.lastServicedOn === null ? 1 : 2) };
+  prisma.inventoryItem = { findMany: async (a) => {
+    calls.push(a);
+    if (a.select?.linkedWarranties) return [
+      { id: 'i1', name: 'Dishwasher', warrantyId: null, coverageEvidenceStatus: 'UNKNOWN', linkedWarranties: [] },
+      { id: 'i2', name: 'Furnace', warrantyId: null, coverageEvidenceStatus: 'NONE', linkedWarranties: [] },
+      { id: 'i3', name: 'Washer', warrantyId: 'w-1', coverageEvidenceStatus: 'UNKNOWN', linkedWarranties: [{ id: 'w-2' }] },
+      { id: 'i4', name: 'Dryer', warrantyId: null, coverageEvidenceStatus: 'NOT_SURE', linkedWarranties: [] },
+    ];
+    return [{ id: 'i1', name: 'Dishwasher', lastServicedOn: null }, { id: 'i2', name: 'Furnace', lastServicedOn: new Date('2023-01-01') }];
+  }, count: async (a) => (a.where.lastServicedOn === null ? 1 : 2) };
   const absent = await dataPointReadResult('u1', 'p1', 'Which appliances have no serial number recorded?');
   assert.match(absent.blocks[0].body, /Dishwasher; Furnace/); assert.match(absent.blocks[0].body, /does not exist/); assert.equal(calls[0].where.propertyId, 'p1');
   assert.equal(absent.parameters.dataPointQuery.snapshot, true);
   const stale = await dataPointReadResult('u1', 'p1', 'Which appliances have I not serviced in over a year?');
   assert.equal(stale.status, 'READY_WITH_LIMITATIONS'); assert.match(stale.blocks[0].body, /no service date at all/);
   const noWarranty = await dataPointReadResult('u1', 'p1', 'How many appliances have no warranty?');
-  assert.match(noWarranty.blocks[0].title, /2 items have no warranty record/); assert.match(noWarranty.blocks[0].body, /without being linked/);
+  assert.match(noWarranty.blocks[0].title, /2 items have no linked warranty record/);
+  assert.match(noWarranty.blocks[0].body, /1 item has conflicting warranty links/);
+  assert.match(noWarranty.blocks[0].body, /1 item has an unknown warranty state/);
   assert.equal(noWarranty.parameters.semanticExecutionReceipt.projection, 'COUNT');
   assert.equal(noWarranty.parameters.semanticExecutionReceipt.population.confirmedCount, 2);
+  assert.equal(noWarranty.parameters.semanticExecutionReceipt.population.conflictedCount, 1);
+  assert.equal(noWarranty.parameters.semanticExecutionReceipt.population.unknownCount, 1);
   assert.deepEqual(noWarranty.parameters.semanticExecutionReceipt.predicateIds, ['predicate.inventory_item.has_no_warranty_record']);
   prisma.inventoryItem = { findMany: async () => [], count: async () => 0 };
   const none = await dataPointReadResult('u1', 'p1', 'Which appliances have no serial number recorded?');

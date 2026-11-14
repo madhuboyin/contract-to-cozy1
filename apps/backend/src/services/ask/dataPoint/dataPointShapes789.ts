@@ -4,6 +4,7 @@
 import { DATA_POINT_BY_ID, type DataPointDefinition } from './dataPointCatalogue';
 import { ABSENCE_REQUIREMENT_REGISTRY, CROSS_ENTITY_RELATION_REGISTRY, TIME_SERIES_REGISTRY, queryShapesEnabled } from './queryShapeRegistries';
 import { prisma } from '../../../lib/prisma';
+import { readTransitionalWarrantyLinks } from '../semantic/transitionalWarrantyRead';
 
 const norm = (m: string) => ` ${m.toLowerCase().replace(/[^a-z0-9$.%' -]+/g, ' ').replace(/\s+/g, ' ').trim()} `;
 const ITEM_NOUN = /\b(?:appliances?|items?|inventory items?|household items?|items in my inventory|everything in my (?:home|house)|hvac (?:items|systems|equipment)|systems)\b/;
@@ -79,7 +80,14 @@ export function planShape789(message: string, now: Date = new Date()): Shape789P
 }
 
 export interface ShapeRow { readonly id: string; readonly label: string; readonly detail: string | null }
-export interface ShapeRun { readonly total: number; readonly rows: readonly ShapeRow[]; readonly series?: ReadonlyArray<{ readonly id: string; readonly year: number; readonly value: number | null }>; readonly neverServiced?: number }
+export interface ShapeRun {
+  readonly total: number;
+  readonly rows: readonly ShapeRow[];
+  readonly conflictedRows?: readonly ShapeRow[];
+  readonly unknownRows?: readonly ShapeRow[];
+  readonly series?: ReadonlyArray<{ readonly id: string; readonly year: number; readonly value: number | null }>;
+  readonly neverServiced?: number;
+}
 const toNumber = (v: unknown): number | null => (v === null || v === undefined ? null : typeof v === 'object' && v && 'toNumber' in v ? (v as { toNumber(): number }).toNumber() : Number(v));
 const LIMIT = 100;
 
@@ -97,6 +105,14 @@ export async function runShape789(propertyId: string, plan: Shape789Plan, now: D
     const rows: any[] = await delegate.findMany({ where: { propertyId, status: 'ACTIVE', supersededById: null }, select: { id: true, taxYear: true, [plan.column]: true }, orderBy: [{ taxYear: 'desc' }, { id: 'asc' }], take: plan.maxPeriods });
     const series = rows.reverse().map((r) => ({ id: String(r.id), year: Number(r.taxYear), value: toNumber(r[plan.column]) }));
     return { total: series.length, rows: [], series };
+  }
+  if (plan.shape === 'NO_WARRANTY') {
+    const states = await readTransitionalWarrantyLinks(propertyId);
+    const row = (entry: typeof states[number]): ShapeRow => ({ id: entry.inventoryItemId, label: entry.label, detail: entry.state });
+    const rows = states.filter((entry) => entry.state === 'NO_LINK_RECORDED' || entry.state === 'EXPLICIT_NO_COVERAGE').map(row);
+    const conflictedRows = states.filter((entry) => entry.state === 'CONFLICTED_LINKS').map(row);
+    const unknownRows = states.filter((entry) => entry.state === 'UNKNOWN').map(row);
+    return { total: rows.length, rows, conflictedRows, unknownRows };
   }
   const where = shapeWhere(propertyId, plan, now);
   const lastCol = plan.shape === 'STALE_SERVICE' ? plan.column : null;

@@ -181,10 +181,16 @@ async function shape789Result(propertyId: string, role: string, plan: Shape789Pl
     lines.push(run.total === 0 ? `Every item with a service date was serviced ${plan.cutoff ? `within ${plan.windowText}` : 'at some point'}.` : `${plan.count ? `${run.total} of your items` : names(run.total)} ${plan.cutoff ? `${plural(run.total, 'was', 'were')} last serviced more than ${plan.windowText} ago or ${plural(run.total, 'has', 'have')} no service recorded` : `${plural(run.total, 'has', 'have')} no service recorded`}.`);
     if (plan.cutoff && never > 0) { limited = true; lines.push(`${never} of these ${plural(never, 'has', 'have')} no service date at all, so ${plural(never, 'it may', 'they may')} have been serviced without being recorded.`); }
   } else {
-    const where = plan.currentOnly ? 'no current warranty' : 'no warranty record';
-    title = run.total === 0 ? `Every item has a ${plan.currentOnly ? 'current ' : ''}warranty record` : `${run.total} ${plural(run.total, 'item has', 'items have')} ${where}`;
-    lines.push(run.total === 0 ? `Each of your inventory items has a ${plan.currentOnly ? 'warranty that has not expired' : 'warranty record'}.` : `${plan.count ? `${run.total} of your items` : names(run.total)} ${plural(run.total, 'has', 'have')} ${where}${plan.currentOnly ? ' (none that has not expired)' : ''}.`);
-    if (run.total > 0) { limited = true; lines.push('This only reflects warranties saved against an item; a warranty that is recorded without being linked to the item is not counted.'); }
+    const conflicted = run.conflictedRows?.length ?? 0;
+    const unknown = run.unknownRows?.length ?? 0;
+    title = run.total === 0 ? 'No items have a confirmed missing warranty record' : `${run.total} ${plural(run.total, 'item has', 'items have')} no linked warranty record`;
+    lines.push(run.total === 0
+      ? 'No inventory item is confirmed in the requested no-linked-warranty population.'
+      : `${plan.count ? `${run.total} of your items` : names(run.total)} ${plural(run.total, 'has', 'have')} no warranty linked in your home record.`);
+    if (conflicted > 0) lines.push(`${conflicted} ${plural(conflicted, 'item has', 'items have')} conflicting warranty links and ${plural(conflicted, 'is', 'are')} shown separately from the confirmed count.`);
+    if (unknown > 0) lines.push(`${unknown} ${plural(unknown, 'item has', 'items have')} an unknown warranty state and ${plural(unknown, 'is', 'are')} not counted as having or not having a linked warranty.`);
+    limited = conflicted > 0 || unknown > 0;
+    lines.push('This describes links recorded for each item; it does not decide whether warranty terms cover the item.');
   }
   const sources = run.rows.length ? run.rows.slice(0, 10).map((r) => sourceRef('InventoryItem', r.id)) : [sourceRef('Property', propertyId)];
   const receipt = plan.shape === 'NO_WARRANTY' && agreement?.outcome === 'AGREE' && agreement.facet ? {
@@ -198,8 +204,8 @@ async function shape789Result(propertyId: string, role: string, plan: Shape789Pl
     resolvedRecordIds: run.rows.map((row) => row.id),
     population: {
       confirmedCount: run.total,
-      conflictedCount: 0,
-      unknownCount: 0,
+      conflictedCount: run.conflictedRows?.length ?? 0,
+      unknownCount: run.unknownRows?.length ?? 0,
       totalMatchCount: run.total,
       displayedCount: Math.min(run.rows.length, 10),
       truncated: run.total > 10,

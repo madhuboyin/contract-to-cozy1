@@ -11,6 +11,7 @@ export type TransitionalWarrantyState =
 
 export interface TransitionalWarrantyLinkInput {
   readonly inventoryItemId: string;
+  readonly label?: string;
   /** Legacy InventoryItem.warrantyId path. Its final business meaning is owner-pending. */
   readonly propertyPlanWarrantyId: string | null;
   /** Legacy Warranty.inventoryItemId path; more than one row is preserved. */
@@ -20,6 +21,7 @@ export interface TransitionalWarrantyLinkInput {
 
 export interface TransitionalWarrantyRead {
   readonly inventoryItemId: string;
+  readonly label: string;
   readonly state: TransitionalWarrantyState;
   readonly warrantyIds: readonly string[];
   readonly reconciliationRequired: boolean;
@@ -36,6 +38,7 @@ export function classifyTransitionalWarrantyLinks(input: TransitionalWarrantyLin
   if (input.coverageEvidenceStatus === 'NONE') {
     return {
       inventoryItemId: input.inventoryItemId,
+      label: input.label ?? 'inventory item',
       state: warrantyIds.length ? 'CONFLICTED_LINKS' : 'EXPLICIT_NO_COVERAGE',
       warrantyIds,
       reconciliationRequired: warrantyIds.length > 0,
@@ -44,15 +47,16 @@ export function classifyTransitionalWarrantyLinks(input: TransitionalWarrantyLin
   if (!propertyPlanWarrantyId && itemWarrantyIds.length === 0) {
     return {
       inventoryItemId: input.inventoryItemId,
+      label: input.label ?? 'inventory item',
       state: input.coverageEvidenceStatus === 'NOT_SURE' ? 'UNKNOWN' : 'NO_LINK_RECORDED',
       warrantyIds: [],
       reconciliationRequired: false,
     };
   }
-  if (propertyPlanWarrantyId && itemWarrantyIds.length === 0) return { inventoryItemId: input.inventoryItemId, state: 'PROPERTY_PLAN_LINKED', warrantyIds, reconciliationRequired: false };
-  if (!propertyPlanWarrantyId) return { inventoryItemId: input.inventoryItemId, state: 'ITEM_WARRANTY_LINKED', warrantyIds, reconciliationRequired: itemWarrantyIds.length > 1 };
+  if (propertyPlanWarrantyId && itemWarrantyIds.length === 0) return { inventoryItemId: input.inventoryItemId, label: input.label ?? 'inventory item', state: 'PROPERTY_PLAN_LINKED', warrantyIds, reconciliationRequired: false };
+  if (!propertyPlanWarrantyId) return { inventoryItemId: input.inventoryItemId, label: input.label ?? 'inventory item', state: 'ITEM_WARRANTY_LINKED', warrantyIds, reconciliationRequired: itemWarrantyIds.length > 1 };
   const consistent = itemWarrantyIds.length === 1 && itemWarrantyIds[0] === propertyPlanWarrantyId;
-  return { inventoryItemId: input.inventoryItemId, state: consistent ? 'BOTH_CONSISTENT' : 'CONFLICTED_LINKS', warrantyIds, reconciliationRequired: !consistent };
+  return { inventoryItemId: input.inventoryItemId, label: input.label ?? 'inventory item', state: consistent ? 'BOTH_CONSISTENT' : 'CONFLICTED_LINKS', warrantyIds, reconciliationRequired: !consistent };
 }
 
 /** Property-scoped reader over both legacy link directions. */
@@ -61,6 +65,7 @@ export async function readTransitionalWarrantyLinks(propertyId: string): Promise
     where: { propertyId },
     select: {
       id: true,
+      name: true,
       warrantyId: true,
       coverageEvidenceStatus: true,
       linkedWarranties: { where: { propertyId }, select: { id: true } },
@@ -69,6 +74,7 @@ export async function readTransitionalWarrantyLinks(propertyId: string): Promise
   });
   return items.map((item) => classifyTransitionalWarrantyLinks({
     inventoryItemId: item.id,
+    label: item.name,
     propertyPlanWarrantyId: item.warrantyId,
     itemWarrantyIds: item.linkedWarranties.map((warranty) => warranty.id),
     coverageEvidenceStatus: item.coverageEvidenceStatus,
