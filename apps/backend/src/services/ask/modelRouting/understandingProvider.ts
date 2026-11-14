@@ -12,7 +12,16 @@ import { isWriteCapableOperation } from '../support/writeCapability';
 import { geminiService } from '../../gemini.service';
 import { z } from 'zod';
 
-export const MODEL_CALL_BUDGET = Object.freeze({ maxTotalCalls: 4, maxTargetCalls: 3, perCallTimeoutMs: 1500, totalBudgetMs: 4000 });
+// D6a (decided 2026-11-11): routing hard budget 4 s; stage one <= 1.5 s, each target call <= 2.5 s (concurrent, so the budget holds); S_max = 3 target calls, 1 + S_max = 4 calls at most. `perCallTimeoutMs` is the limit of a
+// single-call route, and the whole-call guard of a provider that makes one call.
+export const MODEL_CALL_BUDGET = Object.freeze({ maxTotalCalls: 4, maxTargetCalls: 3, perCallTimeoutMs: 1500, stageOneTimeoutMs: 1500, targetCallTimeoutMs: 2500, totalBudgetMs: 4000 });
+/** A model facet below this confidence is not run (it is reported as a part that could not be matched), the same floor the deterministic decomposition uses. */
+export const MODEL_FACET_MIN_CONFIDENCE = 0.5;
+/**
+ * PROVISIONAL confidence for a candidate the model returned without a plan confidence: the model's own self-assessment, mapped conservatively. It is NOT a calibrated probability (FR-CAL: calibration needs the sealed
+ * evaluation, which does not exist); it only stops a LOW self-assessment from being run as if it were as sure as a HIGH one, and it is moot until the understanding stratum is certified.
+ */
+export const provisionalCandidateConfidence = (selfAssessment: unknown): number => (selfAssessment === 'HIGH' ? 0.7 : selfAssessment === 'MEDIUM' ? 0.5 : 0.3);
 export const SINGLE_STAGE_CANDIDATE_LIMIT = 120;
 
 const ProviderCandidateSchema = z.object({
@@ -38,6 +47,10 @@ const ProviderUnderstandingSchema = z.object({
 export interface UnderstandingProvider {
   readonly name: string;
   readonly lastCallCount?: number;
+  /** Target-stage domains beyond S_max that were not searched (FR-UND-13 step 3): reported, never a reason to fail the turn. */
+  readonly lastDomainOverflow?: number;
+  /** The longest this provider may take for one plan() call. Defaults to one call's budget; a provider that makes several calls states its own (each call is bounded inside it). */
+  readonly timeoutBudgetMs?: number;
   plan(input: {
     readonly text: string;
     readonly signal: AbortSignal;
@@ -46,7 +59,7 @@ export interface UnderstandingProvider {
   }): Promise<unknown>;
 }
 export type GuardOutcome =
-  | { readonly kind: 'PLANNED'; readonly validation: PlanValidation; readonly sentText: string; readonly calls: number }
+  | { readonly kind: 'PLANNED'; readonly validation: PlanValidation; readonly sentText: string; readonly calls: number; readonly domainOverflow?: number }
   | { readonly kind: 'REFUSED'; readonly reason: 'PROVIDER_TERMS_NOT_RECORDED' | 'NO_CALL_UNCLASSIFIABLE_IDENTIFIER' | 'NO_CALL_UNINTERPRETABLE_AFTER_MINIMISATION' }
   /** FR-UND-12: the model answered and said NONE_FITS or INSUFFICIENT_TEXT. These are outcomes of their own, not a schema failure and not an outage. */
   | { readonly kind: 'NO_MATCH'; readonly disposition: 'NONE_FITS' | 'INSUFFICIENT_TEXT'; readonly calls: number }
@@ -67,7 +80,7 @@ export async function guardedPlan(input: GuardedPlanInput): Promise<GuardOutcome
   const minimised = minimizePrompt(input.message, input.knownNames ?? []);
   if (minimised.noCall) return { kind: 'REFUSED', reason: minimised.noCall === 'UNCLASSIFIABLE_IDENTIFIER' ? 'NO_CALL_UNCLASSIFIABLE_IDENTIFIER' : 'NO_CALL_UNINTERPRETABLE_AFTER_MINIMISATION' };
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), MODEL_CALL_BUDGET.perCallTimeoutMs);
+  const timer = setTimeout(() => controller.abort(), input.provider.timeoutBudgetMs ?? MODEL_CALL_BUDGET.perCallTimeoutMs);
   try {
     const raw = await Promise.race([
       input.provider.plan({
@@ -85,7 +98,7 @@ export async function guardedPlan(input: GuardedPlanInput): Promise<GuardOutcome
     // The plan is validated against the MINIMISED text's words: a facet span is a phrase of the message, and placeholders are not routing words.
     const validation = validateRequestPlan(raw, { ...input.planContext, message: input.message });
     if (!validation.accepted.length && !validation.dropped.length) return { kind: 'UNAVAILABLE', reason: 'SCHEMA_FAILURE', calls: input.provider.lastCallCount ?? 1 };
-    return { kind: 'PLANNED', validation, sentText: minimised.text, calls: input.provider.lastCallCount ?? 1 };
+    return { kind: 'PLANNED', validation, sentText: minimised.text, calls: input.provider.lastCallCount ?? 1, domainOverflow: input.provider.lastDomainOverflow ?? 0 };
   } catch (error) {
     const stage = (error as { stage?: unknown })?.stage;
     return { kind: 'UNAVAILABLE', reason: (error as Error)?.name === 'TimeoutError' ? 'TIMEOUT' : 'PROVIDER_ERROR', calls: input.provider.lastCallCount ?? 1, ...(stage === 'STAGE1' || stage === 'STAGE2' ? { stage } : {}) };
@@ -100,10 +113,21 @@ export class ScriptedProvider implements UnderstandingProvider {
   async plan(input: { text: string; signal: AbortSignal }): Promise<unknown> { this.received.push(input.text); return this.script(input.text); }
 }
 
+/** One model call under its own timeout, linked to the caller's abort signal; a timeout is a TimeoutError carrying the stage it happened in (FR-UND-13: STAGE1_UNAVAILABLE / STAGE2_UNAVAILABLE). */
+function boundedCall<T>(parent: AbortSignal, ms: number, stage: 'STAGE1' | 'STAGE2' | null, run: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController(); const onAbort = () => controller.abort(); parent.addEventListener('abort', onAbort, { once: true });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(Object.assign(new Error('model call timed out'), { name: 'TimeoutError', ...(stage ? { stage } : {}) })); }, ms); });
+  return Promise.race([run(controller.signal), timeout]).finally(() => { if (timer) clearTimeout(timer); parent.removeEventListener('abort', onAbort); });
+}
+
 /** Real provider adapter. It exposes only reviewed ids and descriptions; no home record values are included. */
 export class GeminiUnderstandingProvider implements UnderstandingProvider {
   readonly name = 'gemini-structured-understanding';
   lastCallCount = 0;
+  lastDomainOverflow = 0;
+  /** Up to 1 + S_max calls run inside one plan(); each is bounded by its own stage timeout below, and the whole is bounded by the routing budget (D6a). */
+  readonly timeoutBudgetMs = MODEL_CALL_BUDGET.totalBudgetMs;
   async plan(input: { text: string; signal: AbortSignal; eligibleOperationIds?: ReadonlySet<string>; eligibleDataPointIds?: ReadonlySet<string> }): Promise<unknown> {
     const operationCatalogue = Object.values(ASK_OPERATION_DEFINITIONS)
       .filter((definition) => (!input.eligibleOperationIds || input.eligibleOperationIds.has(definition.operationId))
@@ -113,32 +137,39 @@ export class GeminiUnderstandingProvider implements UnderstandingProvider {
       .filter((point) => !input.eligibleDataPointIds || input.eligibleDataPointIds.has(point.id))
       .map((point) => ({ id: point.id, description: point.label, domain: point.domain }));
     let raw: unknown;
+    this.lastDomainOverflow = 0;
     if (operationCatalogue.length + dataPointCatalogue.length <= SINGLE_STAGE_CANDIDATE_LIMIT) {
       this.lastCallCount = 1;
-      raw = await geminiService.planAskUnderstanding({ text: input.text, operations: operationCatalogue.map(({ domain: _domain, ...entry }) => entry), dataPoints: dataPointCatalogue, signal: input.signal });
+      raw = await boundedCall(input.signal, MODEL_CALL_BUDGET.perCallTimeoutMs, null, (signal) => geminiService.planAskUnderstanding({ text: input.text, operations: operationCatalogue.map(({ domain: _domain, ...entry }) => entry), dataPoints: dataPointCatalogue, signal }));
     } else {
       const domainIds = [...new Set([...operationCatalogue.map((entry) => entry.domain), ...dataPointCatalogue.map((entry) => entry.domain)])].sort();
       const tagStage = (stage: 'STAGE1' | 'STAGE2') => (error: unknown): never => { throw Object.assign(error instanceof Error ? error : new Error(String(error)), { stage }); };
-      const stageOne = await geminiService.selectAskUnderstandingDomains({ text: input.text, domains: domainIds.map((id) => ({ id, description: id.replace(/^operation:/, '').replace(/_/g, ' ').toLowerCase() })), signal: input.signal }).catch(tagStage('STAGE1')) as { disposition?: string; domains?: Array<{ domainId?: string }> };
+      const stageOne = await boundedCall(input.signal, MODEL_CALL_BUDGET.stageOneTimeoutMs, 'STAGE1', (signal) => geminiService.selectAskUnderstandingDomains({ text: input.text, domains: domainIds.map((id) => ({ id, description: id.replace(/^operation:/, '').replace(/_/g, ' ').toLowerCase() })), signal })).catch(tagStage('STAGE1')) as { disposition?: string; domains?: Array<{ domainId?: string }> };
       this.lastCallCount = 1;
       if (stageOne.disposition !== 'MATCH') return { disposition: stageOne.disposition, candidates: [], slots: {}, selfAssessment: 'LOW', requestPlan: null };
       const selected = [...new Set((stageOne.domains ?? []).map((entry) => entry.domainId).filter((id): id is string => domainIds.includes(id ?? '')))];
-      if (selected.length > MODEL_CALL_BUDGET.maxTargetCalls) throw Object.assign(new Error('domain selection exceeds the target-call budget'), { stage: 'STAGE1' });
-      this.lastCallCount += selected.length;
-      const parts = await Promise.all(selected.map((domain) => geminiService.planAskUnderstanding({
+      // FR-UND-13 step 3: more domains than S_max target calls is not an outage. The first S_max domains, in the model's rank order, are searched and the remainder is counted (reported only when independently confirmed).
+      const searched = selected.slice(0, MODEL_CALL_BUDGET.maxTargetCalls);
+      this.lastDomainOverflow = selected.length - searched.length;
+      this.lastCallCount += searched.length;
+      const parts = await Promise.all(searched.map((domain) => boundedCall(input.signal, MODEL_CALL_BUDGET.targetCallTimeoutMs, 'STAGE2', (signal) => geminiService.planAskUnderstanding({
         text: input.text,
         operations: operationCatalogue.filter((entry) => entry.domain === domain).map(({ domain: _domain, ...entry }) => entry),
         dataPoints: dataPointCatalogue.filter((entry) => entry.domain === domain),
-        signal: input.signal,
-      }).catch(tagStage('STAGE2')) as Promise<{ disposition?: string; candidates?: Array<Record<string, unknown>>; requestPlan?: { facets?: Array<Record<string, unknown>> } | null }>));
+        signal,
+      })).catch(tagStage('STAGE2')) as Promise<{ disposition?: string; selfAssessment?: string; candidates?: Array<Record<string, unknown>>; requestPlan?: { facets?: Array<Record<string, unknown>> } | null }>));
       const facets: Array<Record<string, unknown>> = []; const candidates: Array<Record<string, unknown>> = [];
       for (const part of parts) {
         const offset = facets.length;
-        for (const facet of part.requestPlan?.facets ?? []) facets.push({ ...facet, dependsOn: Array.isArray(facet.dependsOn) ? facet.dependsOn.map((value) => Number(value) + offset) : [] });
+        const planned = part.requestPlan?.facets ?? [];
+        for (const facet of planned) facets.push({ ...facet, dependsOn: Array.isArray(facet.dependsOn) ? facet.dependsOn.map((value) => Number(value) + offset) : [] });
+        // A domain that matched with a candidate but no request plan still contributes its best candidate: nothing a searched domain found is dropped because another domain also answered.
+        if (!planned.length && part.disposition === 'MATCH' && part.candidates?.length) facets.push({ ...part.candidates[0], span: input.text, dependsOn: [], confidence: provisionalCandidateConfidence(part.selfAssessment) });
         candidates.push(...(part.candidates ?? []));
       }
+      const order = ['LOW', 'MEDIUM', 'HIGH']; const weakest = parts.map((part) => (order.includes(part.selfAssessment ?? '') ? part.selfAssessment! : 'LOW')).sort((a, b) => order.indexOf(a) - order.indexOf(b))[0] ?? 'LOW';
       const uniqueCandidates = [...new Map(candidates.map((candidate) => [`${candidate.kind}:${candidate.operationId ?? candidate.dataPointId ?? ''}`, candidate])).values()];
-      raw = { disposition: facets.length || uniqueCandidates.length ? 'MATCH' : 'NONE_FITS', candidates: uniqueCandidates.slice(0, 3), slots: {}, selfAssessment: 'MEDIUM', requestPlan: { facets } };
+      raw = { disposition: facets.length || uniqueCandidates.length ? 'MATCH' : 'NONE_FITS', candidates: uniqueCandidates.slice(0, 3), slots: {}, selfAssessment: weakest, requestPlan: { facets } };
     }
     if (!raw || typeof raw !== 'object') return raw;
     const parsedResponse = ProviderUnderstandingSchema.safeParse(raw);
@@ -147,7 +178,7 @@ export class GeminiUnderstandingProvider implements UnderstandingProvider {
     if (response.disposition !== 'MATCH') return { facets: [], disposition: response.disposition };
     const proposed: Array<Record<string, unknown>> = Array.isArray(response.requestPlan?.facets) && response.requestPlan!.facets!.length
       ? response.requestPlan!.facets!
-      : (response.candidates ?? []).slice(0, 1).map((candidate) => ({ ...candidate, span: input.text, dependsOn: [], confidence: 0.5 } as Record<string, unknown>));
+      : (response.candidates ?? []).slice(0, 1).map((candidate) => ({ ...candidate, span: input.text, dependsOn: [], confidence: provisionalCandidateConfidence(response.selfAssessment) } as Record<string, unknown>));
     return { facets: proposed.map((facet) => ({
       span: facet.span,
       target: facet.kind === 'DATA_POINT'

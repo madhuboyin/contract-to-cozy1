@@ -318,7 +318,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
   // FR-GATE-3 c1: set only when deterministic decomposition positively certified that every clause of the full message routes to the one operation answering it.
   let segmentationCertified = false;
   if (!internal.composition && executionPropertyId && !input.launchContext?.operationId && !input.suggestedActionSelection) {
-    const decomposition = decomposeForComposition(input.message, { eligibleOperationIds: new Set(eligibleOperationIds) });
+    const decomposition = decomposeForComposition(input.message, { eligibleOperationIds: new Set(eligibleOperationIds), knownNames });
     segmentationCertified = decomposition.kind === 'SINGLE' && decomposition.reason === 'SAME_OPERATION';
     const plannerRoutingDecision = resolveAskRoutingCascade(input.message, { knownNames });
     const plannerMayRun = plannerRoutingDecision.stage === 'REMOTE_FALLBACK' || plannerRoutingDecision.stage === 'CLARIFICATION';
@@ -362,6 +362,8 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       }
     }
     const admittedModelPlan = modelPlan?.kind === 'PLAN' ? modelPlan : null;
+    // FR-UND-13 step 3: domains beyond S_max were not searched. Recorded as telemetry only; the homeowner is told about omitted parts only when the deterministic segmentation or the validated plan confirms them.
+    if (admittedModelPlan?.domainOverflow) await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'UNDERSTANDING_DOMAIN_OVERFLOW', metadataJson: asInputJson({ domainsNotSearched: admittedModelPlan.domainOverflow }) } }).catch(() => undefined);
     if (decomposition.kind === 'NOT_COMPOSED' && !admittedModelPlan) {
       declinedComposition = { reason: decomposition.reason, clauseCount: decomposition.clauseCount };
       askCompositionTotal.inc({ outcome: `declined_${decomposition.reason.toLowerCase()}` });

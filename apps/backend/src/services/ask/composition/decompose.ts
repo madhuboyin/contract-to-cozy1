@@ -3,6 +3,7 @@
 import { COMPOSITION_PURE_VARIANTS, getAskOperationDefinition, isReadOnlyOperation, resolveAskOperation, type AskOperationId } from '../askOperationRegistry';
 import { resolveAskRoutingCascade } from '../askRoutingCascade';
 import { clarificationLabelFor } from '../support/clarificationLabels';
+import type { KnownName } from '../privacy/promptMinimizer';
 import { operationCoversClause, resolveClauseOperation, splitQuestionClauses, standalone, subjectOf } from '../support/alsoAnswer';
 import { parseTargetDate } from '../support/targetDate';
 import { COVERAGE_DECLARATIONS, coverageSkips } from './quantities';
@@ -34,8 +35,8 @@ export interface DeferredClause { clause: string; reason: 'NOT_ROUTED' | 'LOW_CO
 
 const MAX_CLARIFICATION_OPTIONS = 3;
 /** The read operations a clause could plausibly mean, when the router itself could not choose between two or more (never fewer than two, never a write, never an operation this home cannot run). */
-function clarificationOptionsFor(clause: string, eligible: ReadonlySet<AskOperationId> | undefined): ClarificationOption[] {
-  const decision = resolveAskRoutingCascade(clause);
+function clarificationOptionsFor(clause: string, eligible: ReadonlySet<AskOperationId> | undefined, knownNames?: ReadonlyArray<KnownName>): ClarificationOption[] {
+  const decision = resolveAskRoutingCascade(clause, { knownNames });
   if (decision.stage !== 'CLARIFICATION' || decision.candidates.length < 2) return [];
   const options: ClarificationOption[] = [];
   for (const candidate of decision.candidates) {
@@ -55,6 +56,8 @@ export type DecompositionOutcome =
   | { kind: 'COMPOSE'; clauses: ComposedClause[]; skipped: ComposedClause[]; deferred: DeferredClause[] };
 
 export interface DecomposeOptions {
+  /** The authorised property's own names: protected from spelling correction while each part is routed (FR-NRM-1, FR-PRV-1). */
+  knownNames?: ReadonlyArray<KnownName>;
   /** Operations this user and property may run (the existing discoverability set). Omitted means every registered operation. */
   eligibleOperationIds?: ReadonlySet<AskOperationId>;
   now?: Date;
@@ -65,7 +68,7 @@ export interface DecomposeOptions {
  * (the single-operation path handles it) and no clause is routed. Only after that gate passes are clauses split and routed individually.
  */
 export function decomposeForComposition(message: string, options: DecomposeOptions = {}): DecompositionOutcome {
-  const whole = resolveAskRoutingCascade(message);
+  const whole = resolveAskRoutingCascade(message, { knownNames: options.knownNames });
   // Used only for declared coverage and clause inheritance; it does not admit
   // or execute the raw deterministic match.
   const wholeOperationId = resolveAskOperation(message).operationId;
@@ -95,9 +98,9 @@ export function decomposeForComposition(message: string, options: DecomposeOptio
         ? { operationId: 'CAPITAL_ITEM_FUNDING_GOAL' as const, family: 'DECISION_ANALYSIS', confidence: MIN_CLAUSE_CONFIDENCE }
         : null
     );
-    if (!resolved) { refuse('CLAUSE_NOT_COMPOSABLE', `“${part}” did not route to a known read.`); const choices = clarificationOptionsFor(clause, options.eligibleOperationIds); deferred.push(choices.length ? { clause: tail(clause), reason: 'NEEDS_CLARIFICATION', operationId: null, options: choices } : { clause: tail(clause), reason: 'NOT_ROUTED', operationId: null }); continue; }
+    if (!resolved) { refuse('CLAUSE_NOT_COMPOSABLE', `“${part}” did not route to a known read.`); const choices = clarificationOptionsFor(clause, options.eligibleOperationIds, options.knownNames); deferred.push(choices.length ? { clause: tail(clause), reason: 'NEEDS_CLARIFICATION', operationId: null, options: choices } : { clause: tail(clause), reason: 'NOT_ROUTED', operationId: null }); continue; }
     // FR-DEC-3: confident routing to an operation on the composable allowlist, eligible for this user and property.
-    if (resolved.confidence < MIN_CLAUSE_CONFIDENCE) { refuse('LOW_CONFIDENCE', `“${part}” routed with low confidence.`); const choices = clarificationOptionsFor(clause, options.eligibleOperationIds); deferred.push(choices.length ? { clause: tail(clause), reason: 'NEEDS_CLARIFICATION', operationId: resolved.operationId, options: choices } : { clause: tail(clause), reason: 'LOW_CONFIDENCE', operationId: resolved.operationId }); continue; }
+    if (resolved.confidence < MIN_CLAUSE_CONFIDENCE) { refuse('LOW_CONFIDENCE', `“${part}” routed with low confidence.`); const choices = clarificationOptionsFor(clause, options.eligibleOperationIds, options.knownNames); deferred.push(choices.length ? { clause: tail(clause), reason: 'NEEDS_CLARIFICATION', operationId: resolved.operationId, options: choices } : { clause: tail(clause), reason: 'LOW_CONFIDENCE', operationId: resolved.operationId }); continue; }
     // D17: an operation that persists runs inside a composed answer as its pure variant. Eligibility is judged on the operation the homeowner asked for.
     const requestedOperationId = resolved.operationId;
     const operationId = COMPOSITION_PURE_VARIANTS[requestedOperationId] ?? requestedOperationId;
