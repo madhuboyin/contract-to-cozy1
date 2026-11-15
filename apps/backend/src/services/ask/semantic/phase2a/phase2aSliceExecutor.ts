@@ -1,0 +1,969 @@
+import { prisma } from '../../../../lib/prisma';
+import type { AskOperationResult } from '../../askOperationRegistry';
+import type { AskEntityResolutionResult } from '../../askEntityResolution';
+import { parseDeterministicSemanticRequest } from '../deterministicSemanticParser';
+import { ASK_SEMANTIC_RELATION_REGISTRY } from '../semanticRelationRegistry';
+import { SemanticRequestPlanSchema, type SemanticRequestPlan, type SemanticWhereExpression } from '../semanticRequestPlan';
+import { resolvePropertyEntityReference, type PropertyEntityCandidate, type PropertyEntityResolution } from '../propertyEntityResolver';
+import { classifyTransitionalWarrantyLinks, type TransitionalWarrantyRead } from '../transitionalWarrantyRead';
+import { buildSemanticReadReceipt, type SemanticReadReceipt } from '../semanticExecutionReceipt';
+import { verifySemanticReadReceiptEntailment, type SemanticReceiptEntailmentVerdict } from '../semanticReceiptEntailment';
+import { gateUncertifiedCommandPreview } from '../phase1/commandPreviewAdmission';
+import {
+  buildSemanticTextEnvelope,
+  verifyPlaceholderSpanMapRoundTrip,
+  type DynamicPlaceholderEntityCandidate,
+  type SemanticTextEnvelope,
+} from './placeholderSpanMap';
+import {
+  buildPhase2aRichPresentation,
+  verifyRichPresentationPopulationEquivalence,
+  type Phase2aPresentationRow,
+  type Phase2aRichPresentationEquivalenceReport,
+} from './phase2aRichPresentationAdapter';
+
+export interface Phase2aAuthorizationContext {
+  readonly propertyId: string;
+  readonly role: 'VIEWER' | 'EDITOR' | 'OWNER';
+  readonly propertyAuthorized: boolean;
+  readonly restrictedItemIds?: readonly string[];
+  readonly allowSensitiveFields?: boolean;
+}
+
+export interface Phase2aRoomRecord {
+  readonly id: string;
+  readonly propertyId: string;
+  readonly name: string;
+}
+
+export interface Phase2aInventoryItemRecord {
+  readonly id: string;
+  readonly propertyId: string;
+  readonly name: string;
+  readonly category: string;
+  readonly brand?: string;
+  readonly modelNumber?: string;
+  readonly serialNumber?: string;
+  readonly purchaseCostCents?: number | null;
+  readonly replacementCostCents?: number | null;
+  readonly installedOn?: string | null;
+  readonly condition?: 'GOOD_CONDITION' | 'FAIR_CONDITION' | 'POOR_CONDITION' | 'REPLACE_SOON' | string;
+  readonly roomId?: string | null;
+  readonly propertyPlanWarrantyId?: string | null;
+  readonly itemWarrantyIds: readonly string[];
+  readonly coverageEvidenceStatus: 'NONE' | 'NOT_SURE' | 'UNKNOWN' | string;
+}
+
+export interface Phase2aMaintenanceTaskRecord {
+  readonly id: string;
+  readonly propertyId: string;
+  readonly title: string;
+  readonly status: 'PENDING' | 'IN_PROGRESS' | 'PAST_DUE' | 'COMPLETED' | string;
+  readonly priority: 'LOW_PRIORITY' | 'MEDIUM_PRIORITY' | 'HIGH_PRIORITY' | string;
+  readonly nextDueDate: string;
+  readonly inventoryItemId?: string | null;
+}
+
+export interface Phase2aPropertySnapshot {
+  readonly propertyId: string;
+  readonly asOfDate: string;
+  readonly rooms: readonly Phase2aRoomRecord[];
+  readonly items: readonly Phase2aInventoryItemRecord[];
+  readonly maintenanceTasks: readonly Phase2aMaintenanceTaskRecord[];
+}
+
+export interface Phase2aSliceExecutionResult {
+  readonly status: 'ANSWERED' | 'NEEDS_CLARIFICATION' | 'NEEDS_CONFIRMATION' | 'BLOCKED' | 'OUT_OF_SCOPE';
+  readonly envelope: SemanticTextEnvelope;
+  readonly spanRoundTripOk: boolean;
+  readonly plan: SemanticRequestPlan;
+  readonly entityResolution: PropertyEntityResolution | null;
+  readonly receipt: SemanticReadReceipt | null;
+  readonly entailment: SemanticReceiptEntailmentVerdict | null;
+  readonly presentationEquivalence: Phase2aRichPresentationEquivalenceReport | null;
+  readonly operationResult: AskOperationResult;
+  readonly redactedFields: readonly string[];
+  readonly traversalDepthUsed: number;
+  readonly activeEntityIds: readonly string[];
+}
+
+function buildItemCandidates(
+  snapshot: Phase2aPropertySnapshot,
+  auth: Phase2aAuthorizationContext
+): PropertyEntityCandidate[] {
+  const restricted = new Set(auth.restrictedItemIds ?? []);
+  return snapshot.items.map((item) => ({
+    entityId: 'entity.inventory_item',
+    recordId: item.id,
+    safeDisplayLabel: item.name,
+    identityLabels: [item.name, item.category, ...(item.brand ? [`${item.brand} ${item.name}`] : [])],
+    authorization: auth.propertyAuthorized && !restricted.has(item.id) ? 'AUTHORISED' : 'UNAUTHORISED',
+  }));
+}
+
+function detectMentionedItem(rawText: string, snapshot: Phase2aPropertySnapshot): string {
+  const lower = rawText.toLocaleLowerCase('en-US');
+  for (const item of snapshot.items) {
+    if (lower.includes(item.name.toLocaleLowerCase('en-US'))) {
+      return item.name;
+    }
+  }
+  return '';
+}
+
+function detectMentionedRoom(rawText: string, snapshot: Phase2aPropertySnapshot): Phase2aRoomRecord | null {
+  const lower = rawText.toLocaleLowerCase('en-US');
+  return snapshot.rooms.find((room) => lower.includes(room.name.toLocaleLowerCase('en-US'))) ?? null;
+}
+
+function evaluateWarrantyState(item: Phase2aInventoryItemRecord): TransitionalWarrantyRead {
+  return classifyTransitionalWarrantyLinks({
+    inventoryItemId: item.id,
+    label: item.name,
+    propertyPlanWarrantyId: item.propertyPlanWarrantyId ?? null,
+    itemWarrantyIds: item.itemWarrantyIds,
+    coverageEvidenceStatus: item.coverageEvidenceStatus,
+  });
+}
+
+export interface TraversalBoundVerdict {
+  readonly ok: boolean;
+  readonly depth: number;
+  readonly reason?: string;
+}
+
+/**
+ * Validates a sequential multi-hop relation chain against every registered edge's
+ * maximumTraversalDepth and cyclePolicy.
+ */
+export function checkRelationChainBound(
+  relationPathIds: readonly string[],
+  visitedNodes: readonly string[]
+): TraversalBoundVerdict {
+  if (relationPathIds.length === 0) {
+    return { ok: true, depth: 0 };
+  }
+  const uniqueNodes = new Set(visitedNodes);
+  if (uniqueNodes.size !== visitedNodes.length) {
+    return { ok: false, depth: relationPathIds.length, reason: 'TRAVERSAL_CYCLE_DETECTED' };
+  }
+  const registrations = relationPathIds.map((pathId) =>
+    ASK_SEMANTIC_RELATION_REGISTRY.find((entry) => entry.relationPathId === pathId)
+  );
+  if (registrations.some((reg) => !reg)) {
+    return { ok: false, depth: relationPathIds.length, reason: 'UNREGISTERED_RELATION_PATH' };
+  }
+  const minAllowedDepth = Math.min(...registrations.map((reg) => reg!.maximumTraversalDepth));
+  const depth = relationPathIds.length;
+  if (depth > minAllowedDepth) {
+    return { ok: false, depth, reason: 'TRAVERSAL_DEPTH_EXCEEDED' };
+  }
+  return { ok: true, depth };
+}
+
+/**
+ * Validates sibling depth-1 predicates originating from the root entity
+ * (e.g. warranty + room on entity.inventory_item), checking each path independently
+ * against its own registered maximumTraversalDepth.
+ */
+function validateSiblingDepthOnePredicates(relationPathIds: readonly string[]): TraversalBoundVerdict {
+  if (relationPathIds.length === 0) {
+    return { ok: true, depth: 0 };
+  }
+  for (const pathId of relationPathIds) {
+    const reg = ASK_SEMANTIC_RELATION_REGISTRY.find((entry) => entry.relationPathId === pathId);
+    if (!reg) {
+      return { ok: false, depth: 1, reason: 'UNREGISTERED_RELATION_PATH' };
+    }
+    if (reg.maximumTraversalDepth < 1) {
+      return { ok: false, depth: 1, reason: 'TRAVERSAL_DEPTH_EXCEEDED' };
+    }
+  }
+  return { ok: true, depth: 1 };
+}
+
+function buildDynamicPlaceholderCandidates(
+  snapshot: Phase2aPropertySnapshot,
+  auth: Phase2aAuthorizationContext
+): DynamicPlaceholderEntityCandidate[] {
+  const restricted = new Set(auth.restrictedItemIds ?? []);
+  const itemCandidates: DynamicPlaceholderEntityCandidate[] = snapshot.items.map((item) => ({
+    kind: 'ITEM',
+    entityId: 'entity.inventory_item',
+    recordId: item.id,
+    names: [item.name, ...(item.brand ? [`${item.brand} ${item.name}`] : [])],
+    authorized: auth.propertyAuthorized && !restricted.has(item.id),
+    safeDisplayLabel: item.name,
+  }));
+  const roomCandidates: DynamicPlaceholderEntityCandidate[] = snapshot.rooms.map((room) => ({
+    kind: 'ROOM',
+    entityId: 'entity.room',
+    recordId: room.id,
+    names: [room.name],
+    authorized: auth.propertyAuthorized,
+    safeDisplayLabel: room.name,
+  }));
+  return [...itemCandidates, ...roomCandidates];
+}
+
+function evaluateWherePredicate(
+  predicateId: string,
+  item: Phase2aInventoryItemRecord,
+  warranty: TransitionalWarrantyRead,
+  snapshot: Phase2aPropertySnapshot,
+  mentionedRoom: Phase2aRoomRecord | null
+): boolean {
+  const linkedTasks = snapshot.maintenanceTasks.filter((task) => task.inventoryItemId === item.id);
+  const dueTasks = linkedTasks.filter((task) => task.status !== 'COMPLETED');
+  const overdueTasks = linkedTasks.filter((task) => task.status === 'PAST_DUE' || (task.status !== 'COMPLETED' && task.nextDueDate < snapshot.asOfDate));
+
+  switch (predicateId) {
+    case 'predicate.inventory_item.has_warranty_record':
+      return warranty.state === 'ITEM_WARRANTY_LINKED'
+        || warranty.state === 'PROPERTY_PLAN_LINKED'
+        || warranty.state === 'BOTH_CONSISTENT';
+    case 'predicate.inventory_item.has_no_warranty_record':
+      return warranty.state === 'NO_LINK_RECORDED' || warranty.state === 'EXPLICIT_NO_COVERAGE';
+    case 'predicate.inventory_item.warranty_state_unknown':
+      return warranty.state === 'UNKNOWN' || warranty.state === 'CONFLICTED_LINKS';
+    case 'predicate.inventory_item.has_due_maintenance':
+      return dueTasks.length > 0;
+    case 'predicate.inventory_item.has_overdue_maintenance':
+      return overdueTasks.length > 0;
+    case 'predicate.inventory_item.has_no_due_maintenance':
+      return dueTasks.length === 0;
+    case 'predicate.inventory_item.in_room':
+      return mentionedRoom ? item.roomId === mentionedRoom.id : Boolean(item.roomId);
+    default:
+      return false;
+  }
+}
+
+function evaluateWhereExpression(
+  expr: SemanticWhereExpression,
+  item: Phase2aInventoryItemRecord,
+  warranty: TransitionalWarrantyRead,
+  snapshot: Phase2aPropertySnapshot,
+  mentionedRoom: Phase2aRoomRecord | null
+): boolean {
+  switch (expr.kind) {
+    case 'PREDICATE':
+      return evaluateWherePredicate(expr.predicateId, item, warranty, snapshot, mentionedRoom);
+    case 'NOT':
+      return !evaluateWhereExpression(expr.operand, item, warranty, snapshot, mentionedRoom);
+    case 'AND':
+      return expr.operands.every((operand) => evaluateWhereExpression(operand, item, warranty, snapshot, mentionedRoom));
+    case 'OR':
+      return expr.operands.some((operand) => evaluateWhereExpression(operand, item, warranty, snapshot, mentionedRoom));
+  }
+}
+
+function formatMoneyCents(cents: number | null | undefined, redacted: boolean): string {
+  if (redacted) return '[redacted for current role]';
+  if (cents === null || cents === undefined) return 'not recorded';
+  return `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function buildBlockedResult(
+  rawText: string,
+  envelope: SemanticTextEnvelope,
+  spanRoundTripOk: boolean,
+  plan: SemanticRequestPlan,
+  entityResolution: PropertyEntityResolution | null,
+  reason: string
+): Phase2aSliceExecutionResult {
+  const operationResult: AskOperationResult = {
+    status: 'BLOCKED',
+    reasonCode: 'ASK_PROPERTY_AUTHORIZATION_BLOCKED',
+    blocks: [
+      {
+        type: 'BOUNDARY',
+        id: 'phase2a-auth-boundary',
+        title: 'Access restricted',
+        body: reason,
+        severity: 'CAUTION',
+        suggestions: [],
+      },
+    ],
+    suggestions: [],
+    parameters: { retryable: false, actions: [], operationId: 'INVENTORY_ITEMS_READ', summary: reason },
+    confirmation: null,
+    clarification: null,
+  };
+  return {
+    status: 'BLOCKED',
+    envelope,
+    spanRoundTripOk,
+    plan,
+    entityResolution,
+    receipt: null,
+    entailment: null,
+    presentationEquivalence: null,
+    operationResult,
+    redactedFields: ['serialNumber', 'purchaseCostCents', 'replacementCostCents'],
+    traversalDepthUsed: 0,
+    activeEntityIds: [],
+  };
+}
+
+/**
+ * Executes the complete Phase 2A vertical slice:
+ * text envelope -> deterministic plan -> entity resolution -> bounded traversal /
+ * Boolean evaluation / capability / command preview -> typed receipt -> entailment
+ * verification -> rich presentation equivalence.
+ */
+export function executePhase2aVerticalSlice(input: {
+  readonly rawText: string;
+  readonly snapshot: Phase2aPropertySnapshot;
+  readonly auth: Phase2aAuthorizationContext;
+  readonly filterEntityIds?: readonly string[];
+}): Phase2aSliceExecutionResult {
+  const { rawText, snapshot, auth } = input;
+  const envelope = buildSemanticTextEnvelope(rawText, {
+    dynamicEntities: buildDynamicPlaceholderCandidates(snapshot, auth),
+  });
+  const spanRoundTripOk = verifyPlaceholderSpanMapRoundTrip(envelope).ok;
+  const plan = SemanticRequestPlanSchema.parse(parseDeterministicSemanticRequest(rawText));
+
+  if (!auth.propertyAuthorized || auth.propertyId !== snapshot.propertyId) {
+    return buildBlockedResult(
+      rawText,
+      envelope,
+      spanRoundTripOk,
+      plan,
+      null,
+      'You are not authorized to access records for this property.'
+    );
+  }
+
+  if (plan.outcome !== 'MATCH' || plan.facets.length === 0) {
+    const isBoundary = plan.outcome === 'BOUNDARY';
+    const operationResult: AskOperationResult = {
+      status: isBoundary ? 'NEEDS_CLARIFICATION' : 'OUT_OF_SCOPE',
+      reasonCode: isBoundary ? 'ASK_AMBIGUOUS_NEGATIVE_COORDINATION' : 'ASK_OUT_OF_SCOPE',
+      blocks: [],
+      suggestions: [],
+      parameters: { retryable: false, actions: [], operationId: 'INVENTORY_ITEMS_READ' },
+      confirmation: null,
+      clarification: isBoundary
+        ? {
+            version: 1,
+            question: 'Please clarify whether both conditions should be excluded ("neither ... nor") or at least one applies ("either ... or").',
+            options: [
+              { operationId: 'INVENTORY_ITEMS_READ', label: 'Neither warranty nor due maintenance' },
+              { operationId: 'INVENTORY_ITEMS_READ', label: 'Either warranty or due maintenance' },
+            ],
+            allowFreeText: false,
+            expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+          }
+        : null,
+    };
+    return {
+      status: isBoundary ? 'NEEDS_CLARIFICATION' : 'OUT_OF_SCOPE',
+      envelope,
+      spanRoundTripOk,
+      plan,
+      entityResolution: null,
+      receipt: null,
+      entailment: null,
+      presentationEquivalence: null,
+      operationResult,
+      redactedFields: [],
+      traversalDepthUsed: 0,
+      activeEntityIds: [],
+    };
+  }
+
+  const facet = plan.facets[0];
+  const canReadSensitive = auth.allowSensitiveFields ?? (auth.role === 'OWNER' || auth.role === 'EDITOR');
+  const redactedFields = canReadSensitive ? [] : ['serialNumber', 'purchaseCostCents', 'replacementCostCents'];
+  const restricted = new Set(auth.restrictedItemIds ?? []);
+
+  // Resolve explicit item mention if present
+  const mentionedItem = detectMentionedItem(rawText, snapshot);
+  let entityResolution: PropertyEntityResolution | null = null;
+  if (mentionedItem) {
+    entityResolution = resolvePropertyEntityReference({
+      entityId: 'entity.inventory_item',
+      mention: mentionedItem,
+      applicable: true,
+      candidates: buildItemCandidates(snapshot, auth),
+    });
+    if (
+      entityResolution.outcome === 'UNAUTHORISED'
+      || entityResolution.outcome === 'MISSING'
+      || entityResolution.outcome === 'NOT_APPLICABLE'
+    ) {
+      const operationResult: AskOperationResult = {
+        status: 'NEEDS_CLARIFICATION',
+        reasonCode: 'ASK_ENTITY_MISSING',
+        blocks: [],
+        suggestions: [],
+        parameters: { retryable: false, operationId: 'INVENTORY_ITEMS_READ' },
+        confirmation: null,
+        clarification: null,
+      };
+      return {
+        status: 'NEEDS_CLARIFICATION',
+        envelope,
+        spanRoundTripOk,
+        plan,
+        entityResolution,
+        receipt: null,
+        entailment: null,
+        presentationEquivalence: null,
+        operationResult,
+        redactedFields,
+        traversalDepthUsed: 0,
+        activeEntityIds: [],
+      };
+    }
+  }
+
+  // 1. CAPABILITY: Replacement guidance
+  if (facet.requestClass === 'CAPABILITY' && facet.evidence.jobMatch === 'job.inventory.replacement_guidance') {
+    const targetItem = entityResolution?.outcome === 'RESOLVED'
+      ? snapshot.items.find((item) => item.id === entityResolution.recordId)
+      : snapshot.items.find((item) => !restricted.has(item.id));
+    if (!targetItem || restricted.has(targetItem.id)) {
+      return buildBlockedResult(rawText, envelope, spanRoundTripOk, plan, entityResolution, 'Target item is not accessible.');
+    }
+    const warranty = evaluateWarrantyState(targetItem);
+    const hasActiveWarranty = warranty.state === 'ITEM_WARRANTY_LINKED' || warranty.state === 'BOTH_CONSISTENT';
+    const recommendation = targetItem.condition === 'REPLACE_SOON' || targetItem.condition === 'POOR_CONDITION'
+      ? (hasActiveWarranty ? 'Check warranty claim eligibility before scheduling replacement.' : 'Plan replacement based on condition and estimated cost.')
+      : 'Repair and routine maintenance are recommended before replacement.';
+    const costText = formatMoneyCents(targetItem.replacementCostCents, !canReadSensitive);
+    const answerVariantId = 'phase2a-replacement-guidance-summary';
+    const receipt = buildSemanticReadReceipt({
+      facetId: facet.id,
+      requestClass: 'CAPABILITY',
+      entityId: 'entity.inventory_item',
+      operationAdapter: 'phase2a-replacement-guidance',
+      projection: 'DETAIL',
+      predicateIds: ['capability.inventory.replacement_guidance'],
+      resolvedRecordIds: [targetItem.id],
+      confirmedCount: 1,
+      displayedCount: 1,
+      propertyId: snapshot.propertyId,
+      role: auth.role,
+      sourceType: 'PROPERTY_INVENTORY_AND_WARRANTY',
+      observedAt: `${snapshot.asOfDate}T00:00:00.000Z`,
+      answerVariantId,
+    });
+    const rows: Phase2aPresentationRow[] = [{
+      id: targetItem.id,
+      label: targetItem.name,
+      subtitle: `${recommendation} Estimated replacement: ${costText}.`,
+      stateCode: targetItem.condition ?? 'GOOD_CONDITION',
+      groupKey: 'Replacement Guidance',
+    }];
+    const blocks = buildPhase2aRichPresentation({
+      receipt,
+      title: `Replacement guidance for ${targetItem.name}`,
+      summaryBody: `${recommendation} Estimated replacement cost: ${costText}.`,
+      rows,
+    });
+    const operationResult: AskOperationResult = {
+      status: 'ANSWERED',
+      blocks,
+      suggestions: [],
+      parameters: { semanticExecutionReceipt: receipt, redactedFields, operationId: 'REPLACEMENT_GUIDANCE' },
+      confirmation: null,
+      clarification: null,
+    };
+    return {
+      status: 'ANSWERED',
+      envelope,
+      spanRoundTripOk,
+      plan,
+      entityResolution,
+      receipt,
+      entailment: verifySemanticReadReceiptEntailment(operationResult),
+      presentationEquivalence: verifyRichPresentationPopulationEquivalence(receipt, blocks),
+      operationResult,
+      redactedFields,
+      traversalDepthUsed: 1,
+      activeEntityIds: [targetItem.id],
+    };
+  }
+
+  // 2. COMMAND: Maintenance task creation preview
+  if (facet.requestClass === 'COMMAND' && facet.evidence.jobMatch === 'job.maintenance.create') {
+    if (auth.role === 'VIEWER') {
+      return buildBlockedResult(
+        rawText,
+        envelope,
+        spanRoundTripOk,
+        plan,
+        entityResolution,
+        'Viewer role cannot create or schedule maintenance tasks.'
+      );
+    }
+    const targetItem = entityResolution?.outcome === 'RESOLVED'
+      ? snapshot.items.find((item) => item.id === entityResolution.recordId)
+      : undefined;
+    const dueMatch = rawText.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+    const missingSlots: string[] = [];
+    if (!targetItem) missingSlots.push('inventoryItemId');
+    if (!dueMatch) missingSlots.push('dueDate');
+
+    const candidateEntityResolution: AskEntityResolutionResult | null = targetItem
+      ? ({
+          resolvedEntity: { entityType: 'INVENTORY_ITEM', entityId: targetItem.id, label: targetItem.name },
+          missingSlots,
+        } as unknown as AskEntityResolutionResult)
+      : ({ missingSlots } as unknown as AskEntityResolutionResult);
+
+    const previewParams = targetItem && dueMatch
+      ? {
+          propertyId: snapshot.propertyId,
+          inventoryItemId: targetItem.id,
+          title: `Service ${targetItem.name}`,
+          nextDueDate: dueMatch[1],
+        }
+      : {};
+
+    const draftResult: AskOperationResult = {
+      status: 'NEEDS_CONFIRMATION',
+      blocks: [],
+      suggestions: [],
+      parameters: previewParams,
+      confirmation: {
+        confirmationId: 'phase2a-maint-preview-1',
+        summary: `Create maintenance task for ${targetItem?.name ?? 'item'}`,
+        parameters: previewParams,
+      } as unknown as AskOperationResult['confirmation'],
+      clarification: null,
+    };
+
+    const gated = gateUncertifiedCommandPreview({
+      operationId: 'MAINTENANCE_TASK_CREATE',
+      message: rawText,
+      routedDeterministically: true,
+      operationConfirmedByUser: false,
+      entityResolution: candidateEntityResolution,
+      result: draftResult,
+    });
+
+    return {
+      status: gated.result.status === 'NEEDS_CONFIRMATION' ? 'NEEDS_CONFIRMATION' : 'NEEDS_CLARIFICATION',
+      envelope,
+      spanRoundTripOk,
+      plan,
+      entityResolution,
+      receipt: null,
+      entailment: null,
+      presentationEquivalence: null,
+      operationResult: gated.result,
+      redactedFields,
+      traversalDepthUsed: targetItem ? 1 : 0,
+      activeEntityIds: targetItem ? [targetItem.id] : [],
+    };
+  }
+
+  // 3. DATA_QUERY: Maintenance task list / due-date queries
+  if (facet.subject?.entityId === 'entity.maintenance_task') {
+    const accessibleItemsById = new Map(
+      snapshot.items.filter((item) => !restricted.has(item.id)).map((item) => [item.id, item])
+    );
+    const matchingTasks = snapshot.maintenanceTasks.filter((task) => {
+      if (task.inventoryItemId && restricted.has(task.inventoryItemId)) return false;
+      if (entityResolution?.outcome === 'RESOLVED' && task.inventoryItemId !== entityResolution.recordId) return false;
+      if (/\boverdue\b/i.test(rawText)) {
+        return task.status === 'PAST_DUE' || (task.status !== 'COMPLETED' && task.nextDueDate < snapshot.asOfDate);
+      }
+      if (/\bdue\b/i.test(rawText)) {
+        return task.status !== 'COMPLETED';
+      }
+      return true;
+    });
+
+    const projection = facet.projection === 'COUNT' ? 'COUNT' : 'LIST';
+    const answerVariantId = 'phase2a-maintenance-summary';
+    const receipt = buildSemanticReadReceipt({
+      facetId: facet.id,
+      requestClass: 'DATA_QUERY',
+      entityId: 'entity.maintenance_task',
+      operationAdapter: 'phase2a-slice-executor',
+      projection,
+      predicateIds: ['predicate.maintenance_task.for_inventory_item'],
+      resolvedRecordIds: matchingTasks.map((task) => task.id),
+      confirmedCount: matchingTasks.length,
+      displayedCount: projection === 'COUNT' ? 0 : matchingTasks.length,
+      propertyId: snapshot.propertyId,
+      role: auth.role,
+      sourceType: 'PROPERTY_MAINTENANCE_TASKS',
+      observedAt: `${snapshot.asOfDate}T00:00:00.000Z`,
+      answerVariantId,
+    });
+    const rows: Phase2aPresentationRow[] = projection === 'COUNT'
+      ? []
+      : matchingTasks.map((task) => {
+          const item = task.inventoryItemId ? accessibleItemsById.get(task.inventoryItemId) : undefined;
+          return {
+            id: task.id,
+            label: task.title,
+            subtitle: `Due ${task.nextDueDate}${item ? ` · Item: ${item.name}` : ''}`,
+            stateCode: task.status,
+            groupKey: task.priority,
+          };
+        });
+    const blocks = buildPhase2aRichPresentation({
+      receipt,
+      title: projection === 'COUNT' ? `${matchingTasks.length} maintenance tasks matched` : 'Maintenance tasks',
+      summaryBody: `Found ${matchingTasks.length} matching maintenance task${matchingTasks.length === 1 ? '' : 's'}.`,
+      rows,
+    });
+    const operationResult: AskOperationResult = {
+      status: 'ANSWERED',
+      blocks,
+      suggestions: [],
+      parameters: { semanticExecutionReceipt: receipt, redactedFields, operationId: 'MAINTENANCE_STATUS' },
+      confirmation: null,
+      clarification: null,
+    };
+    return {
+      status: 'ANSWERED',
+      envelope,
+      spanRoundTripOk,
+      plan,
+      entityResolution,
+      receipt,
+      entailment: verifySemanticReadReceiptEntailment(operationResult),
+      presentationEquivalence: verifyRichPresentationPopulationEquivalence(receipt, blocks),
+      operationResult,
+      redactedFields,
+      traversalDepthUsed: entityResolution?.outcome === 'RESOLVED' ? 1 : 0,
+      activeEntityIds: matchingTasks.map((task) => task.id),
+    };
+  }
+
+  // 4. DATA_QUERY: Inventory item facts, counts, Boolean expressions, and bounded relations
+  const relationPathIds = facet.relations.map((rel) =>
+    rel.semanticRelationId === 'relation.inventory_item.warranty'
+      ? 'path.inventory_item.warranty'
+      : rel.semanticRelationId === 'relation.inventory_item.maintenance_task'
+        ? 'path.inventory_item.maintenance_task'
+        : 'path.inventory_item.room'
+  );
+  const mentionedRoom = detectMentionedRoom(rawText, snapshot);
+  const effectiveRelationPathIds = mentionedRoom && !relationPathIds.includes('path.inventory_item.room')
+    ? [...relationPathIds, 'path.inventory_item.room']
+    : relationPathIds;
+  const effectiveTraversalCheck = validateSiblingDepthOnePredicates(effectiveRelationPathIds);
+  if (!effectiveTraversalCheck.ok) {
+    return buildBlockedResult(
+      rawText,
+      envelope,
+      spanRoundTripOk,
+      plan,
+      entityResolution,
+      `Relation traversal rejected (${effectiveTraversalCheck.reason}).`
+    );
+  }
+
+  const filterSet = input.filterEntityIds ? new Set(input.filterEntityIds) : null;
+
+  const authorisedItems = snapshot.items.filter((item) => {
+    if (restricted.has(item.id)) return false;
+    if (filterSet && !filterSet.has(item.id)) return false;
+    if (mentionedRoom && item.roomId !== mentionedRoom.id) return false;
+    if (entityResolution?.outcome === 'RESOLVED' && item.id !== entityResolution.recordId) return false;
+    return true;
+  });
+
+  const evaluated = authorisedItems.map((item) => ({
+    item,
+    warranty: evaluateWarrantyState(item),
+  }));
+
+  const matched = facet.where
+    ? evaluated.filter(({ item, warranty }) => evaluateWhereExpression(facet.where!, item, warranty, snapshot, mentionedRoom))
+    : evaluated;
+
+  const conflictedCount = facet.relations.some((r) => r.semanticRelationId === 'relation.inventory_item.warranty')
+    ? evaluated.filter(({ warranty }) => warranty.state === 'CONFLICTED_LINKS').length
+    : 0;
+  const unknownCount = facet.relations.some((r) => r.semanticRelationId === 'relation.inventory_item.warranty')
+    ? evaluated.filter(({ warranty }) => warranty.state === 'UNKNOWN').length
+    : 0;
+
+  const projection = facet.projection === 'COUNT' ? 'COUNT'
+    : facet.projection === 'DETAIL' ? 'DETAIL'
+    : 'LIST';
+  const predicateIds = facet.relations.length > 0
+    ? facet.relations.map((rel) => rel.predicateId)
+    : facet.fields.length > 0
+      ? facet.fields.map((field) => field.fieldId)
+      : ['predicate.entity.inventory_item.read'];
+
+  const answerVariantId = 'phase2a-inventory-summary';
+  const receipt = buildSemanticReadReceipt({
+    facetId: facet.id,
+    requestClass: 'DATA_QUERY',
+    entityId: 'entity.inventory_item',
+    operationAdapter: 'phase2a-slice-executor',
+    projection,
+    predicateIds,
+    resolvedRecordIds: matched.map(({ item }) => item.id),
+    confirmedCount: matched.length,
+    conflictedCount,
+    unknownCount,
+    displayedCount: projection === 'COUNT' ? 0 : matched.length,
+    propertyId: snapshot.propertyId,
+    role: auth.role,
+    sourceType: 'PROPERTY_INVENTORY_AND_RELATIONS',
+    observedAt: `${snapshot.asOfDate}T00:00:00.000Z`,
+    answerVariantId,
+  });
+
+  const requestedFields = new Set(facet.fields.map((field) => field.fieldId));
+  const rows: Phase2aPresentationRow[] = projection === 'COUNT'
+    ? []
+    : matched.map(({ item, warranty }) => {
+        const room = snapshot.rooms.find((r) => r.id === item.roomId);
+        const parts: string[] = [];
+        if (room) parts.push(`Room: ${room.name}`);
+        if (requestedFields.has('field.inventory_item.serial_number')) {
+          parts.push(`Serial: ${canReadSensitive ? (item.serialNumber ?? 'not recorded') : '[redacted for current role]'}`);
+        }
+        if (requestedFields.has('field.inventory_item.purchase_cost')) {
+          parts.push(`Purchase cost: ${formatMoneyCents(item.purchaseCostCents, !canReadSensitive)}`);
+        }
+        if (requestedFields.has('field.inventory_item.replacement_cost')) {
+          parts.push(`Replacement cost: ${formatMoneyCents(item.replacementCostCents, !canReadSensitive)}`);
+        }
+        if (requestedFields.has('field.inventory_item.installed_on')) {
+          parts.push(`Installed: ${item.installedOn ?? 'not recorded'}`);
+        }
+        if (parts.length === 0) {
+          parts.push(`Category: ${item.category}`);
+        }
+        return {
+          id: item.id,
+          label: item.name,
+          subtitle: parts.join(' · '),
+          stateCode: facet.relations.some((r) => r.semanticRelationId === 'relation.inventory_item.warranty')
+            ? warranty.state
+            : item.condition,
+          groupKey: room?.name ?? item.category,
+        };
+      });
+
+  const title = projection === 'COUNT'
+    ? `${matched.length} matching inventory items`
+    : matched.length === 1 && projection === 'DETAIL'
+      ? `${matched[0].item.name} details`
+      : 'Inventory results';
+  const summaryBody = projection === 'COUNT'
+    ? `Confirmed count: ${matched.length} matching item${matched.length === 1 ? '' : 's'}.`
+    : `Found ${matched.length} matching inventory item${matched.length === 1 ? '' : 's'}.`;
+
+  const blocks = buildPhase2aRichPresentation({
+    receipt,
+    title,
+    summaryBody,
+    rows,
+  });
+
+  const operationResult: AskOperationResult = {
+    status: 'ANSWERED',
+    blocks,
+    suggestions: [],
+    parameters: { semanticExecutionReceipt: receipt, redactedFields, operationId: 'INVENTORY_ITEMS_READ' },
+    confirmation: null,
+    clarification: null,
+  };
+
+  return {
+    status: 'ANSWERED',
+    envelope,
+    spanRoundTripOk,
+    plan,
+    entityResolution,
+    receipt,
+    entailment: verifySemanticReadReceiptEntailment(operationResult),
+    presentationEquivalence: verifyRichPresentationPopulationEquivalence(receipt, blocks),
+    operationResult,
+    redactedFields,
+    traversalDepthUsed: effectiveTraversalCheck.depth,
+    activeEntityIds: matched.map(({ item }) => item.id),
+  };
+}
+
+/**
+ * Semantic follow-up refinement preserving prior active entity population and
+ * applying a follow-up constraint or projection change (e.g. "how many", "without warranty", "in kitchen").
+ */
+export function applyPhase2aFollowUpRefinement(input: {
+  readonly priorResult: Phase2aSliceExecutionResult;
+  readonly followUpText: string;
+  readonly snapshot: Phase2aPropertySnapshot;
+  readonly auth: Phase2aAuthorizationContext;
+}): Phase2aSliceExecutionResult {
+  const { priorResult, followUpText, snapshot, auth } = input;
+  const trimmed = followUpText.trim();
+  const baseIds = priorResult.activeEntityIds;
+
+  if (/^how many\b/i.test(trimmed)) {
+    const countQuery = priorResult.plan.rawText.replace(/^(?:list|show|which)\b/i, 'how many');
+    return executePhase2aVerticalSlice({
+      rawText: countQuery === priorResult.plan.rawText ? `how many ${priorResult.plan.rawText}` : countQuery,
+      snapshot,
+      auth,
+      filterEntityIds: baseIds.length > 0 ? baseIds : undefined,
+    });
+  }
+
+  const normalizedFollowUp = /\bappliances?\b|\bitems?\b/i.test(trimmed)
+    ? trimmed
+    : `which appliances ${trimmed}`;
+
+  return executePhase2aVerticalSlice({
+    rawText: normalizedFollowUp,
+    snapshot,
+    auth,
+    filterEntityIds: baseIds.length > 0 ? baseIds : undefined,
+  });
+}
+
+/**
+ * Authorization replay: re-evaluates the prior request under an updated
+ * authorization context (e.g. role downgrade or item/property access revocation),
+ * redacting sensitive fields or blocking unauthorized access.
+ */
+export function replayPhase2aExecutionWithAuthorization(input: {
+  readonly priorResult: Phase2aSliceExecutionResult;
+  readonly snapshot: Phase2aPropertySnapshot;
+  readonly updatedAuth: Phase2aAuthorizationContext;
+}): Phase2aSliceExecutionResult {
+  return executePhase2aVerticalSlice({
+    rawText: input.priorResult.plan.rawText,
+    snapshot: input.snapshot,
+    auth: input.updatedAuth,
+  });
+}
+
+function normalizePhase2aRole(role: string): Phase2aAuthorizationContext['role'] {
+  const upper = role.toUpperCase();
+  if (upper === 'OWNER' || upper === 'ADMIN') return 'OWNER';
+  if (upper === 'EDITOR' || upper === 'MEMBER') return 'EDITOR';
+  return 'VIEWER';
+}
+
+/**
+ * Loads a property's inventory, room, warranty, and maintenance records from Prisma
+ * into the typed Phase2aPropertySnapshot contract.
+ */
+export async function loadPhase2aPropertySnapshot(propertyId: string): Promise<Phase2aPropertySnapshot> {
+  const [rooms, items, warranties, maintenanceTasks] = await Promise.all([
+    prisma.inventoryRoom.findMany({
+      where: { propertyId },
+      select: { id: true, propertyId: true, name: true },
+    }),
+    prisma.inventoryItem.findMany({
+      where: { propertyId },
+      select: {
+        id: true,
+        propertyId: true,
+        name: true,
+        category: true,
+        brand: true,
+        modelNumber: true,
+        serialNumber: true,
+        purchaseCostCents: true,
+        replacementCostCents: true,
+        installedOn: true,
+        condition: true,
+        roomId: true,
+        warrantyId: true,
+        coverageEvidenceStatus: true,
+      },
+    }),
+    prisma.warranty.findMany({
+      where: { propertyId },
+      select: { id: true, inventoryItemId: true },
+    }),
+    prisma.propertyMaintenanceTask.findMany({
+      where: { propertyId },
+      select: {
+        id: true,
+        propertyId: true,
+        title: true,
+        status: true,
+        priority: true,
+        nextDueDate: true,
+        inventoryItemId: true,
+      },
+    }),
+  ]);
+
+  const warrantiesByItem = new Map<string, string[]>();
+  for (const w of warranties) {
+    if (!w.inventoryItemId) continue;
+    const list = warrantiesByItem.get(w.inventoryItemId) ?? [];
+    list.push(w.id);
+    warrantiesByItem.set(w.inventoryItemId, list);
+  }
+
+  return {
+    propertyId,
+    asOfDate: new Date().toISOString().slice(0, 10),
+    rooms: rooms.map((room) => ({
+      id: room.id,
+      propertyId: room.propertyId,
+      name: room.name,
+    })),
+    items: items.map((item) => ({
+      id: item.id,
+      propertyId: item.propertyId,
+      name: item.name,
+      category: String(item.category),
+      brand: item.brand ?? undefined,
+      modelNumber: item.modelNumber ?? undefined,
+      serialNumber: item.serialNumber ?? undefined,
+      purchaseCostCents: item.purchaseCostCents ?? null,
+      replacementCostCents: item.replacementCostCents ?? null,
+      installedOn: item.installedOn ? item.installedOn.toISOString().slice(0, 10) : null,
+      condition: String(item.condition),
+      roomId: item.roomId ?? null,
+      propertyPlanWarrantyId: item.warrantyId ?? null,
+      itemWarrantyIds: warrantiesByItem.get(item.id) ?? [],
+      coverageEvidenceStatus: String(item.coverageEvidenceStatus ?? 'UNKNOWN'),
+    })),
+    maintenanceTasks: maintenanceTasks.map((task) => ({
+      id: task.id,
+      propertyId: task.propertyId,
+      title: task.title,
+      status: String(task.status),
+      priority: String(task.priority),
+      nextDueDate: task.nextDueDate ? task.nextDueDate.toISOString().slice(0, 10) : '',
+      inventoryItemId: task.inventoryItemId ?? null,
+    })),
+  };
+}
+
+/**
+ * Production entry point connecting Phase 2A vertical-slice execution to real
+ * Prisma-backed property records and authorization context.
+ */
+export async function executePhase2aOnProperty(input: {
+  readonly propertyId: string;
+  readonly role: string;
+  readonly propertyAuthorized: boolean;
+  readonly rawText: string;
+  readonly restrictedItemIds?: readonly string[];
+}): Promise<Phase2aSliceExecutionResult> {
+  const snapshot = await loadPhase2aPropertySnapshot(input.propertyId);
+  return executePhase2aVerticalSlice({
+    rawText: input.rawText,
+    snapshot,
+    auth: {
+      propertyId: input.propertyId,
+      role: normalizePhase2aRole(input.role),
+      propertyAuthorized: input.propertyAuthorized,
+      restrictedItemIds: input.restrictedItemIds,
+    },
+  });
+}

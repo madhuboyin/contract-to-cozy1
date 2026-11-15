@@ -1,0 +1,402 @@
+import { verifyPhase2aSliceRegistryCompleteness } from './phase2aSliceRegistry';
+import { buildSemanticTextEnvelope, verifyPlaceholderSpanMapRoundTrip } from './placeholderSpanMap';
+import {
+  applyPhase2aFollowUpRefinement,
+  executePhase2aVerticalSlice,
+  replayPhase2aExecutionWithAuthorization,
+  type Phase2aAuthorizationContext,
+  type Phase2aPropertySnapshot,
+  type Phase2aSliceExecutionResult,
+} from './phase2aSliceExecutor';
+
+export * from './placeholderSpanMap';
+export * from './phase2aSliceRegistry';
+export * from './phase2aRichPresentationAdapter';
+export * from './phase2aSliceExecutor';
+
+export const PHASE2A_SEEDED_PROPERTY_SNAPSHOT: Phase2aPropertySnapshot = Object.freeze({
+  propertyId: 'prop-phase2a-1',
+  asOfDate: '2026-11-15',
+  rooms: [
+    { id: 'room-kitchen', propertyId: 'prop-phase2a-1', name: 'Kitchen' },
+    { id: 'room-basement', propertyId: 'prop-phase2a-1', name: 'Basement' },
+  ],
+  items: [
+    {
+      id: 'item-fridge',
+      propertyId: 'prop-phase2a-1',
+      name: 'Refrigerator',
+      category: 'APPLIANCE',
+      brand: 'Bosch',
+      modelNumber: 'B36CL80SNS',
+      serialNumber: 'SN-FRG-88412',
+      purchaseCostCents: 289900,
+      replacementCostCents: 319900,
+      installedOn: '2022-05-10',
+      condition: 'GOOD_CONDITION',
+      roomId: 'room-kitchen',
+      propertyPlanWarrantyId: null,
+      itemWarrantyIds: ['war-fridge-1'],
+      coverageEvidenceStatus: 'VERIFIED',
+    },
+    {
+      id: 'item-dishwasher',
+      propertyId: 'prop-phase2a-1',
+      name: 'Dishwasher',
+      category: 'APPLIANCE',
+      brand: 'KitchenAid',
+      modelNumber: 'KDTM404KPS',
+      serialNumber: 'SN-DW-44109',
+      purchaseCostCents: 119900,
+      replacementCostCents: 135000,
+      installedOn: '2020-03-14',
+      condition: 'FAIR_CONDITION',
+      roomId: 'room-kitchen',
+      propertyPlanWarrantyId: null,
+      itemWarrantyIds: [],
+      coverageEvidenceStatus: 'NONE',
+    },
+    {
+      id: 'item-furnace',
+      propertyId: 'prop-phase2a-1',
+      name: 'Furnace',
+      category: 'HVAC',
+      brand: 'Carrier',
+      modelNumber: '59TP6B',
+      serialNumber: 'SN-FUR-99201',
+      purchaseCostCents: 540000,
+      replacementCostCents: 680000,
+      installedOn: '2014-10-01',
+      condition: 'REPLACE_SOON',
+      roomId: 'room-basement',
+      propertyPlanWarrantyId: null,
+      itemWarrantyIds: [],
+      coverageEvidenceStatus: 'NOT_SURE',
+    },
+    {
+      id: 'item-water-heater',
+      propertyId: 'prop-phase2a-1',
+      name: 'Water Heater',
+      category: 'PLUMBING',
+      brand: 'Rheem',
+      modelNumber: 'XE50T10H45U0',
+      serialNumber: 'SN-WH-31002',
+      purchaseCostCents: 145000,
+      replacementCostCents: 195000,
+      installedOn: '2019-08-22',
+      condition: 'FAIR_CONDITION',
+      roomId: 'room-basement',
+      propertyPlanWarrantyId: 'war-plan-1',
+      itemWarrantyIds: ['war-plan-1'],
+      coverageEvidenceStatus: 'VERIFIED',
+    },
+    {
+      id: 'item-sump-pump',
+      propertyId: 'prop-phase2a-1',
+      name: 'Sump Pump',
+      category: 'PLUMBING',
+      brand: 'Zoeller',
+      modelNumber: 'M53',
+      serialNumber: 'SN-SP-11223',
+      purchaseCostCents: 35000,
+      replacementCostCents: 55000,
+      installedOn: '2021-04-12',
+      condition: 'GOOD_CONDITION',
+      roomId: 'room-basement',
+      propertyPlanWarrantyId: 'war-plan-1',
+      itemWarrantyIds: ['war-sp-2'],
+      coverageEvidenceStatus: 'VERIFIED',
+    },
+  ],
+  maintenanceTasks: [
+    {
+      id: 'maint-furnace-filter',
+      propertyId: 'prop-phase2a-1',
+      title: 'Replace furnace air filter',
+      status: 'PAST_DUE',
+      priority: 'HIGH_PRIORITY',
+      nextDueDate: '2026-10-15',
+      inventoryItemId: 'item-furnace',
+    },
+    {
+      id: 'maint-water-heater-flush',
+      propertyId: 'prop-phase2a-1',
+      title: 'Flush water heater tank',
+      status: 'PENDING',
+      priority: 'MEDIUM_PRIORITY',
+      nextDueDate: '2026-12-01',
+      inventoryItemId: 'item-water-heater',
+    },
+    {
+      id: 'maint-fridge-coils',
+      propertyId: 'prop-phase2a-1',
+      title: 'Clean refrigerator condenser coils',
+      status: 'COMPLETED',
+      priority: 'LOW_PRIORITY',
+      nextDueDate: '2026-06-01',
+      inventoryItemId: 'item-fridge',
+    },
+  ],
+});
+
+export const PHASE2A_OWNER_AUTH: Phase2aAuthorizationContext = Object.freeze({
+  propertyId: 'prop-phase2a-1',
+  role: 'OWNER',
+  propertyAuthorized: true,
+});
+
+export const PHASE2A_VIEWER_AUTH: Phase2aAuthorizationContext = Object.freeze({
+  propertyId: 'prop-phase2a-1',
+  role: 'VIEWER',
+  propertyAuthorized: true,
+});
+
+export interface Phase2aDiscoveredAbstractionChange {
+  readonly id: string;
+  readonly area: string;
+  readonly summary: string;
+  readonly actionBeforePhase2b: string;
+}
+
+/**
+ * §18 Phase 2A / §19 Artifact #9:
+ * Concrete abstraction changes discovered while running the vertical slice,
+ * recorded before expanding registry generation to the remaining domains.
+ */
+export const PHASE2A_DISCOVERED_ABSTRACTION_CHANGES: readonly Phase2aDiscoveredAbstractionChange[] = Object.freeze([
+  {
+    id: 'P2A-ABS-01',
+    area: 'Facet requestClass vs Receipt projection',
+    summary: 'CAPABILITY facets use projection ANALYSIS in SemanticRequestPlanSchema, whereas SemanticReadReceiptSchema expects DETAIL/LIST/COUNT/EXISTS.',
+    actionBeforePhase2b: 'Allow ANALYSIS projection on SemanticReadReceiptSchema or formalize capability-to-receipt projection mapping in registry metadata.',
+  },
+  {
+    id: 'P2A-ABS-02',
+    area: 'Multi-relation Boolean scope vs unresolved coordination tokens',
+    summary: 'Inventory queries combining Boolean coordinators ("and", "either", "or", "neither", "nor") with pronouns ("I") required explicit handling alongside unresolvedSpans.',
+    actionBeforePhase2b: 'Generate coordinator and pronoun stopword classes from the shared grammar lexicon rather than per-parser exclusion lists.',
+  },
+  {
+    id: 'P2A-ABS-03',
+    area: 'Field-level authorization redaction in presentation & receipts',
+    summary: 'Role downgrade (OWNER -> VIEWER) must redact sensitive fields (serialNumber, purchaseCostCents, replacementCostCents) while keeping population counts entailed.',
+    actionBeforePhase2b: 'Attach sensitivity classification from FieldRegistration directly to receipt/presentation redaction metadata.',
+  },
+]);
+
+export interface Phase2aMetamorphicCase {
+  readonly family: 'INFLECTION' | 'NEGATION' | 'COORDINATION' | 'TYPO' | 'WORD_ORDER';
+  readonly leftPrompt: string;
+  readonly rightPrompt: string;
+  readonly expectedMatchedIds: readonly string[];
+}
+
+export const PHASE2A_METAMORPHIC_CASES: readonly Phase2aMetamorphicCase[] = Object.freeze([
+  {
+    family: 'INFLECTION',
+    leftPrompt: 'which appliance has warranty',
+    rightPrompt: 'which appliances have warranties',
+    expectedMatchedIds: ['item-fridge', 'item-water-heater'],
+  },
+  {
+    family: 'NEGATION',
+    leftPrompt: 'which appliances do not have warranty',
+    rightPrompt: 'which appliances have no warranty',
+    expectedMatchedIds: ['item-dishwasher'],
+  },
+  {
+    family: 'COORDINATION',
+    leftPrompt: 'which appliances have either warranty or due maintenance',
+    rightPrompt: 'which appliances have warranty or due maintenance',
+    expectedMatchedIds: ['item-fridge', 'item-furnace', 'item-water-heater'],
+  },
+  {
+    family: 'TYPO',
+    leftPrompt: 'which appliences have warranty',
+    rightPrompt: 'which appliances have warrnty',
+    expectedMatchedIds: ['item-fridge', 'item-water-heater'],
+  },
+  {
+    family: 'WORD_ORDER',
+    leftPrompt: 'show replacement cost for my furnace',
+    rightPrompt: 'furnace replacement cost show',
+    expectedMatchedIds: ['item-furnace'],
+  },
+]);
+
+export interface Phase2aMetamorphicSuiteResult {
+  readonly ok: boolean;
+  readonly failures: readonly string[];
+}
+
+export function runPhase2aMetamorphicSuite(
+  snapshot: Phase2aPropertySnapshot = PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+  auth: Phase2aAuthorizationContext = PHASE2A_OWNER_AUTH
+): Phase2aMetamorphicSuiteResult {
+  const failures: string[] = [];
+  for (const testCase of PHASE2A_METAMORPHIC_CASES) {
+    const left = executePhase2aVerticalSlice({ rawText: testCase.leftPrompt, snapshot, auth });
+    const right = executePhase2aVerticalSlice({ rawText: testCase.rightPrompt, snapshot, auth });
+    const leftIds = [...left.activeEntityIds].sort();
+    const rightIds = [...right.activeEntityIds].sort();
+    const expected = [...testCase.expectedMatchedIds].sort();
+
+    if (left.status !== 'ANSWERED' || right.status !== 'ANSWERED') {
+      failures.push(`${testCase.family}:non_answered:${left.status}/${right.status}`);
+      continue;
+    }
+    if (JSON.stringify(leftIds) !== JSON.stringify(expected)) {
+      failures.push(`${testCase.family}:left_mismatch:${leftIds.join(',')}!=${expected.join(',')}`);
+    }
+    if (JSON.stringify(rightIds) !== JSON.stringify(expected)) {
+      failures.push(`${testCase.family}:right_mismatch:${rightIds.join(',')}!=${expected.join(',')}`);
+    }
+  }
+  return { ok: failures.length === 0, failures };
+}
+
+export interface Phase2aInvariantReport {
+  readonly ok: boolean;
+  readonly reasons: readonly string[];
+  readonly registryReport: ReturnType<typeof verifyPhase2aSliceRegistryCompleteness>;
+  readonly metamorphicReport: Phase2aMetamorphicSuiteResult;
+}
+
+/**
+ * Verifies every Phase 2A deliverable (§18 Phase 2A):
+ * registry completeness, placeholder span-map round-trips, vertical slice scenarios,
+ * follow-up refinement, authorization replay, rich presentation equivalence,
+ * adjacent negatives, and metamorphic invariance.
+ */
+export function verifyPhase2aInvariants(): Phase2aInvariantReport {
+  const reasons: string[] = [];
+  const registryReport = verifyPhase2aSliceRegistryCompleteness();
+  if (!registryReport.ok) {
+    reasons.push(...registryReport.missing.map((m) => `registry:${m}`));
+  }
+
+  // Span map round-trip check
+  const envelope = buildSemanticTextEnvelope(
+    'Schedule maintenance for my refrigerator SN-FRG-88412 in kitchen on 2026-12-10 for $150.00'
+  );
+  const spanCheck = verifyPlaceholderSpanMapRoundTrip(envelope);
+  if (!spanCheck.ok) {
+    reasons.push(...spanCheck.reasons.map((r) => `span:${r}`));
+  }
+
+  const checkAnswered = (label: string, result: Phase2aSliceExecutionResult) => {
+    if (result.status !== 'ANSWERED') reasons.push(`${label}:status=${result.status}`);
+    if (!result.spanRoundTripOk) reasons.push(`${label}:span_round_trip_failed`);
+    if (result.entailment?.outcome !== 'PASS') reasons.push(`${label}:entailment_failed`);
+    if (!result.presentationEquivalence?.ok) reasons.push(`${label}:presentation_equivalence_failed`);
+  };
+
+  // Core vertical-slice queries
+  const invCount = executePhase2aVerticalSlice({
+    rawText: 'how many appliances do I have',
+    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+    auth: PHASE2A_OWNER_AUTH,
+  });
+  checkAnswered('inventory_count', invCount);
+  if (invCount.receipt?.population.confirmedCount !== 5) reasons.push('inventory_count:expected_5');
+
+  const warNeg = executePhase2aVerticalSlice({
+    rawText: 'which appliances have no warranty',
+    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+    auth: PHASE2A_OWNER_AUTH,
+  });
+  checkAnswered('warranty_negative', warNeg);
+  if (warNeg.receipt?.population.conflictedCount !== 1 || warNeg.receipt?.population.unknownCount !== 1) {
+    reasons.push('warranty_negative:uncertainty_counts_mismatch');
+  }
+
+  const boolAnd = executePhase2aVerticalSlice({
+    rawText: 'which appliances have warranty and due maintenance',
+    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+    auth: PHASE2A_OWNER_AUTH,
+  });
+  checkAnswered('boolean_and', boolAnd);
+  if (JSON.stringify(boolAnd.activeEntityIds) !== JSON.stringify(['item-water-heater'])) {
+    reasons.push('boolean_and:expected_water_heater');
+  }
+
+  const boolNeither = executePhase2aVerticalSlice({
+    rawText: 'which appliances have neither warranty nor due maintenance',
+    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+    auth: PHASE2A_OWNER_AUTH,
+  });
+  checkAnswered('boolean_neither_nor', boolNeither);
+  if (JSON.stringify(boolNeither.activeEntityIds) !== JSON.stringify(['item-dishwasher', 'item-sump-pump'])) {
+    reasons.push('boolean_neither_nor:expected_dishwasher_and_sump_pump');
+  }
+
+  const guidance = executePhase2aVerticalSlice({
+    rawText: 'should I repair or replace my furnace',
+    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+    auth: PHASE2A_OWNER_AUTH,
+  });
+  checkAnswered('replacement_guidance', guidance);
+
+  const cmdPreview = executePhase2aVerticalSlice({
+    rawText: 'schedule maintenance for my furnace on 2026-12-01',
+    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+    auth: PHASE2A_OWNER_AUTH,
+  });
+  if (cmdPreview.status !== 'NEEDS_CONFIRMATION') {
+    reasons.push(`command_preview:expected_NEEDS_CONFIRMATION_got_${cmdPreview.status}`);
+  }
+
+  const followUp = applyPhase2aFollowUpRefinement({
+    priorResult: warNeg,
+    followUpText: 'how many',
+    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+    auth: PHASE2A_OWNER_AUTH,
+  });
+  checkAnswered('follow_up_refinement', followUp);
+  if (followUp.receipt?.population.confirmedCount !== 1) {
+    reasons.push('follow_up_refinement:expected_1');
+  }
+
+  const serialOwner = executePhase2aVerticalSlice({
+    rawText: 'show serial number for my refrigerator',
+    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+    auth: PHASE2A_OWNER_AUTH,
+  });
+  checkAnswered('serial_owner', serialOwner);
+  const serialViewer = replayPhase2aExecutionWithAuthorization({
+    priorResult: serialOwner,
+    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+    updatedAuth: PHASE2A_VIEWER_AUTH,
+  });
+  checkAnswered('serial_viewer_redacted', serialViewer);
+  if (!serialViewer.redactedFields.includes('serialNumber') || JSON.stringify(serialViewer.operationResult.blocks).includes('SN-FRG-88412')) {
+    reasons.push('serial_viewer_redacted:sensitive_value_leaked');
+  }
+
+  // Adjacent negatives
+  const adjUnsupported = executePhase2aVerticalSlice({
+    rawText: 'which appliances have no guarantee',
+    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+    auth: PHASE2A_OWNER_AUTH,
+  });
+  if (adjUnsupported.status !== 'OUT_OF_SCOPE') reasons.push('adj_unsupported:expected_OUT_OF_SCOPE');
+
+  const adjAmbiguous = executePhase2aVerticalSlice({
+    rawText: 'which appliances do not have warranty or due maintenance',
+    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+    auth: PHASE2A_OWNER_AUTH,
+  });
+  if (adjAmbiguous.status !== 'NEEDS_CLARIFICATION') reasons.push('adj_ambiguous:expected_NEEDS_CLARIFICATION');
+
+  const metamorphicReport = runPhase2aMetamorphicSuite();
+  if (!metamorphicReport.ok) {
+    reasons.push(...metamorphicReport.failures.map((f) => `metamorphic:${f}`));
+  }
+
+  return {
+    ok: reasons.length === 0,
+    reasons,
+    registryReport,
+    metamorphicReport,
+  };
+}

@@ -76,9 +76,13 @@ const PHASE1_REGISTRY_LEXEMES: readonly RegistryLexeme[] = [
 
   // Relations
   { role: 'RELATION', semanticId: 'relation.inventory_item.warranty', canonicalLabel: 'warranty', reviewedAliases: ['warranties', 'warranty record', 'warranty records'] },
+  { role: 'RELATION', semanticId: 'relation.inventory_item.maintenance_task', canonicalLabel: 'due maintenance', reviewedAliases: ['maintenance due', 'overdue maintenance', 'maintenance schedule', 'maintenance task', 'maintenance tasks'] },
+  { role: 'RELATION', semanticId: 'relation.inventory_item.room', canonicalLabel: 'in room', reviewedAliases: ['room', 'located in'] },
 
   // Jobs
   { role: 'JOB', semanticId: 'job.saved_results.lookup', canonicalLabel: 'saved results', reviewedAliases: ['saved analyses', 'bookmarked results'] },
+  { role: 'JOB', semanticId: 'job.inventory.replacement_guidance', canonicalLabel: 'replacement guidance', reviewedAliases: ['repair or replace', 'should i repair or replace', 'should i replace', 'replace or repair'] },
+  { role: 'JOB', semanticId: 'job.maintenance.create', canonicalLabel: 'schedule maintenance', reviewedAliases: ['create maintenance task', 'add maintenance task', 'schedule maintenance task', 'create upkeep task'] },
 
   // Projections & Polarity
   { role: 'PROJECTION', semanticId: 'projection.list', canonicalLabel: 'list', reviewedAliases: ['list down', 'show', 'which'] },

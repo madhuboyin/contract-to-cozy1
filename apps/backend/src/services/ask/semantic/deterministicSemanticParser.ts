@@ -1,6 +1,14 @@
 import { createHash } from 'crypto';
 import { ASK_SHARED_SEMANTIC_LEXICON, ASK_SHARED_LEXICON_VERSION, type GeneratedSemanticLexeme } from './sharedSemanticLexicon';
 import { ASK_SEMANTIC_PLAN_VERSION, SemanticRequestPlanSchema, type SemanticRequestPlan, type SemanticSourceSpan } from './semanticRequestPlan';
+import { assembleSemanticBooleanExpression } from './semanticBooleanAssembler';
+import { buildSemanticTextEnvelope } from './phase2a/placeholderSpanMap';
+
+interface SemanticPredicateAtom {
+  kind: 'PREDICATE';
+  predicateId: string;
+  relationPathId: string;
+}
 
 export const ASK_DETERMINISTIC_SEMANTIC_PARSER_VERSION = 'typed-grammar-0.5.0' as const;
 
@@ -158,18 +166,21 @@ const FIELD_OWNER_ENTITY: Readonly<Record<string, string>> = Object.freeze({
 
 export function parseDeterministicSemanticRequest(rawText: string): SemanticRequestPlan {
   const { normalized, tokens } = normalizedWithOffsets(rawText);
+  const envelope = buildSemanticTextEnvelope(rawText, normalized);
   const base = {
     schemaVersion: ASK_SEMANTIC_PLAN_VERSION,
     producer: { kind: 'DETERMINISTIC' as const, version: `${ASK_DETERMINISTIC_SEMANTIC_PARSER_VERSION}+${ASK_SHARED_LEXICON_VERSION}` },
     rawText,
     normalizedText: normalized,
-    minimizedText: rawText,
+    minimizedText: envelope.minimizedText,
   };
   if (!tokens.length) return SemanticRequestPlanSchema.parse({ ...base, outcome: 'INSUFFICIENT_TEXT', facets: [], unresolvedSpans: [] });
 
   const annotations = annotate(rawText, tokens);
   const inventorySubject = annotations.find((annotation) => annotation.lexeme.semanticId === 'entity.inventory_item');
   const warrantyRelation = annotations.find((annotation) => annotation.lexeme.semanticId === 'relation.inventory_item.warranty');
+  const maintenanceRelation = annotations.find((annotation) => annotation.lexeme.semanticId === 'relation.inventory_item.maintenance_task');
+  const roomRelation = annotations.find((annotation) => annotation.lexeme.semanticId === 'relation.inventory_item.room');
   const projectionAnnotation = first(annotations, 'PROJECTION');
   // Explicit negation governs the relation even when an affirmative auxiliary
   // is also present ("have no warranty", "does not have"). This is scope
@@ -178,6 +189,147 @@ export function parseDeterministicSemanticRequest(rawText: string): SemanticRequ
     ?? annotations.find((annotation) => annotation.lexeme.semanticId === 'polarity.positive');
   const unresolvedSpans = unresolved(tokens, annotations);
   const facetId = `facet-${createHash('sha256').update(`${rawText}:0`).digest('hex').slice(0, 12)}`;
+
+  // 0A. Phase 2A analysis capability: replacement guidance
+  const replacementGuidanceJob = annotations.find((annotation) => annotation.lexeme.semanticId === 'job.inventory.replacement_guidance');
+  if (replacementGuidanceJob) {
+    return SemanticRequestPlanSchema.parse({
+      ...base,
+      outcome: 'MATCH',
+      unresolvedSpans,
+      facets: [{
+        id: facetId,
+        sourceSpan: { start: 0, end: rawText.length, text: rawText },
+        requestClass: 'CAPABILITY',
+        domainCandidates: [{ id: 'domain.inventory', score: 1 }],
+        subject: { entityId: 'entity.inventory_item', recordId: null },
+        relations: [],
+        polarity: 'POSITIVE',
+        projection: 'ANALYSIS',
+        fields: [],
+        where: null,
+        sort: [], limit: null, time: null, groupBy: [],
+        targetCandidates: [{ id: 'capability.inventory.replacement_guidance', score: 1 }],
+        requiredSlots: [], dependsOn: [],
+        evidence: {
+          jobMatch: 'job.inventory.replacement_guidance',
+          subjectNamed: Boolean(inventorySubject),
+          relationNamed: false,
+          projectionNamed: Boolean(projectionAnnotation),
+          polarityNamed: Boolean(polarityAnnotation),
+        },
+        confidenceSignals: { grammarComplete: true, unresolvedSpanCount: unresolvedSpans.length },
+      }],
+    });
+  }
+
+  // 0B. Phase 2A command preview: create / schedule maintenance task
+  const createMaintenanceJob = annotations.find((annotation) => annotation.lexeme.semanticId === 'job.maintenance.create');
+  if (createMaintenanceJob) {
+    return SemanticRequestPlanSchema.parse({
+      ...base,
+      outcome: 'MATCH',
+      unresolvedSpans,
+      facets: [{
+        id: facetId,
+        sourceSpan: { start: 0, end: rawText.length, text: rawText },
+        requestClass: 'COMMAND',
+        domainCandidates: [{ id: 'domain.maintenance', score: 1 }],
+        subject: { entityId: 'entity.maintenance_task', recordId: null },
+        relations: [],
+        polarity: 'POSITIVE',
+        projection: 'DETAIL',
+        fields: [],
+        where: null,
+        sort: [], limit: null, time: null, groupBy: [],
+        targetCandidates: [{ id: 'command.maintenance.create_preview', score: 1 }],
+        requiredSlots: [], dependsOn: [],
+        evidence: {
+          jobMatch: 'job.maintenance.create',
+          subjectNamed: true,
+          relationNamed: false,
+          projectionNamed: Boolean(projectionAnnotation),
+          polarityNamed: Boolean(polarityAnnotation),
+        },
+        confidenceSignals: { grammarComplete: true, unresolvedSpanCount: unresolvedSpans.length },
+      }],
+    });
+  }
+
+  // 0C. Phase 2A multi-relation / Boolean coordination over inventory_item
+  const relationCount = [warrantyRelation, maintenanceRelation, roomRelation].filter(Boolean).length;
+  const hasBooleanCoordinator = /\b(?:and|or|either|neither|nor)\b/i.test(rawText);
+  if (inventorySubject && (relationCount >= 2 || (relationCount >= 1 && (maintenanceRelation || roomRelation || hasBooleanCoordinator)))) {
+    const projection = projectionAnnotation?.lexeme.semanticId === 'projection.count' ? 'COUNT'
+      : projectionAnnotation?.lexeme.semanticId === 'projection.detail' ? 'DETAIL'
+      : projectionAnnotation?.lexeme.semanticId === 'projection.exists' ? 'EXISTS' : 'LIST';
+    const polarity = polarityAnnotation?.lexeme.semanticId === 'polarity.negative' ? 'NEGATIVE'
+      : polarityAnnotation?.lexeme.semanticId === 'polarity.positive' ? 'POSITIVE' : 'UNKNOWN';
+
+    const predicates: SemanticPredicateAtom[] = [];
+    const relations: Array<{ semanticRelationId: string; predicateId: string; targetEntityId: string }> = [];
+
+    if (warrantyRelation) {
+      const predicateId = polarity === 'NEGATIVE' ? 'predicate.inventory_item.has_no_warranty_record'
+        : polarity === 'POSITIVE' ? 'predicate.inventory_item.has_warranty_record'
+        : 'predicate.inventory_item.warranty_state_unknown';
+      predicates.push({ kind: 'PREDICATE', predicateId, relationPathId: 'path.inventory_item.warranty' });
+      relations.push({ semanticRelationId: 'relation.inventory_item.warranty', predicateId, targetEntityId: 'entity.warranty' });
+    }
+    if (maintenanceRelation) {
+      const isOverdue = /\boverdue\b/i.test(rawText);
+      const predicateId = isOverdue ? 'predicate.inventory_item.has_overdue_maintenance'
+        : polarity === 'NEGATIVE' ? 'predicate.inventory_item.has_no_due_maintenance'
+        : 'predicate.inventory_item.has_due_maintenance';
+      predicates.push({ kind: 'PREDICATE', predicateId, relationPathId: 'path.inventory_item.maintenance_task' });
+      relations.push({ semanticRelationId: 'relation.inventory_item.maintenance_task', predicateId, targetEntityId: 'entity.maintenance_task' });
+    }
+    if (roomRelation) {
+      const predicateId = 'predicate.inventory_item.in_room';
+      predicates.push({ kind: 'PREDICATE', predicateId, relationPathId: 'path.inventory_item.room' });
+      relations.push({ semanticRelationId: 'relation.inventory_item.room', predicateId, targetEntityId: 'entity.room' });
+    }
+
+    const coordination = /\bneither\b/i.test(rawText) && /\bnor\b/i.test(rawText) ? 'NEITHER_NOR'
+      : polarity === 'NEGATIVE' && /\bor\b/i.test(rawText) ? 'AMBIGUOUS_NEGATIVE_OR'
+      : /\bor\b/i.test(rawText) ? 'EITHER_OR'
+      : /\band\b/i.test(rawText) ? 'AND'
+      : 'SINGLE';
+
+    const assembled = assembleSemanticBooleanExpression({ coordination, predicates });
+    if (assembled.outcome === 'CLARIFY') {
+      return SemanticRequestPlanSchema.parse({ ...base, outcome: 'BOUNDARY', facets: [], unresolvedSpans });
+    }
+    if (assembled.outcome === 'ASSEMBLED') {
+      return SemanticRequestPlanSchema.parse({
+        ...base,
+        outcome: 'MATCH',
+        unresolvedSpans,
+        facets: [{
+          id: facetId,
+          sourceSpan: { start: 0, end: rawText.length, text: rawText },
+          requestClass: 'DATA_QUERY',
+          domainCandidates: [{ id: 'domain.inventory', score: 1 }],
+          subject: { entityId: 'entity.inventory_item', recordId: null },
+          relations,
+          polarity,
+          projection,
+          fields: [],
+          where: assembled.expression,
+          sort: [], limit: null, time: null, groupBy: [], targetCandidates: [{ id: 'data-point-read.read', score: 1 }],
+          requiredSlots: [], dependsOn: [],
+          evidence: {
+            jobMatch: 'query.inventory_item.relation_boolean',
+            subjectNamed: true,
+            relationNamed: true,
+            projectionNamed: Boolean(projectionAnnotation),
+            polarityNamed: Boolean(polarityAnnotation),
+          },
+          confidenceSignals: { grammarComplete: true, unresolvedSpanCount: unresolvedSpans.length },
+        }],
+      });
+    }
+  }
 
   // 1. Migrated warranty-relation vertical slice (FAM_P1_WARRANTY_INVENTORY_RELATION)
   if (inventorySubject && warrantyRelation) {
@@ -269,9 +421,13 @@ export function parseDeterministicSemanticRequest(rawText: string): SemanticRequ
   }
 
   // Inventory-item queries without the warranty relation require a registered inventory field
-  // (e.g. purchase_cost, replacement_cost, serial_number, installed_on) so unsupported relations
-  // like "which appliances have no guarantee" fail closed with NONE_FITS.
-  if (inferredEntityId === 'entity.inventory_item' && !primaryField) {
+  // (e.g. purchase_cost, replacement_cost, serial_number, installed_on) unless a clear
+  // projection (list/count/detail/exists) is given with no unsupported nouns/relations,
+  // so unsupported relations like "which appliances have no guarantee" fail closed with NONE_FITS.
+  const hasUnsupportedInventoryToken = unresolvedSpans.some(
+    (span) => !['i', 'and', 'or', 'either', 'neither', 'nor'].includes(span.text.toLocaleLowerCase('en-US'))
+  );
+  if (inferredEntityId === 'entity.inventory_item' && !primaryField && (!projectionAnnotation || hasUnsupportedInventoryToken)) {
     return SemanticRequestPlanSchema.parse({ ...base, outcome: 'NONE_FITS', facets: [], unresolvedSpans });
   }
 

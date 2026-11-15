@@ -19,6 +19,8 @@ import { dataPointReadGrammarAgreement, warrantyShapeGrammarAgreement, type Lega
 import { ASK_SEMANTIC_RECEIPT_VERSION, buildSemanticReadReceipt, type SemanticReadReceipt } from '../semantic/semanticExecutionReceipt';
 import { verifySemanticReadReceiptEntailment } from '../semantic/semanticReceiptEntailment';
 import { humanizePresentationToken } from '../semantic/phase1/presentationHumanizer';
+import { parseDeterministicSemanticRequest } from '../semantic/deterministicSemanticParser';
+import { executePhase2aOnProperty } from '../semantic/phase2a/phase2aSliceExecutor';
 
 const ENTITY_COPY: Record<string, { plural: string; singular: string; collection: string; record: string; none?: string }> = {
   InventoryItem: { plural: 'items', singular: 'inventory', collection: 'inventory', record: 'Home inventory record' },
@@ -310,6 +312,22 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
         return shape789Result(propertyId, role, shapePlan, agreement);
       }
       return shape789Result(propertyId, role, shapePlan);
+    }
+    const phase2aPlan = parseDeterministicSemanticRequest(message);
+    const phase2aJob = phase2aPlan.outcome === 'MATCH' ? phase2aPlan.facets[0]?.evidence.jobMatch : null;
+    if (
+      phase2aPlan.outcome === 'BOUNDARY'
+      || phase2aJob === 'query.inventory_item.relation_boolean'
+      || phase2aJob === 'job.inventory.replacement_guidance'
+      || phase2aJob === 'job.maintenance.create'
+    ) {
+      const phase2aExecution = await executePhase2aOnProperty({
+        propertyId,
+        role,
+        propertyAuthorized: true,
+        rawText: message,
+      });
+      return phase2aExecution.operationResult;
     }
   }
   // A multi-part question ("what is my deductible and when does my insurance policy expire") has several facets: each is read through the ordinary single-point path and all are answered in one summary.
