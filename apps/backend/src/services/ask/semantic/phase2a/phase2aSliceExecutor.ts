@@ -1,4 +1,6 @@
 import { prisma } from '../../../../lib/prisma';
+import { AskConfirmationSchema } from '../../../../productFramework/ask/ask.contract';
+import { visibleInventoryItemWhere } from '../../../riskAssetApplicability';
 import type { AskOperationResult } from '../../askOperationRegistry';
 import type { AskEntityResolutionResult } from '../../askEntityResolution';
 import { parseDeterministicSemanticRequest } from '../deterministicSemanticParser';
@@ -67,6 +69,7 @@ export interface Phase2aMaintenanceTaskRecord {
 export interface Phase2aPropertySnapshot {
   readonly propertyId: string;
   readonly asOfDate: string;
+  readonly maintenanceWorkflowVersion?: string;
   readonly rooms: readonly Phase2aRoomRecord[];
   readonly items: readonly Phase2aInventoryItemRecord[];
   readonly maintenanceTasks: readonly Phase2aMaintenanceTaskRecord[];
@@ -516,25 +519,45 @@ export function executePhase2aVerticalSlice(input: {
         } as unknown as AskEntityResolutionResult)
       : ({ missingSlots } as unknown as AskEntityResolutionResult);
 
+    const previewTitle = targetItem ? `Service ${targetItem.name}` : 'Maintenance task';
     const previewParams = targetItem && dueMatch
       ? {
           propertyId: snapshot.propertyId,
           inventoryItemId: targetItem.id,
-          title: `Service ${targetItem.name}`,
-          nextDueDate: dueMatch[1],
+          maintenanceWorkflowVersion: snapshot.maintenanceWorkflowVersion ?? 'phase2a-snapshot-v1',
+          maintenanceTitle: previewTitle,
+          maintenanceDescription: `Scheduled via Ask for ${targetItem.name}`,
+          maintenancePriority: 'MEDIUM',
+          maintenanceNextDueDate: dueMatch[1],
+          maintenanceIsRecurring: false,
         }
       : {};
+
+    const validConfirmation = targetItem && dueMatch
+      ? AskConfirmationSchema.parse({
+          confirmationId: 'phase2a-maint-preview-1',
+          version: 1,
+          title: `Create maintenance task: ${previewTitle}?`,
+          description: 'This command creates a task in the canonical Maintenance record.',
+          fields: [
+            { label: 'Task', value: previewTitle },
+            { label: 'Item', value: targetItem.name },
+            { label: 'Due date', value: dueMatch[1] },
+            { label: 'Priority', value: 'Medium' },
+          ],
+          editableFields: [],
+          confirmLabel: 'Create maintenance task',
+          consentText: 'I authorize creating this maintenance task in the shared Maintenance record.',
+          expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+        })
+      : null;
 
     const draftResult: AskOperationResult = {
       status: 'NEEDS_CONFIRMATION',
       blocks: [],
       suggestions: [],
       parameters: previewParams,
-      confirmation: {
-        confirmationId: 'phase2a-maint-preview-1',
-        summary: `Create maintenance task for ${targetItem?.name ?? 'item'}`,
-        parameters: previewParams,
-      } as unknown as AskOperationResult['confirmation'],
+      confirmation: validConfirmation,
       clarification: null,
     };
 
@@ -858,13 +881,13 @@ function normalizePhase2aRole(role: string): Phase2aAuthorizationContext['role']
  * into the typed Phase2aPropertySnapshot contract.
  */
 export async function loadPhase2aPropertySnapshot(propertyId: string): Promise<Phase2aPropertySnapshot> {
-  const [rooms, items, warranties, maintenanceTasks] = await Promise.all([
+  const [rooms, items, warranties, maintenanceTasks, workflowVersion] = await Promise.all([
     prisma.inventoryRoom.findMany({
       where: { propertyId },
       select: { id: true, propertyId: true, name: true },
     }),
     prisma.inventoryItem.findMany({
-      where: { propertyId },
+      where: { propertyId, ...visibleInventoryItemWhere() },
       select: {
         id: true,
         propertyId: true,
@@ -898,6 +921,7 @@ export async function loadPhase2aPropertySnapshot(propertyId: string): Promise<P
         inventoryItemId: true,
       },
     }),
+    (await import('../../handlers/maintenance.handler')).maintenanceWorkflowVersion(propertyId),
   ]);
 
   const warrantiesByItem = new Map<string, string[]>();
@@ -911,6 +935,7 @@ export async function loadPhase2aPropertySnapshot(propertyId: string): Promise<P
   return {
     propertyId,
     asOfDate: new Date().toISOString().slice(0, 10),
+    maintenanceWorkflowVersion: workflowVersion,
     rooms: rooms.map((room) => ({
       id: room.id,
       propertyId: room.propertyId,

@@ -233,13 +233,13 @@ async function invokeGuarded(
   }
 
   // Phase 2A unified semantic plan boundary across QUERY, CAPABILITY, and COMMAND
+  // (HVAC_DECISION_START keeps its canonical decision-platform.hvac.start adapter)
   if (
     envelope.propertyId
     && envelope.message
     && (
       operationId === 'DATA_POINT_READ'
       || operationId === 'REPLACEMENT_GUIDANCE'
-      || operationId === 'HVAC_DECISION_START'
       || operationId === 'MAINTENANCE_TASK_CREATE'
     )
   ) {
@@ -248,7 +248,7 @@ async function invokeGuarded(
     const isPhase2aDispatch =
       phase2aPlan.outcome === 'BOUNDARY'
       || (operationId === 'DATA_POINT_READ' && phase2aJob === 'query.inventory_item.relation_boolean')
-      || ((operationId === 'REPLACEMENT_GUIDANCE' || operationId === 'HVAC_DECISION_START' || operationId === 'DATA_POINT_READ')
+      || ((operationId === 'REPLACEMENT_GUIDANCE' || operationId === 'DATA_POINT_READ')
         && phase2aJob === 'job.inventory.replacement_guidance')
       || ((operationId === 'MAINTENANCE_TASK_CREATE' || operationId === 'DATA_POINT_READ')
         && phase2aJob === 'job.maintenance.create');

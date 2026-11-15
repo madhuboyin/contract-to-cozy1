@@ -137,9 +137,21 @@ export function verifyRichPresentationPopulationEquivalence(
 
   if (receipt.resolvedRecordIds.length > 0 && renderedItems.length > 0) {
     const allowedIds = new Set(receipt.resolvedRecordIds);
+    const seenRenderedIds = new Set<string>();
     for (const item of renderedItems) {
       if (!allowedIds.has(item.id)) {
         reasons.push(`ungrounded_rendered_item:${item.id}`);
+      }
+      if (seenRenderedIds.has(item.id)) {
+        reasons.push(`duplicate_rendered_item:${item.id}`);
+      }
+      seenRenderedIds.add(item.id);
+    }
+    if (!receipt.population.truncated && receipt.projection !== 'COUNT') {
+      for (const expectedId of receipt.resolvedRecordIds) {
+        if (!seenRenderedIds.has(expectedId)) {
+          reasons.push(`missing_rendered_item:${expectedId}`);
+        }
       }
     }
   }

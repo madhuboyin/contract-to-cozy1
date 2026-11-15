@@ -13,6 +13,7 @@ const {
   buildSemanticTextEnvelope,
   verifyPlaceholderSpanMapRoundTrip,
   roundTripRestorePlaceholderSpans,
+  verifyRichPresentationPopulationEquivalence,
   checkRelationChainBound,
   executePhase2aVerticalSlice,
   applyPhase2aFollowUpRefinement,
@@ -277,9 +278,54 @@ test('Phase 2A protects dynamic property entities, hides restricted items as mis
     'utf8'
   );
   assert.ok(capabilityRegistrySource.includes('executePhase2aOnProperty'));
-  assert.ok(capabilityRegistrySource.includes('HVAC_DECISION_START'));
+  assert.ok(!capabilityRegistrySource.includes("operationId === 'HVAC_DECISION_START'"));
   assert.ok(capabilityRegistrySource.includes('MAINTENANCE_TASK_CREATE'));
   assert.ok(capabilityRegistrySource.includes('REPLACEMENT_GUIDANCE'));
+
+  // 4b. Maintenance preview passes AskConfirmationSchema and carries confirmMaintenanceTaskCreate params
+  const { AskConfirmationSchema } = require('../../src/productFramework/ask/ask.contract.ts');
+  const maintPreview = executePhase2aVerticalSlice({
+    rawText: 'schedule maintenance for my furnace on 2026-12-01',
+    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+    auth: PHASE2A_OWNER_AUTH,
+  });
+  assert.equal(maintPreview.status, 'NEEDS_CONFIRMATION');
+  const parsedConfirm = AskConfirmationSchema.safeParse(maintPreview.operationResult.confirmation);
+  assert.equal(parsedConfirm.success, true);
+  assert.equal(maintPreview.operationResult.parameters.maintenanceTitle, 'Service Furnace');
+  assert.equal(maintPreview.operationResult.parameters.maintenancePriority, 'MEDIUM');
+  assert.equal(maintPreview.operationResult.parameters.maintenanceNextDueDate, '2026-12-01');
+  assert.ok(maintPreview.operationResult.parameters.maintenanceWorkflowVersion);
+
+  // 4c. Prisma snapshot loader applies visibleInventoryItemWhere()
+  const executorSource = fs.readFileSync(
+    path.join(__dirname, '../../src/services/ask/semantic/phase2a/phase2aSliceExecutor.ts'),
+    'utf8'
+  );
+  assert.ok(executorSource.includes('visibleInventoryItemWhere()'));
+
+  // 4d. Rich presentation equivalence rejects duplicate rendered IDs
+  const warNeg = executePhase2aVerticalSlice({
+    rawText: 'which appliances have either warranty or due maintenance',
+    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+    auth: PHASE2A_OWNER_AUTH,
+  });
+  const listBlock = warNeg.operationResult.blocks.find((b) => b.type === 'GROUPED_LIST');
+  const dupBlocks = warNeg.operationResult.blocks.map((b) =>
+    b.type === 'GROUPED_LIST'
+      ? {
+          ...b,
+          sections: [{
+            ...b.sections[0],
+            items: b.sections.flatMap((s) => s.items).map((item, _, all) => ({ ...item, id: all[0].id })),
+          }],
+        }
+      : b
+  );
+  assert.ok(listBlock);
+  const dupCheck = verifyRichPresentationPopulationEquivalence(warNeg.receipt, dupBlocks);
+  assert.equal(dupCheck.ok, false);
+  assert.ok(dupCheck.reasons.some((r) => r.startsWith('duplicate_rendered_item:')));
 
   // 5. Canonical plan.minimizedText masks dynamic custom property entities
   const customSnapshot = {
