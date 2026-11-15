@@ -21,7 +21,7 @@ import { verifySemanticReadReceiptEntailment } from '../semantic/semanticReceipt
 import { humanizePresentationToken } from '../semantic/phase1/presentationHumanizer';
 import { parseDeterministicSemanticRequest } from '../semantic/deterministicSemanticParser';
 import { executePhase2aOnProperty } from '../semantic/phase2a/phase2aSliceExecutor';
-import { parseCrossDomainSemanticRequest } from '../semantic/waves/crossDomainPlanBuilder';
+import { mayNeedDynamicQuoteResolution, parseCrossDomainSemanticRequest } from '../semantic/waves/crossDomainPlanBuilder';
 import { executeCrossDomainOnProperty } from '../semantic/waves/crossDomainWaveExecutor';
 
 const ENTITY_COPY: Record<string, { plural: string; singular: string; collection: string; record: string; none?: string }> = {
@@ -327,6 +327,7 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
       crossDomainParsed.clarification
       || crossDomainParsed.plan.outcome === 'BOUNDARY'
       || crossDomainParsed.plan.outcome === 'MATCH'
+      || mayNeedDynamicQuoteResolution(message)
     ) {
       const crossDomainExecution = await executeCrossDomainOnProperty({
         propertyId,
@@ -336,7 +337,13 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
         rawText: message,
         timeZone,
       });
-      return crossDomainExecution.operationResult;
+      if (
+        crossDomainExecution.execution.status !== 'NONE_FITS'
+        || crossDomainParsed.plan.outcome === 'MATCH'
+        || Boolean(crossDomainParsed.clarification)
+      ) {
+        return crossDomainExecution.operationResult;
+      }
     }
     const shapePlan = planShape789(message);
     if (shapePlan) {

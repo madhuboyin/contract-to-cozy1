@@ -289,6 +289,128 @@ function annotateClauseTokens(tokens: readonly TokenSpan[]): {
   return { annotations, unresolvedSpans };
 }
 
+const SINGLE_WORD_LEXICON_PHRASES = new Set(
+  ASK_CROSS_DOMAIN_SEMANTIC_LEXICON.filter((l) => !l.phrase.includes(' ')).map((l) => l.phrase),
+);
+
+function matchDynamicQuotesOnTokens(
+  tokens: readonly TokenSpan[],
+  dynamicQuotes: readonly DynamicQuoteCandidate[] = [],
+): {
+  readonly matchedQuoteIds: readonly string[];
+  readonly coveredTokenIndices: ReadonlySet<number>;
+} {
+  if (dynamicQuotes.length === 0 || tokens.length === 0) {
+    return { matchedQuoteIds: [], coveredTokenIndices: new Set<number>() };
+  }
+
+  const vendorTokenMap = dynamicQuotes.map((quote) => ({
+    quote,
+    idTokens: tokenizeClause(quote.id).map((t) => t.normalized),
+    vendorTokens: tokenizeClause(quote.vendorName).map((t) => t.normalized),
+  }));
+
+  // Count how many candidates use each candidate discriminating word
+  const wordDocFreq = new Map<string, number>();
+  for (const entry of vendorTokenMap) {
+    const uniqueWords = new Set(entry.vendorTokens);
+    for (const w of uniqueWords) {
+      wordDocFreq.set(w, (wordDocFreq.get(w) ?? 0) + 1);
+    }
+  }
+
+  const matchedQuoteIds: string[] = [];
+  const seenQuoteIds = new Set<string>();
+  const coveredTokenIndices = new Set<number>();
+
+  const recordMatch = (quoteId: string, start: number, len: number): void => {
+    for (let k = start; k < start + len; k += 1) {
+      coveredTokenIndices.add(k);
+    }
+    if (!seenQuoteIds.has(quoteId)) {
+      seenQuoteIds.add(quoteId);
+      matchedQuoteIds.push(quoteId);
+    }
+  };
+
+  for (let i = 0; i < tokens.length; i += 1) {
+    if (coveredTokenIndices.has(i)) continue;
+
+    // 1. Exact ID or full vendor name phrase match (prefer longest phrase)
+    let bestMatch: { quoteId: string; len: number } | null = null;
+    for (const entry of vendorTokenMap) {
+      for (const candidateTokens of [entry.vendorTokens, entry.idTokens]) {
+        if (candidateTokens.length === 0) continue;
+        if (i + candidateTokens.length > tokens.length) continue;
+        const matchesAll = candidateTokens.every((w, offset) => tokens[i + offset].normalized === w);
+        if (matchesAll && (!bestMatch || candidateTokens.length > bestMatch.len)) {
+          bestMatch = { quoteId: entry.quote.id, len: candidateTokens.length };
+        }
+      }
+    }
+    if (bestMatch) {
+      recordMatch(bestMatch.quoteId, i, bestMatch.len);
+      continue;
+    }
+
+    // 2. Unique discriminating vendor token (>= 3 chars, not stop-word or static lexicon word)
+    const tok = tokens[i].normalized;
+    if (
+      tok.length >= 3
+      && !CLOSED_CLASS_STOP_WORDS.has(tok)
+      && !SINGLE_WORD_LEXICON_PHRASES.has(tok)
+      && wordDocFreq.get(tok) === 1
+    ) {
+      const owner = vendorTokenMap.find((entry) => entry.vendorTokens.includes(tok));
+      if (owner) {
+        recordMatch(owner.quote.id, i, 1);
+      }
+    }
+  }
+
+  return { matchedQuoteIds, coveredTokenIndices };
+}
+
+function annotateClauseWithDynamicQuotes(
+  tokens: readonly TokenSpan[],
+  dynamicQuotes: readonly DynamicQuoteCandidate[] = [],
+): {
+  readonly annotations: readonly LexiconAnnotation[];
+  readonly unresolvedSpans: readonly SemanticSourceSpan[];
+  readonly matchedQuoteIds: readonly string[];
+} {
+  const base = annotateClauseTokens(tokens);
+  if (dynamicQuotes.length === 0) {
+    return { annotations: base.annotations, unresolvedSpans: base.unresolvedSpans, matchedQuoteIds: [] };
+  }
+  const quoteMatches = matchDynamicQuotesOnTokens(tokens, dynamicQuotes);
+  if (quoteMatches.coveredTokenIndices.size === 0) {
+    return {
+      annotations: base.annotations,
+      unresolvedSpans: base.unresolvedSpans,
+      matchedQuoteIds: quoteMatches.matchedQuoteIds,
+    };
+  }
+  const coveredStarts = new Set(Array.from(quoteMatches.coveredTokenIndices).map((idx) => tokens[idx].start));
+  return {
+    annotations: base.annotations,
+    unresolvedSpans: base.unresolvedSpans.filter((span) => !coveredStarts.has(span.start)),
+    matchedQuoteIds: quoteMatches.matchedQuoteIds,
+  };
+}
+
+/**
+ * Lexicon-backed check indicating whether an utterance likely targets contractor quote comparison
+ * and should load property quote candidates before concluding NONE_FITS.
+ */
+export function mayNeedDynamicQuoteResolution(rawText: string): boolean {
+  const tokens = tokenizeClause(rawText);
+  const { annotations } = annotateClauseTokens(tokens);
+  return annotations.some(
+    (a) => a.lexeme.semanticId === 'projection.compare' || a.lexeme.semanticId === 'entity.contractor_quote',
+  );
+}
+
 export interface PlanOverflowFacet {
   readonly id: string;
   readonly sourceSpan: SemanticSourceSpan;
@@ -296,10 +418,27 @@ export interface PlanOverflowFacet {
   readonly reasonCode: 'DOMAIN_NOT_SEARCHED';
 }
 
+export interface CrossDomainClarificationCandidate {
+  readonly id: string;
+  readonly label: string;
+  readonly subtitle?: string;
+}
+
 export interface CrossDomainClarification {
-  readonly reasonCode: 'AMBIGUOUS_NEGATIVE_COORDINATION' | 'UNRESOLVED_FOLLOW_UP_INPUT';
+  readonly reasonCode:
+    | 'AMBIGUOUS_NEGATIVE_COORDINATION'
+    | 'UNRESOLVED_FOLLOW_UP_INPUT'
+    | 'AMBIGUOUS_QUOTE_SELECTION';
   readonly question: string;
   readonly options: readonly string[];
+  readonly candidateRecords?: readonly CrossDomainClarificationCandidate[];
+}
+
+export interface DynamicQuoteCandidate {
+  readonly id: string;
+  readonly vendorName: string;
+  readonly roomTag?: string | null;
+  readonly amountCents?: number;
 }
 
 export interface CrossDomainParseResult {
@@ -384,7 +523,11 @@ function indexAnnotations(annotations: readonly LexiconAnnotation[]): Annotation
  */
 function compileClauseSpecFromAnnotations(
   sig: AnnotationSignalIndex,
-  options: { priorClaimFacetId?: string | null; resolvedSubjectHint?: string | null } = {},
+  options: {
+    priorClaimFacetId?: string | null;
+    resolvedSubjectHint?: string | null;
+    matchedQuoteIds?: readonly string[];
+  } = {},
 ): ClauseSpec | null {
   const has = (id: string) => sig.ids.has(id);
   const projection: SemanticFacet['projection'] = has('projection.count')
@@ -819,9 +962,12 @@ function compileClauseSpecFromAnnotations(
     };
   }
 
-  // Compare contractor quotes
-  if (has('projection.compare') && has('entity.contractor_quote')) {
+  // Compare contractor quotes (binds 2 resolved quote IDs when present; otherwise preserves UNRESOLVED slot for CLARIFY)
+  const matchedQuoteIds = options.matchedQuoteIds ?? [];
+  if (has('projection.compare') && (has('entity.contractor_quote') || matchedQuoteIds.length >= 2)) {
     const requestedScope = sig.quoteScope;
+    const boundQuoteIds = matchedQuoteIds.length >= 2 ? matchedQuoteIds.slice(0, 2) : null;
+    const hasPredicate = Boolean(requestedScope || boundQuoteIds);
     return {
       domainId: 'domain.projects_quotes_vendors',
       entityId: 'entity.contractor_quote',
@@ -829,15 +975,21 @@ function compileClauseSpecFromAnnotations(
       jobMatch: 'job.projects.quote_comparison',
       projection: 'COMPARE',
       polarity: null,
-      relations: requestedScope
+      relations: hasPredicate
         ? [{ semanticRelationId: 'relation.contractor_quote.comparison', predicateId: 'predicate.contractor_quote.compared_in_scope', targetEntityId: 'entity.contractor_quote' }]
         : [],
-      where: requestedScope
-        ? { kind: 'PREDICATE', predicateId: 'predicate.contractor_quote.compared_in_scope', relationPathId: 'path.contractor_quote.comparison', targetRecordId: requestedScope }
+      where: hasPredicate
+        ? {
+            kind: 'PREDICATE',
+            predicateId: 'predicate.contractor_quote.compared_in_scope',
+            relationPathId: 'path.contractor_quote.comparison',
+            ...(requestedScope ? { targetRecordId: requestedScope } : {}),
+            ...(boundQuoteIds ? { targetCategorySet: [...boundQuoteIds] } : {}),
+          }
         : null,
       time: null,
       fields: [{ fieldId: 'field.contractor_quote.amount_cents' }, { fieldId: 'field.contractor_quote.vendor_name' }],
-      requiredSlots: [{ slotId: 'slot.quotes.two_resolved_quotes', state: 'UNRESOLVED' }],
+      requiredSlots: [{ slotId: 'slot.quotes.two_resolved_quotes', state: boundQuoteIds ? 'RESOLVED' : 'UNRESOLVED' }],
     };
   }
 
@@ -1047,7 +1199,10 @@ function splitCompoundClauses(rawText: string): {
  * Token-annotated Cross-Domain Request Plan Builder across Waves 1-5 (FR-PLAN-5/7, §18).
  * Operates exclusively over generated lexicon annotations (no operation-selecting sentence regexes).
  */
-export function parseCrossDomainSemanticRequest(rawText: string): CrossDomainParseResult {
+export function parseCrossDomainSemanticRequest(
+  rawText: string,
+  options?: { readonly dynamicQuotes?: readonly DynamicQuoteCandidate[] },
+): CrossDomainParseResult {
   const trimmed = rawText.trim();
   if (!trimmed) {
     return { plan: buildEmptyPlan('INSUFFICIENT_TEXT', rawText), clarification: null, overflowFacets: [], requiresUnambiguousCoordination: false };
@@ -1058,9 +1213,11 @@ export function parseCrossDomainSemanticRequest(rawText: string): CrossDomainPar
     return { plan: buildEmptyPlan('BOUNDARY', rawText), clarification: null, overflowFacets: [], requiresUnambiguousCoordination: false };
   }
 
-  // Check whole-utterance tokens against generated lexicon before admitting any plan
+  const dynamicQuotes = options?.dynamicQuotes ?? [];
+
+  // Check whole-utterance tokens against generated lexicon (plus dynamic quote entities) before admitting any plan
   const wholeTokens = tokenizeClause(trimmed);
-  const wholeAnnotated = annotateClauseTokens(wholeTokens);
+  const wholeAnnotated = annotateClauseWithDynamicQuotes(wholeTokens, dynamicQuotes);
   if (wholeAnnotated.unresolvedSpans.length > 0) {
     return {
       plan: buildEmptyPlan('NONE_FITS', rawText, wholeAnnotated.unresolvedSpans),
@@ -1104,11 +1261,15 @@ export function parseCrossDomainSemanticRequest(rawText: string): CrossDomainPar
   for (const [index, clause] of segmented.clauses.entries()) {
     const facetId = `facet-${index + 1}`;
     const clauseTokens = tokenizeClause(clause.text);
-    const clauseAnnotated = annotateClauseTokens(clauseTokens);
+    const clauseAnnotated = annotateClauseWithDynamicQuotes(clauseTokens, dynamicQuotes);
     const clauseSignals = indexAnnotations(clauseAnnotated.annotations);
 
     let spec = clauseAnnotated.unresolvedSpans.length === 0
-      ? compileClauseSpecFromAnnotations(clauseSignals, { priorClaimFacetId: claimFacetId, resolvedSubjectHint })
+      ? compileClauseSpecFromAnnotations(clauseSignals, {
+          priorClaimFacetId: claimFacetId,
+          resolvedSubjectHint,
+          matchedQuoteIds: clauseAnnotated.matchedQuoteIds,
+        })
       : null;
 
     if (!spec) {
@@ -1189,12 +1350,58 @@ export function applyCrossDomainFollowUpRefinement(
   priorPlan: SemanticRequestPlan,
   followUpText: string,
   dynamicEntities: readonly DynamicPlaceholderEntityCandidate[] = [],
+  dynamicQuotes: readonly DynamicQuoteCandidate[] = [],
 ): {
   readonly outcome: 'REFINED' | 'CLARIFY_UNRESOLVED';
   readonly plan: SemanticRequestPlan;
   readonly unresolvedSpans: readonly SemanticSourceSpan[];
 } {
   const strippedFollowUp = followUpText.replace(/^what\s+about\s+/i, '').trim() || followUpText;
+  if (
+    priorPlan.outcome === 'MATCH'
+    && priorPlan.facets.length > 0
+    && priorPlan.facets[0].evidence.jobMatch === 'job.projects.quote_comparison'
+    && dynamicQuotes.length > 0
+  ) {
+    const followTokens = tokenizeClause(strippedFollowUp);
+    const followAnnotated = annotateClauseWithDynamicQuotes(followTokens, dynamicQuotes);
+    if (followAnnotated.unresolvedSpans.length === 0 && followAnnotated.matchedQuoteIds.length >= 2) {
+      const priorFacet = priorPlan.facets[0];
+      const followSignals = indexAnnotations(followAnnotated.annotations);
+      const priorScope = priorFacet.where?.kind === 'PREDICATE' ? (priorFacet.where.targetRecordId ?? null) : null;
+      const requestedScope = followSignals.quoteScope ?? priorScope;
+      const boundQuoteIds = followAnnotated.matchedQuoteIds.slice(0, 2);
+      const refinedPlan = SemanticRequestPlanSchema.parse({
+        ...priorPlan,
+        facets: [
+          {
+            ...priorFacet,
+            relations: priorFacet.relations.length > 0
+              ? priorFacet.relations
+              : [{
+                  semanticRelationId: 'relation.contractor_quote.comparison',
+                  predicateId: 'predicate.contractor_quote.compared_in_scope',
+                  targetEntityId: 'entity.contractor_quote',
+                }],
+            where: {
+              kind: 'PREDICATE',
+              predicateId: 'predicate.contractor_quote.compared_in_scope',
+              relationPathId: 'path.contractor_quote.comparison',
+              ...(requestedScope ? { targetRecordId: requestedScope } : {}),
+              targetCategorySet: [...boundQuoteIds],
+            },
+            requiredSlots: [{ slotId: 'slot.quotes.two_resolved_quotes', state: 'RESOLVED' }],
+          },
+          ...priorPlan.facets.slice(1),
+        ],
+      });
+      return {
+        outcome: 'REFINED',
+        plan: refinedPlan,
+        unresolvedSpans: [],
+      };
+    }
+  }
   const delta = extractSemanticFollowUpDelta(strippedFollowUp, { dynamicEntities });
   if (delta.outcome !== 'APPLICABLE' || priorPlan.outcome !== 'MATCH' || priorPlan.facets.length === 0) {
     return {

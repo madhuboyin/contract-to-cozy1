@@ -441,6 +441,7 @@ test('production dataPointReadResult loads live manual/receipt links, canonical 
     ['inspectionFinding', () => []],
     ['projectRecord', () => []],
     ['quoteComparisonQuote', () => []],
+    ['toolOverride', () => [{ key: 'monthlyRentNow', value: 2000 }]],
     ['homeRiskReplayEventMatch', () => []],
     ['claim', () => []],
     ['askSavedArtifactPreference', () => []],
@@ -678,6 +679,72 @@ test('production dataPointReadResult loads live manual/receipt links, canonical 
     assert.equal(failedSaved.reasonCode, 'CROSS_DOMAIN_PARTIAL');
     assert.equal(failedSaved.parameters.crossDomainExecution.facetResults[0].status, 'PARTIAL_MISSING_SLOTS');
     assert.deepEqual(failedSaved.parameters.crossDomainExecution.facetResults[0].missingSlots, ['saved_results_unavailable']);
+
+    // 8. Canonical SellHoldRentAnalysis array drivers without ToolOverride does NOT divide netRentCents by years*12
+    prisma.toolOverride.findMany = async () => [];
+    prisma.sellHoldRentAnalysis.findFirst = async () => ({
+      id: 'shr-canonical-array-drivers',
+      years: 5,
+      winner: 'HOLD',
+      homeValueNowCents: 48000000,
+      netHoldCents: 15000000,
+      netRentCents: 12000000,
+      drivers: [{ factor: 'Equity growth', impact: 'POSITIVE' }],
+    });
+    const canonicalNoOverride = await dataPointReadResult('user-1', 'prop-ny-1', 'how long until owning beats renting?');
+    assert.equal(canonicalNoOverride.status, 'ANSWERED');
+    const canonicalFacet = canonicalNoOverride.parameters.crossDomainExecution.facetResults[0];
+    assert.equal(canonicalFacet.metrics.monthlyRentCents, null);
+    assert.equal(canonicalFacet.metrics.crossoverYear, null);
+    assert.equal(canonicalFacet.metrics.breaksEvenWithinHorizon, true);
+    assert.equal(canonicalFacet.metrics.ownAdvantageAtHorizonCents, 3000000);
+    assert.doesNotMatch(canonicalFacet.summary, /starting in year/i);
+    assert.match(canonicalFacet.summary, /requires a monthly-rent assumption/i);
+
+    // 9. Live multi-quote ambiguity returns NEEDS_CLARIFICATION, while named pair resolves & executes
+    prisma.quoteComparisonQuote.findMany = async () => [
+      {
+        id: 'quote-1',
+        vendorName: 'Harbor Kitchen Craft',
+        quoteAmount: 28500,
+        serviceLocation: 'Kitchen',
+        serviceCategory: 'REMODEL',
+        serviceLabelRaw: 'Kitchen cabinet & counter remodel',
+        scopeSummary: 'Kitchen remodel',
+        workspace: { propertyId: 'prop-ny-1', scopeSummary: 'Kitchen remodel', serviceCategory: 'REMODEL' },
+      },
+      {
+        id: 'quote-2',
+        vendorName: 'Summit Remodelers',
+        quoteAmount: 31200,
+        serviceLocation: 'Kitchen',
+        serviceCategory: 'REMODEL',
+        serviceLabelRaw: 'Kitchen remodel',
+        scopeSummary: 'Kitchen remodel',
+        workspace: { propertyId: 'prop-ny-1', scopeSummary: 'Kitchen remodel', serviceCategory: 'REMODEL' },
+      },
+      {
+        id: 'quote-3',
+        vendorName: 'Northside Kitchens',
+        quoteAmount: 29900,
+        serviceLocation: 'Kitchen',
+        serviceCategory: 'REMODEL',
+        serviceLabelRaw: 'Kitchen cabinet install',
+        scopeSummary: 'Kitchen remodel',
+        workspace: { propertyId: 'prop-ny-1', scopeSummary: 'Kitchen remodel', serviceCategory: 'REMODEL' },
+      },
+    ];
+    const liveAmbiguousQuotes = await dataPointReadResult('user-1', 'prop-ny-1', 'compare these two kitchen contractor quotes');
+    assert.equal(liveAmbiguousQuotes.status, 'NEEDS_CLARIFICATION');
+    assert.equal(liveAmbiguousQuotes.reasonCode, 'AMBIGUOUS_QUOTE_SELECTION');
+    assert.equal(liveAmbiguousQuotes.parameters.clarification.candidateRecords.length, 3);
+
+    const liveNamedQuotes = await dataPointReadResult('user-1', 'prop-ny-1', 'compare Harbor and Northside');
+    assert.equal(liveNamedQuotes.status, 'ANSWERED');
+    const namedQuoteFacet = liveNamedQuotes.parameters.crossDomainExecution.facetResults[0];
+    assert.deepEqual(namedQuoteFacet.recordIds, ['quote-1', 'quote-3']);
+    assert.equal(namedQuoteFacet.metrics.deltaCents, -140000);
+    assert.match(namedQuoteFacet.summary, /Harbor Kitchen Craft.*Northside Kitchens/);
     assert.deepEqual(failedSaved.parameters.crossDomainExecution.facetResults[0].recordIds, []);
   } finally {
     propertyAccess.resolvePropertyAccess = origResolve;
@@ -790,33 +857,74 @@ test('Semantic receipts use domain-appropriate predicates, quote comparison resp
   assert.equal(partialQuoteRes.facetResults[0].status, 'PARTIAL_MISSING_SLOTS');
   assert.deepEqual(partialQuoteRes.facetResults[0].recordIds, ['quote-1']);
 
-  // If > 2 kitchen quotes exist without explicit quote IDs bound, fail closed rather than slicing first 2
+  // If > 2 kitchen quotes exist without explicit quote IDs bound, return structured CLARIFY + selectable candidates
+  const threeKitchenQuotesSnapshot = {
+    ...base,
+    contractorQuotes: [
+      ...base.contractorQuotes,
+      {
+        id: 'quote-3',
+        propertyId: base.propertyId,
+        roomTag: 'Kitchen',
+        vendorName: 'Northside Kitchens',
+        amountCents: 2990000,
+        timelineDays: 20,
+        warrantyMonths: 24,
+      },
+    ],
+  };
   const ambiguousQuoteRes = await executeCrossDomainWaves({
     rawText: 'compare these two kitchen contractor quotes',
-    snapshot: {
-      ...base,
-      contractorQuotes: [
-        ...base.contractorQuotes,
-        {
-          id: 'quote-3',
-          propertyId: base.propertyId,
-          roomTag: 'Kitchen',
-          vendorName: 'Northside Kitchens',
-          amountCents: 2990000,
-          timelineDays: 20,
-          warrantyMonths: 24,
-        },
-      ],
-    },
+    snapshot: threeKitchenQuotesSnapshot,
     role: 'OWNER',
     propertyAuthorized: true,
   });
-  assert.equal(ambiguousQuoteRes.status, 'PARTIAL');
+  assert.equal(ambiguousQuoteRes.status, 'CLARIFY');
+  assert.equal(ambiguousQuoteRes.clarification?.reasonCode, 'AMBIGUOUS_QUOTE_SELECTION');
+  assert.deepEqual(ambiguousQuoteRes.clarification?.options, ['Harbor Kitchen Craft', 'Summit Remodelers', 'Northside Kitchens']);
+  assert.equal(ambiguousQuoteRes.clarification?.candidateRecords?.length, 3);
   assert.equal(ambiguousQuoteRes.facetResults[0].status, 'PARTIAL_MISSING_SLOTS');
   assert.deepEqual(ambiguousQuoteRes.facetResults[0].missingSlots, ['slot.quotes.two_resolved_quotes']);
   assert.deepEqual(ambiguousQuoteRes.facetResults[0].recordIds, []);
   assert.equal(ambiguousQuoteRes.facetResults[0].metrics.ambiguousQuoteSelection, true);
   assert.equal(ambiguousQuoteRes.facetResults[0].metrics.candidateCount, 3);
+  const ambiguousQuoteOp = buildOperationResultFromCrossDomainExecution(ambiguousQuoteRes);
+  assert.equal(ambiguousQuoteOp.status, 'NEEDS_CLARIFICATION');
+  assert.equal(ambiguousQuoteOp.reasonCode, 'AMBIGUOUS_QUOTE_SELECTION');
+  assert.ok(ambiguousQuoteOp.blocks.some((b) => b.type === 'GROUPED_LIST'));
+
+  // Follow-up selection binds exact pair into facet.where + resolves slot.quotes.two_resolved_quotes
+  const quoteFollowUp = executeCrossDomainFollowUp({
+    priorPrompt: 'compare these two kitchen contractor quotes',
+    followUpText: 'Harbor and Northside',
+    snapshot: threeKitchenQuotesSnapshot,
+  });
+  assert.equal(quoteFollowUp.outcome, 'REFINED');
+  assert.equal(quoteFollowUp.plan.facets[0].requiredSlots[0]?.state, 'RESOLVED');
+  assert.equal(quoteFollowUp.plan.facets[0].where?.targetRecordId, 'kitchen');
+  assert.deepEqual(quoteFollowUp.plan.facets[0].where?.targetCategorySet, ['quote-1', 'quote-3']);
+
+  const refinedQuoteExec = await executeCrossDomainWaves({
+    rawText: 'Harbor and Northside',
+    snapshot: threeKitchenQuotesSnapshot,
+    role: 'OWNER',
+    propertyAuthorized: true,
+    planOverride: quoteFollowUp.plan,
+  });
+  assert.equal(refinedQuoteExec.status, 'ANSWERED');
+  assert.deepEqual(refinedQuoteExec.facetResults[0].recordIds, ['quote-1', 'quote-3']);
+  assert.equal(refinedQuoteExec.facetResults[0].metrics.deltaCents, -140000);
+
+  // Direct comparison naming two quotes resolves & executes cleanly even with 3+ candidates on the property
+  const directNamedQuoteExec = await executeCrossDomainWaves({
+    rawText: 'compare Harbor and Northside',
+    snapshot: threeKitchenQuotesSnapshot,
+    role: 'OWNER',
+    propertyAuthorized: true,
+  });
+  assert.equal(directNamedQuoteExec.status, 'ANSWERED');
+  assert.deepEqual(directNamedQuoteExec.facetResults[0].recordIds, ['quote-1', 'quote-3']);
+  assert.equal(directNamedQuoteExec.facetResults[0].metrics.deltaCents, -140000);
 
   // Authoritative persisted RENT analysis must never be overridden by fallback crossover model
   const persistedRentWins = await executeCrossDomainWaves({
