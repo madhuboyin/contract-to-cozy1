@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { findSemanticPredicateRegistration } from './semanticRelationRegistry';
 
 export const ASK_SEMANTIC_PLAN_VERSION = '1.1.0' as const;
 
@@ -18,12 +19,18 @@ export type SemanticWhereExpression =
   | { kind: 'AND' | 'OR'; operands: SemanticWhereExpression[] }
   | { kind: 'NOT'; operand: SemanticWhereExpression };
 
-export const SemanticWhereExpressionSchema: z.ZodType<SemanticWhereExpression> = z.lazy(() => z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('PREDICATE'),
-    predicateId: z.string().min(1),
-    relationPathId: z.string().min(1),
-  }).strict(),
+const RegisteredPredicateExpressionSchema = z.object({
+  kind: z.literal('PREDICATE'),
+  predicateId: z.string().min(1),
+  relationPathId: z.string().min(1),
+}).strict().superRefine((predicate, context) => {
+  if (!findSemanticPredicateRegistration(predicate.predicateId, predicate.relationPathId)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'predicate and relation path must be registered together' });
+  }
+});
+
+export const SemanticWhereExpressionSchema: z.ZodType<SemanticWhereExpression> = z.lazy(() => z.union([
+  RegisteredPredicateExpressionSchema,
   z.object({
     kind: z.literal('AND'),
     operands: z.array(SemanticWhereExpressionSchema).min(2).max(20),

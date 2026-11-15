@@ -38,6 +38,7 @@ test('the semantic plan accepts only bounded Boolean predicate trees', () => {
   const predicate = { kind: 'PREDICATE', predicateId: 'predicate.inventory_item.has_warranty_record', relationPathId: 'path.inventory_item.warranty' };
   assert.equal(SemanticWhereExpressionSchema.safeParse({ kind: 'AND', operands: [predicate, { kind: 'NOT', operand: predicate }] }).success, true);
   assert.equal(SemanticWhereExpressionSchema.safeParse({ kind: 'OR', operands: [predicate] }).success, false, 'connectives require at least two operands');
+  assert.equal(SemanticWhereExpressionSchema.safeParse({ kind: 'PREDICATE', predicateId: 'predicate.inventory_item.has_manual_record', relationPathId: 'path.inventory_item.manual' }).success, false, 'unregistered predicate paths fail closed');
   assert.equal(SemanticWhereExpressionSchema.safeParse({ inventoryItem: { warranties: { some: {} } } }).success, false, 'storage query objects are not semantic predicates');
 
   const plan = parseDeterministicSemanticRequest('which appliances have warranties');
@@ -48,16 +49,16 @@ test('the semantic plan accepts only bounded Boolean predicate trees', () => {
 
 test('the Boolean assembler preserves explicit coordination and clarifies ambiguous negative OR', () => {
   const warranty = { kind: 'PREDICATE', predicateId: 'predicate.inventory_item.has_warranty_record', relationPathId: 'path.inventory_item.warranty' };
-  const manual = { kind: 'PREDICATE', predicateId: 'predicate.inventory_item.has_manual_record', relationPathId: 'path.inventory_item.manual' };
+  const noWarranty = { kind: 'PREDICATE', predicateId: 'predicate.inventory_item.has_no_warranty_record', relationPathId: 'path.inventory_item.warranty' };
 
-  assert.deepEqual(assembleSemanticBooleanExpression({ coordination: 'EITHER_OR', predicates: [warranty, manual] }), {
-    outcome: 'ASSEMBLED', expression: { kind: 'OR', operands: [warranty, manual] },
+  assert.deepEqual(assembleSemanticBooleanExpression({ coordination: 'EITHER_OR', predicates: [warranty, noWarranty] }), {
+    outcome: 'ASSEMBLED', expression: { kind: 'OR', operands: [warranty, noWarranty] },
   });
-  assert.deepEqual(assembleSemanticBooleanExpression({ coordination: 'NEITHER_NOR', predicates: [warranty, manual] }), {
+  assert.deepEqual(assembleSemanticBooleanExpression({ coordination: 'NEITHER_NOR', predicates: [warranty, noWarranty] }), {
     outcome: 'ASSEMBLED',
-    expression: { kind: 'AND', operands: [{ kind: 'NOT', operand: warranty }, { kind: 'NOT', operand: manual }] },
+    expression: { kind: 'AND', operands: [{ kind: 'NOT', operand: warranty }, { kind: 'NOT', operand: noWarranty }] },
   });
-  assert.deepEqual(assembleSemanticBooleanExpression({ coordination: 'AMBIGUOUS_NEGATIVE_OR', predicates: [warranty, manual] }), {
+  assert.deepEqual(assembleSemanticBooleanExpression({ coordination: 'AMBIGUOUS_NEGATIVE_OR', predicates: [warranty, noWarranty] }), {
     outcome: 'CLARIFY', reasonCode: 'AMBIGUOUS_NEGATIVE_COORDINATION',
   });
   assert.deepEqual(assembleSemanticBooleanExpression({ coordination: 'AND', predicates: [warranty, warranty] }), {
