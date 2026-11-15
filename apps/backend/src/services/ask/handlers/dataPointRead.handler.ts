@@ -21,6 +21,7 @@ import { verifySemanticReadReceiptEntailment } from '../semantic/semanticReceipt
 import { humanizePresentationToken } from '../semantic/phase1/presentationHumanizer';
 import { parseDeterministicSemanticRequest } from '../semantic/deterministicSemanticParser';
 import { executePhase2aOnProperty } from '../semantic/phase2a/phase2aSliceExecutor';
+import { parseCrossDomainSemanticRequest } from '../semantic/waves/crossDomainPlanBuilder';
 
 const ENTITY_COPY: Record<string, { plural: string; singular: string; collection: string; record: string; none?: string }> = {
   InventoryItem: { plural: 'items', singular: 'inventory', collection: 'inventory', record: 'Home inventory record' },
@@ -319,6 +320,23 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
         rawText: message,
       });
       return phase2aExecution.operationResult;
+    }
+    const crossDomainParsed = parseCrossDomainSemanticRequest(message);
+    if (crossDomainParsed.clarification) {
+      return notice(
+        crossDomainParsed.clarification.reasonCode,
+        'cross-domain-clarification-required',
+        'Please clarify what you mean',
+        `${crossDomainParsed.clarification.question} (${crossDomainParsed.clarification.options.join(' vs ')})`,
+      );
+    }
+    if (crossDomainParsed.plan.outcome === 'BOUNDARY') {
+      return notice(
+        'SAFETY_BOUNDARY_TRIGGERED',
+        'cross-domain-safety-boundary',
+        'Safety warning triggered',
+        'For potential emergency symptoms (gas leak, carbon monoxide, fire, or active flooding), seek immediate emergency assistance.',
+      );
     }
     const shapePlan = planShape789(message);
     if (shapePlan) {

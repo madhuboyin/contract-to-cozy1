@@ -15,17 +15,30 @@ const RankedCandidateSchema = z.object({
 }).strict();
 
 export type SemanticWhereExpression =
-  | { kind: 'PREDICATE'; predicateId: string; relationPathId: string; targetRecordId?: string | null }
+  | {
+      kind: 'PREDICATE';
+      predicateId: string;
+      relationPathId: string;
+      targetRecordId?: string | null;
+      targetCategorySet?: string[];
+      enumStatus?: string;
+    }
   | { kind: 'AND' | 'OR'; operands: SemanticWhereExpression[] }
   | { kind: 'NOT'; operand: SemanticWhereExpression };
 
 export type SemanticTimeConstraint =
   | { kind: 'DUE_STATUS'; status: 'DUE' | 'OVERDUE' }
-  | { kind: 'EXACT_DATE'; isoDate: string };
+  | { kind: 'EXACT_DATE'; isoDate: string }
+  | { kind: 'CALENDAR_PERIOD'; unit: 'WEEK' | 'MONTH' | 'YEAR'; offset: -1 | 0 | 1 }
+  | { kind: 'COMPARE_YEARS'; baselineOffset: -1; targetOffset: 0 }
+  | { kind: 'BEFORE_CLOSING' };
 
 export const SemanticTimeConstraintSchema: z.ZodType<SemanticTimeConstraint> = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('DUE_STATUS'), status: z.enum(['DUE', 'OVERDUE']) }).strict(),
   z.object({ kind: z.literal('EXACT_DATE'), isoDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).strict(),
+  z.object({ kind: z.literal('CALENDAR_PERIOD'), unit: z.enum(['WEEK', 'MONTH', 'YEAR']), offset: z.union([z.literal(-1), z.literal(0), z.literal(1)]) }).strict(),
+  z.object({ kind: z.literal('COMPARE_YEARS'), baselineOffset: z.literal(-1), targetOffset: z.literal(0) }).strict(),
+  z.object({ kind: z.literal('BEFORE_CLOSING') }).strict(),
 ]);
 
 const RegisteredPredicateExpressionSchema = z.object({
@@ -33,6 +46,8 @@ const RegisteredPredicateExpressionSchema = z.object({
   predicateId: z.string().min(1),
   relationPathId: z.string().min(1),
   targetRecordId: z.string().min(1).nullable().optional(),
+  targetCategorySet: z.array(z.string().min(1)).min(1).optional(),
+  enumStatus: z.string().min(1).optional(),
 }).strict().superRefine((predicate, context) => {
   if (!findSemanticPredicateRegistration(predicate.predicateId, predicate.relationPathId)) {
     context.addIssue({ code: z.ZodIssueCode.custom, message: 'predicate and relation path must be registered together' });

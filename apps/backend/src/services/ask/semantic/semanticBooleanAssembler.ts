@@ -27,7 +27,7 @@ export function assembleSemanticBooleanExpression(input: {
   const expressions = parsed.map((result) => result.data as SemanticWhereExpression);
   const predicateAtoms = expressions.filter((expr): expr is PredicateExpression => expr.kind === 'PREDICATE');
   const identities = predicateAtoms.map(
-    (predicate) => `${predicate.predicateId}:${predicate.relationPathId}:${predicate.targetRecordId ?? ''}`
+    (predicate) => `${predicate.predicateId}:${predicate.relationPathId}:${predicate.targetRecordId ?? ''}:${(predicate.targetCategorySet ?? []).join(',')}:${predicate.enumStatus ?? ''}`
   );
   if (new Set(identities).size !== identities.length) return { outcome: 'INVALID', reasonCode: 'DUPLICATE_PREDICATE' };
 
