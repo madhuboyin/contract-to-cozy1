@@ -18,6 +18,9 @@ import { ASK_ARTIFACT_TYPE_REGISTRY, type AskArtifactFreshness, type AskArtifact
 import { ASK_SAVED_MAX_LIMIT, type AskSavedArtifact, type AskSavedPage } from '../askSaved.contract';
 import { humanDate } from '../askFormatting';
 import { SAVED_ARCHIVE_ACTION_IDS, SAVED_ARTIFACT_ENTITY_TYPE, savedArchiveMessage } from '../support/workSavedCommands';
+import { savedResultsGrammarAgreement } from '../semantic/legacyGrammarAgreement';
+import { buildSemanticReadReceipt } from '../semantic/semanticExecutionReceipt';
+import { verifySemanticReadReceiptEntailment } from '../semantic/semanticReceiptEntailment';
 
 export const SAVED_RESULTS_PAGE_SIZE = 10;
 
@@ -219,7 +222,47 @@ export function savedResultsFromPage(input: { page: AskSavedPage; state: SavedRe
     });
   }
   blocks.push(BOUNDARY);
-  return { status: partial ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: partial ? 'SAVED_PARTIAL' : undefined, parameters: { viewState }, blocks, suggestions: [] };
+  const semanticExecutionReceipt = buildSemanticReadReceipt({
+    facetId: 'saved-results-read',
+    entityId: 'entity.saved_result',
+    projection: 'LIST',
+    predicateIds: ['predicate.saved_result.all'],
+    resolvedRecordIds: rows.map((row) => row.artifactKey),
+    confirmedCount: rows.length,
+    unknownCount: gaps.length,
+    displayedCount: rows.length,
+    propertyId: 'property',
+    role: 'VIEWER',
+    sourceType: 'SavedResult',
+    answerVariantId: 'saved-results-summary',
+  });
+  const result: AskOperationResult = {
+    status: partial ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: partial ? 'SAVED_PARTIAL' : undefined,
+    parameters: { viewState, semanticExecutionReceipt },
+    blocks,
+    suggestions: [],
+  };
+  const entailment = verifySemanticReadReceiptEntailment(result);
+  if (entailment.outcome === 'FAIL') {
+    return {
+      status: 'READY_WITH_LIMITATIONS',
+      reasonCode: 'SAVED_RECEIPT_ENTAILMENT_FAILED',
+      parameters: { viewState },
+      blocks: [
+        {
+          type: 'EMPTY_STATE',
+          id: 'saved-results-entailment-failed',
+          title: 'Saved results could not be verified',
+          body: 'I could not verify the saved-results receipt against the executed query.',
+          actions: [],
+        },
+        BOUNDARY,
+      ],
+      suggestions: [],
+    };
+  }
+  return result;
 }
 
 /** The prior view only when the source execution really was a Saved lookup (another domain's view state is never continued). */
@@ -231,7 +274,27 @@ async function loadSavedViewState(sourceExecutionId: string | null | undefined, 
 
 registerCapabilityHandler('saved.results', async (envelope) => {
   const prior = await loadSavedViewState(envelope.launchContext?.sourceExecutionId, envelope.userId);
-  const { state } = resolveSavedState(envelope.message, prior);
+  const { state, refinement } = resolveSavedState(envelope.message, prior);
+  if (!prior && !refinement && !state.type && !state.freshness && !state.search && !state.archived) {
+    const agreement = savedResultsGrammarAgreement(envelope.message, 'LIST');
+    if (agreement.outcome !== 'AGREE') {
+      return {
+        status: 'READY_WITH_LIMITATIONS',
+        reasonCode: 'SAVED_SEMANTIC_AGREEMENT_REQUIRED',
+        blocks: [
+          {
+            type: 'EMPTY_STATE',
+            id: 'saved-results-semantic-agreement-required',
+            title: 'I need a clearer saved-results question',
+            body: 'I could not verify the saved-results request against the typed grammar, so I did not run this read.',
+            actions: [],
+          },
+          BOUNDARY,
+        ],
+        suggestions: [],
+      };
+    }
+  }
   try {
     const page = await getAskSavedPage(envelope.userId, envelope.propertyId!, { archived: state.archived, artifactType: state.type, freshness: state.freshness, limit: state.limit, search: state.search });
     return savedResultsFromPage({ page, state, viewState: buildSavedViewState(prior, state) });

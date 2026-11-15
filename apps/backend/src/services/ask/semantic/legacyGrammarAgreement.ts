@@ -85,3 +85,48 @@ export function verifyLegacyCandidateGrammarAgreement(
 
   return { outcome: 'AGREE', reasonCode: 'LEGACY_AND_TYPED_GRAMMAR_AGREE', plan, facet };
 }
+
+export const PRISMA_ENTITY_TO_PHASE1_SUBJECT: Readonly<Record<string, string>> = Object.freeze({
+  Property: 'entity.property',
+  InventoryRoom: 'entity.inventory_room',
+  InventoryItem: 'entity.inventory_item',
+  PropertyMaintenanceTask: 'entity.maintenance_task',
+  Warranty: 'entity.warranty',
+  InsurancePolicy: 'entity.insurance_policy',
+  PropertyTaxBillRecord: 'entity.tax_bill',
+  HomeReserveFund: 'entity.tax_bill',
+  Document: 'entity.document',
+  HomeEvent: 'entity.home_event',
+  HomeBuyerTask: 'entity.buyer_task',
+});
+
+export function dataPointReadGrammarAgreement(
+  message: string,
+  spec: {
+    readonly prismaEntity: string;
+    readonly projection: 'DETAIL' | 'LIST' | 'COUNT' | 'EXISTS';
+    readonly polarity?: 'POSITIVE' | 'NEGATIVE';
+  },
+): LegacyGrammarAgreement | null {
+  const subjectEntityId = PRISMA_ENTITY_TO_PHASE1_SUBJECT[spec.prismaEntity];
+  if (!subjectEntityId) return null;
+  return verifyLegacyCandidateGrammarAgreement(message, {
+    requestClass: 'DATA_QUERY',
+    subjectEntityId,
+    polarity: spec.polarity ?? 'POSITIVE',
+    projection: spec.projection,
+  });
+}
+
+export function savedResultsGrammarAgreement(
+  message: string,
+  projection: 'LIST' | 'COUNT' = 'LIST',
+): LegacyGrammarAgreement {
+  return verifyLegacyCandidateGrammarAgreement(message, {
+    requestClass: 'CAPABILITY',
+    subjectEntityId: 'entity.saved_result',
+    jobMatch: 'job.saved_results.lookup',
+    polarity: 'POSITIVE',
+    projection,
+  });
+}

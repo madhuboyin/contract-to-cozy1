@@ -435,7 +435,8 @@ async function updateInventoryItemCoverageEvidence(
     const warrantyId = coverageChoice.slice('WARRANTY:'.length);
     const warranty = await tx.warranty.findFirst({ where: { id: warrantyId, propertyId }, select: { id: true } });
     if (!warranty) throw new Error('The selected warranty does not belong to this property.');
-    await tx.inventoryItem.update({ where: { id: item.id }, data: { warrantyId: warranty.id, coverageEvidenceStatus: 'UNKNOWN' } });
+    await tx.warranty.update({ where: { id: warranty.id }, data: { inventoryItemId: item.id } });
+    await tx.inventoryItem.update({ where: { id: item.id }, data: { coverageEvidenceStatus: 'UNKNOWN' } });
   } else if (coverageChoice === 'ADD_INSURANCE') {
     const selection = await createInsurancePolicy(tx, propertyId, {
       carrierName: values.carrierName,
@@ -453,7 +454,8 @@ async function updateInventoryItemCoverageEvidence(
       startDate: values.warrantyStartDate,
       expiryDate: values.warrantyExpiryDate,
     });
-    await tx.inventoryItem.update({ where: { id: item.id }, data: { warrantyId: selection.entityId, coverageEvidenceStatus: 'UNKNOWN' } });
+    await tx.warranty.update({ where: { id: selection.entityId }, data: { inventoryItemId: item.id } });
+    await tx.inventoryItem.update({ where: { id: item.id }, data: { coverageEvidenceStatus: 'UNKNOWN' } });
   } else {
     throw new Error('Choose a valid coverage option.');
   }

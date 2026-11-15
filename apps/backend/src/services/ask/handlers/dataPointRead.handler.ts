@@ -15,8 +15,9 @@ import { safeTimezone } from '../support/propertyContext';
 import { runDataPointQuery } from '../dataPoint/dataPointQueryRunner';
 import { applyLaunchHints } from '../dataPoint/dataPointLaunchHints';
 import { planShape789, runShape789, shapePointIds, type Shape789Plan } from '../dataPoint/dataPointShapes789';
-import { warrantyShapeGrammarAgreement, type LegacyGrammarAgreement } from '../semantic/legacyGrammarAgreement';
+import { dataPointReadGrammarAgreement, warrantyShapeGrammarAgreement, type LegacyGrammarAgreement } from '../semantic/legacyGrammarAgreement';
 import { ASK_SEMANTIC_RECEIPT_VERSION, buildSemanticReadReceipt, type SemanticReadReceipt } from '../semantic/semanticExecutionReceipt';
+import { verifySemanticReadReceiptEntailment } from '../semantic/semanticReceiptEntailment';
 import { humanizePresentationToken } from '../semantic/phase1/presentationHumanizer';
 
 const ENTITY_COPY: Record<string, { plural: string; singular: string; collection: string; record: string; none?: string }> = {
@@ -132,13 +133,14 @@ async function dataPointQueryResult(propertyId: string, role: string, plan: Quer
   }
   const sources = plan.shape === 'AGGREGATE' || !run.rows.length ? [{ ...sourceRef('Property', propertyId), ...minRole }] : run.rows.slice(0, 10).map((r) => ({ ...sourceRef(t.entity as CompositeSourceType, r.id), ...minRole }));
   const asOf = new Date().toISOString();
+  const resolvedCount = plan.shape === 'AGGREGATE' ? run.total : run.rows.length;
   const queryReceipt = buildSemanticReadReceipt({
     facetId: `query-${t.id}-${plan.shape.toLowerCase()}`,
     entityId: `entity.${t.id}`,
     projection: plan.shape === 'AGGREGATE' ? (plan.aggregate?.fn === 'COUNT' ? 'COUNT' : 'AGGREGATE') : 'LIST',
     predicateIds: plan.predicates.length ? plan.predicates.map((p) => `predicate.${t.id}.${p.field}`) : [`predicate.${t.id}.all`],
     resolvedRecordIds: plan.shape === 'AGGREGATE' ? Array.from({ length: run.total }, (_, idx) => `${t.id}-${idx + 1}`) : run.rows.map((r) => r.id),
-    confirmedCount: run.total,
+    confirmedCount: resolvedCount,
     unknownCount: run.unrecorded,
     displayedCount: plan.shape === 'AGGREGATE' ? run.total : Math.min(run.rows.length, 10),
     propertyId,
@@ -147,7 +149,7 @@ async function dataPointQueryResult(propertyId: string, role: string, plan: Quer
     observedAt: asOf,
     answerVariantId: 'data-point-query-summary',
   });
-  return {
+  const queryResult: AskOperationResult = {
     status: limited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: limited ? 'DATA_POINT_QUERY_PARTIAL' : undefined,
     // A count, total, ranking or filter changes when ANY record is added, removed, edited or stops matching, which per-row sources cannot detect. It is therefore a snapshot as of `asOf`, and is NOT composable: a composite
     // never reuses it (describeSources returns null for it); asking again re-runs the plan.
@@ -158,6 +160,11 @@ async function dataPointQueryResult(propertyId: string, role: string, plan: Quer
     ] as AskPresentationBlock[],
     suggestions: [],
   };
+  const queryEntailment = verifySemanticReadReceiptEntailment(queryResult);
+  if (queryEntailment.outcome === 'FAIL') {
+    return notice('DATA_POINT_RECEIPT_ENTAILMENT_FAILED', 'data-point-receipt-entailment-failed', 'I could not verify that answer', 'The read receipt failed structural entailment verification.');
+  }
+  return queryResult;
 }
 
 
@@ -310,9 +317,30 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
     if (facets.length >= 2) return mergeFacetResults(await Promise.all(facets.map((facet) => dataPointReadResult(userId, propertyId, message, facet))));
   }
   if (queryOutcome.kind === 'CLARIFY') return notice(queryOutcome.reasonCode, 'data-point-query-clarify', queryOutcome.title, queryOutcome.body);
-  if (queryOutcome.kind === 'PLAN') return dataPointQueryResult(propertyId, role, queryOutcome.plan);
+  if (queryOutcome.kind === 'PLAN') {
+    if (!forcedPoint) {
+      const projection = queryOutcome.plan.shape === 'AGGREGATE' && queryOutcome.plan.aggregate?.fn === 'COUNT' ? 'COUNT' : 'LIST';
+      const agreement = dataPointReadGrammarAgreement(message, {
+        prismaEntity: queryOutcome.plan.template.entity,
+        projection,
+      });
+      if (agreement && agreement.plan.outcome === 'MATCH' && agreement.outcome !== 'AGREE') {
+        return notice('DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED', 'data-point-semantic-agreement-required', 'I need a clearer question', 'I could not verify the target entity and projection independently, so I did not run this read.');
+      }
+    }
+    return dataPointQueryResult(propertyId, role, queryOutcome.plan);
+  }
   const point = forcedPoint ?? resolveDataPoint(message);
   if (!point) return notice('DATA_POINT_NOT_IDENTIFIED', 'data-point-unidentified', 'Which detail do you mean?', 'Tell me the detail and the item, for example “the serial number of my refrigerator” or “when my furnace was installed”.');
+  if (!forcedPoint) {
+    const agreement = dataPointReadGrammarAgreement(message, {
+      prismaEntity: point.entity,
+      projection: 'DETAIL',
+    });
+    if (agreement && agreement.plan.outcome === 'MATCH' && agreement.outcome !== 'AGREE') {
+      return notice('DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED', 'data-point-semantic-agreement-required', 'I need a clearer question', 'I could not verify the target entity and detail projection independently, so I did not run this read.');
+    }
+  }
   if (!roleMayRead(role, point)) {
     const copy = audienceFloorCopy(point.audience);
     return notice('DATA_POINT_RESTRICTED', 'data-point-restricted', copy.title, `${point.label} is only shown to ${copy.who}. Ask the home’s owner if you need it.`);
@@ -362,7 +390,7 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
     sourceType: readPoint.entity,
     answerVariantId: 'data-point-summary',
   });
-  return {
+  const singlePointResult: AskOperationResult = {
     status: missing > 0 || limits.length ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: missing > 0 ? 'DATA_POINT_PARTIAL' : limits.length ? 'DATA_POINT_LIMITED_PROVENANCE' : undefined,
     // `dataPointRead` names the reviewed data point(s) whose VALUE this answer states, so the delivery gate can check the answer against the question without a text-similarity guess.
     parameters: { dataPointRead: { pointIds: [readPoint.id] }, semanticExecutionReceipt: singlePointReceipt, sources: present.map((r) => ({ ...sourceRef((r.sourceType ?? readPoint.entity) as CompositeSourceType, r.id), ...(readPoint.audience !== 'VIEWER' ? { minRole: readPoint.audience } : {}) })) },
@@ -372,6 +400,11 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
     ] as AskPresentationBlock[],
     suggestions: [],
   };
+  const singlePointEntailment = verifySemanticReadReceiptEntailment(singlePointResult);
+  if (singlePointEntailment.outcome === 'FAIL') {
+    return notice('DATA_POINT_RECEIPT_ENTAILMENT_FAILED', 'data-point-receipt-entailment-failed', 'I could not verify that answer', 'The single-point read receipt failed structural entailment verification.');
+  }
+  return singlePointResult;
 }
 
 /** The data-point read capability, exported so it can be exercised directly. */

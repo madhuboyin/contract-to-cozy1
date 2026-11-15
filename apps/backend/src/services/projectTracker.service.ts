@@ -2797,7 +2797,6 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
             serialNumber: data.serialNumber,
             serialNo: data.serialNumber,
             replacementCostCents: data.actualCostCents,
-            warrantyId: warrantyId ?? undefined,
             isVerified: true,
             verificationSource: 'PROJECT_COMPLETION',
           },

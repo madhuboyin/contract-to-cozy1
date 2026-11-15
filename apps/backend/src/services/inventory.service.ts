@@ -27,6 +27,7 @@ import { emitPropertyChangeWithTransaction } from '../propertyChanges/propertyCh
 import { isWaterHeaterInventoryName } from './repairReplaceEligibility';
 import type { HouseholdRole } from '@prisma/client';
 import { entityIdsWithLinkedRecords } from './entityLinkedRecords.service';
+import { assertValidTransitionalWarrantyLinkWrite } from './ask/semantic/transitionalWarrantyRead';
 
 function normalize(v: any) {
   return String(v ?? '').trim().toLowerCase();
@@ -412,6 +413,15 @@ export class InventoryService {
     // CREATE THE ITEM
     // ═══════════════════════════════════════════════════════════════════════════
   
+    if (data.warrantyId) {
+      assertValidTransitionalWarrantyLinkWrite({
+        targetModel: 'InventoryItem',
+        targetField: 'warrantyId',
+        inventoryItemId: 'new',
+        warrantyId: data.warrantyId,
+      });
+    }
+
     const changedAt = new Date();
     const sourceRevision = `created:${crypto.randomUUID()}`;
     const created = await prisma.$transaction(async (tx) => {
@@ -425,7 +435,7 @@ export class InventoryService {
           verificationSource: 'USER_REPORTED',
 
           roomId: data.roomId || null,
-          warrantyId: data.warrantyId || null,
+          warrantyId: null,
           insurancePolicyId: data.insurancePolicyId || null,
           assetType: data.assetType || null,
           efficiencyRating: data.efficiencyRating || null,
@@ -597,6 +607,14 @@ export class InventoryService {
     }
     // Validate relations
     if ('roomId' in patch) await this.assertRoomBelongs(propertyId, patch.roomId);
+    if ('warrantyId' in patch && patch.warrantyId) {
+      assertValidTransitionalWarrantyLinkWrite({
+        targetModel: 'InventoryItem',
+        targetField: 'warrantyId',
+        inventoryItemId: itemId,
+        warrantyId: patch.warrantyId,
+      });
+    }
     if ('warrantyId' in patch) await this.assertWarrantyBelongs(propertyId, patch.warrantyId);
     if ('insurancePolicyId' in patch) await this.assertInsuranceBelongs(propertyId, patch.insurancePolicyId);
   

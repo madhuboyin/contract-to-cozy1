@@ -1347,6 +1347,15 @@ export const ASK_RELATIONSHIP_STORAGE_ACCESS_SITES: readonly RelationshipStorage
     contradictionOrDriftNote: 'Governed catalogue/semantic/authorization contract referencing [HomeBuyerTask] for relation.buyer_checklist.buyer_task.',
   },
   {
+    siteId: 'rel_site.services_ask_semantic_legacygrammaragreement__buyer_checklist_buyer_task',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/ask/semantic/legacyGrammarAgreement.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Governed catalogue/semantic/authorization contract referencing [HomeBuyerTask] for relation.buyer_checklist.buyer_task.',
+  },
+  {
     siteId: 'rel_site.services_ask_semantic_phase1_phase1familymanifest__property_record_record_version',
     semanticRelationId: 'relation.property_record.record_version',
     relativeFilePath: 'src/services/ask/semantic/phase1/phase1FamilyManifest.ts',

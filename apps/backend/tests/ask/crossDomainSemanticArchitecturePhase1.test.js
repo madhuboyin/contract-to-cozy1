@@ -1,3 +1,6 @@
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 require('ts-node/register/transpile-only');
@@ -5,7 +8,12 @@ require('ts-node/register/transpile-only');
 const { SemanticRequestPlanSchema, SemanticWhereExpressionSchema } = require('../../src/services/ask/semantic/semanticRequestPlan.ts');
 const { ASK_SHARED_SEMANTIC_LEXICON, generateSharedSemanticLexicon, verifyProtectionLexemeSeparation } = require('../../src/services/ask/semantic/sharedSemanticLexicon.ts');
 const { parseDeterministicSemanticRequest } = require('../../src/services/ask/semantic/deterministicSemanticParser.ts');
-const { warrantyShapeGrammarAgreement, verifyLegacyCandidateGrammarAgreement } = require('../../src/services/ask/semantic/legacyGrammarAgreement.ts');
+const {
+  warrantyShapeGrammarAgreement,
+  dataPointReadGrammarAgreement,
+  savedResultsGrammarAgreement,
+  verifyLegacyCandidateGrammarAgreement,
+} = require('../../src/services/ask/semantic/legacyGrammarAgreement.ts');
 const { SemanticReadReceiptSchema, buildSemanticReadReceipt } = require('../../src/services/ask/semantic/semanticExecutionReceipt.ts');
 const { verifySemanticReadReceiptEntailment } = require('../../src/services/ask/semantic/semanticReceiptEntailment.ts');
 const { resolvePropertyEntityReference } = require('../../src/services/ask/semantic/propertyEntityResolver.ts');
@@ -13,6 +21,8 @@ const { assembleSemanticBooleanExpression } = require('../../src/services/ask/se
 const { askTopicTokens, PROTECTION_TOPIC_SEPARATION_FAMILIES } = require('../../src/services/ask/askPromptMinimization.ts');
 const { extractSeparatedProtectionConcepts } = require('../../src/services/ask/askSemanticEmbedding.ts');
 const { canAnswerContractBypassRelevance, isSourceScanOnlyAnswerContract } = require('../../src/services/ask/answerContract/operationAnswerContract.ts');
+const { assertValidTransitionalWarrantyLinkWrite } = require('../../src/services/ask/semantic/transitionalWarrantyRead.ts');
+const { savedResultsFromPage } = require('../../src/services/ask/handlers/savedResults.handler.ts');
 const {
   PHASE1_SELECTED_BASIC_READ_FAMILIES,
   PHASE1_DEFERRED_FAMILIES,
@@ -22,6 +32,8 @@ const {
   humanizePresentationToken,
   humanizePresentationText,
   stripRetryFromDeterministicFailure,
+  verifyNoUnguardedLegacyWarrantyWrites,
+  verifyPhase1RuntimeWiring,
   verifyPhase1Invariants,
 } = require('../../src/services/ask/semantic/phase1/index.ts');
 
@@ -402,4 +414,118 @@ test('Phase 1 invariant verification passes with zero issues', () => {
   const check = verifyPhase1Invariants();
   assert.equal(check.valid, true);
   assert.deepEqual(check.issues, []);
+  assert.equal(check.summary.runtimeWiringVerified, true);
+  assert.equal(check.summary.legacyWarrantyWritesContained, true);
+  assert.equal(check.summary.warrantyCanonicalizationStatus, 'TRANSITIONAL_PENDING_22_1_OWNER_RULING');
+});
+
+test('Phase 1 runtime wiring covers all 13 selected families across dataPointRead and savedResults handlers', () => {
+  const wiring = verifyPhase1RuntimeWiring();
+  assert.equal(wiring.valid, true);
+  assert.deepEqual(wiring.issues, []);
+  assert.deepEqual(wiring.verifiedHandlerFiles.sort(), [
+    'src/services/ask/handlers/dataPointRead.handler.ts',
+    'src/services/ask/handlers/savedResults.handler.ts',
+  ]);
+});
+
+test('repository-wide legacy InventoryItem.warrantyId write containment passes on repo and catches unguarded writers', () => {
+  const repoCheck = verifyNoUnguardedLegacyWarrantyWrites();
+  assert.equal(repoCheck.valid, true);
+  assert.deepEqual(repoCheck.unguardedFiles, []);
+
+  assert.throws(
+    () => assertValidTransitionalWarrantyLinkWrite({
+      targetModel: 'InventoryItem',
+      targetField: 'warrantyId',
+      warrantyId: 'w-1',
+    }),
+    /AMBIGUOUS_LEGACY_INVENTORY_WARRANTY_ID_WRITE_PROHIBITED|Warranty\.inventoryItemId/i,
+  );
+
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'c2c-phase1-write-check-'));
+  try {
+    const srcServices = path.join(tmpRoot, 'src', 'services');
+    fs.mkdirSync(srcServices, { recursive: true });
+    fs.writeFileSync(
+      path.join(srcServices, 'badWriter.ts'),
+      `export async function link(tx: any) { return tx.inventoryItem.update({ where: { id: '1' }, data: { warrantyId: 'w-1' } }); }\n`,
+      'utf8',
+    );
+    const badCheck = verifyNoUnguardedLegacyWarrantyWrites(tmpRoot);
+    assert.equal(badCheck.valid, false);
+    assert.deepEqual(badCheck.unguardedFiles, ['src/services/badWriter.ts']);
+  } finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  }
+});
+
+test('dataPointReadGrammarAgreement and savedResultsGrammarAgreement gate runtime candidates against typed Phase 1 plans', () => {
+  const dpAgree = dataPointReadGrammarAgreement('list my maintenance tasks', {
+    prismaEntity: 'PropertyMaintenanceTask',
+    projection: 'LIST',
+  });
+  assert.equal(dpAgree.outcome, 'AGREE');
+
+  const dpDisagree = dataPointReadGrammarAgreement('list my maintenance tasks', {
+    prismaEntity: 'HomeEvent',
+    projection: 'LIST',
+  });
+  assert.equal(dpDisagree.outcome, 'DISAGREE');
+  assert.equal(dpDisagree.reasonCode, 'GRAMMAR_SUBJECT_MISMATCH');
+
+  const savedAgree = savedResultsGrammarAgreement('show my saved results', 'LIST');
+  assert.equal(savedAgree.outcome, 'AGREE');
+
+  const savedDisagree = savedResultsGrammarAgreement('show my saved results', 'COUNT');
+  assert.equal(savedDisagree.outcome, 'DISAGREE');
+});
+
+test('savedResultsFromPage emits a SemanticReadReceipt that passes verifySemanticReadReceiptEntailment', () => {
+  const result = savedResultsFromPage({
+    page: {
+      rows: [
+        {
+          artifactKey: 'DOCUMENT:doc-1',
+          type: 'PROPERTY_BRIEF',
+          typeLabel: 'Property brief',
+          title: '2026 Roof Report',
+          summary: 'Roof inspection summary.',
+          freshness: { state: 'CURRENT', reason: null },
+          archived: { byOwner: false, byYou: false },
+          version: { label: 'Current' },
+          visibility: { sensitivity: 'NORMAL' },
+          sourceAsOf: '2026-10-01T00:00:00.000Z',
+          sortAt: '2026-10-01T00:00:00.000Z',
+          reopen: null,
+          reopenUnavailableReason: null,
+        },
+      ],
+      types: [{ id: 'PROPERTY_BRIEF', label: 'Property brief', state: 'AVAILABLE', reason: null }],
+      partial: false,
+      totalScope: 'COMPLETE',
+      total: 1,
+      counts: { active: 1, archived: 0 },
+      filterOptions: { types: [], freshness: [] },
+      nextCursor: null,
+    },
+    state: {
+      archived: false,
+      freshness: null,
+      type: null,
+      search: null,
+      limit: 10,
+    },
+    viewState: {
+      domainScopePhrase: '',
+      statusFilter: 'ACTIVE',
+      roomScopePhrase: '',
+      dateScopePhrase: '10',
+    },
+  });
+
+  assert.ok(result.parameters?.semanticExecutionReceipt);
+  SemanticReadReceiptSchema.parse(result.parameters.semanticExecutionReceipt);
+  const verdict = verifySemanticReadReceiptEntailment(result);
+  assert.equal(verdict.outcome, 'PASS');
 });
