@@ -332,6 +332,49 @@ export function executePhase2aVerticalSlice(input: {
   });
 }
 
+function buildNonExecutableResult(input: {
+  readonly envelope: SemanticTextEnvelope;
+  readonly spanRoundTripOk: boolean;
+  readonly plan: SemanticRequestPlan;
+}): Phase2aSliceExecutionResult {
+  const { envelope, spanRoundTripOk, plan } = input;
+  const isBoundary = plan.outcome === 'BOUNDARY';
+  const operationResult: AskOperationResult = {
+    status: isBoundary ? 'NEEDS_CLARIFICATION' : 'OUT_OF_SCOPE',
+    reasonCode: isBoundary ? 'ASK_AMBIGUOUS_NEGATIVE_COORDINATION' : 'ASK_OUT_OF_SCOPE',
+    blocks: [],
+    suggestions: [],
+    parameters: { retryable: false, actions: [], operationId: 'INVENTORY_ITEMS_READ' },
+    confirmation: null,
+    clarification: isBoundary
+      ? {
+          version: 1,
+          question: 'Please clarify whether both conditions should be excluded ("neither ... nor") or at least one applies ("either ... or").',
+          options: [
+            { operationId: 'INVENTORY_ITEMS_READ', label: 'Neither warranty nor due maintenance' },
+            { operationId: 'INVENTORY_ITEMS_READ', label: 'Either warranty or due maintenance' },
+          ],
+          allowFreeText: false,
+          expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+        }
+      : null,
+  };
+  return {
+    status: isBoundary ? 'NEEDS_CLARIFICATION' : 'OUT_OF_SCOPE',
+    envelope,
+    spanRoundTripOk,
+    plan,
+    entityResolution: null,
+    receipt: null,
+    entailment: null,
+    presentationEquivalence: null,
+    operationResult,
+    redactedFields: [],
+    traversalDepthUsed: 0,
+    activeEntityIds: [],
+  };
+}
+
 function executeValidatedPhase2aPlan(input: {
   readonly rawText: string;
   readonly envelope: SemanticTextEnvelope;
@@ -354,42 +397,13 @@ function executeValidatedPhase2aPlan(input: {
     );
   }
 
-  if (plan.outcome !== 'MATCH' || plan.facets.length === 0) {
-    const isBoundary = plan.outcome === 'BOUNDARY';
-    const operationResult: AskOperationResult = {
-      status: isBoundary ? 'NEEDS_CLARIFICATION' : 'OUT_OF_SCOPE',
-      reasonCode: isBoundary ? 'ASK_AMBIGUOUS_NEGATIVE_COORDINATION' : 'ASK_OUT_OF_SCOPE',
-      blocks: [],
-      suggestions: [],
-      parameters: { retryable: false, actions: [], operationId: 'INVENTORY_ITEMS_READ' },
-      confirmation: null,
-      clarification: isBoundary
-        ? {
-            version: 1,
-            question: 'Please clarify whether both conditions should be excluded ("neither ... nor") or at least one applies ("either ... or").',
-            options: [
-              { operationId: 'INVENTORY_ITEMS_READ', label: 'Neither warranty nor due maintenance' },
-              { operationId: 'INVENTORY_ITEMS_READ', label: 'Either warranty or due maintenance' },
-            ],
-            allowFreeText: false,
-            expiresAt: new Date(Date.now() + 3600_000).toISOString(),
-          }
-        : null,
-    };
-    return {
-      status: isBoundary ? 'NEEDS_CLARIFICATION' : 'OUT_OF_SCOPE',
-      envelope,
-      spanRoundTripOk,
-      plan,
-      entityResolution: null,
-      receipt: null,
-      entailment: null,
-      presentationEquivalence: null,
-      operationResult,
-      redactedFields: [],
-      traversalDepthUsed: 0,
-      activeEntityIds: [],
-    };
+  if (
+    plan.outcome !== 'MATCH'
+    || plan.facets.length === 0
+    || !plan.facets[0].confidenceSignals.grammarComplete
+    || plan.unresolvedSpans.length > 0
+  ) {
+    return buildNonExecutableResult({ envelope, spanRoundTripOk, plan });
   }
 
   const facet = plan.facets[0];
@@ -848,6 +862,23 @@ export function applyPhase2aFollowUpRefinement(input: {
   const baseIds = priorResult.activeEntityIds;
   const dynamicEntities = buildDynamicPlaceholderCandidates(snapshot, auth);
   const delta = extractSemanticFollowUpDelta(followUpText, { dynamicEntities });
+  if (delta.outcome !== 'APPLICABLE') {
+    const followUpEnvelope = buildSemanticTextEnvelope(followUpText, { dynamicEntities });
+    const rejectedPlan = SemanticRequestPlanSchema.parse({
+      ...priorResult.plan,
+      outcome: delta.outcome === 'INSUFFICIENT_TEXT' ? 'INSUFFICIENT_TEXT' : 'NONE_FITS',
+      rawText: followUpText,
+      normalizedText: followUpEnvelope.normalizedText,
+      minimizedText: followUpEnvelope.minimizedText,
+      facets: [],
+      unresolvedSpans: [...delta.unresolvedSpans],
+    });
+    return buildNonExecutableResult({
+      envelope: followUpEnvelope,
+      spanRoundTripOk: verifyPlaceholderSpanMapRoundTrip(followUpEnvelope).ok,
+      plan: rejectedPlan,
+    });
+  }
   const priorFacet = priorResult.plan.facets[0];
   if (!priorFacet) {
     return executePhase2aVerticalSlice({

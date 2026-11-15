@@ -395,6 +395,36 @@ test('Phase 2A protects dynamic property entities, hides restricted items as mis
   });
   assert.equal(unresolvedNegResult.status, 'OUT_OF_SCOPE');
   assert.deepEqual(unresolvedNegResult.activeEntityIds, []);
+
+  // 9. Capability, command, ordinary maintenance read, and follow-up fail closed on unresolved spans
+  for (const unresolvedPrompt of [
+    'should I repair or replace my furnace florb',
+    'schedule maintenance for my furnace on 2026-12-01 florb',
+    'which maintenance tasks are not overdue florb',
+  ]) {
+    const res = executePhase2aVerticalSlice({
+      rawText: unresolvedPrompt,
+      snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+      auth: PHASE2A_OWNER_AUTH,
+    });
+    assert.equal(res.status, 'OUT_OF_SCOPE', `expected OUT_OF_SCOPE for: ${unresolvedPrompt}`);
+    assert.equal(res.plan.outcome, 'NONE_FITS');
+    assert.ok(res.plan.unresolvedSpans.some((span) => span.text.toLowerCase() === 'florb'));
+    assert.equal(res.operationResult.confirmation, null);
+  }
+
+  for (const unresolvedFollowUp of ['florb', 'how many florb']) {
+    const followUpRes = applyPhase2aFollowUpRefinement({
+      priorResult: arentResult,
+      followUpText: unresolvedFollowUp,
+      snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+      auth: PHASE2A_OWNER_AUTH,
+    });
+    assert.equal(followUpRes.status, 'OUT_OF_SCOPE', `expected OUT_OF_SCOPE for follow-up: ${unresolvedFollowUp}`);
+    assert.equal(followUpRes.plan.outcome, 'NONE_FITS');
+    assert.deepEqual(followUpRes.activeEntityIds, []);
+    assert.ok(followUpRes.plan.unresolvedSpans.some((span) => span.text.toLowerCase() === 'florb'));
+  }
 });
 
 test('Phase 2A maintenance preview includes matching confirmationVersion and confirmationExpiresAt in parameters', () => {

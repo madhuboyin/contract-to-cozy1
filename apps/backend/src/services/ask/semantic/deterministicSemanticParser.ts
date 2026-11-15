@@ -58,7 +58,7 @@ interface Annotation extends SemanticSourceSpan {
   lexeme: GeneratedSemanticLexeme;
 }
 const STOP_WORDS = new Set([
-  'a', 'all', 'an', 'any', 'are', 'did', 'do', 'does', 'for', 'in', 'is', 'me', 'my',
+  'a', 'all', 'an', 'any', 'are', 'did', 'do', 'does', 'for', 'i', 'in', 'is', 'me', 'my',
   'of', 'on', 'our', 'please', 'provide', 'that', 'the', 'these', 'this', 'those', 'to', 'was', 'were', 'what', 'when', 'which',
 ]);
 const MIN_FUZZY_TOKEN_LENGTH = 5;
@@ -255,6 +255,9 @@ export function parseDeterministicSemanticRequest(
   // 0A. Phase 2A analysis capability: replacement guidance
   const replacementGuidanceJob = annotations.find((annotation) => annotation.lexeme.semanticId === 'job.inventory.replacement_guidance');
   if (replacementGuidanceJob) {
+    if (unresolvedSpans.length > 0) {
+      return SemanticRequestPlanSchema.parse({ ...base, outcome: 'NONE_FITS', facets: [], unresolvedSpans });
+    }
     return SemanticRequestPlanSchema.parse({
       ...base,
       outcome: 'MATCH',
@@ -280,7 +283,7 @@ export function parseDeterministicSemanticRequest(
           projectionNamed: Boolean(projectionAnnotation),
           polarityNamed: Boolean(polarityAnnotation),
         },
-        confidenceSignals: { grammarComplete: true, unresolvedSpanCount: unresolvedSpans.length },
+        confidenceSignals: { grammarComplete: unresolvedSpans.length === 0, unresolvedSpanCount: unresolvedSpans.length },
       }],
     });
   }
@@ -288,6 +291,9 @@ export function parseDeterministicSemanticRequest(
   // 0B. Phase 2A command preview: create / schedule maintenance task
   const createMaintenanceJob = annotations.find((annotation) => annotation.lexeme.semanticId === 'job.maintenance.create');
   if (createMaintenanceJob) {
+    if (unresolvedSpans.length > 0) {
+      return SemanticRequestPlanSchema.parse({ ...base, outcome: 'NONE_FITS', facets: [], unresolvedSpans });
+    }
     const dueDateMatch = rawText.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1] ?? null;
     const commandTime: SemanticTimeConstraint | null = dueDateMatch
       ? { kind: 'EXACT_DATE', isoDate: dueDateMatch }
@@ -317,7 +323,7 @@ export function parseDeterministicSemanticRequest(
           projectionNamed: Boolean(projectionAnnotation),
           polarityNamed: Boolean(polarityAnnotation),
         },
-        confidenceSignals: { grammarComplete: true, unresolvedSpanCount: unresolvedSpans.length },
+        confidenceSignals: { grammarComplete: unresolvedSpans.length === 0, unresolvedSpanCount: unresolvedSpans.length },
       }],
     });
   }
@@ -447,7 +453,7 @@ export function parseDeterministicSemanticRequest(
             projectionNamed: Boolean(projectionAnnotation),
             polarityNamed: Boolean(polarityAnnotation),
           },
-          confidenceSignals: { grammarComplete: true, unresolvedSpanCount: unresolvedSpans.length },
+          confidenceSignals: { grammarComplete: unresolvedSpans.length === 0, unresolvedSpanCount: unresolvedSpans.length },
         }],
       });
     }
@@ -582,6 +588,9 @@ export function parseDeterministicSemanticRequest(
     : fields.length > 0 && meta.defaultProjection === 'DETAIL' ? 'DETAIL' : meta.defaultProjection;
   const polarity = polarityAnnotation?.lexeme.semanticId === 'polarity.negative' ? 'NEGATIVE' : 'POSITIVE';
   const grammarComplete = unresolvedSpans.length === 0;
+  if (inferredEntityId === 'entity.maintenance_task' && !grammarComplete) {
+    return SemanticRequestPlanSchema.parse({ ...base, outcome: 'NONE_FITS', facets: [], unresolvedSpans });
+  }
   const maintenanceTime: SemanticTimeConstraint | null = inferredEntityId === 'entity.maintenance_task' && timeAnnotation
     ? {
         kind: 'DUE_STATUS',
@@ -620,6 +629,8 @@ export function parseDeterministicSemanticRequest(
 }
 
 export interface SemanticFollowUpDelta {
+  readonly outcome: 'APPLICABLE' | 'UNRESOLVED' | 'INSUFFICIENT_TEXT';
+  readonly unresolvedSpans: readonly SemanticSourceSpan[];
   readonly projection: 'EXISTS' | 'COUNT' | 'LIST' | 'DETAIL' | null;
   readonly polarity: 'POSITIVE' | 'NEGATIVE' | null;
   readonly time: SemanticTimeConstraint | null;
@@ -636,8 +647,29 @@ export function extractSemanticFollowUpDelta(
   followUpText: string,
   options?: { readonly dynamicEntities?: readonly DynamicPlaceholderEntityCandidate[] }
 ): SemanticFollowUpDelta {
-  const { tokens } = normalizedWithOffsets(followUpText);
+  const { normalized, tokens } = normalizedWithOffsets(followUpText);
+  if (!tokens.length) {
+    return {
+      outcome: 'INSUFFICIENT_TEXT',
+      unresolvedSpans: [],
+      projection: null,
+      polarity: null,
+      time: null,
+      relations: [],
+      where: null,
+    };
+  }
+  const envelope = buildSemanticTextEnvelope(followUpText, {
+    normalizedText: normalized,
+    dynamicEntities: options?.dynamicEntities,
+  });
+  const dynamicSpans: SemanticSourceSpan[] = envelope.spanMap.map((entry) => ({
+    start: entry.rawStart,
+    end: entry.rawEnd,
+    text: followUpText.slice(entry.rawStart, entry.rawEnd),
+  }));
   const annotations = annotate(followUpText, tokens);
+  const unresolvedSpans = unresolved(tokens, annotations, dynamicSpans);
   const projectionAnnotation = first(annotations, 'PROJECTION');
   const timeAnnotation = first(annotations, 'TIME');
   const polarityAnnotation = annotations.find((annotation) => annotation.lexeme.semanticId === 'polarity.negative')
@@ -715,5 +747,8 @@ export function extractSemanticFollowUpDelta(
     }
   }
 
-  return { projection, polarity, time, relations, where };
+  const hasAnySemanticChange = Boolean(projection || polarity || time || relations.length > 0 || where);
+  const outcome = unresolvedSpans.length > 0 || !hasAnySemanticChange ? 'UNRESOLVED' : 'APPLICABLE';
+
+  return { outcome, unresolvedSpans, projection, polarity, time, relations, where };
 }
