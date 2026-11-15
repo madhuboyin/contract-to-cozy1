@@ -7,6 +7,7 @@ const { ASK_SHARED_SEMANTIC_LEXICON, generateSharedSemanticLexicon } = require('
 const { parseDeterministicSemanticRequest } = require('../../src/services/ask/semantic/deterministicSemanticParser.ts');
 const { warrantyShapeGrammarAgreement } = require('../../src/services/ask/semantic/legacyGrammarAgreement.ts');
 const { SemanticReadReceiptSchema } = require('../../src/services/ask/semantic/semanticExecutionReceipt.ts');
+const { resolvePropertyEntityReference } = require('../../src/services/ask/semantic/propertyEntityResolver.ts');
 
 test('the generated shared lexicon is stable and keeps warranty separate from insurance and claims', () => {
   assert.deepEqual(generateSharedSemanticLexicon(), ASK_SHARED_SEMANTIC_LEXICON);
@@ -48,6 +49,22 @@ test('bounded typo tolerance resolves unique registry identities', () => {
   assert.equal(plan.facets[0].confidenceSignals.grammarComplete, true);
 });
 
+test('morphological normalization preserves relation meaning across tense and number', () => {
+  const pastNegative = parseDeterministicSemanticRequest('which appliances did not have warranties');
+  assert.equal(pastNegative.outcome, 'MATCH');
+  assert.equal(pastNegative.facets[0].polarity, 'NEGATIVE');
+  assert.equal(pastNegative.facets[0].relations[0].predicateId, 'predicate.inventory_item.has_no_warranty_record');
+  assert.deepEqual(pastNegative.unresolvedSpans, []);
+  assert.equal(pastNegative.facets[0].confidenceSignals.grammarComplete, true);
+
+  const pastPositive = parseDeterministicSemanticRequest('which appliance had warranty');
+  assert.equal(pastPositive.outcome, 'MATCH');
+  assert.equal(pastPositive.facets[0].polarity, 'POSITIVE');
+  assert.equal(pastPositive.facets[0].relations[0].predicateId, 'predicate.inventory_item.has_warranty_record');
+  assert.deepEqual(pastPositive.unresolvedSpans, []);
+  assert.equal(pastPositive.facets[0].confidenceSignals.grammarComplete, true);
+});
+
 test('typo tolerance does not guess short or distant registry terms', () => {
   const shortCollision = parseDeterministicSemanticRequest('which itms have no warranty');
   assert.equal(shortCollision.outcome, 'NONE_FITS');
@@ -75,4 +92,49 @@ test('legacy warranty reads execute only when the independently built grammar ag
 
 test('the minimal receipt rejects missing structural evidence', () => {
   assert.equal(SemanticReadReceiptSchema.safeParse({ schemaVersion: '1.0.0' }).success, false);
+});
+
+test('property-backed entity resolution returns one opaque authorised identity', () => {
+  const resolution = resolvePropertyEntityReference({
+    entityId: 'entity.inventory_item',
+    mention: '  KITCHEN-dishwasher ',
+    applicable: true,
+    candidates: [
+      { entityId: 'entity.inventory_item', recordId: 'item-1', safeDisplayLabel: 'Kitchen dishwasher', identityLabels: ['Kitchen Dishwasher'], authorization: 'AUTHORISED' },
+      { entityId: 'entity.inventory_item', recordId: 'item-2', safeDisplayLabel: 'Garage freezer', identityLabels: ['Garage freezer'], authorization: 'AUTHORISED' },
+      { entityId: 'entity.warranty', recordId: 'warranty-1', safeDisplayLabel: 'Kitchen dishwasher warranty', identityLabels: ['Kitchen Dishwasher'], authorization: 'AUTHORISED' },
+    ],
+  });
+  assert.deepEqual(resolution, { outcome: 'RESOLVED', entityId: 'entity.inventory_item', recordId: 'item-1', safeDisplayLabel: 'Kitchen dishwasher' });
+});
+
+test('property-backed entity resolution preserves ambiguity and does not disclose hidden records', () => {
+  const duplicateCandidates = [
+    { entityId: 'entity.inventory_item', recordId: 'item-1', safeDisplayLabel: 'Hall thermostat', identityLabels: ['Thermostat'], authorization: 'AUTHORISED' },
+    { entityId: 'entity.inventory_item', recordId: 'item-2', safeDisplayLabel: 'Bedroom thermostat', identityLabels: ['Thermostat'], authorization: 'AUTHORISED' },
+  ];
+  assert.deepEqual(resolvePropertyEntityReference({ entityId: 'entity.inventory_item', mention: 'thermostat', applicable: true, candidates: duplicateCandidates }), {
+    outcome: 'MULTIPLE_MATCHES',
+    entityId: 'entity.inventory_item',
+    candidates: [
+      { recordId: 'item-1', safeDisplayLabel: 'Hall thermostat' },
+      { recordId: 'item-2', safeDisplayLabel: 'Bedroom thermostat' },
+    ],
+  });
+
+  assert.deepEqual(resolvePropertyEntityReference({
+    entityId: 'entity.inventory_item',
+    mention: 'private safe',
+    applicable: true,
+    candidates: [{ entityId: 'entity.inventory_item', recordId: 'hidden-1', safeDisplayLabel: 'Private safe', identityLabels: ['Private safe'], authorization: 'UNAUTHORISED' }],
+  }), { outcome: 'UNAUTHORISED', entityId: 'entity.inventory_item' });
+});
+
+test('property-backed entity resolution distinguishes missing and not-applicable states', () => {
+  assert.deepEqual(resolvePropertyEntityReference({ entityId: 'entity.inventory_item', mention: 'attic fan', applicable: true, candidates: [] }), {
+    outcome: 'MISSING', entityId: 'entity.inventory_item',
+  });
+  assert.deepEqual(resolvePropertyEntityReference({ entityId: 'entity.inventory_item', mention: 'attic fan', applicable: false, candidates: [] }), {
+    outcome: 'NOT_APPLICABLE', entityId: 'entity.inventory_item',
+  });
 });

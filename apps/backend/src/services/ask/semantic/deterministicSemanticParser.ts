@@ -2,13 +2,32 @@ import { createHash } from 'crypto';
 import { ASK_SHARED_SEMANTIC_LEXICON, ASK_SHARED_LEXICON_VERSION, type GeneratedSemanticLexeme } from './sharedSemanticLexicon';
 import { ASK_SEMANTIC_PLAN_VERSION, SemanticRequestPlanSchema, type SemanticRequestPlan, type SemanticSourceSpan } from './semanticRequestPlan';
 
-export const ASK_DETERMINISTIC_SEMANTIC_PARSER_VERSION = 'typed-grammar-0.2.0' as const;
+export const ASK_DETERMINISTIC_SEMANTIC_PARSER_VERSION = 'typed-grammar-0.3.0' as const;
 
 interface Annotation extends SemanticSourceSpan {
   lexeme: GeneratedSemanticLexeme;
 }
 const STOP_WORDS = new Set(['a', 'all', 'any', 'are', 'of', 'please', 'provide', 'the', 'which']);
 const MIN_FUZZY_TOKEN_LENGTH = 5;
+const IRREGULAR_MORPHOLOGY = new Map<string, string>([
+  ['did', 'do'],
+  ['does', 'do'],
+  ['had', 'have'],
+  ['has', 'have'],
+  ['having', 'have'],
+]);
+
+function morphologicalKey(token: string): string {
+  const irregular = IRREGULAR_MORPHOLOGY.get(token);
+  if (irregular) return irregular;
+  if (token.length > 4 && token.endsWith('ies')) return `${token.slice(0, -3)}y`;
+  if (token.length > 4 && token.endsWith('s') && !token.endsWith('ss')) return token.slice(0, -1);
+  return token;
+}
+
+function tokensMatch(observed: string, registered: string): boolean {
+  return observed === registered || morphologicalKey(observed) === morphologicalKey(registered);
+}
 
 function boundedEditDistance(left: string, right: string, limit: number): number | null {
   if (Math.abs(left.length - right.length) > limit) return null;
@@ -48,7 +67,7 @@ function annotate(raw: string, tokens: readonly SemanticSourceSpan[]): Annotatio
   for (const lexeme of ASK_SHARED_SEMANTIC_LEXICON) {
     const phraseTokens = lexeme.phrase.split(' ');
     for (let index = 0; index <= normalizedTokens.length - phraseTokens.length; index += 1) {
-      if (!phraseTokens.every((token, offset) => normalizedTokens[index + offset] === token)) continue;
+      if (!phraseTokens.every((token, offset) => tokensMatch(normalizedTokens[index + offset], token))) continue;
       const occupied = occupiedByRole.get(lexeme.role) ?? new Set<number>();
       if (phraseTokens.some((_, offset) => occupied.has(index + offset))) continue;
       phraseTokens.forEach((_, offset) => occupied.add(index + offset));
