@@ -37,6 +37,27 @@ test('unconsumed meaning is surfaced and cannot be admitted as a complete gramma
   assert.equal(plan.facets[0].confidenceSignals.grammarComplete, false);
 });
 
+test('bounded typo tolerance resolves unique registry identities', () => {
+  const plan = parseDeterministicSemanticRequest('which apliances have no warrenty');
+  assert.equal(plan.outcome, 'MATCH');
+  assert.equal(plan.facets[0].subject.entityId, 'entity.inventory_item');
+  assert.equal(plan.facets[0].relations[0].semanticRelationId, 'relation.inventory_item.warranty');
+  assert.equal(plan.facets[0].polarity, 'NEGATIVE');
+  assert.equal(plan.facets[0].projection, 'LIST');
+  assert.deepEqual(plan.unresolvedSpans, []);
+  assert.equal(plan.facets[0].confidenceSignals.grammarComplete, true);
+});
+
+test('typo tolerance does not guess short or distant registry terms', () => {
+  const shortCollision = parseDeterministicSemanticRequest('which itms have no warranty');
+  assert.equal(shortCollision.outcome, 'NONE_FITS');
+  assert.deepEqual(shortCollision.unresolvedSpans.map((span) => span.text.toLowerCase()), ['itms']);
+
+  const distant = parseDeterministicSemanticRequest('which appliances have no guarantee');
+  assert.equal(distant.outcome, 'NONE_FITS');
+  assert.deepEqual(distant.unresolvedSpans.map((span) => span.text.toLowerCase()), ['guarantee']);
+});
+
 test('unsupported questions remain unmatched rather than selecting a nearby operation', () => {
   const plan = parseDeterministicSemanticRequest('what claims are still open?');
   assert.equal(plan.outcome, 'NONE_FITS');

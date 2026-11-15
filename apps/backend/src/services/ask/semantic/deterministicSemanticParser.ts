@@ -2,12 +2,35 @@ import { createHash } from 'crypto';
 import { ASK_SHARED_SEMANTIC_LEXICON, ASK_SHARED_LEXICON_VERSION, type GeneratedSemanticLexeme } from './sharedSemanticLexicon';
 import { ASK_SEMANTIC_PLAN_VERSION, SemanticRequestPlanSchema, type SemanticRequestPlan, type SemanticSourceSpan } from './semanticRequestPlan';
 
-export const ASK_DETERMINISTIC_SEMANTIC_PARSER_VERSION = 'typed-grammar-0.1.0' as const;
+export const ASK_DETERMINISTIC_SEMANTIC_PARSER_VERSION = 'typed-grammar-0.2.0' as const;
 
 interface Annotation extends SemanticSourceSpan {
   lexeme: GeneratedSemanticLexeme;
 }
 const STOP_WORDS = new Set(['a', 'all', 'any', 'are', 'of', 'please', 'provide', 'the', 'which']);
+const MIN_FUZZY_TOKEN_LENGTH = 5;
+
+function boundedEditDistance(left: string, right: string, limit: number): number | null {
+  if (Math.abs(left.length - right.length) > limit) return null;
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    const current = [leftIndex];
+    let rowMinimum = current[0];
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const substitutionCost = left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1;
+      const distance = Math.min(
+        previous[rightIndex] + 1,
+        current[rightIndex - 1] + 1,
+        previous[rightIndex - 1] + substitutionCost,
+      );
+      current.push(distance);
+      rowMinimum = Math.min(rowMinimum, distance);
+    }
+    if (rowMinimum > limit) return null;
+    previous = current;
+  }
+  return previous[right.length] <= limit ? previous[right.length] : null;
+}
 
 function normalizedWithOffsets(raw: string): { normalized: string; tokens: SemanticSourceSpan[] } {
   const tokens: SemanticSourceSpan[] = [];
@@ -33,6 +56,31 @@ function annotate(raw: string, tokens: readonly SemanticSourceSpan[]): Annotatio
       const start = tokens[index].start;
       const end = tokens[index + phraseTokens.length - 1].end;
       annotations.push({ start, end, text: raw.slice(start, end), lexeme });
+    }
+  }
+
+  // Fuzzy annotation is intentionally a fallback for a single registry token.
+  // Requiring a unique best semantic identity prevents a typo from silently
+  // selecting between two meanings that happen to be equally close.
+  for (let index = 0; index < normalizedTokens.length; index += 1) {
+    const observed = normalizedTokens[index];
+    if (observed.length < MIN_FUZZY_TOKEN_LENGTH) continue;
+    for (const role of ['ENTITY', 'RELATION', 'PROJECTION', 'POLARITY'] as const) {
+      const occupied = occupiedByRole.get(role) ?? new Set<number>();
+      if (occupied.has(index)) continue;
+      const candidates = ASK_SHARED_SEMANTIC_LEXICON.flatMap((lexeme) => {
+        if (lexeme.role !== role || lexeme.phrase.includes(' ') || lexeme.phrase.length < MIN_FUZZY_TOKEN_LENGTH) return [];
+        const distance = boundedEditDistance(observed, lexeme.phrase, 1);
+        return distance === null || distance === 0 ? [] : [{ lexeme, distance }];
+      });
+      if (!candidates.length) continue;
+      const bestDistance = Math.min(...candidates.map((candidate) => candidate.distance));
+      const best = candidates.filter((candidate) => candidate.distance === bestDistance);
+      if (new Set(best.map((candidate) => candidate.lexeme.semanticId)).size !== 1) continue;
+      occupied.add(index);
+      occupiedByRole.set(role, occupied);
+      const token = tokens[index];
+      annotations.push({ start: token.start, end: token.end, text: raw.slice(token.start, token.end), lexeme: best[0].lexeme });
     }
   }
   return annotations;
