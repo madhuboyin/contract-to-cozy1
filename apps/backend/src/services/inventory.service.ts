@@ -27,7 +27,6 @@ import { emitPropertyChangeWithTransaction } from '../propertyChanges/propertyCh
 import { isWaterHeaterInventoryName } from './repairReplaceEligibility';
 import type { HouseholdRole } from '@prisma/client';
 import { entityIdsWithLinkedRecords } from './entityLinkedRecords.service';
-import { assertValidTransitionalWarrantyLinkWrite } from './ask/semantic/transitionalWarrantyRead';
 
 function normalize(v: any) {
   return String(v ?? '').trim().toLowerCase();
@@ -298,6 +297,7 @@ export class InventoryService {
         include: {
           room: true,
           warranty: true,
+          linkedWarranties: { orderBy: { createdAt: 'desc' }, take: 1 },
           insurancePolicy: true,
           documents: { orderBy: { createdAt: 'desc' } },
         },
@@ -305,7 +305,8 @@ export class InventoryService {
       prisma.propertyResponsibility.findMany({ where: { propertyId }, select: { scope: true, party: true } }),
     ]);
     if (!item) throw new APIError('Inventory item not found', 404, 'ITEM_NOT_FOUND');
-    return { ...item, ...buildInventoryCoveragePresentation(item, responsibilities) };
+    const canonicalWarranty = item.linkedWarranties[0] ?? item.warranty;
+    return { ...item, itemWarrantyId: canonicalWarranty?.id ?? null, ...buildInventoryCoveragePresentation({ ...item, warranty: canonicalWarranty }, responsibilities) };
   }
   async listItems(propertyId: string, query: ListItemsQuery) {
     const where: any = { propertyId, ...visibleInventoryItemWhere() };
@@ -347,6 +348,7 @@ export class InventoryService {
         include: {
           room: true,
           warranty: true,
+          linkedWarranties: { orderBy: { createdAt: 'desc' }, take: 1 },
           insurancePolicy: true,
           documents: { orderBy: { createdAt: 'desc' } },
         },
@@ -354,7 +356,10 @@ export class InventoryService {
       }),
       prisma.propertyResponsibility.findMany({ where: { propertyId }, select: { scope: true, party: true } }),
     ]);
-    return items.map((item) => ({ ...item, ...buildInventoryCoveragePresentation(item, responsibilities) }));
+    return items.map((item) => {
+      const canonicalWarranty = item.linkedWarranties[0] ?? item.warranty;
+      return { ...item, itemWarrantyId: canonicalWarranty?.id ?? null, ...buildInventoryCoveragePresentation({ ...item, warranty: canonicalWarranty }, responsibilities) };
+    });
   }
 
   async createItem(propertyId: string, data: any, userId: string | null) {
@@ -369,7 +374,7 @@ export class InventoryService {
       );
     }
     await this.assertRoomBelongs(propertyId, data.roomId);
-    await this.assertWarrantyBelongs(propertyId, data.warrantyId);
+    await this.assertWarrantyBelongs(propertyId, data.itemWarrantyId);
     await this.assertInsuranceBelongs(propertyId, data.insurancePolicyId);
   
     const manufacturerNorm = norm(data.manufacturer);
@@ -413,15 +418,6 @@ export class InventoryService {
     // CREATE THE ITEM
     // ═══════════════════════════════════════════════════════════════════════════
   
-    if (data.warrantyId) {
-      assertValidTransitionalWarrantyLinkWrite({
-        targetModel: 'InventoryItem',
-        targetField: 'warrantyId',
-        inventoryItemId: 'new',
-        warrantyId: data.warrantyId,
-      });
-    }
-
     const changedAt = new Date();
     const sourceRevision = `created:${crypto.randomUUID()}`;
     const created = await prisma.$transaction(async (tx) => {
@@ -471,10 +467,14 @@ export class InventoryService {
         include: {
           room: true,
           warranty: true,
+          linkedWarranties: { orderBy: { createdAt: 'desc' }, take: 1 },
           insurancePolicy: true,
           documents: { orderBy: { createdAt: 'desc' } },
         },
       });
+      if (data.itemWarrantyId) {
+        await tx.warranty.update({ where: { id: data.itemWarrantyId }, data: { inventoryItemId: item.id } });
+      }
       await emitInventoryItemPropertyChange(tx, {
         propertyId,
         itemId: item.id,
@@ -482,7 +482,12 @@ export class InventoryService {
         sourceRevision,
         changedAt,
       });
-      return item;
+      if (!data.itemWarrantyId) return { ...item, itemWarrantyId: null };
+      return {
+        ...item,
+        itemWarrantyId: data.itemWarrantyId,
+        linkedWarranties: [await tx.warranty.findUniqueOrThrow({ where: { id: data.itemWarrantyId } })],
+      };
     });
   
     // Analytics: inventory item or system added
@@ -607,19 +612,14 @@ export class InventoryService {
     }
     // Validate relations
     if ('roomId' in patch) await this.assertRoomBelongs(propertyId, patch.roomId);
-    if ('warrantyId' in patch && patch.warrantyId) {
-      assertValidTransitionalWarrantyLinkWrite({
-        targetModel: 'InventoryItem',
-        targetField: 'warrantyId',
-        inventoryItemId: itemId,
-        warrantyId: patch.warrantyId,
-      });
-    }
-    if ('warrantyId' in patch) await this.assertWarrantyBelongs(propertyId, patch.warrantyId);
+    if ('itemWarrantyId' in patch) await this.assertWarrantyBelongs(propertyId, patch.itemWarrantyId);
     if ('insurancePolicyId' in patch) await this.assertInsuranceBelongs(propertyId, patch.insurancePolicyId);
   
     // Build update payload
     const updateData: any = { ...patch };
+    // Defense in depth: request validation strips the legacy field, and the
+    // service also prevents a spread payload from reintroducing it.
+    delete updateData.warrantyId;
   
     if ('installedOn' in patch) {
       updateData.installedOn = patch.installedOn ? new Date(patch.installedOn) : null;
@@ -631,7 +631,7 @@ export class InventoryService {
       updateData.lastServicedOn = patch.lastServicedOn ? new Date(patch.lastServicedOn) : null;
     }
   
-    if ('warrantyId' in patch) updateData.warrantyId = patch.warrantyId || null;
+    delete updateData.itemWarrantyId;
     if ('insurancePolicyId' in patch) updateData.insurancePolicyId = patch.insurancePolicyId || null;
     if ('roomId' in patch) updateData.roomId = patch.roomId || null;
   
@@ -648,10 +648,17 @@ export class InventoryService {
         include: {
           room: true,
           warranty: true,
+          linkedWarranties: { orderBy: { createdAt: 'desc' }, take: 1 },
           insurancePolicy: true,
           documents: { orderBy: { createdAt: 'desc' } },
         },
       });
+      if ('itemWarrantyId' in patch) {
+        await tx.warranty.updateMany({ where: { propertyId, inventoryItemId: itemId }, data: { inventoryItemId: null } });
+        if (patch.itemWarrantyId) {
+          await tx.warranty.update({ where: { id: patch.itemWarrantyId }, data: { inventoryItemId: itemId } });
+        }
+      }
       await emitInventoryItemPropertyChange(tx, {
         propertyId,
         itemId,
@@ -659,7 +666,12 @@ export class InventoryService {
         sourceRevision,
         changedAt,
       });
-      return item;
+      const linkedWarranties = 'itemWarrantyId' in patch
+        ? patch.itemWarrantyId
+          ? [await tx.warranty.findUniqueOrThrow({ where: { id: patch.itemWarrantyId } })]
+          : []
+        : item.linkedWarranties;
+      return { ...item, linkedWarranties, itemWarrantyId: linkedWarranties[0]?.id ?? null };
     });
 
     // Recalculate lifespan if relevant fields changed on a verified item
@@ -685,7 +697,7 @@ export class InventoryService {
     // fact this item's active Decision Thread(s) depend on just changed.
     // The Specialist may recompute immediately after this method resolves, so
     // staleness is part of the correction contract and must be visible first.
-    if (existing.category === 'HVAC' && ['condition', 'installedOn', 'purchasedOn', 'warrantyId', 'replacementCostCents'].some((field) => field in patch)) {
+    if (existing.category === 'HVAC' && ['condition', 'installedOn', 'purchasedOn', 'itemWarrantyId', 'replacementCostCents'].some((field) => field in patch)) {
       await markThreadStaleOnFactCorrection(propertyId, itemId, 'HVAC_ITEM_FACT_CORRECTED');
     }
 

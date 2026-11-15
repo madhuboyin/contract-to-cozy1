@@ -24,6 +24,7 @@ const { canAnswerContractBypassRelevance, isSourceScanOnlyAnswerContract } = req
 const { assertValidTransitionalWarrantyLinkWrite } = require('../../src/services/ask/semantic/transitionalWarrantyRead.ts');
 const { dataPointReadResult } = require('../../src/services/ask/handlers/dataPointRead.handler.ts');
 const { savedResultsFromPage } = require('../../src/services/ask/handlers/savedResults.handler.ts');
+const { GROUNDED_READ_CHECKS, PROVISIONAL_READ_FAMILY_DISPOSITIONS, verifyProvisionalReadFamilyDispositions } = require('../../src/services/ask/support/provisionalRead.ts');
 const {
   PHASE1_SELECTED_BASIC_READ_FAMILIES,
   PHASE1_DEFERRED_FAMILIES,
@@ -464,6 +465,13 @@ test('repository-wide legacy InventoryItem.warrantyId write containment passes o
   } finally {
     fs.rmSync(tmpRoot, { recursive: true, force: true });
   }
+});
+
+test('every provisional read family has an explicit grammar or demotion disposition with evidence lineage', () => {
+  assert.deepEqual(verifyProvisionalReadFamilyDispositions(), []);
+  assert.deepEqual(Object.keys(PROVISIONAL_READ_FAMILY_DISPOSITIONS).sort(), Object.keys(GROUNDED_READ_CHECKS).sort());
+  assert.equal(PROVISIONAL_READ_FAMILY_DISPOSITIONS.DATA_POINT_READ.disposition, 'TYPED_GRAMMAR_AGREEMENT');
+  assert.equal(PROVISIONAL_READ_FAMILY_DISPOSITIONS.MAINTENANCE_STATUS.disposition, 'DEMOTED_GROUNDED_ONLY');
 });
 
 test('dataPointReadGrammarAgreement and savedResultsGrammarAgreement gate runtime candidates against typed Phase 1 plans', () => {

@@ -62,9 +62,18 @@ export function verifyNoUnguardedLegacyWarrantyWrites(backendRoot: string = DEFA
     const source = fs.readFileSync(filePath, 'utf8');
     const hasInventoryWrite = /inventoryItem\.(?:create|update|upsert|createMany|updateMany)\s*\(/.test(source);
     if (!hasInventoryWrite) continue;
-    const writesNonNullWarrantyId = /\bdata\s*:\s*\{[\s\S]{0,800}?\bwarrantyId\s*:\s*(?!null\b)/.test(source);
-    const hasContainmentGuard = /\bassertValidTransitionalWarrantyLinkWrite\b/.test(source);
-    if (writesNonNullWarrantyId && !hasContainmentGuard) {
+    const writesNonNullWarrantyId = /\bdata\s*:\s*\{[\s\S]{0,800}?\bwarrantyId\s*:(?!\s*null\b)\s*/.test(source);
+    const untrustedPayloadName = String.raw`(?:patch|body|input|payload|requestData|data)`;
+    const writesInlineSpreadPayload = new RegExp(`inventoryItem\\.(?:create|update|upsert|createMany|updateMany)\\s*\\([\\s\\S]{0,800}?\\bdata\\s*:\\s*\\{[\\s\\S]{0,400}?\\.\\.\\.\\s*${untrustedPayloadName}\\b`).test(source);
+    const spreadPayloadNames = [...source.matchAll(new RegExp(`\\b(?:const|let)\\s+([A-Za-z_$][\\w$]*)\\s*(?::[^=;]+)?=\\s*\\{[\\s\\S]{0,400}?\\.\\.\\.\\s*${untrustedPayloadName}\\b`, 'g'))].map((match) => match[1]);
+    const writesUnsanitizedNamedSpread = spreadPayloadNames.some((payloadName) => {
+      const usedByInventoryWrite = new RegExp(`inventoryItem\\.(?:create|update|upsert|createMany|updateMany)\\s*\\([\\s\\S]{0,800}?\\bdata\\s*:\\s*${payloadName}\\b`).test(source);
+      const stripsLegacyField = new RegExp(`delete\\s+${payloadName}\\.warrantyId\\b`).test(source);
+      return usedByInventoryWrite && !stripsLegacyField;
+    });
+    // A guard elsewhere in the file must never bless a later write. Phase 1
+    // prohibits the storage write itself; callers must use Warranty.inventoryItemId.
+    if (writesNonNullWarrantyId || writesInlineSpreadPayload || writesUnsanitizedNamedSpread) {
       unguardedFiles.push(path.relative(backendRoot, filePath).replace(/\\/g, '/'));
     }
   }

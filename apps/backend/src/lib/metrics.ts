@@ -318,6 +318,13 @@ export const askCompositionContradictionsTotal = new Counter({
   help: 'Composites whose components disagreed on one quantity',
   registers: [register],
 });
+
+export const askWarrantyReconciliationCasesTotal = new Counter({
+  name: 'ask_warranty_reconciliation_cases_total',
+  help: 'Transitional warranty-link cases recorded for reconciliation',
+  labelNames: ['reason'] as const,
+  registers: [register],
+});
 export const askCompositionUnansweredTotal = new Counter({
   name: 'ask_composition_unanswered_total',
   help: 'Components a composite could not answer, by bounded reason code',

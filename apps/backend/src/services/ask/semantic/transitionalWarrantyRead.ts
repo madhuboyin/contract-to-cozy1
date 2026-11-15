@@ -1,4 +1,6 @@
 import { prisma } from '../../../lib/prisma';
+import { logger } from '../../../lib/logger';
+import { askWarrantyReconciliationCasesTotal } from '../../../lib/metrics';
 
 export type TransitionalWarrantyState =
   | 'ITEM_WARRANTY_LINKED'
@@ -245,11 +247,23 @@ export async function readTransitionalWarrantyLinks(propertyId: string): Promise
     },
     orderBy: [{ name: 'asc' }, { id: 'asc' }],
   });
-  return items.map((item) => classifyTransitionalWarrantyLinks({
+  const reads = items.map((item) => classifyTransitionalWarrantyLinks({
     inventoryItemId: item.id,
     label: item.name,
     propertyPlanWarrantyId: item.warrantyId,
     itemWarrantyIds: item.linkedWarranties.map((warranty) => warranty.id),
     coverageEvidenceStatus: item.coverageEvidenceStatus,
   }));
+  const cases = extractWarrantyReconciliationCases(reads);
+  for (const reconciliationCase of cases) {
+    askWarrantyReconciliationCasesTotal.inc({ reason: reconciliationCase.reason });
+    logger.warn({
+      propertyId,
+      inventoryItemId: reconciliationCase.inventoryItemId,
+      state: reconciliationCase.state,
+      reason: reconciliationCase.reason,
+      warrantyIds: reconciliationCase.warrantyIds,
+    }, 'Transitional warranty-link reconciliation case recorded');
+  }
+  return reads;
 }

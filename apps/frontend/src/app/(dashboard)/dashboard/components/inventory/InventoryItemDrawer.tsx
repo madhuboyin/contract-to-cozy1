@@ -343,7 +343,7 @@ useEffect(() => {
 
     setNotes((item as any)?.notes ?? '');
 
-    setWarrantyId((item as any)?.warrantyId ?? '');
+    setWarrantyId((item as any)?.itemWarrantyId ?? '');
     setInsurancePolicyId((item as any)?.insurancePolicyId ?? '');
 
     // scanning state reset
@@ -799,7 +799,7 @@ useEffect(() => {
         currency: 'USD',
         
         tags: [],
-        warrantyId: warrantyId || null,
+        itemWarrantyId: warrantyId || null,
         insurancePolicyId: insurancePolicyId || null,
         coverageNotRequired,
       };

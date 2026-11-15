@@ -41,9 +41,6 @@
   "COVERAGE_COMPARISON_STATUS": [
    "how does my insurance stack up against alternatives"
   ],
-  "COVERAGE_GAPS": [
-   "is my stuff protected by insurance or warranty"
-  ],
   "DIY_PROJECTS": [
    "which diy steps are left"
   ],
@@ -64,6 +61,11 @@
    "any events that affect my property",
    "what is on the radar for my home"
   ],
+  "HOME_STATUS_BOARD": [
+   "show my home status board",
+   "what is the condition of my appliances",
+   "which systems need action"
+  ],
   "HOME_WORK_ITEMS": [
    "list my open work items"
   ],
@@ -75,6 +77,12 @@
   ],
   "HVAC_PREFERENCE_SAVE": [
    "save my hvac preference for efficiency"
+  ],
+  "INCIDENT_CLAIM_STATUS": [
+   "any open claims on the house",
+   "did my claim get approved",
+   "show my insurance claims",
+   "what is the status of my claim"
   ],
   "INSPECTION_FINDINGS": [
    "open inspection items"
@@ -96,15 +104,28 @@
    "list the latest home intelligence"
   ],
   "INVENTORY_LOOKUP": [
+   "how old is my water heater",
+   "what is the model number of my dishwasher",
+   "when was my water heater last serviced",
    "which items have missing details"
   ],
+  "ITEM_REPLACEMENT_COST": [
+   "cost of a new dishwasher",
+   "how much does a new roof cost",
+   "how much will a new furnace cost",
+   "price of a new refrigerator",
+   "what does a replacement water heater cost"
+  ],
   "MAINTENANCE_BUDGET_FORECAST": [
-   "how much budget i need to allocate over the next 5 years for home maintainence",
-   "what will upkeep cost me this year"
+   "how much budget i need to allocate over the next 5 years for home maintainence"
   ],
   "MAINTENANCE_FORECAST": [
    "forecast of home system upkeep",
    "what repairs should i expect soon"
+  ],
+  "MAINTENANCE_STATUS": [
+   "list the maintenance i finished",
+   "show my pending home tasks"
   ],
   "MAJOR_EVENT_ENTRY": [
    "i am getting ready to sell",
@@ -118,6 +139,15 @@
   "PAST_HAZARD_EXPOSURE": [
    "is my house at risk of earthquakes",
    "what natural hazards affect my home"
+  ],
+  "PROPERTY_SUMMARY": [
+   "how many bed rooms do i have",
+   "how many bedrooms do i have",
+   "summarize my property",
+   "tell me about my house",
+   "what details are missing from my home profile",
+   "what is the square footage of my home",
+   "what year was my house built"
   ],
   "PROPERTY_TAX_APPEAL_READINESS": [
    "can i appeal my property taxes"
@@ -133,10 +163,10 @@
    "what are current mortgage rates"
   ],
   "RENOVATION_PERMIT_READINESS": [
-   "am i ready to pull a permit",
-   "permit checklist for my addition"
+   "am i ready to pull a permit"
   ],
   "SAVED_RESULTS": [
+   "list my saved results",
    "show what i saved",
    "what have i bookmarked"
   ],
@@ -144,20 +174,20 @@
    "how do i get my house ready to sell",
    "show the checklist for selling"
   ],
-  "SERVICE_PRICE_CHECKS": [
-   "is this quote a fair price"
+  "WARRANTY_LOOKUP": [
+   "is my dishwasher still under warranty",
+   "show warranty details",
+   "what warranties do i have",
+   "when does my home warranty expire",
+   "which warranties expire this year"
   ],
   "WORK_OVERVIEW": [
-   "what is under way on my house"
+   "summarize all the work for my home",
+   "what is under way on my house",
+   "what is waiting on me and what is scheduled"
   ]
  },
  "knownMisrouted": {
-  "BREAK_EVEN_ANALYSIS": [
-   "when does appreciation cover my costs"
-  ],
-  "BUYER_COST_READINESS": [
-   "what should i budget immediately after closing"
-  ],
   "BUYER_MOVE_STATUS": [
    "am i ready to move into the new house",
    "how is my move in going"
@@ -167,7 +197,6 @@
   ],
   "HOME_DIGITAL_WILL": [
    "review my home legacy plan",
-   "what happens to the house info if i am gone",
    "who can take over managing my home"
   ],
   "HOME_STATUS_BOARD": [
@@ -197,9 +226,6 @@
   "MAINTENANCE_STATUS": [
    "am i caught up on upkeep"
   ],
-  "PERMIT_TRACKER_STATUS": [
-   "is my permit approved"
-  ],
   "PLANT_CARE_OUTLOOK": [
    "which plants need attention"
   ],
@@ -207,14 +233,10 @@
    "how do i lower my property taxes"
   ],
   "REFINANCE_ANALYSIS": [
-   "can i get a better mortgage rate",
-   "would refinancing save me money"
+   "can i get a better mortgage rate"
   ],
   "REFINANCE_COMMAND": [
    "create a refinance what if at 5.5 percent"
-  ],
-  "RESERVE_FUND_COMMAND": [
-   "match this expense to my reserve"
   ],
   "SAVINGS_OPPORTUNITIES": [
    "where am i overspending on the house"

@@ -315,6 +315,40 @@ const itemCostRouteGuard = (message: string): boolean => COST_TOPIC.test(message
 export type GroundedReadCheck = (question: string, result: AskOperationResult) => GroundedReadVerdict;
 /** FR-GATE-8: an operation may be tried provisionally only together with a grounded delivery check. This table IS the allowlist (fastPathCertificates derives PROVISIONAL_READ_OPERATIONS from it). */
 export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict, WARRANTY_LOOKUP: groundedWarrantyVerdict, HOME_STATUS_BOARD: groundedStatusBoardVerdict, HOME_BASICS_GUIDE: groundedHomeBasicsVerdict, PROPERTY_SUMMARY: groundedPropertySummaryVerdict, INCIDENT_CLAIM_STATUS: groundedClaimStatusVerdict, SAVED_RESULTS: groundedSavedResultsVerdict, WORK_OVERVIEW: groundedWorkOverviewVerdict, ITEM_REPLACEMENT_COST: groundedItemCostVerdict });
+
+/**
+ * FR-CAP-3 Phase 1 disposition for every provisional family. FAST_PATH_RULES
+ * remains the authoritative rule-level DEMOTED/CERTIFIED state; this manifest
+ * makes the family-level evidence combination explicit instead of silently
+ * grandfathering entries merely because they have a READ label.
+ */
+export const PROVISIONAL_READ_FAMILY_DISPOSITIONS: Readonly<Record<string, {
+  readonly disposition: 'TYPED_GRAMMAR_AGREEMENT' | 'DEMOTED_GROUNDED_ONLY';
+  readonly admissionEvidence: readonly string[];
+}>> = Object.freeze({
+  DATA_POINT_READ: { disposition: 'TYPED_GRAMMAR_AGREEMENT', admissionEvidence: ['deterministicSemanticParser', 'dataPointReadGrammarAgreement', 'semanticExecutionReceipt'] },
+  WARRANTY_LOOKUP: { disposition: 'TYPED_GRAMMAR_AGREEMENT', admissionEvidence: ['deterministicSemanticParser', 'warrantyShapeGrammarAgreement', 'groundedWarrantyVerdict'] },
+  SAVED_RESULTS: { disposition: 'TYPED_GRAMMAR_AGREEMENT', admissionEvidence: ['deterministicSemanticParser', 'savedResultsGrammarAgreement', 'semanticExecutionReceipt'] },
+  MAINTENANCE_STATUS: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'maintenanceRouteGuard', 'groundedMaintenanceVerdict', 'operationAnswerContract'] },
+  HOME_STATUS_BOARD: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'statusBoardRouteGuard', 'groundedStatusBoardVerdict', 'operationAnswerContract'] },
+  HOME_BASICS_GUIDE: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'homeBasicsRouteGuard', 'groundedHomeBasicsVerdict', 'operationAnswerContract'] },
+  PROPERTY_SUMMARY: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'propertySummaryRouteGuard', 'groundedPropertySummaryVerdict', 'operationAnswerContract'] },
+  INCIDENT_CLAIM_STATUS: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'claimStatusRouteGuard', 'groundedClaimStatusVerdict', 'operationAnswerContract'] },
+  WORK_OVERVIEW: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'workOverviewRouteGuard', 'groundedWorkOverviewVerdict', 'operationAnswerContract'] },
+  ITEM_REPLACEMENT_COST: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'itemCostRouteGuard', 'groundedItemCostVerdict', 'operationAnswerContract'] },
+});
+
+export function verifyProvisionalReadFamilyDispositions(): readonly string[] {
+  const operations = Object.keys(GROUNDED_READ_CHECKS).sort();
+  const declared = Object.keys(PROVISIONAL_READ_FAMILY_DISPOSITIONS).sort();
+  const issues: string[] = [];
+  if (operations.join('|') !== declared.join('|')) issues.push('Provisional read disposition manifest does not exactly cover GROUNDED_READ_CHECKS.');
+  for (const operation of operations) {
+    const row = PROVISIONAL_READ_FAMILY_DISPOSITIONS[operation as keyof typeof PROVISIONAL_READ_FAMILY_DISPOSITIONS];
+    if (!row || row.admissionEvidence.length < 3) issues.push(`${operation} lacks an explicit Phase 1 evidence lineage.`);
+  }
+  return issues;
+}
 export const hasGroundedReadCheck = (operationId: AskOperationId): boolean => operationId in GROUNDED_READ_CHECKS;
 /** Checked before a provisional read is started: false means the rule's match is not the request this read answers, so the turn keeps the strict path. */
 export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ MAINTENANCE_STATUS: maintenanceRouteGuard, WARRANTY_LOOKUP: warrantyRouteGuard, HOME_STATUS_BOARD: statusBoardRouteGuard, HOME_BASICS_GUIDE: homeBasicsRouteGuard, PROPERTY_SUMMARY: propertySummaryRouteGuard, INCIDENT_CLAIM_STATUS: claimStatusRouteGuard, SAVED_RESULTS: savedResultsRouteGuard, WORK_OVERVIEW: workOverviewRouteGuard, ITEM_REPLACEMENT_COST: itemCostRouteGuard });
