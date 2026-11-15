@@ -44,11 +44,11 @@ test('unsupported questions remain unmatched rather than selecting a nearby oper
 });
 
 test('legacy warranty reads execute only when the independently built grammar agrees', () => {
-  const count = { shape: 'NO_WARRANTY', relationId: 'inventory-warranty', currentOnly: false, count: true };
+  const count = { shape: 'NO_WARRANTY', relationId: 'inventory-warranty', currentOnly: false, count: true, detail: false };
   assert.equal(warrantyShapeGrammarAgreement('how many appliances have no warranty?', count).outcome, 'AGREE');
-  assert.equal(warrantyShapeGrammarAgreement('provide details of appliances without warranty', { ...count, count: false }).reasonCode, 'GRAMMAR_PROJECTION_MISMATCH');
+  assert.equal(warrantyShapeGrammarAgreement('provide details of appliances without warranty', { ...count, count: false, detail: true }).outcome, 'AGREE');
   assert.equal(warrantyShapeGrammarAgreement('which appliances are out of warranty?', { ...count, currentOnly: true, count: false }).outcome, 'DISAGREE');
-  assert.equal(warrantyShapeGrammarAgreement('which appliances have a warranty?', { shape: 'HAS_WARRANTY', relationId: 'inventory-warranty', count: false }).outcome, 'AGREE');
+  assert.equal(warrantyShapeGrammarAgreement('which appliances have a warranty?', { shape: 'HAS_WARRANTY', relationId: 'inventory-warranty', count: false, detail: false }).outcome, 'AGREE');
 });
 
 test('the minimal receipt rejects missing structural evidence', () => {

@@ -155,6 +155,7 @@ async function shape789Result(propertyId: string, role: string, plan: Shape789Pl
   const run = await runShape789(propertyId, plan);
   const lines: string[] = []; let title = ''; let limited = false; let evidenceLabel = 'Your inventory';
   const names = (n: number) => run.rows.slice(0, 10).map((r) => r.label).join('; ') + (run.total > 10 ? `; and ${run.total - 10} more` : '');
+  const relationDetails = (n: number) => run.rows.slice(0, 10).map((row) => `${row.label} (${row.detail === 'EXPLICIT_NO_COVERAGE' ? 'explicitly recorded as no coverage' : row.detail === 'NO_LINK_RECORDED' ? 'no linked warranty record' : 'linked warranty record'})`).join('; ') + (n > 10 ? `; and ${n - 10} more` : '');
   if (plan.shape === 'TIME_SERIES') {
     evidenceLabel = plan.label === 'total assessed value' ? 'Your property tax assessments' : 'Your property tax bills';
     const series = run.series ?? []; const known = series.filter((x) => x.value !== null) as Array<{ id: string; year: number; value: number }>;
@@ -186,7 +187,9 @@ async function shape789Result(propertyId: string, role: string, plan: Shape789Pl
     title = run.total === 0 ? 'No items have a confirmed missing warranty record' : `${run.total} ${plural(run.total, 'item has', 'items have')} no linked warranty record`;
     lines.push(run.total === 0
       ? 'No inventory item is confirmed in the requested no-linked-warranty population.'
-      : `${plan.count ? `${run.total} of your items` : names(run.total)} ${plural(run.total, 'has', 'have')} no warranty linked in your home record.`);
+      : plan.count ? `${run.total} of your items ${plural(run.total, 'has', 'have')} no warranty linked in your home record.`
+        : plan.detail ? relationDetails(run.total)
+          : `${names(run.total)} ${plural(run.total, 'has', 'have')} no warranty linked in your home record.`);
     if (conflicted > 0) lines.push(`${conflicted} ${plural(conflicted, 'item has', 'items have')} conflicting warranty links and ${plural(conflicted, 'is', 'are')} shown separately from the confirmed count.`);
     if (unknown > 0) lines.push(`${unknown} ${plural(unknown, 'item has', 'items have')} an unknown warranty state and ${plural(unknown, 'is', 'are')} not counted as having or not having a linked warranty.`);
     limited = conflicted > 0 || unknown > 0;
@@ -197,7 +200,9 @@ async function shape789Result(propertyId: string, role: string, plan: Shape789Pl
     title = run.total === 0 ? 'No items have a confirmed linked warranty record' : `${run.total} ${plural(run.total, 'item has', 'items have')} a linked warranty record`;
     lines.push(run.total === 0
       ? 'No inventory item is confirmed in the requested linked-warranty population.'
-      : `${plan.count ? `${run.total} of your items` : names(run.total)} ${plural(run.total, 'has', 'have')} a warranty linked in your home record.`);
+      : plan.count ? `${run.total} of your items ${plural(run.total, 'has', 'have')} a warranty linked in your home record.`
+        : plan.detail ? relationDetails(run.total)
+          : `${names(run.total)} ${plural(run.total, 'has', 'have')} a warranty linked in your home record.`);
     if (conflicted > 0) lines.push(`${conflicted} ${plural(conflicted, 'item has', 'items have')} conflicting warranty links and ${plural(conflicted, 'is', 'are')} shown separately from the confirmed count.`);
     if (unknown > 0) lines.push(`${unknown} ${plural(unknown, 'item has', 'items have')} an unknown warranty state and ${plural(unknown, 'is', 'are')} not counted as having or not having a linked warranty.`);
     limited = conflicted > 0 || unknown > 0;
@@ -210,7 +215,7 @@ async function shape789Result(propertyId: string, role: string, plan: Shape789Pl
     facetId: agreement.facet.id,
     requestClass: 'DATA_QUERY' as const,
     target: { entityId: 'entity.inventory_item', operationAdapter: 'data-point-read.read' },
-    projection: agreement.facet.projection as 'COUNT' | 'LIST',
+    projection: agreement.facet.projection as 'COUNT' | 'LIST' | 'DETAIL',
     predicateIds: agreement.facet.relations.map((relation) => relation.predicateId),
     resolvedRecordIds: run.rows.map((row) => row.id),
     population: {

@@ -23,7 +23,7 @@ export function warrantyShapeGrammarAgreement(message: string, legacy: Shape789P
     || facet.polarity !== (legacy.shape === 'NO_WARRANTY' ? 'NEGATIVE' : 'POSITIVE')) {
     return { outcome: 'DISAGREE', reasonCode: 'GRAMMAR_MEANING_MISMATCH', plan, facet };
   }
-  const expectedProjection = legacy.count ? 'COUNT' : 'LIST';
+  const expectedProjection = legacy.count ? 'COUNT' : legacy.detail ? 'DETAIL' : 'LIST';
   if (facet.projection !== expectedProjection) return { outcome: 'DISAGREE', reasonCode: 'GRAMMAR_PROJECTION_MISMATCH', plan, facet };
   // The first subset represents absence of a linked record. Expiration is a
   // different predicate and remains withheld until that grammar is registered.
