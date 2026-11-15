@@ -7,7 +7,7 @@ export const ASK_DETERMINISTIC_SEMANTIC_PARSER_VERSION = 'typed-grammar-0.1.0' a
 interface Annotation extends SemanticSourceSpan {
   lexeme: GeneratedSemanticLexeme;
 }
-const STOP_WORDS = new Set(['a', 'all', 'are', 'of', 'please', 'provide', 'the', 'which']);
+const STOP_WORDS = new Set(['a', 'all', 'any', 'are', 'of', 'please', 'provide', 'the', 'which']);
 
 function normalizedWithOffsets(raw: string): { normalized: string; tokens: SemanticSourceSpan[] } {
   const tokens: SemanticSourceSpan[] = [];

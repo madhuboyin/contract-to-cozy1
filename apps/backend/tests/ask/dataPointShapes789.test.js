@@ -23,6 +23,7 @@ test('planning: absence, service gap, no warranty, change over time; ordinary qu
   assert.equal(planShape789('Which appliances are out of warranty?').currentOnly, true);
   assert.equal(planShape789('Which appliances have no warranty?').currentOnly, false);
   assert.equal(planShape789('Provide details of appliances without warranty').detail, true);
+  assert.equal(planShape789('Do any appliances have a warranty?').exists, true);
   assert.equal(shape('How has my property tax changed over the years?'), 'TIME_SERIES');
   assert.equal(planShape789('How has my assessed value changed?').pointId, 'taxAssessment.totalAssessedValue');
   assert.equal(shape('Compare my property tax to last year'), 'TIME_SERIES');
@@ -85,6 +86,10 @@ test('handler: absence, no warranty and service gap answers name the items and w
   assert.equal(warrantyDetails.parameters.semanticExecutionReceipt.projection, 'DETAIL');
   assert.match(warrantyDetails.blocks[0].body, /Dishwasher \(no linked warranty record\)/);
   assert.match(warrantyDetails.blocks[0].body, /Furnace \(explicitly recorded as no coverage\)/);
+  const warrantyExists = await dataPointReadResult('u1', 'p1', 'Do any appliances have a warranty?');
+  assert.equal(warrantyExists.parameters.semanticExecutionReceipt.projection, 'EXISTS');
+  assert.match(warrantyExists.blocks[0].title, /^Yes/);
+  assert.equal(verifySemanticReadReceiptEntailment(warrantyExists).outcome, 'PASS');
   prisma.inventoryItem = { findMany: async () => [], count: async () => 0 };
   const none = await dataPointReadResult('u1', 'p1', 'Which appliances have no serial number recorded?');
   assert.match(none.blocks[0].title, /Every item has its serial number/);

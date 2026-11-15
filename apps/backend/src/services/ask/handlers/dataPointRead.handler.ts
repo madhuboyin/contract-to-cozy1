@@ -184,8 +184,12 @@ async function shape789Result(propertyId: string, role: string, plan: Shape789Pl
   } else if (plan.shape === 'NO_WARRANTY') {
     const conflicted = run.conflictedRows?.length ?? 0;
     const unknown = run.unknownRows?.length ?? 0;
-    title = run.total === 0 ? 'No items have a confirmed missing warranty record' : `${run.total} ${plural(run.total, 'item has', 'items have')} no linked warranty record`;
-    lines.push(run.total === 0
+    title = plan.exists
+      ? run.total > 0 ? 'Yes—at least one item has no linked warranty record' : conflicted > 0 || unknown > 0 ? 'I cannot confirm whether any item has no linked warranty record' : 'No—every item has a linked warranty record'
+      : run.total === 0 ? 'No items have a confirmed missing warranty record' : `${run.total} ${plural(run.total, 'item has', 'items have')} no linked warranty record`;
+    lines.push(plan.exists
+      ? run.total > 0 ? `Yes. ${run.total} ${plural(run.total, 'item has', 'items have')} no warranty linked in your home record.` : conflicted > 0 || unknown > 0 ? 'The recorded conflicts or unknown states could change the answer, so I cannot give an unqualified yes or no.' : 'No. Every inventory item has a linked warranty record.'
+      : run.total === 0
       ? 'No inventory item is confirmed in the requested no-linked-warranty population.'
       : plan.count ? `${run.total} of your items ${plural(run.total, 'has', 'have')} no warranty linked in your home record.`
         : plan.detail ? relationDetails(run.total)
@@ -197,8 +201,12 @@ async function shape789Result(propertyId: string, role: string, plan: Shape789Pl
   } else {
     const conflicted = run.conflictedRows?.length ?? 0;
     const unknown = run.unknownRows?.length ?? 0;
-    title = run.total === 0 ? 'No items have a confirmed linked warranty record' : `${run.total} ${plural(run.total, 'item has', 'items have')} a linked warranty record`;
-    lines.push(run.total === 0
+    title = plan.exists
+      ? run.total > 0 ? 'Yes—at least one item has a linked warranty record' : conflicted > 0 || unknown > 0 ? 'I cannot confirm whether any item has a linked warranty record' : 'No—no item has a linked warranty record'
+      : run.total === 0 ? 'No items have a confirmed linked warranty record' : `${run.total} ${plural(run.total, 'item has', 'items have')} a linked warranty record`;
+    lines.push(plan.exists
+      ? run.total > 0 ? `Yes. ${run.total} ${plural(run.total, 'item has', 'items have')} a warranty linked in your home record.` : conflicted > 0 || unknown > 0 ? 'The recorded conflicts or unknown states could change the answer, so I cannot give an unqualified yes or no.' : 'No. No inventory item has a linked warranty record.'
+      : run.total === 0
       ? 'No inventory item is confirmed in the requested linked-warranty population.'
       : plan.count ? `${run.total} of your items ${plural(run.total, 'has', 'have')} a warranty linked in your home record.`
         : plan.detail ? relationDetails(run.total)
@@ -215,7 +223,7 @@ async function shape789Result(propertyId: string, role: string, plan: Shape789Pl
     facetId: agreement.facet.id,
     requestClass: 'DATA_QUERY' as const,
     target: { entityId: 'entity.inventory_item', operationAdapter: 'data-point-read.read' },
-    projection: agreement.facet.projection as 'COUNT' | 'LIST' | 'DETAIL',
+    projection: agreement.facet.projection as 'COUNT' | 'LIST' | 'DETAIL' | 'EXISTS',
     predicateIds: agreement.facet.relations.map((relation) => relation.predicateId),
     resolvedRecordIds: run.rows.map((row) => row.id),
     population: {
