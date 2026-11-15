@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 require('ts-node/register/transpile-only');
 
-const { SemanticRequestPlanSchema } = require('../../src/services/ask/semantic/semanticRequestPlan.ts');
+const { SemanticRequestPlanSchema, SemanticWhereExpressionSchema } = require('../../src/services/ask/semantic/semanticRequestPlan.ts');
 const { ASK_SHARED_SEMANTIC_LEXICON, generateSharedSemanticLexicon } = require('../../src/services/ask/semantic/sharedSemanticLexicon.ts');
 const { parseDeterministicSemanticRequest } = require('../../src/services/ask/semantic/deterministicSemanticParser.ts');
 const { warrantyShapeGrammarAgreement } = require('../../src/services/ask/semantic/legacyGrammarAgreement.ts');
@@ -28,7 +28,21 @@ test('equivalent inventory/warranty wording produces the same typed meaning', ()
   assert.deepEqual(plans.map((plan) => plan.facets[0].projection), ['LIST', 'DETAIL', 'COUNT', 'LIST']);
   assert.deepEqual(plans.map((plan) => plan.facets[0].polarity), ['NEGATIVE', 'NEGATIVE', 'NEGATIVE', 'POSITIVE']);
   assert.ok(plans.every((plan) => plan.facets[0].relations[0].semanticRelationId === 'relation.inventory_item.warranty'));
+  assert.ok(plans.every((plan) => plan.facets[0].where.kind === 'PREDICATE'));
+  assert.ok(plans.every((plan) => plan.facets[0].where.relationPathId === 'path.inventory_item.warranty'));
   assert.ok(plans.every((plan) => plan.facets[0].confidenceSignals.grammarComplete), 'the declared examples consume every meaningful token');
+});
+
+test('the semantic plan accepts only bounded Boolean predicate trees', () => {
+  const predicate = { kind: 'PREDICATE', predicateId: 'predicate.inventory_item.has_warranty_record', relationPathId: 'path.inventory_item.warranty' };
+  assert.equal(SemanticWhereExpressionSchema.safeParse({ kind: 'AND', operands: [predicate, { kind: 'NOT', operand: predicate }] }).success, true);
+  assert.equal(SemanticWhereExpressionSchema.safeParse({ kind: 'OR', operands: [predicate] }).success, false, 'connectives require at least two operands');
+  assert.equal(SemanticWhereExpressionSchema.safeParse({ inventoryItem: { warranties: { some: {} } } }).success, false, 'storage query objects are not semantic predicates');
+
+  const plan = parseDeterministicSemanticRequest('which appliances have warranties');
+  const unsafe = structuredClone(plan);
+  unsafe.facets[0].where = { inventoryItem: { warranties: { some: {} } } };
+  assert.equal(SemanticRequestPlanSchema.safeParse(unsafe).success, false);
 });
 
 test('unconsumed meaning is surfaced and cannot be admitted as a complete grammar plan', () => {

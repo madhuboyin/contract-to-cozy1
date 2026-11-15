@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const ASK_SEMANTIC_PLAN_VERSION = '1.0.0' as const;
+export const ASK_SEMANTIC_PLAN_VERSION = '1.1.0' as const;
 
 const SpanSchema = z.object({
   start: z.number().int().nonnegative(),
@@ -12,6 +12,31 @@ const RankedCandidateSchema = z.object({
   id: z.string().min(1),
   score: z.number().min(0).max(1),
 }).strict();
+
+export type SemanticWhereExpression =
+  | { kind: 'PREDICATE'; predicateId: string; relationPathId: string }
+  | { kind: 'AND' | 'OR'; operands: SemanticWhereExpression[] }
+  | { kind: 'NOT'; operand: SemanticWhereExpression };
+
+export const SemanticWhereExpressionSchema: z.ZodType<SemanticWhereExpression> = z.lazy(() => z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('PREDICATE'),
+    predicateId: z.string().min(1),
+    relationPathId: z.string().min(1),
+  }).strict(),
+  z.object({
+    kind: z.literal('AND'),
+    operands: z.array(SemanticWhereExpressionSchema).min(2).max(20),
+  }).strict(),
+  z.object({
+    kind: z.literal('OR'),
+    operands: z.array(SemanticWhereExpressionSchema).min(2).max(20),
+  }).strict(),
+  z.object({
+    kind: z.literal('NOT'),
+    operand: SemanticWhereExpressionSchema,
+  }).strict(),
+]));
 
 export const SemanticFacetSchema = z.object({
   id: z.string().min(1),
@@ -30,7 +55,7 @@ export const SemanticFacetSchema = z.object({
   polarity: z.enum(['POSITIVE', 'NEGATIVE', 'UNKNOWN']).nullable(),
   projection: z.enum(['EXISTS', 'COUNT', 'LIST', 'DETAIL', 'AGGREGATE', 'COMPARE', 'TIMELINE', 'ANALYSIS']),
   fields: z.array(z.object({ fieldId: z.string().min(1) }).strict()),
-  where: z.unknown().nullable(),
+  where: SemanticWhereExpressionSchema.nullable(),
   sort: z.array(z.object({ fieldId: z.string().min(1), direction: z.enum(['ASC', 'DESC']) }).strict()),
   limit: z.number().int().positive().nullable(),
   time: z.unknown().nullable(),

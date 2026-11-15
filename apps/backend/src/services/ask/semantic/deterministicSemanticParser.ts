@@ -2,7 +2,7 @@ import { createHash } from 'crypto';
 import { ASK_SHARED_SEMANTIC_LEXICON, ASK_SHARED_LEXICON_VERSION, type GeneratedSemanticLexeme } from './sharedSemanticLexicon';
 import { ASK_SEMANTIC_PLAN_VERSION, SemanticRequestPlanSchema, type SemanticRequestPlan, type SemanticSourceSpan } from './semanticRequestPlan';
 
-export const ASK_DETERMINISTIC_SEMANTIC_PARSER_VERSION = 'typed-grammar-0.3.0' as const;
+export const ASK_DETERMINISTIC_SEMANTIC_PARSER_VERSION = 'typed-grammar-0.4.0' as const;
 
 interface Annotation extends SemanticSourceSpan {
   lexeme: GeneratedSemanticLexeme;
@@ -162,7 +162,13 @@ export function parseDeterministicSemanticRequest(rawText: string): SemanticRequ
       relations: [{ semanticRelationId: 'relation.inventory_item.warranty', predicateId, targetEntityId: 'entity.warranty' }],
       polarity,
       projection,
-      fields: [], where: null, sort: [], limit: null, time: null, groupBy: [], targetCandidates: [], requiredSlots: [], dependsOn: [],
+      fields: [],
+      where: {
+        kind: 'PREDICATE',
+        predicateId,
+        relationPathId: 'path.inventory_item.warranty',
+      },
+      sort: [], limit: null, time: null, groupBy: [], targetCandidates: [], requiredSlots: [], dependsOn: [],
       evidence: {
         jobMatch: 'query.inventory_item.warranty_relation',
         subjectNamed: true,
