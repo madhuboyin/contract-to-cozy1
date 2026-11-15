@@ -8,6 +8,7 @@ const { parseDeterministicSemanticRequest } = require('../../src/services/ask/se
 const { warrantyShapeGrammarAgreement } = require('../../src/services/ask/semantic/legacyGrammarAgreement.ts');
 const { SemanticReadReceiptSchema } = require('../../src/services/ask/semantic/semanticExecutionReceipt.ts');
 const { resolvePropertyEntityReference } = require('../../src/services/ask/semantic/propertyEntityResolver.ts');
+const { assembleSemanticBooleanExpression } = require('../../src/services/ask/semantic/semanticBooleanAssembler.ts');
 
 test('the generated shared lexicon is stable and keeps warranty separate from insurance and claims', () => {
   assert.deepEqual(generateSharedSemanticLexicon(), ASK_SHARED_SEMANTIC_LEXICON);
@@ -43,6 +44,25 @@ test('the semantic plan accepts only bounded Boolean predicate trees', () => {
   const unsafe = structuredClone(plan);
   unsafe.facets[0].where = { inventoryItem: { warranties: { some: {} } } };
   assert.equal(SemanticRequestPlanSchema.safeParse(unsafe).success, false);
+});
+
+test('the Boolean assembler preserves explicit coordination and clarifies ambiguous negative OR', () => {
+  const warranty = { kind: 'PREDICATE', predicateId: 'predicate.inventory_item.has_warranty_record', relationPathId: 'path.inventory_item.warranty' };
+  const manual = { kind: 'PREDICATE', predicateId: 'predicate.inventory_item.has_manual_record', relationPathId: 'path.inventory_item.manual' };
+
+  assert.deepEqual(assembleSemanticBooleanExpression({ coordination: 'EITHER_OR', predicates: [warranty, manual] }), {
+    outcome: 'ASSEMBLED', expression: { kind: 'OR', operands: [warranty, manual] },
+  });
+  assert.deepEqual(assembleSemanticBooleanExpression({ coordination: 'NEITHER_NOR', predicates: [warranty, manual] }), {
+    outcome: 'ASSEMBLED',
+    expression: { kind: 'AND', operands: [{ kind: 'NOT', operand: warranty }, { kind: 'NOT', operand: manual }] },
+  });
+  assert.deepEqual(assembleSemanticBooleanExpression({ coordination: 'AMBIGUOUS_NEGATIVE_OR', predicates: [warranty, manual] }), {
+    outcome: 'CLARIFY', reasonCode: 'AMBIGUOUS_NEGATIVE_COORDINATION',
+  });
+  assert.deepEqual(assembleSemanticBooleanExpression({ coordination: 'AND', predicates: [warranty, warranty] }), {
+    outcome: 'INVALID', reasonCode: 'DUPLICATE_PREDICATE',
+  });
 });
 
 test('unconsumed meaning is surfaced and cannot be admitted as a complete grammar plan', () => {

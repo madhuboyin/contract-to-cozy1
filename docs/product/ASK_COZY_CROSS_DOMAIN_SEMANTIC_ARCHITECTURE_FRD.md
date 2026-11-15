@@ -40,7 +40,7 @@ This section is the maintained repository implementation ledger for this FRD. It
 | Typo handling | Implemented for bounded single-token aliases | One-edit matching is limited to registry aliases of at least five characters and requires one unique best semantic identity per role. Exact annotations remain authoritative. |
 | Morphology | Implemented for the initial possession and number subset | Common `do`/`have` tense forms and bounded singular/plural forms share semantic annotations while retaining original spans. This is not yet a general morphological engine. |
 | Property-backed entity resolution contract | Implemented as a pure authorization-bounded seam | `propertyEntityResolver.ts`, version `property-entity-resolver-0.1.0`, returns `RESOLVED`, `MULTIPLE_MATCHES`, `MISSING`, `UNAUTHORISED` or `NOT_APPLICABLE`; hidden matches return no record identity or label. Live property loading and parser attachment remain to be integrated. |
-| Typed Boolean query contract | Implemented contract; connective parsing deferred | `SemanticWhereExpressionSchema` permits only bounded `PREDICATE`, `AND`, `OR` and `NOT` nodes. Warranty plans emit a registered predicate and `path.inventory_item.warranty`. Natural-language coordination is not yet assembled into multi-node trees. |
+| Typed Boolean query contract | Implemented contract and deterministic assembly seam; surface parsing deferred | `SemanticWhereExpressionSchema` permits only bounded `PREDICATE`, `AND`, `OR` and `NOT` nodes. `semanticBooleanAssembler.ts`, version `semantic-boolean-0.1.0`, assembles explicit conjunction, either/or and neither/nor meanings from registered predicates, rejects duplicates and invalid arity, and returns clarification for ambiguous negative `OR`. Warranty plans emit a registered predicate and `path.inventory_item.warranty`; natural-language connective annotation is not yet wired to multi-node plans. |
 | Transitional warranty relation read | Implemented for the first live vertical read | `transitionalWarrantyRead.ts` inspects both legacy link directions and preserves linked, conflicted, no-link and unknown states instead of treating their union as confirmed coverage. |
 | Legacy admission agreement | Implemented for migrated warranty shapes | `legacyGrammarAgreement.ts` independently compares the typed grammar plan with the legacy warranty candidate on subject, relation, polarity, projection and supported filters before admission. |
 | Minimal read receipt and entailment | Implemented for the warranty vertical read | `semanticExecutionReceipt.ts` and `semanticReceiptEntailment.ts` validate plan lineage, registered predicates, resolved-record cardinality, separated confirmed/conflicted/unknown populations, authorization, provenance and answer projection. |
@@ -48,7 +48,7 @@ This section is the maintained repository implementation ledger for this FRD. It
 
 ### 0.2 Current evidence
 
-- Focused semantic and data-point suites: 19 tests passing on 2026-11-14.
+- Focused semantic and data-point suites: 20 tests passing on 2026-11-14.
 - Backend TypeScript validation: `npm run typecheck` passing on 2026-11-14.
 - Repository hygiene: `git diff --check` passing for the current slice.
 - Runtime services and a database were not started; the focused data-point suite exercised its existing environment-independent fallback and emitted expected unavailable-local-database diagnostics.
@@ -57,7 +57,7 @@ This section is the maintained repository implementation ledger for this FRD. It
 ### 0.3 Not yet implemented or not yet complete
 
 - Live attachment of property-backed entity candidates to parser facets and reauthorization on replay.
-- Natural-language `AND`/`OR`/`NOT` coordination, negative-scope disambiguation and interpreted-population receipts.
+- Natural-language connective annotation and parser integration for `AND`/`OR`/`NOT`, plus interpreted-population receipts; the deterministic Boolean assembly seam exists but does not infer surface-language scope.
 - Registered field predicates, bounded comparisons, aggregates, time expressions and safe query compilation beyond the first warranty path.
 - Complete inventory and maintenance coverage required by Phase 2A, including due-date/item relations and inventory fact queries.
 - `CAPABILITY` semantic-job planning, `COMMAND` confirmation previews, follow-up refinement and semantic conversation state.
