@@ -5,10 +5,182 @@
  * - Exact Current Failures Regression Catalogue (labelled CONTAINMENT_REGRESSION_NOT_COVERAGE_PROOF)
  */
 import { ASK_SEMANTIC_DOMAINS, type SemanticDomainId } from './semanticOntologyBaseline';
+import { evaluateScalarFieldCoalescence } from './scalarFieldCoalescenceManifest';
+import { classifyTransitionalWarrantyLinks } from '../transitionalWarrantyRead';
 
-export const ASK_SEEDED_SCENARIO_CATALOGUE_VERSION = 'phase0-seeded-scenarios-1.0.0' as const;
+export const ASK_SEEDED_SCENARIO_CATALOGUE_VERSION = 'phase0-seeded-scenarios-1.1.0' as const;
 
 export type SeededDataStateVariant = 'POPULATED' | 'EMPTY_OR_MISSING' | 'UNKNOWN' | 'CONFLICTED';
+
+export interface SeededPropertyFixtureDataset {
+  readonly property: {
+    readonly id: string;
+    readonly name: string;
+    readonly yearBuilt: number | null;
+    readonly roofType: string | null;
+    readonly roofReplacementYear: number | null;
+    readonly hvacInstallYear: number | null;
+    readonly waterHeaterInstallYear: number | null;
+    readonly zipCode: string | null;
+    readonly normalizedZipCode: string | null;
+    readonly geocodedZipCode: string | null;
+    readonly lotSize: number | null;
+    readonly hasIrrigation: boolean | null;
+    readonly hasDrainageIssues: boolean | null;
+  };
+  readonly exteriorProfile: {
+    readonly lotSizeSqFt: number | null;
+    readonly hasIrrigation: boolean | null;
+    readonly hasDrainageIssues: boolean | null;
+  } | null;
+  readonly inventoryItems: ReadonlyArray<{
+    readonly id: string;
+    readonly name: string;
+    readonly category: string | null;
+    readonly assetType: string | null;
+    readonly brand: string | null;
+    readonly manufacturer: string | null;
+    readonly manufacturerNorm: string | null;
+    readonly model: string | null;
+    readonly modelNumber: string | null;
+    readonly modelNumberNorm: string | null;
+    readonly serialNo: string | null;
+    readonly serialNumber: string | null;
+    readonly installedOn: string | null;
+    readonly warrantyId: string | null;
+    readonly coverageEvidenceStatus: 'NONE' | 'NOT_SURE' | 'UNKNOWN' | 'VERIFIED';
+    readonly purchaseCostCents: number | null;
+    readonly replacementCostCents: number | null;
+  }>;
+  readonly warranties: ReadonlyArray<{
+    readonly id: string;
+    readonly inventoryItemId: string | null;
+    readonly providerName: string;
+    readonly policyNumber: string | null;
+    readonly category: string;
+    readonly expiryDate: string | null;
+    readonly cost: number | null;
+  }>;
+  readonly insurancePolicies: ReadonlyArray<{
+    readonly id: string;
+    readonly carrierName: string;
+    readonly policyNumber: string;
+    readonly coverageType: string | null;
+    readonly premiumAmount: number | null;
+    readonly deductibleAmount: number | null;
+    readonly deductibleCents: number | null;
+    readonly personalPropertyLimitCents: number | null;
+    readonly expiryDate: string | null;
+    readonly isVerified: boolean;
+  }>;
+  readonly maintenanceTasks: ReadonlyArray<{
+    readonly id: string;
+    readonly title: string;
+    readonly status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'OVERDUE';
+    readonly priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+    readonly category: string | null;
+    readonly assetType: string | null;
+    readonly serviceCategory: string | null;
+    readonly nextDueDate: string | null;
+    readonly inventoryItemId: string | null;
+  }>;
+  readonly claims: ReadonlyArray<{
+    readonly id: string;
+    readonly title: string;
+    readonly status: 'DRAFT' | 'OPEN' | 'SUBMITTED' | 'CLOSED';
+    readonly type: string;
+    readonly claimNumber: string | null;
+    readonly deductibleAmount: number | null;
+    readonly estimatedLossAmount: number | null;
+    readonly settlementAmount: number | null;
+    readonly requiredDocumentsMissing: boolean;
+  }>;
+  readonly claimDocuments: ReadonlyArray<{
+    readonly id: string;
+    readonly claimId: string;
+    readonly documentId: string;
+    readonly propertyRecordId: string;
+    readonly title: string;
+  }>;
+  readonly propertyRecords: ReadonlyArray<{
+    readonly id: string;
+    readonly title: string;
+    readonly recordType: string;
+    readonly visibility: 'VIEWER' | 'CONTRIBUTOR' | 'OWNER';
+    readonly verificationStatus: 'VERIFIED' | 'UNVERIFIED' | 'UNKNOWN';
+    readonly currentVersionId: string | null;
+  }>;
+  readonly taxBills: ReadonlyArray<{
+    readonly id: string;
+    readonly taxYear: number;
+    readonly billAmount: number;
+    readonly status: string;
+  }>;
+  readonly reserveFund: {
+    readonly id: string;
+    readonly currentBalanceCents: number;
+    readonly recommendedMonthlyContributionCents: number;
+    readonly currentShortfallCents: number;
+  } | null;
+  readonly projectsAndQuotes: ReadonlyArray<{
+    readonly id: string;
+    readonly title: string;
+    readonly vendorName: string;
+    readonly quoteAmountCents: number;
+    readonly permitStatus: string;
+  }>;
+  readonly risksRecallsInspections: ReadonlyArray<{
+    readonly id: string;
+    readonly kind: 'RECALL' | 'INSPECTION_FINDING' | 'RADAR_HAZARD';
+    readonly title: string;
+    readonly severity: string;
+    readonly status: string;
+  }>;
+  readonly homeEvents: ReadonlyArray<{
+    readonly id: string;
+    readonly title: string;
+    readonly eventType: string;
+    readonly occurredAt: string;
+  }>;
+  readonly buyerChecklist: {
+    readonly id: string;
+    readonly status: string;
+    readonly stage: string;
+    readonly targetCloseDate: string;
+    readonly tasks: ReadonlyArray<{
+      readonly id: string;
+      readonly title: string;
+      readonly status: string;
+      readonly priority: string;
+      readonly dueAt: string | null;
+    }>;
+    readonly milestones: ReadonlyArray<{
+      readonly id: string;
+      readonly milestoneKey: string;
+      readonly status: string;
+      readonly dueAt: string | null;
+    }>;
+  } | null;
+  readonly sellerPrep: {
+    readonly saleCaseId: string;
+    readonly status: string;
+    readonly targetCloseDate: string;
+    readonly stagingReadiness: string;
+    readonly readinessItems: ReadonlyArray<{
+      readonly id: string;
+      readonly title: string;
+      readonly status: string;
+      readonly estimatedCostMinCents: number | null;
+      readonly estimatedCostMaxCents: number | null;
+    }>;
+  } | null;
+  readonly accountHouseholdPreferences: ReadonlyArray<{
+    readonly id: string;
+    readonly kind: 'SAVED_RESULT' | 'NOTIFICATION' | 'GUIDANCE_JOURNEY' | 'HOUSEHOLD_MEMBER';
+    readonly title: string;
+    readonly roleFloor: 'VIEWER' | 'CONTRIBUTOR' | 'OWNER';
+  }>;
+}
 
 export interface SeededPropertyArchetype {
   readonly archetypeId: string;
@@ -17,6 +189,7 @@ export interface SeededPropertyArchetype {
   readonly supportedDataStates: readonly SeededDataStateVariant[];
   readonly supportedRoles: readonly ('VIEWER' | 'CONTRIBUTOR' | 'OWNER')[];
   readonly domainsCovered: readonly SemanticDomainId[];
+  readonly fixtureData: SeededPropertyFixtureDataset;
 }
 
 export const ASK_SEEDED_PROPERTY_ARCHETYPES: readonly SeededPropertyArchetype[] = Object.freeze([
@@ -27,6 +200,224 @@ export const ASK_SEEDED_PROPERTY_ARCHETYPES: readonly SeededPropertyArchetype[] 
     supportedDataStates: ['POPULATED'],
     supportedRoles: ['VIEWER', 'CONTRIBUTOR', 'OWNER'],
     domainsCovered: ASK_SEMANTIC_DOMAINS.filter((d) => d.domainId !== 'domain.safety_boundary').map((d) => d.domainId),
+    fixtureData: {
+      property: {
+        id: 'prop-complete-1',
+        name: '742 Evergreen Terrace',
+        yearBuilt: 2012,
+        roofType: 'ARCHITECTURAL_SHINGLE',
+        roofReplacementYear: 2021,
+        hvacInstallYear: 2020,
+        waterHeaterInstallYear: 2022,
+        zipCode: '78701',
+        normalizedZipCode: '78701',
+        geocodedZipCode: '78701',
+        lotSize: 8500,
+        hasIrrigation: true,
+        hasDrainageIssues: false,
+      },
+      exteriorProfile: {
+        lotSizeSqFt: 8500,
+        hasIrrigation: true,
+        hasDrainageIssues: false,
+      },
+      inventoryItems: [
+        {
+          id: 'item-hvac-1',
+          name: 'Carrier Infinity Heat Pump',
+          category: 'HVAC',
+          assetType: 'HVAC',
+          brand: 'Carrier',
+          manufacturer: 'Carrier',
+          manufacturerNorm: 'carrier',
+          model: '24VNA9',
+          modelNumber: '24VNA9',
+          modelNumberNorm: '24vna9',
+          serialNo: 'SN-CAR-2020',
+          serialNumber: 'SN-CAR-2020',
+          installedOn: '2020-05-15',
+          warrantyId: 'war-hvac-1',
+          coverageEvidenceStatus: 'VERIFIED',
+          purchaseCostCents: 820000,
+          replacementCostCents: 950000,
+        },
+        {
+          id: 'item-dishwasher-1',
+          name: 'Bosch 800 Series Dishwasher',
+          category: 'APPLIANCE',
+          assetType: 'APPLIANCE',
+          brand: 'Bosch',
+          manufacturer: 'Bosch',
+          manufacturerNorm: 'bosch',
+          model: 'SHPM88Z75N',
+          modelNumber: 'SHPM88Z75N',
+          modelNumberNorm: 'shpm88z75n',
+          serialNo: 'SN-BSH-2022',
+          serialNumber: 'SN-BSH-2022',
+          installedOn: '2022-08-10',
+          warrantyId: null,
+          coverageEvidenceStatus: 'NONE',
+          purchaseCostCents: 129900,
+          replacementCostCents: 139900,
+        },
+      ],
+      warranties: [
+        {
+          id: 'war-hvac-1',
+          inventoryItemId: 'item-hvac-1',
+          providerName: 'Carrier Comfort Warranty',
+          policyNumber: 'CW-99201',
+          category: 'HVAC',
+          expiryDate: '2030-05-15',
+          cost: 0,
+        },
+      ],
+      insurancePolicies: [
+        {
+          id: 'ins-ho3-1',
+          carrierName: 'Chubb Masterpiece',
+          policyNumber: 'HO3-78701-01',
+          coverageType: 'HO3',
+          premiumAmount: 2400,
+          deductibleAmount: 1500,
+          deductibleCents: 150000,
+          personalPropertyLimitCents: 25000000,
+          expiryDate: '2027-01-01',
+          isVerified: true,
+        },
+      ],
+      maintenanceTasks: [
+        {
+          id: 'task-filter-1',
+          title: 'Replace HVAC MERV-13 filter',
+          status: 'OVERDUE',
+          priority: 'HIGH',
+          category: 'HVAC',
+          assetType: 'HVAC',
+          serviceCategory: 'HVAC',
+          nextDueDate: '2026-04-01',
+          inventoryItemId: 'item-hvac-1',
+        },
+      ],
+      claims: [
+        {
+          id: 'claim-water-1',
+          title: 'Upstairs guest bath supply line leak',
+          status: 'OPEN',
+          type: 'WATER_DAMAGE',
+          claimNumber: 'CLM-2026-104',
+          deductibleAmount: 1500,
+          estimatedLossAmount: 6800,
+          settlementAmount: null,
+          requiredDocumentsMissing: false,
+        },
+      ],
+      claimDocuments: [
+        {
+          id: 'cdoc-1',
+          claimId: 'claim-water-1',
+          documentId: 'doc-plumber-1',
+          propertyRecordId: 'rec-plumber-invoice-1',
+          title: 'Plumber emergency mitigation invoice',
+        },
+      ],
+      propertyRecords: [
+        {
+          id: 'rec-plumber-invoice-1',
+          title: 'Plumber emergency mitigation invoice',
+          recordType: 'INVOICE',
+          visibility: 'VIEWER',
+          verificationStatus: 'VERIFIED',
+          currentVersionId: 'ver-plumber-1',
+        },
+      ],
+      taxBills: [
+        {
+          id: 'tax-2025',
+          taxYear: 2025,
+          billAmount: 7850,
+          status: 'PAID',
+        },
+      ],
+      reserveFund: {
+        id: 'res-fund-1',
+        currentBalanceCents: 1450000,
+        recommendedMonthlyContributionCents: 45000,
+        currentShortfallCents: 200000,
+      },
+      projectsAndQuotes: [
+        {
+          id: 'proj-deck-1',
+          title: 'Composite deck resurfacing',
+          vendorName: 'Austin Deck Pros',
+          quoteAmountCents: 1850000,
+          permitStatus: 'APPROVED',
+        },
+      ],
+      risksRecallsInspections: [
+        {
+          id: 'risk-recall-1',
+          kind: 'RECALL',
+          title: 'Dishwasher power cord safety recall check',
+          severity: 'HIGH',
+          status: 'OPEN',
+        },
+      ],
+      homeEvents: [
+        {
+          id: 'evt-roof-2021',
+          title: 'Full architectural shingle roof replacement',
+          eventType: 'CAPITAL_IMPROVEMENT',
+          occurredAt: '2021-06-15',
+        },
+      ],
+      buyerChecklist: {
+        id: 'buyer-chk-complete-1',
+        status: 'ACTIVE',
+        stage: 'CLOSING',
+        targetCloseDate: '2026-06-01',
+        tasks: [
+          {
+            id: 'btask-complete-1',
+            title: 'Schedule final walkthrough',
+            status: 'PENDING',
+            priority: 'HIGH',
+            dueAt: '2026-05-28',
+          },
+        ],
+        milestones: [
+          {
+            id: 'bmile-complete-1',
+            milestoneKey: 'APPRAISAL_COMPLETE',
+            status: 'COMPLETED',
+            dueAt: '2026-05-15',
+          },
+        ],
+      },
+      sellerPrep: {
+        saleCaseId: 'sale-case-complete-1',
+        status: 'PREP',
+        targetCloseDate: '2026-09-15',
+        stagingReadiness: 'READY',
+        readinessItems: [
+          {
+            id: 'sitem-complete-1',
+            title: 'Touch up exterior trim paint',
+            status: 'OPEN',
+            estimatedCostMinCents: 80000,
+            estimatedCostMaxCents: 150000,
+          },
+        ],
+      },
+      accountHouseholdPreferences: [
+        {
+          id: 'saved-refi-1',
+          kind: 'SAVED_RESULT',
+          title: 'Saved 30-year refinance comparison',
+          roleFloor: 'VIEWER',
+        },
+      ],
+    },
   },
   {
     archetypeId: 'property.seeded.missing_and_unknown_states',
@@ -37,11 +428,91 @@ export const ASK_SEEDED_PROPERTY_ARCHETYPES: readonly SeededPropertyArchetype[] 
     domainsCovered: [
       'domain.property_profile',
       'domain.inventory',
+      'domain.maintenance',
       'domain.warranties_coverage',
+      'domain.insurance_policies',
       'domain.claims',
       'domain.documents_records',
       'domain.ownership_costs_finance',
+      'domain.projects_quotes_vendors',
+      'domain.risks_recalls_inspections',
+      'domain.timeline_home_events',
+      'domain.account_household_preferences',
     ],
+    fixtureData: {
+      property: {
+        id: 'prop-missing-1',
+        name: '19 Oak Hollow Lane',
+        yearBuilt: 1998,
+        roofType: null,
+        roofReplacementYear: null,
+        hvacInstallYear: null,
+        waterHeaterInstallYear: null,
+        zipCode: '98101',
+        normalizedZipCode: null,
+        geocodedZipCode: null,
+        lotSize: null,
+        hasIrrigation: null,
+        hasDrainageIssues: null,
+      },
+      exteriorProfile: null,
+      inventoryItems: [
+        {
+          id: 'item-washer-unknown-1',
+          name: 'Laundry Room Washer',
+          category: 'APPLIANCE',
+          assetType: 'APPLIANCE',
+          brand: null,
+          manufacturer: null,
+          manufacturerNorm: null,
+          model: null,
+          modelNumber: null,
+          modelNumberNorm: null,
+          serialNo: null,
+          serialNumber: null,
+          installedOn: null,
+          warrantyId: null,
+          coverageEvidenceStatus: 'NOT_SURE',
+          purchaseCostCents: null,
+          replacementCostCents: null,
+        },
+      ],
+      warranties: [],
+      insurancePolicies: [],
+      maintenanceTasks: [],
+      claims: [
+        {
+          id: 'claim-missing-docs-1',
+          title: 'Windstorm fence damage claim',
+          status: 'OPEN',
+          type: 'WIND_HAIL',
+          claimNumber: null,
+          deductibleAmount: null,
+          estimatedLossAmount: 3200,
+          settlementAmount: null,
+          requiredDocumentsMissing: true,
+        },
+      ],
+      claimDocuments: [],
+      propertyRecords: [
+        {
+          id: 'rec-unverified-scan-1',
+          title: 'Unverified closing packet scan',
+          recordType: 'DISCLOSURE',
+          visibility: 'CONTRIBUTOR',
+          verificationStatus: 'UNKNOWN',
+          currentVersionId: null,
+        },
+      ],
+      taxBills: [],
+      reserveFund: null,
+      projectsAndQuotes: [],
+      risksRecallsInspections: [],
+      homeEvents: [],
+      buyerChecklist: null,
+      sellerPrep: null,
+      accountHouseholdPreferences: [],
+    },
   },
   {
     archetypeId: 'property.seeded.conflicted_and_dual_parent_auth',
@@ -56,6 +527,124 @@ export const ASK_SEEDED_PROPERTY_ARCHETYPES: readonly SeededPropertyArchetype[] 
       'domain.claims',
       'domain.documents_records',
     ],
+    fixtureData: {
+      property: {
+        id: 'prop-conflicted-1',
+        name: '405 Conflict Ridge Rd',
+        yearBuilt: 2015,
+        roofType: 'METAL',
+        roofReplacementYear: 2016,
+        hvacInstallYear: 2015,
+        waterHeaterInstallYear: 2019,
+        zipCode: '30309',
+        normalizedZipCode: '30309',
+        geocodedZipCode: '30308',
+        lotSize: 10200,
+        hasIrrigation: true,
+        hasDrainageIssues: false,
+      },
+      exteriorProfile: {
+        lotSizeSqFt: 10200,
+        hasIrrigation: false,
+        hasDrainageIssues: false,
+      },
+      inventoryItems: [
+        {
+          id: 'item-fridge-conflict-1',
+          name: 'Samsung Bespoke Refrigerator',
+          category: 'APPLIANCE',
+          assetType: 'APPLIANCE',
+          brand: 'Samsung',
+          manufacturer: 'Samsung Electronics',
+          manufacturerNorm: 'samsung electronics',
+          model: 'RF28-LEGACY',
+          modelNumber: 'RF28R7351SR',
+          modelNumberNorm: 'rf28r7351sr',
+          serialNo: 'SER-OLD-01',
+          serialNumber: 'SER-NEW-99',
+          installedOn: '2021-03-01',
+          warrantyId: 'war-legacy-plan-1',
+          coverageEvidenceStatus: 'VERIFIED',
+          purchaseCostCents: 289900,
+          replacementCostCents: 310000,
+        },
+      ],
+      warranties: [
+        {
+          id: 'war-legacy-plan-1',
+          inventoryItemId: null,
+          providerName: 'First American Home Warranty',
+          policyNumber: 'FA-1001',
+          category: 'APPLIANCE',
+          expiryDate: '2027-03-01',
+          cost: 650,
+        },
+        {
+          id: 'war-item-direct-2',
+          inventoryItemId: 'item-fridge-conflict-1',
+          providerName: 'Samsung Care+ Extended',
+          policyNumber: 'SC-2002',
+          category: 'APPLIANCE',
+          expiryDate: '2028-03-01',
+          cost: 299,
+        },
+      ],
+      insurancePolicies: [
+        {
+          id: 'ins-conflict-1',
+          carrierName: 'State Farm',
+          policyNumber: 'SF-30309-88',
+          coverageType: 'HO3',
+          premiumAmount: 1950,
+          deductibleAmount: 2500,
+          deductibleCents: 100000,
+          personalPropertyLimitCents: 18000000,
+          expiryDate: '2026-12-31',
+          isVerified: true,
+        },
+      ],
+      maintenanceTasks: [],
+      claims: [
+        {
+          id: 'claim-dual-parent-1',
+          title: 'Kitchen refrigerator line leak claim',
+          status: 'SUBMITTED',
+          type: 'WATER_DAMAGE',
+          claimNumber: 'SF-CLM-882',
+          deductibleAmount: 2500,
+          estimatedLossAmount: 4900,
+          settlementAmount: null,
+          requiredDocumentsMissing: false,
+        },
+      ],
+      claimDocuments: [
+        {
+          id: 'cdoc-restricted-1',
+          claimId: 'claim-dual-parent-1',
+          documentId: 'doc-owner-private-1',
+          propertyRecordId: 'rec-owner-only-settlement-1',
+          title: 'Owner-only private tax & settlement worksheet',
+        },
+      ],
+      propertyRecords: [
+        {
+          id: 'rec-owner-only-settlement-1',
+          title: 'Owner-only private tax & settlement worksheet',
+          recordType: 'FINANCIAL',
+          visibility: 'OWNER',
+          verificationStatus: 'VERIFIED',
+          currentVersionId: 'ver-owner-1',
+        },
+      ],
+      taxBills: [],
+      reserveFund: null,
+      projectsAndQuotes: [],
+      risksRecallsInspections: [],
+      homeEvents: [],
+      buyerChecklist: null,
+      sellerPrep: null,
+      accountHouseholdPreferences: [],
+    },
   },
   {
     archetypeId: 'property.seeded.buyer_and_seller_lifecycle',
@@ -64,6 +653,97 @@ export const ASK_SEEDED_PROPERTY_ARCHETYPES: readonly SeededPropertyArchetype[] 
     supportedDataStates: ['POPULATED', 'EMPTY_OR_MISSING'],
     supportedRoles: ['VIEWER', 'CONTRIBUTOR', 'OWNER'],
     domainsCovered: ['domain.buyer_journey', 'domain.seller_preparation', 'domain.projects_quotes_vendors'],
+    fixtureData: {
+      property: {
+        id: 'prop-lifecycle-1',
+        name: '88 Transition Way',
+        yearBuilt: 2008,
+        roofType: 'ARCHITECTURAL_SHINGLE',
+        roofReplacementYear: 2019,
+        hvacInstallYear: 2018,
+        waterHeaterInstallYear: 2021,
+        zipCode: '80202',
+        normalizedZipCode: '80202',
+        geocodedZipCode: '80202',
+        lotSize: 6400,
+        hasIrrigation: false,
+        hasDrainageIssues: false,
+      },
+      exteriorProfile: null,
+      inventoryItems: [],
+      warranties: [],
+      insurancePolicies: [],
+      maintenanceTasks: [],
+      claims: [],
+      claimDocuments: [],
+      propertyRecords: [],
+      taxBills: [],
+      reserveFund: null,
+      projectsAndQuotes: [
+        {
+          id: 'proj-presale-paint-1',
+          title: 'Interior neutral repaint before listing',
+          vendorName: 'Mile High Painters',
+          quoteAmountCents: 420000,
+          permitStatus: 'NOT_REQUIRED',
+        },
+      ],
+      risksRecallsInspections: [],
+      homeEvents: [],
+      buyerChecklist: {
+        id: 'buyer-chk-lifecycle-1',
+        status: 'ACTIVE',
+        stage: 'UNDER_CONTRACT',
+        targetCloseDate: '2026-06-15',
+        tasks: [
+          {
+            id: 'btask-lifecycle-1',
+            title: 'Upload earnest money wire receipt',
+            status: 'PENDING',
+            priority: 'URGENT',
+            dueAt: '2026-05-20',
+          },
+          {
+            id: 'btask-lifecycle-2',
+            title: 'Confirm sewer scope inspection',
+            status: 'COMPLETED',
+            priority: 'HIGH',
+            dueAt: '2026-05-18',
+          },
+        ],
+        milestones: [
+          {
+            id: 'bmile-lifecycle-1',
+            milestoneKey: 'INSPECTION_OBJECTION_DEADLINE',
+            status: 'PENDING',
+            dueAt: '2026-05-25',
+          },
+        ],
+      },
+      sellerPrep: {
+        saleCaseId: 'sale-case-lifecycle-1',
+        status: 'PREP',
+        targetCloseDate: '2026-09-01',
+        stagingReadiness: 'IN_PROGRESS',
+        readinessItems: [
+          {
+            id: 'sitem-lifecycle-1',
+            title: 'Refinish front entry hardwood threshold',
+            status: 'OPEN',
+            estimatedCostMinCents: 65000,
+            estimatedCostMaxCents: 110000,
+          },
+          {
+            id: 'sitem-lifecycle-2',
+            title: 'Stage primary bedroom and patio',
+            status: 'PURSUING',
+            estimatedCostMinCents: null,
+            estimatedCostMaxCents: null,
+          },
+        ],
+      },
+      accountHouseholdPreferences: [],
+    },
   },
 ] as const);
 
@@ -131,7 +811,11 @@ export const ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES: readonly IndependentSemanticSce
     canonicalPrompt: 'which items are having warranty',
     paraphrases: ['which appliances have warranties', 'do any appliances have a warranty?'],
     adjacentNegatives: ['list items without warranty', 'when does my home insurance policy expire?'],
-    seededArchetypeIds: ['property.seeded.complete_single_family', 'property.seeded.conflicted_and_dual_parent_auth'],
+    seededArchetypeIds: [
+      'property.seeded.complete_single_family',
+      'property.seeded.missing_and_unknown_states',
+      'property.seeded.conflicted_and_dual_parent_auth',
+    ],
     requiredDataStateVariants: ['POPULATED', 'EMPTY_OR_MISSING', 'UNKNOWN', 'CONFLICTED'],
     expectedPlanSummary: { subjectEntityId: 'entity.inventory_item', projection: 'LIST', polarity: 'POSITIVE', requiredSlots: [] },
   },
@@ -157,7 +841,11 @@ export const ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES: readonly IndependentSemanticSce
     canonicalPrompt: 'what is my insurance deductible and when does my policy expire?',
     paraphrases: ['who is my insurance carrier and what is the deductible?', 'when does my homeowners insurance renew?'],
     adjacentNegatives: ['which appliances have no warranty?', 'what claims are still open?'],
-    seededArchetypeIds: ['property.seeded.complete_single_family', 'property.seeded.conflicted_and_dual_parent_auth'],
+    seededArchetypeIds: [
+      'property.seeded.complete_single_family',
+      'property.seeded.missing_and_unknown_states',
+      'property.seeded.conflicted_and_dual_parent_auth',
+    ],
     requiredDataStateVariants: ['POPULATED', 'EMPTY_OR_MISSING', 'CONFLICTED'],
     expectedPlanSummary: { subjectEntityId: 'entity.insurance_policy', projection: 'DETAIL', polarity: 'POSITIVE', requiredSlots: [] },
   },
@@ -170,7 +858,11 @@ export const ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES: readonly IndependentSemanticSce
     canonicalPrompt: 'show the documents for my water-damage claim',
     paraphrases: ['what claims are open and what documents are missing?', 'when is the next follow-up on my water damage claim?'],
     adjacentNegatives: ['show all home records', 'when does my warranty expire?'],
-    seededArchetypeIds: ['property.seeded.complete_single_family', 'property.seeded.conflicted_and_dual_parent_auth'],
+    seededArchetypeIds: [
+      'property.seeded.complete_single_family',
+      'property.seeded.missing_and_unknown_states',
+      'property.seeded.conflicted_and_dual_parent_auth',
+    ],
     requiredDataStateVariants: ['POPULATED', 'EMPTY_OR_MISSING', 'UNKNOWN'],
     expectedPlanSummary: { subjectEntityId: 'entity.claim', projection: 'LIST', polarity: 'POSITIVE', requiredSlots: ['claimId'] },
   },
@@ -183,7 +875,11 @@ export const ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES: readonly IndependentSemanticSce
     canonicalPrompt: 'what is the verification status and latest version of my roof invoice record?',
     paraphrases: ['which appliances don’t have a manual or receipt?', 'show the scan status of my deed record'],
     adjacentNegatives: ['show the documents for my water-damage claim', 'export my home report'],
-    seededArchetypeIds: ['property.seeded.complete_single_family', 'property.seeded.conflicted_and_dual_parent_auth'],
+    seededArchetypeIds: [
+      'property.seeded.complete_single_family',
+      'property.seeded.missing_and_unknown_states',
+      'property.seeded.conflicted_and_dual_parent_auth',
+    ],
     requiredDataStateVariants: ['POPULATED', 'EMPTY_OR_MISSING'],
     expectedPlanSummary: { subjectEntityId: 'entity.property_record', projection: 'DETAIL', polarity: 'POSITIVE', requiredSlots: ['recordId'] },
   },
@@ -222,7 +918,11 @@ export const ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES: readonly IndependentSemanticSce
     canonicalPrompt: 'compare these two kitchen contractor quotes',
     paraphrases: ['which active projects still need a permit?', 'is this HVAC repair quote fair for my area?'],
     adjacentNegatives: ['should I repair the furnace or replace it?', 'what maintenance is due next month?'],
-    seededArchetypeIds: ['property.seeded.complete_single_family', 'property.seeded.buyer_and_seller_lifecycle'],
+    seededArchetypeIds: [
+      'property.seeded.complete_single_family',
+      'property.seeded.missing_and_unknown_states',
+      'property.seeded.buyer_and_seller_lifecycle',
+    ],
     requiredDataStateVariants: ['POPULATED', 'UNKNOWN'],
     expectedPlanSummary: { subjectEntityId: 'entity.property', projection: 'CAPABILITY_RESULT', polarity: 'POSITIVE', requiredSlots: ['quoteWorkspaceId'] },
   },
@@ -261,7 +961,7 @@ export const ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES: readonly IndependentSemanticSce
     canonicalPrompt: 'what home events were recorded this year?',
     paraphrases: ['show recent changes to my home timeline', 'when was the roof replacement event logged?'],
     adjacentNegatives: ['when does my warranty expire?', 'what maintenance is due next month?'],
-    seededArchetypeIds: ['property.seeded.complete_single_family'],
+    seededArchetypeIds: ['property.seeded.complete_single_family', 'property.seeded.missing_and_unknown_states'],
     requiredDataStateVariants: ['POPULATED', 'EMPTY_OR_MISSING'],
     expectedPlanSummary: { subjectEntityId: 'entity.property', projection: 'LIST', polarity: 'POSITIVE', requiredSlots: [] },
   },
@@ -300,7 +1000,7 @@ export const ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES: readonly IndependentSemanticSce
     canonicalPrompt: 'show my saved items',
     paraphrases: ['show my saved results and bookmarks', 'what open work items do I have in Ask Cozy?'],
     adjacentNegatives: ['list items without warranty', 'show all appliances in my inventory'],
-    seededArchetypeIds: ['property.seeded.complete_single_family'],
+    seededArchetypeIds: ['property.seeded.complete_single_family', 'property.seeded.missing_and_unknown_states'],
     requiredDataStateVariants: ['POPULATED', 'EMPTY_OR_MISSING'],
     expectedPlanSummary: { subjectEntityId: 'entity.property', projection: 'CAPABILITY_RESULT', polarity: 'POSITIVE', requiredSlots: [] },
   },
@@ -382,6 +1082,223 @@ export const ASK_PHASE0_CONTAINMENT_REGRESSION_CASES: readonly Phase0Containment
   },
 ] as const);
 
+export interface SeededArchetypeFixtureEvaluation {
+  readonly archetypeId: string;
+  readonly passed: boolean;
+  readonly observedStates: readonly SeededDataStateVariant[];
+  readonly warrantyReadStates: readonly string[];
+  readonly scalarCoalescenceStates: Readonly<Record<string, string>>;
+  readonly dualParentRestrictedClaimDocIdsForViewer: readonly string[];
+  readonly issues: readonly string[];
+}
+
+const ROLE_RANK: Readonly<Record<'VIEWER' | 'CONTRIBUTOR' | 'OWNER', number>> = Object.freeze({
+  VIEWER: 1,
+  CONTRIBUTOR: 2,
+  OWNER: 3,
+});
+
+export function evaluateSeededArchetypeFixtures(archetypeId: string): SeededArchetypeFixtureEvaluation {
+  const archetype = ASK_SEEDED_PROPERTY_ARCHETYPES.find((a) => a.archetypeId === archetypeId);
+  if (!archetype) {
+    return {
+      archetypeId,
+      passed: false,
+      observedStates: [],
+      warrantyReadStates: [],
+      scalarCoalescenceStates: {},
+      dualParentRestrictedClaimDocIdsForViewer: [],
+      issues: [`Unknown archetypeId '${archetypeId}'.`],
+    };
+  }
+
+  const issues: string[] = [];
+  const data = archetype.fixtureData;
+  const observedStates = new Set<SeededDataStateVariant>();
+
+  // 1. Evaluate transitional warranty links across fixture inventoryItems and warranties
+  const warrantyReadStates: string[] = [];
+  for (const item of data.inventoryItems) {
+    const linkedIds = data.warranties
+      .filter((w) => w.inventoryItemId === item.id)
+      .map((w) => w.id);
+    const read = classifyTransitionalWarrantyLinks({
+      inventoryItemId: item.id,
+      label: item.name,
+      propertyPlanWarrantyId: item.warrantyId,
+      itemWarrantyIds: linkedIds,
+      coverageEvidenceStatus: item.coverageEvidenceStatus,
+    });
+    warrantyReadStates.push(read.state);
+    if (read.state === 'CONFLICTED_LINKS') observedStates.add('CONFLICTED');
+    else if (read.state === 'UNKNOWN') observedStates.add('UNKNOWN');
+    else if (read.state === 'NO_LINK_RECORDED' || read.state === 'EXPLICIT_NO_COVERAGE') {
+      if (data.warranties.length === 0) observedStates.add('EMPTY_OR_MISSING');
+    } else {
+      observedStates.add('POPULATED');
+    }
+  }
+
+  // 2. Evaluate scalar field coalescence across fixture records
+  const scalarCoalescenceStates: Record<string, string> = {};
+  const zipEval = evaluateScalarFieldCoalescence('scalar_group.property.postal_code', {
+    'Property.zipCode': data.property.zipCode,
+    'Property.normalizedZipCode': data.property.normalizedZipCode,
+    'Property.geocodedZipCode': data.property.geocodedZipCode,
+  });
+  scalarCoalescenceStates['scalar_group.property.postal_code'] = zipEval.state;
+  if (zipEval.state === 'CONFLICTED') observedStates.add('CONFLICTED');
+  if (zipEval.state === 'POPULATED') observedStates.add('POPULATED');
+
+  if (data.exteriorProfile) {
+    const irrigEval = evaluateScalarFieldCoalescence('scalar_group.property.has_irrigation', {
+      'PropertyExteriorProfile.hasIrrigation': data.exteriorProfile.hasIrrigation,
+      'Property.hasIrrigation': data.property.hasIrrigation,
+    });
+    scalarCoalescenceStates['scalar_group.property.has_irrigation'] = irrigEval.state;
+    if (irrigEval.state === 'CONFLICTED') observedStates.add('CONFLICTED');
+  }
+
+  for (const item of data.inventoryItems) {
+    const modelEval = evaluateScalarFieldCoalescence('scalar_group.inventory_item.model_identity', {
+      'InventoryItem.modelNumber': item.modelNumber,
+      'InventoryItem.model': item.model,
+    });
+    scalarCoalescenceStates[`${item.id}:model_identity`] = modelEval.state;
+    if (modelEval.state === 'CONFLICTED') observedStates.add('CONFLICTED');
+    if (modelEval.state === 'MISSING') observedStates.add('EMPTY_OR_MISSING');
+
+    const serialEval = evaluateScalarFieldCoalescence('scalar_group.inventory_item.serial_identity', {
+      'InventoryItem.serialNumber': item.serialNumber,
+      'InventoryItem.serialNo': item.serialNo,
+    });
+    scalarCoalescenceStates[`${item.id}:serial_identity`] = serialEval.state;
+    if (serialEval.state === 'CONFLICTED') observedStates.add('CONFLICTED');
+    if (serialEval.state === 'MISSING') observedStates.add('EMPTY_OR_MISSING');
+  }
+
+  for (const policy of data.insurancePolicies) {
+    const dedEval = evaluateScalarFieldCoalescence('scalar_group.insurance_policy.deductible', {
+      'InsurancePolicy.deductibleAmount': policy.deductibleAmount,
+      'InsurancePolicy.deductibleCents': policy.deductibleCents,
+    });
+    scalarCoalescenceStates[`${policy.id}:deductible`] = dedEval.state;
+    if (dedEval.state === 'CONFLICTED') observedStates.add('CONFLICTED');
+    if (dedEval.state === 'POPULATED') observedStates.add('POPULATED');
+  }
+
+  // 3. Check missing/unknown states on property, records, reserveFund, buyer/seller lifecycle
+  if (data.property.roofReplacementYear === null || data.reserveFund === null || data.taxBills.length === 0) {
+    observedStates.add('EMPTY_OR_MISSING');
+  }
+  if (data.propertyRecords.some((r) => r.verificationStatus === 'UNKNOWN')) {
+    observedStates.add('UNKNOWN');
+  }
+  if (data.buyerChecklist || data.sellerPrep) {
+    observedStates.add('POPULATED');
+  }
+
+  // 4. Evaluate dual-parent intersection for ClaimDocument x PropertyRecord
+  const recordsById = new Map(data.propertyRecords.map((r) => [r.id, r]));
+  const dualParentRestrictedClaimDocIdsForViewer: string[] = [];
+  for (const cdoc of data.claimDocuments) {
+    const parentRecord = recordsById.get(cdoc.propertyRecordId);
+    if (!parentRecord) {
+      issues.push(`${archetypeId}: ClaimDocument '${cdoc.id}' references missing PropertyRecord '${cdoc.propertyRecordId}'.`);
+      continue;
+    }
+    if (ROLE_RANK.VIEWER < ROLE_RANK[parentRecord.visibility]) {
+      dualParentRestrictedClaimDocIdsForViewer.push(cdoc.id);
+    }
+  }
+
+  if (
+    archetypeId === 'property.seeded.conflicted_and_dual_parent_auth' &&
+    dualParentRestrictedClaimDocIdsForViewer.length === 0
+  ) {
+    issues.push(
+      `${archetypeId}: expected at least one dual-parent restricted ClaimDocument hidden from VIEWER role.`,
+    );
+  }
+
+  for (const expectedState of archetype.supportedDataStates) {
+    if (!observedStates.has(expectedState)) {
+      issues.push(
+        `${archetypeId}: declared supportedDataState '${expectedState}' was not produced by concrete fixtureData evaluation (observed: ${[...observedStates].join(', ')}).`,
+      );
+    }
+  }
+
+  return {
+    archetypeId,
+    passed: issues.length === 0,
+    observedStates: Object.freeze([...observedStates]),
+    warrantyReadStates: Object.freeze(warrantyReadStates),
+    scalarCoalescenceStates: Object.freeze(scalarCoalescenceStates),
+    dualParentRestrictedClaimDocIdsForViewer: Object.freeze(dualParentRestrictedClaimDocIdsForViewer),
+    issues: Object.freeze(issues),
+  };
+}
+
+export interface SeededFamilyFixtureExecutionResult {
+  readonly familyId: string;
+  readonly passed: boolean;
+  readonly evaluatedArchetypeIds: readonly string[];
+  readonly observedDataStates: readonly SeededDataStateVariant[];
+  readonly issues: readonly string[];
+}
+
+export function executeSeededFamilyAgainstFixtures(familyId: string): SeededFamilyFixtureExecutionResult {
+  const family = ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES.find((f) => f.familyId === familyId);
+  if (!family) {
+    return {
+      familyId,
+      passed: false,
+      evaluatedArchetypeIds: [],
+      observedDataStates: [],
+      issues: [`Unknown familyId '${familyId}'.`],
+    };
+  }
+
+  const issues: string[] = [];
+  const observedStates = new Set<SeededDataStateVariant>();
+  for (const archetypeId of family.seededArchetypeIds) {
+    const archetype = ASK_SEEDED_PROPERTY_ARCHETYPES.find((a) => a.archetypeId === archetypeId);
+    if (!archetype) {
+      issues.push(`${familyId}: references unknown seededArchetypeId '${archetypeId}'.`);
+      continue;
+    }
+    if (!archetype.domainsCovered.includes(family.domainId)) {
+      issues.push(
+        `${familyId}: archetype '${archetypeId}' does not cover family domain '${family.domainId}'.`,
+      );
+    }
+    const evalResult = evaluateSeededArchetypeFixtures(archetypeId);
+    if (!evalResult.passed) {
+      issues.push(...evalResult.issues.map((i) => `${familyId} -> ${i}`));
+    }
+    for (const st of evalResult.observedStates) {
+      observedStates.add(st);
+    }
+  }
+
+  for (const reqState of family.requiredDataStateVariants) {
+    if (!observedStates.has(reqState)) {
+      issues.push(
+        `${familyId}: requiredDataStateVariant '${reqState}' is not instantiated across its seededArchetypeIds (${family.seededArchetypeIds.join(', ')}).`,
+      );
+    }
+  }
+
+  return {
+    familyId,
+    passed: issues.length === 0,
+    evaluatedArchetypeIds: family.seededArchetypeIds,
+    observedDataStates: Object.freeze([...observedStates]),
+    issues: Object.freeze(issues),
+  };
+}
+
 export function validateSeededScenarioCatalogue(): string[] {
   const issues: string[] = [];
   const nonBoundaryDomains = ASK_SEMANTIC_DOMAINS
@@ -392,6 +1309,13 @@ export function validateSeededScenarioCatalogue(): string[] {
   for (const domainId of nonBoundaryDomains) {
     if (!coveredDomains.has(domainId)) {
       issues.push(`Domain ${domainId} has no independent semantic scenario family in ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES`);
+    }
+  }
+
+  for (const archetype of ASK_SEEDED_PROPERTY_ARCHETYPES) {
+    const evalResult = evaluateSeededArchetypeFixtures(archetype.archetypeId);
+    if (!evalResult.passed) {
+      issues.push(...evalResult.issues);
     }
   }
 
@@ -406,6 +1330,10 @@ export function validateSeededScenarioCatalogue(): string[] {
     }
     if (family.adjacentNegatives.length < 2) {
       issues.push(`${family.familyId}: must declare at least 2 adjacentNegatives`);
+    }
+    const execResult = executeSeededFamilyAgainstFixtures(family.familyId);
+    if (!execResult.passed) {
+      issues.push(...execResult.issues);
     }
   }
 

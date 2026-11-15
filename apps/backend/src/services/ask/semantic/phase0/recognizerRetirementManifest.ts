@@ -1,289 +1,823 @@
 /**
- * Phase 0 Bullet 3 (FR-ONT-8, §18 Phase 0, §19 Artifact #8):
- * Recognizer and Vocabulary Source Inventory & Retirement Manifest.
+ * Phase 0 Bullet 3 (FR-ONT-8, §6.2, §17.1, §18 Phase 0, §19 Artifact #3):
+ * Recognizer & Vocabulary Retirement Manifest.
  *
- * Every pre-existing prompt recognizer and vocabulary source in Ask Cozy is
- * inventoried here with its live item count and exactly one governed FR-ONT-8
- * disposition:
- *   - MIGRATE_TO_LEXICON
- *   - MIGRATE_TO_TYPED_GRAMMAR
- *   - REPLACE_WITH_PROPERTY_RESOLUTION
- *   - RETAIN_SAFETY_BOUNDARY
- *   - RETAIN_CERTIFIED_OPTIMIZATION
- *   - RETIRE
+ * Inventories every existing recognizer, keyword table, synonym list, alias map,
+ * and regex matcher in `src/services/ask` and records its canonical replacement
+ * target and retirement phase:
+ *   - RETIRE_PHASE_2A: Read-path fast-path / data-point / semantic-router /
+ *     handler-local regexes and synonym tables retired when Phase 2A structured
+ *     read understanding & query planner become authoritative.
+ *   - RETIRE_PHASE_2B: Follow-up / composition / conversational capture /
+ *     command extraction regexes retired when Phase 2B multi-step composition &
+ *     stateful turn-continuity graph become authoritative.
+ *   - RETAIN_BOUNDARY_GUARDRAIL: Safety, privacy, trust, and out-of-scope
+ *     boundary pre-filters retained permanently as deterministic guardrails
+ *     under §6.2 ("What remains deterministic").
  */
+import * as fs from 'fs';
+import * as path from 'path';
 import { FAST_PATH_RULE_MANIFEST } from '../../fastPath/ruleManifest.generated';
-import { DATA_POINT_DEFINITIONS } from '../../dataPoint/dataPointCatalogue';
-import { ABSENCE_REQUIREMENT_REGISTRY, CROSS_ENTITY_RELATION_REGISTRY, TIME_SERIES_REGISTRY } from '../../dataPoint/queryShapeRegistries';
-import { ASK_OPERATION_DEFINITIONS } from '../../askOperationRegistry';
-import { ASK_SHARED_SEMANTIC_LEXICON } from '../sharedSemanticLexicon';
+import type { SemanticDomainId } from './semanticOntologyBaseline';
 
-export const ASK_RECOGNIZER_RETIREMENT_MANIFEST_VERSION = 'phase0-recognizer-retirement-1.0.0' as const;
+export const ASK_RECOGNIZER_RETIREMENT_MANIFEST_VERSION = 'phase0-recognizer-retirement-1.1.0' as const;
 
 export type RecognizerRetirementDisposition =
-  | 'MIGRATE_TO_LEXICON'
-  | 'MIGRATE_TO_TYPED_GRAMMAR'
-  | 'REPLACE_WITH_PROPERTY_RESOLUTION'
-  | 'RETAIN_SAFETY_BOUNDARY'
-  | 'RETAIN_CERTIFIED_OPTIMIZATION'
-  | 'RETIRE';
+  | 'RETIRE_PHASE_2A'
+  | 'RETIRE_PHASE_2B'
+  | 'RETAIN_BOUNDARY_GUARDRAIL';
 
-export type RecognizerSourceKind =
-  | 'DETERMINISTIC_OPERATION_RULE'
-  | 'DATA_POINT_ALIAS_CUE'
-  | 'QUERY_TEMPLATE_NOUN'
-  | 'SHAPE_789_PARSER'
+export type RecognizerCategory =
+  | 'FAST_PATH_REGEX_RULE_BANK'
+  | 'ROUTING_CASCADE_GUARDS'
   | 'SEMANTIC_ROUTER_VOCABULARY'
-  | 'FALLBACK_EQUIVALENCE_TABLE'
-  | 'HANDLER_LOCAL_VOCABULARY'
-  | 'ENTITY_RESOLUTION_VOCABULARY'
-  | 'FOLLOW_UP_PATTERN'
-  | 'SAFETY_BOUNDARY_RECOGNIZER';
+  | 'PROMPT_MINIMIZER_EQUIVALENTS'
+  | 'ENTITY_ALIAS_MAP'
+  | 'DATA_POINT_LEXICAL_CUES'
+  | 'FOLLOW_UP_CONTEXT_PATTERNS'
+  | 'COMPOSITION_AND_ALSO_ANSWER'
+  | 'PROVISIONAL_READ_REGEXES'
+  | 'CAPTURE_PREFILTER_REGEXES'
+  | 'HANDLER_LOCAL_INTENT_REGEXES'
+  | 'SUPPORT_COMMAND_AND_NORMALIZATION_REGEXES'
+  | 'OPERATION_REGISTRY_EXAMPLE_PATTERNS'
+  | 'BOUNDARY_AND_TRUST_GUARDRAILS';
 
-export type RecognizerMigrationStatus =
-  | 'ACTIVE_GOVERNED_BOUNDARY'
-  | 'MIGRATION_IN_PROGRESS_CO_GATED'
-  | 'INVENTORIED_PENDING_WAVE_MIGRATION';
-
-export interface RecognizerRetirementEntry {
+export interface RecognizerInventoryEntry {
   readonly recognizerId: string;
-  readonly kind: RecognizerSourceKind;
+  readonly category: RecognizerCategory;
   readonly sourceFile: string;
-  readonly symbolOrSection: string;
-  readonly description: string;
+  readonly coveredSourceFiles: readonly string[];
+  readonly exportedSymbols: readonly string[];
   readonly liveItemCount: number;
+  readonly affectedDomains: readonly SemanticDomainId[];
   readonly disposition: RecognizerRetirementDisposition;
-  readonly owner: string;
-  readonly successorIdentity: string;
-  readonly parityFixtures: readonly string[];
-  readonly collisionEvidence: string;
-  readonly status: RecognizerMigrationStatus;
-  readonly deletionCriterion: string;
+  readonly canonicalReplacementTarget: string;
+  readonly knownFailureModes: readonly string[];
 }
 
-const boundaryFastPathRules = FAST_PATH_RULE_MANIFEST.filter((rule) => {
-  const def = ASK_OPERATION_DEFINITIONS[rule.operationId as keyof typeof ASK_OPERATION_DEFINITIONS];
-  return def ? def.safetyClass.endsWith('_BOUNDARY') : false;
-});
+export interface DiscoveredAskRecognizerSource {
+  readonly relativeFilePath: string;
+  readonly regexCount: number;
+  readonly vocabularyDeclarationCount: number;
+  readonly totalSignals: number;
+}
 
-const domainFastPathRules = FAST_PATH_RULE_MANIFEST.filter((rule) => {
-  const def = ASK_OPERATION_DEFINITIONS[rule.operationId as keyof typeof ASK_OPERATION_DEFINITIONS];
-  return def ? !def.safetyClass.endsWith('_BOUNDARY') : true;
-});
+const HANDLER_RECOGNIZER_SOURCE_FILES: readonly string[] = Object.freeze([
+  'src/services/ask/askInventoryIntent.ts',
+  'src/services/ask/handlers/applianceOracleBudget.handler.ts',
+  'src/services/ask/handlers/buyerClosingDisclosureCommands.handler.ts',
+  'src/services/ask/handlers/buyerClosingItemCommands.handler.ts',
+  'src/services/ask/handlers/buyerContractCommands.handler.ts',
+  'src/services/ask/handlers/buyerInsuranceCommands.handler.ts',
+  'src/services/ask/handlers/buyerLoanEstimateCommands.handler.ts',
+  'src/services/ask/handlers/buyerPlan.handler.ts',
+  'src/services/ask/handlers/buyerPlanSetupCommands.handler.ts',
+  'src/services/ask/handlers/buyerWalkthroughCommands.handler.ts',
+  'src/services/ask/handlers/capitalItemFunding.handler.ts',
+  'src/services/ask/handlers/capitalPlanning.handler.ts',
+  'src/services/ask/handlers/capitalTimelineCommands.handler.ts',
+  'src/services/ask/handlers/claims.handler.ts',
+  'src/services/ask/handlers/coverage.handler.ts',
+  'src/services/ask/handlers/coverageReview.handler.ts',
+  'src/services/ask/handlers/dataPointRead.handler.ts',
+  'src/services/ask/handlers/diyProjectCenter.handler.ts',
+  'src/services/ask/handlers/documents.handler.ts',
+  'src/services/ask/handlers/financing.handler.ts',
+  'src/services/ask/handlers/guidanceStepDeclare.handler.ts',
+  'src/services/ask/handlers/homeActions.handler.ts',
+  'src/services/ask/handlers/homeDigitalWill.handler.ts',
+  'src/services/ask/handlers/homeDigitalWillCreate.handler.ts',
+  'src/services/ask/handlers/homeEventRadar.handler.ts',
+  'src/services/ask/handlers/homeHabitCoach.handler.ts',
+  'src/services/ask/handlers/homeRecordExport.handler.ts',
+  'src/services/ask/handlers/homeRecordStateCommands.handler.ts',
+  'src/services/ask/handlers/homeRecordWrites.handler.ts',
+  'src/services/ask/handlers/homeTimeline.handler.ts',
+  'src/services/ask/handlers/homeToolRuns.handler.ts',
+  'src/services/ask/handlers/homeUpgradePlanner.handler.ts',
+  'src/services/ask/handlers/homeWorkItemCommands.handler.ts',
+  'src/services/ask/handlers/hvacConfirm.handler.ts',
+  'src/services/ask/handlers/hvacDecision.handler.ts',
+  'src/services/ask/handlers/inspection.handler.ts',
+  'src/services/ask/handlers/inspectionReportReview.handler.ts',
+  'src/services/ask/handlers/insurancePolicyCommands.handler.ts',
+  'src/services/ask/handlers/inventory.handler.ts',
+  'src/services/ask/handlers/itemReplacementCost.handler.ts',
+  'src/services/ask/handlers/itemReserveAllocation.handler.ts',
+  'src/services/ask/handlers/maintenance.handler.ts',
+  'src/services/ask/handlers/maintenanceConfirm.handler.ts',
+  'src/services/ask/handlers/maintenanceEvidenceAttach.handler.ts',
+  'src/services/ask/handlers/maintenanceTemplates.handler.ts',
+  'src/services/ask/handlers/miscHandlers.handler.ts',
+  'src/services/ask/handlers/negotiationShield.handler.ts',
+  'src/services/ask/handlers/negotiationShieldBuyerCommands.handler.ts',
+  'src/services/ask/handlers/notificationsOverview.handler.ts',
+  'src/services/ask/handlers/ownershipCostCommands.handler.ts',
+  'src/services/ask/handlers/plantAdvisor.handler.ts',
+  'src/services/ask/handlers/plantRecommendations.handler.ts',
+  'src/services/ask/handlers/projectTracker.handler.ts',
+  'src/services/ask/handlers/propertyBrief.handler.ts',
+  'src/services/ask/handlers/propertyBriefCommands.handler.ts',
+  'src/services/ask/handlers/propertySummary.handler.ts',
+  'src/services/ask/handlers/propertyTaxEvidenceCommands.handler.ts',
+  'src/services/ask/handlers/quoteComparisonCommands.handler.ts',
+  'src/services/ask/handlers/quotes.handler.ts',
+  'src/services/ask/handlers/radarConfirm.handler.ts',
+  'src/services/ask/handlers/recallReview.handler.ts',
+  'src/services/ask/handlers/recordConfirm.handler.ts',
+  'src/services/ask/handlers/refinance.handler.ts',
+  'src/services/ask/handlers/refinanceCommands.handler.ts',
+  'src/services/ask/handlers/renovationAuthorityWrites.handler.ts',
+  'src/services/ask/handlers/renovationExploreCommands.handler.ts',
+  'src/services/ask/handlers/renovationReadinessCommands.handler.ts',
+  'src/services/ask/handlers/reserveFundCommands.handler.ts',
+  'src/services/ask/handlers/roomDetailCommands.handler.ts',
+  'src/services/ask/handlers/savedResults.handler.ts',
+  'src/services/ask/handlers/savingsOwnership.handler.ts',
+  'src/services/ask/handlers/savingsRecurringSetup.handler.ts',
+  'src/services/ask/handlers/seasonalHomeCare.handler.ts',
+  'src/services/ask/handlers/sellHoldRent.handler.ts',
+  'src/services/ask/handlers/sellerPrepTransition.ts',
+  'src/services/ask/handlers/servicePriceRadar.handler.ts',
+  'src/services/ask/handlers/statusBoard.handler.ts',
+  'src/services/ask/handlers/statusBoardCommands.handler.ts',
+  'src/services/ask/handlers/warranties.handler.ts',
+  'src/services/ask/handlers/warrantyRemoval.handler.ts',
+  'src/services/ask/handlers/workOverview.handler.ts',
+  'src/services/ask/handlers/workflowConfirm.handler.ts',
+]);
 
-const totalDataPointAliases = DATA_POINT_DEFINITIONS.reduce((sum, point) => sum + point.aliases.length, 0);
-const totalDataPointCues = DATA_POINT_DEFINITIONS.reduce((sum, point) => sum + (point.cues?.length ?? 0) + (point.unlessCues?.length ?? 0), 0);
+const SUPPORT_COMMAND_RECOGNIZER_SOURCE_FILES: readonly string[] = Object.freeze([
+  'src/services/ask/support/activationContextCapture.ts',
+  'src/services/ask/support/answerGateBypass.ts',
+  'src/services/ask/support/answerGuards.ts',
+  'src/services/ask/support/breakEvenWhatIf.ts',
+  'src/services/ask/support/buyerClosingDisclosureCommand.ts',
+  'src/services/ask/support/buyerClosingItemCommand.ts',
+  'src/services/ask/support/buyerContractCommand.ts',
+  'src/services/ask/support/buyerInsuranceCommand.ts',
+  'src/services/ask/support/buyerLoanEstimateCommand.ts',
+  'src/services/ask/support/buyerPlanSetupCommand.ts',
+  'src/services/ask/support/buyerProfessionalCloseCommand.ts',
+  'src/services/ask/support/buyerWalkthroughCommand.ts',
+  'src/services/ask/support/capabilityDiscovery.ts',
+  'src/services/ask/support/capitalTimelineCommand.ts',
+  'src/services/ask/support/collectionOrdering.ts',
+  'src/services/ask/support/commandInputs.ts',
+  'src/services/ask/support/commonMisspellings.ts',
+  'src/services/ask/support/communityUpdates.ts',
+  'src/services/ask/support/didYouMean.ts',
+  'src/services/ask/support/diyTemplateBrowseFilter.ts',
+  'src/services/ask/support/domainHelpers.ts',
+  'src/services/ask/support/environmentReportCommand.ts',
+  'src/services/ask/support/expenseCommand.ts',
+  'src/services/ask/support/financingProfileCommand.ts',
+  'src/services/ask/support/financingRead.ts',
+  'src/services/ask/support/generalGuidanceCard.ts',
+  'src/services/ask/support/hoaComplianceCommand.ts',
+  'src/services/ask/support/homeBasicsGuide.ts',
+  'src/services/ask/support/homeEventCorrection.ts',
+  'src/services/ask/support/homeRecordExport.ts',
+  'src/services/ask/support/homeRecordStateCommand.ts',
+  'src/services/ask/support/homeWorkItemCommand.ts',
+  'src/services/ask/support/inspectionFindingDecisionCommand.ts',
+  'src/services/ask/support/inspectionOwnerOnly.ts',
+  'src/services/ask/support/insurancePolicyCommand.ts',
+  'src/services/ask/support/inventoryRoomGrouping.ts',
+  'src/services/ask/support/itemFundingWording.ts',
+  'src/services/ask/support/maintenanceImportance.ts',
+  'src/services/ask/support/materialSpecSearch.ts',
+  'src/services/ask/support/moneyAmount.ts',
+  'src/services/ask/support/negotiationShieldStart.ts',
+  'src/services/ask/support/notificationConversation.ts',
+  'src/services/ask/support/pastHazardOutcomeCommand.ts',
+  'src/services/ask/support/permitTrackerCommand.ts',
+  'src/services/ask/support/permitTrackerExtra.ts',
+  'src/services/ask/support/permitTrackerRead.ts',
+  'src/services/ask/support/profileRoof.ts',
+  'src/services/ask/support/projectTrackerInputs.ts',
+  'src/services/ask/support/propertyTaxAppealCommand.ts',
+  'src/services/ask/support/propertyTaxComparableCommand.ts',
+  'src/services/ask/support/propertyTaxDocumentFactsCommand.ts',
+  'src/services/ask/support/propertyTaxEvidenceCommand.ts',
+  'src/services/ask/support/quoteComparisonCommand.ts',
+  'src/services/ask/support/receiptFollowUps.ts',
+  'src/services/ask/support/refinanceCommand.ts',
+  'src/services/ask/support/renovationCaseOverview.ts',
+  'src/services/ask/support/renovationCaseStart.ts',
+  'src/services/ask/support/renovationExploreCommand.ts',
+  'src/services/ask/support/renovationReadinessCommand.ts',
+  'src/services/ask/support/reserveFundMessage.ts',
+  'src/services/ask/support/riskMitigationPlan.ts',
+  'src/services/ask/support/roomDetailCommand.ts',
+  'src/services/ask/support/routingNormalization.ts',
+  'src/services/ask/support/routingVocabulary.generated.ts',
+  'src/services/ask/support/savingsBenefitCommand.ts',
+  'src/services/ask/support/savingsRecurringSetup.ts',
+  'src/services/ask/support/seasonalHomeCare.ts',
+  'src/services/ask/support/sellHoldRentWhatIf.ts',
+  'src/services/ask/support/sellerPrepCaseCommand.ts',
+  'src/services/ask/support/statusBoardCommand.ts',
+  'src/services/ask/support/targetDate.ts',
+  'src/services/ask/support/wholeWord.ts',
+  'src/services/ask/support/workSavedCommands.ts',
+]);
 
-export const ASK_RECOGNIZER_RETIREMENT_MANIFEST: readonly RecognizerRetirementEntry[] = Object.freeze([
+const CORE_RUNTIME_AND_BOUNDARY_RECOGNIZER_FILES: readonly string[] = Object.freeze([
+  'src/services/ask/askAnswerTrustPolicy.ts',
+  'src/services/ask/askAnswerTrustValidator.ts',
+  'src/services/ask/askAudiencePresentation.ts',
+  'src/services/ask/askBuyerPlanPresentation.ts',
+  'src/services/ask/askConciergePromptPolicy.ts',
+  'src/services/ask/askCorrectionFields.ts',
+  'src/services/ask/askDiscoveryTopics.ts',
+  'src/services/ask/askEnvelopeQueryScope.ts',
+  'src/services/ask/askExplorerRegistry.ts',
+  'src/services/ask/askFocusedGuidance.ts',
+  'src/services/ask/askFormatting.ts',
+  'src/services/ask/askGeneralGuidanceCatalog.ts',
+  'src/services/ask/askIntake.service.ts',
+  'src/services/ask/askInteractionCoverageMatrix.ts',
+  'src/services/ask/askMaintenancePresentation.ts',
+  'src/services/ask/askMaintenanceTaskInput.ts',
+  'src/services/ask/askNextActions.ts',
+  'src/services/ask/askNotificationSettings.service.ts',
+  'src/services/ask/askOperationRegistry.ts',
+  'src/services/ask/askOutcomeReport.ts',
+  'src/services/ask/askRecordCollections.service.ts',
+  'src/services/ask/askRemoteFallbackTypedClaims.ts',
+  'src/services/ask/askResultSynthesis.service.ts',
+  'src/services/ask/askSearch.service.ts',
+  'src/services/ask/askSeasonalMaintenance.ts',
+  'src/services/ask/askSuggestionPolicy.ts',
+  'src/services/ask/decisionThreadPresentationBlocks.ts',
+  'src/services/ask/execution/askCapture.ts',
+  'src/services/ask/execution/askConcierge.ts',
+  'src/services/ask/execution/askSessions.ts',
+  'src/services/ask/governance/askNotificationContinuationRegistry.ts',
+  'src/services/ask/governance/askRouteRetirementRegistry.ts',
+  'src/services/ask/governance/askWorkProviderRegistry.ts',
+  'src/services/ask/healthGapCapture.ts',
+  'src/services/ask/modelRouting/requestPlan.ts',
+  'src/services/ask/modelRouting/understandingProvider.ts',
+  'src/services/ask/operationalWorkSnooze.ts',
+  'src/services/ask/presentation/evaluatePresentationQuality.ts',
+  'src/services/ask/recordEditor/recordEditor.contract.ts',
+  'src/services/ask/recovery/recoveryOutcomes.ts',
+  'src/services/ask/saved/savedReaderSupport.ts',
+  'src/services/ask/saved/savedTypeReaders.ts',
+  'src/services/ask/search/askSearchProviders.ts',
+  'src/services/ask/suggestedActions/capabilityRecommendationCandidates.ts',
+  'src/services/ask/suggestedActions/skillHandoffCandidates.ts',
+  'src/services/ask/suggestedActions/suggestedNextActionCandidate.ts',
+  'src/services/ask/work/askWorkRowSupport.ts',
+  'src/services/ask/work/operationalWorkItems.reader.ts',
+  'src/services/ask/work/pendingExecutions.reader.ts',
+  'src/services/ask/work/scheduledFollowUps.reader.ts',
+]);
+
+export const ASK_RECOGNIZER_RETIREMENT_MANIFEST: readonly RecognizerInventoryEntry[] = Object.freeze([
   {
-    recognizerId: 'recognizer.fast_path.safety_and_boundary_rules',
-    kind: 'SAFETY_BOUNDARY_RECOGNIZER',
-    sourceFile: 'src/services/ask/askOperationRegistry.ts',
-    symbolOrSection: 'resolveAskOperation (safety/restricted/emergency/medical/legal/unsupported boundary DET_* rules)',
-    description: 'Raw-message safety, emergency, legal/tax/medical advice refusal, and out-of-scope boundary rules.',
-    liveItemCount: boundaryFastPathRules.length,
-    disposition: 'RETAIN_SAFETY_BOUNDARY',
-    owner: 'ask-safety-governance',
-    successorIdentity: 'Raw-message safety gate & boundary operations (FR-ONT-8 / §6 Stage 0)',
-    parityFixtures: ['tests/ask/askSafetyGate.test.js', 'tests/ask/askBoundaryRecognition.test.js'],
-    collisionEvidence: 'Raw-message safety evaluation runs before semantic planning and cannot be bypassed by entity/job resolution.',
-    status: 'ACTIVE_GOVERNED_BOUNDARY',
-    deletionCriterion: 'Retained permanently as Stage 0 raw-message safety and restricted-request boundary (FR-ONT-8).',
+    recognizerId: 'recognizer.fast_path.rule_manifest',
+    category: 'FAST_PATH_REGEX_RULE_BANK',
+    sourceFile: 'src/services/ask/fastPath/ruleManifest.generated.ts',
+    coveredSourceFiles: ['src/services/ask/fastPath/ruleManifest.generated.ts'],
+    exportedSymbols: ['FAST_PATH_RULE_MANIFEST', 'FastPathRuleEntry'],
+    liveItemCount: FAST_PATH_RULE_MANIFEST.length,
+    affectedDomains: [
+      'domain.property_profile',
+      'domain.inventory',
+      'domain.maintenance',
+      'domain.warranties_coverage',
+      'domain.insurance_policies',
+      'domain.claims',
+      'domain.documents_records',
+      'domain.ownership_costs_finance',
+      'domain.projects_quotes_vendors',
+      'domain.risks_recalls_inspections',
+      'domain.timeline_home_events',
+      'domain.buyer_journey',
+      'domain.seller_preparation',
+      'domain.account_household_preferences',
+      'domain.safety_boundary',
+    ],
+    disposition: 'RETIRE_PHASE_2A',
+    canonicalReplacementTarget: 'CanonicalSemanticUnderstander + SemanticQueryPlanner (FR-UND-1, FR-QUERY-1); safety boundary rules move to BoundaryGuardrailFilter (§6.2).',
+    knownFailureModes: [
+      'Rule ordering and priority shadows cross-domain intents (e.g. warranty vs insurance vs maintenance).',
+      '150 compiled regex rules require manual regex edits for each new paraphrase.',
+    ],
   },
   {
-    recognizerId: 'recognizer.fast_path.domain_operation_rules',
-    kind: 'DETERMINISTIC_OPERATION_RULE',
-    sourceFile: 'src/services/ask/askOperationRegistry.ts',
-    symbolOrSection: 'resolveAskOperation (non-boundary DET_* operation rules in FAST_PATH_RULE_MANIFEST)',
-    description: 'Sentence-level regex fast-path rules that directly return flat operation IDs.',
-    liveItemCount: domainFastPathRules.length,
-    disposition: 'MIGRATE_TO_TYPED_GRAMMAR',
-    owner: 'ask-semantic-architecture',
-    successorIdentity: 'src/services/ask/semantic/deterministicSemanticParser.ts + CapabilityRegistry semantic jobs (FR-PLAN-7, FR-ONT-4)',
-    parityFixtures: ['tests/ask/crossDomainSemanticArchitecturePhase1.test.js', 'tests/ask/crossDomainSemanticArchitecturePhase0.test.js'],
-    collisionEvidence: 'FAST_PATH_ADJACENCY in src/services/ask/fastPath/adjacencyManifest.generated.ts tracks cross-operation hard-negative collisions.',
-    status: 'INVENTORIED_PENDING_WAVE_MIGRATION',
-    deletionCriterion: 'Retire per domain wave once typed-grammar + CapabilityPlanner passes exact seeded and metamorphic parity for the operation family.',
+    recognizerId: 'recognizer.routing_cascade.guards_and_fast_matchers',
+    category: 'ROUTING_CASCADE_GUARDS',
+    sourceFile: 'src/services/ask/askRoutingCascade.ts',
+    coveredSourceFiles: ['src/services/ask/askRoutingCascade.ts'],
+    exportedSymbols: [
+      'resolveFastPathOperation',
+      'resolveIntentRecognizerOperation',
+      'resolveSemanticOperation',
+    ],
+    liveItemCount: 8,
+    affectedDomains: [
+      'domain.inventory',
+      'domain.warranties_coverage',
+      'domain.insurance_policies',
+      'domain.maintenance',
+      'domain.documents_records',
+      'domain.safety_boundary',
+    ],
+    disposition: 'RETIRE_PHASE_2A',
+    canonicalReplacementTarget: 'CanonicalSemanticUnderstander (single semantic understanding pipeline replacing 4-stage cascade).',
+    knownFailureModes: [
+      'Multi-stage routing cascade (fastPath -> intentRecognizer -> semanticRouter -> LLM fallback) uses incompatible domain vocabularies across stages.',
+    ],
   },
   {
-    recognizerId: 'recognizer.data_point_catalogue.aliases_and_cues',
-    kind: 'DATA_POINT_ALIAS_CUE',
-    sourceFile: 'src/services/ask/dataPoint/dataPointCatalogue.ts',
-    symbolOrSection: 'DATA_POINT_DEFINITIONS.aliases / cues / unlessCues / resolveDataPointIn',
-    description: '107 approved data-point definitions with per-point homeowner alias phrases, entity cues, and exclusion cues.',
-    liveItemCount: totalDataPointAliases + totalDataPointCues,
-    disposition: 'MIGRATE_TO_LEXICON',
-    owner: 'ask-data-catalogue',
-    successorIdentity: 'src/services/ask/semantic/sharedSemanticLexicon.ts + FieldRegistry (FR-ONT-2, FR-ONT-6)',
-    parityFixtures: ['tests/ask/dataPointRead.test.js'],
-    collisionEvidence: 'Tie-detection in resolveDataPointIn returns null on equal-weight alias matches across distinct data points.',
-    status: 'INVENTORIED_PENDING_WAVE_MIGRATION',
-    deletionCriterion: 'Migrate reviewed aliases into FieldRegistry overrides feeding generateSharedSemanticLexicon() per domain wave.',
-  },
-  {
-    recognizerId: 'recognizer.data_point_shapes_789.warranty_relation_grammar',
-    kind: 'SHAPE_789_PARSER',
-    sourceFile: 'src/services/ask/dataPoint/dataPointShapes789.ts',
-    symbolOrSection: 'planShape789 (Shape 9: NO_WARRANTY / HAS_WARRANTY)',
-    description: 'Cross-entity inventory-to-warranty relation matcher (ITEM_NOUN + warranty + NO_VALUE/outside/positive).',
-    liveItemCount: CROSS_ENTITY_RELATION_REGISTRY.length + 4,
-    disposition: 'MIGRATE_TO_TYPED_GRAMMAR',
-    owner: 'ask-semantic-architecture',
-    successorIdentity: 'parseDeterministicSemanticRequest + warrantyShapeGrammarAgreement + readTransitionalWarrantyLinks',
-    parityFixtures: ['tests/ask/crossDomainSemanticArchitecturePhase1.test.js', 'tests/ask/dataPointShapes789.test.js'],
-    collisionEvidence: 'Co-gated by warrantyShapeGrammarAgreement (src/services/ask/semantic/legacyGrammarAgreement.ts); coverage-gap wording explicitly excluded.',
-    status: 'MIGRATION_IN_PROGRESS_CO_GATED',
-    deletionCriterion: 'Remove Shape 9 regex branch once Phase 2A query compiler executes directly from SemanticRequestPlan.',
-  },
-  {
-    recognizerId: 'recognizer.data_point_shapes_789.absence_and_time_series',
-    kind: 'SHAPE_789_PARSER',
-    sourceFile: 'src/services/ask/dataPoint/dataPointShapes789.ts',
-    symbolOrSection: 'planShape789 (Shape 7 TIME_SERIES & Shape 8 ABSENCE / STALE_SERVICE)',
-    description: 'Regex and noun-list parser for tax year-over-year comparisons, missing inventory scalar fields, and stale service windows.',
-    liveItemCount: TIME_SERIES_REGISTRY.length + ABSENCE_REQUIREMENT_REGISTRY.length + 5,
-    disposition: 'MIGRATE_TO_TYPED_GRAMMAR',
-    owner: 'ask-semantic-architecture',
-    successorIdentity: 'Typed-grammar COMPARE / MISSING_FIELD / temporal predicates in SemanticRequestPlan (FR-PLAN-7, FR-QUERY-1)',
-    parityFixtures: ['tests/ask/dataPointShapes789.test.js'],
-    collisionEvidence: 'Requires explicit ITEM_NOUN + NO_VALUE or tax trend cue; ambiguous multi-field hits return AMBIGUOUS.',
-    status: 'INVENTORIED_PENDING_WAVE_MIGRATION',
-    deletionCriterion: 'Retire when inventory absence and ownership-cost tax comparison waves enable typed-grammar compilation.',
-  },
-  {
-    recognizerId: 'recognizer.data_point_reader.item_synonyms',
-    kind: 'QUERY_TEMPLATE_NOUN',
-    sourceFile: 'src/services/ask/dataPoint/dataPointReader.ts',
-    symbolOrSection: 'SYNONYMS / matchItemsByName',
-    description: 'Appliance name synonym table (refrigerator/fridge, air conditioner/ac, dishwasher, water heater, hvac/furnace/heat pump, microwave).',
-    liveItemCount: 7,
-    disposition: 'REPLACE_WITH_PROPERTY_RESOLUTION',
-    owner: 'ask-semantic-architecture',
-    successorIdentity: 'resolvePropertyEntityReference (src/services/ask/semantic/propertyEntityResolver.ts) + sharedSemanticLexicon',
-    parityFixtures: ['tests/ask/dataPointRead.test.js', 'tests/ask/crossDomainSemanticArchitecturePhase1.test.js'],
-    collisionEvidence: 'Token-subset matching and multi-match ambiguity return AMBIGUOUS / MULTIPLE_MATCHES.',
-    status: 'INVENTORIED_PENDING_WAVE_MIGRATION',
-    deletionCriterion: 'Replace with EntityRegistry resolver adapter + lexicon-backed alias matching in Phase 2A.',
-  },
-  {
-    recognizerId: 'recognizer.semantic_embedding.synonym_groups',
-    kind: 'SEMANTIC_ROUTER_VOCABULARY',
-    sourceFile: 'src/services/ask/askSemanticEmbedding.ts',
-    symbolOrSection: 'SEMANTIC_SYNONYM_GROUPS (local-synonym-subword-embedding-3.0)',
-    description: '40 hashed concept synonym groups used by the local feature-hashing router, including group #8 that conflated coverage, insurance, and warranty.',
-    liveItemCount: 40,
-    disposition: 'MIGRATE_TO_LEXICON',
-    owner: 'ask-semantic-architecture',
-    successorIdentity: 'ASK_SHARED_SEMANTIC_LEXICON (src/services/ask/semantic/sharedSemanticLexicon.ts, FR-ONT-6)',
-    parityFixtures: ['tests/ask/crossDomainSemanticArchitecturePhase1.test.js'],
-    collisionEvidence: 'Group ["coverage", ["coverage", "protection", "protections", "insurance", "warranty"]] documented in FRD §17.2 item 3 as cross-domain conflation source.',
-    status: 'INVENTORIED_PENDING_WAVE_MIGRATION',
-    deletionCriterion: 'Retire ad-hoc concept groups once shared semantic lexicon and two-stage retrieval own vocabulary expansion.',
+    recognizerId: 'recognizer.semantic_router.synonyms_and_signals',
+    category: 'SEMANTIC_ROUTER_VOCABULARY',
+    sourceFile: 'src/services/ask/askSemanticRouter.ts',
+    coveredSourceFiles: [
+      'src/services/ask/askSemanticRouter.ts',
+      'src/services/ask/askSemanticEmbedding.ts',
+      'src/services/ask/askSemanticResponseProjection.ts',
+    ],
+    exportedSymbols: [
+      'SYNONYM_GROUPS',
+      'ATTRIBUTE_TOKENS',
+      'ITEM_SYNONYMS',
+      'CONVERSATIONAL_FILLER',
+      'EXPLICIT_OPERATION_SIGNALS',
+    ],
+    liveItemCount: 14,
+    affectedDomains: [
+      'domain.property_profile',
+      'domain.inventory',
+      'domain.maintenance',
+      'domain.warranties_coverage',
+      'domain.insurance_policies',
+      'domain.claims',
+      'domain.documents_records',
+      'domain.ownership_costs_finance',
+    ],
+    disposition: 'RETIRE_PHASE_2A',
+    canonicalReplacementTarget: 'Authoritative Cross-Domain Ontology Registry (FR-ONT-1..4) + CanonicalSemanticUnderstander.',
+    knownFailureModes: [
+      'Lexical token overlap between WARRANTY_LOOKUP, COVERAGE_GAPS, and INVENTORY_LOOKUP causes domain confusion when paraphrases omit exact cue words.',
+    ],
   },
   {
     recognizerId: 'recognizer.prompt_minimization.domain_equivalents',
-    kind: 'FALLBACK_EQUIVALENCE_TABLE',
+    category: 'PROMPT_MINIMIZER_EQUIVALENTS',
     sourceFile: 'src/services/ask/askPromptMinimization.ts',
-    symbolOrSection: 'DOMAIN_EQUIVALENTS / GENERIC_QUESTION_TOKENS',
-    description: '10 domain equivalence token buckets used to rank property facts for remote fallback synthesis (where insurance bucket mixes coverage, policy, premium, claim, and warranty).',
-    liveItemCount: 10,
-    disposition: 'RETIRE',
-    owner: 'ask-semantic-architecture',
-    successorIdentity: 'Stage-1 domain candidates + Registry-backed fact selection (FR-UND-2, FR-ONT-6)',
-    parityFixtures: ['tests/ask/askRemoteFallbackTypedClaims.test.js'],
-    collisionEvidence: 'Mixing insurance/claim/warranty in DOMAIN_EQUIVALENTS.insurance causes cross-domain candidate pollution (§17.2 item 3).',
-    status: 'INVENTORIED_PENDING_WAVE_MIGRATION',
-    deletionCriterion: 'Remove DOMAIN_EQUIVALENTS once remote fallback consumes domain-scoped receipts from SemanticRequestPlan.',
+    coveredSourceFiles: [
+      'src/services/ask/askPromptMinimization.ts',
+      'src/services/ask/privacy/knownNames.ts',
+      'src/services/ask/privacy/promptMinimizer.ts',
+    ],
+    exportedSymbols: ['DOMAIN_EQUIVALENTS', 'minimizeAskPrompt'],
+    liveItemCount: 39,
+    affectedDomains: [
+      'domain.warranties_coverage',
+      'domain.insurance_policies',
+      'domain.claims',
+      'domain.inventory',
+      'domain.maintenance',
+      'domain.ownership_costs_finance',
+      'domain.documents_records',
+    ],
+    disposition: 'RETAIN_BOUNDARY_GUARDRAIL',
+    canonicalReplacementTarget: 'PII/privacy minimization retained as deterministic guardrail (§6.2); DOMAIN_EQUIVALENTS governed by Phase 1 domain separation (FR-ONT-5).',
+    knownFailureModes: [
+      'Previously collapsed warranty, insurance, policy, coverage, and claim into one equivalence bucket (§17.1 item 1; remediated in Phase 1).',
+    ],
   },
   {
-    recognizerId: 'recognizer.entity_resolution.regex_patterns',
-    kind: 'ENTITY_RESOLUTION_VOCABULARY',
-    sourceFile: 'src/services/ask/askEntityResolution.ts',
-    symbolOrSection: 'ENTITY_PATTERNS (MAINTENANCE_TASK, INVENTORY_ITEM, QUOTE, DECISION_THREAD)',
-    description: 'Hardcoded regex noun lists for detecting entity mentions in user prompts (e.g. refrigerator|fridge|washer|dryer|dishwasher|water heater|roof|boiler|furnace).',
-    liveItemCount: 4,
-    disposition: 'REPLACE_WITH_PROPERTY_RESOLUTION',
-    owner: 'ask-semantic-architecture',
-    successorIdentity: 'resolvePropertyEntityReference (src/services/ask/semantic/propertyEntityResolver.ts, FR-ENT-1..2)',
-    parityFixtures: ['tests/ask/crossDomainSemanticArchitecturePhase1.test.js'],
-    collisionEvidence: 'Regex allowlist misses any property item whose name is not in the 14 hardcoded nouns (§2 failure #4, §17.2 item 4).',
-    status: 'INVENTORIED_PENDING_WAVE_MIGRATION',
-    deletionCriterion: 'Replace with authorised property-record matching in EntityRegistry resolver adapters.',
-  },
-  {
-    recognizerId: 'recognizer.follow_up_context.rewrite_patterns',
-    kind: 'FOLLOW_UP_PATTERN',
-    sourceFile: 'src/services/ask/askFollowUpContext.ts',
-    symbolOrSection: 'CONVERSATIONAL_FILTER_LEAD / STATUS_FILTER_WORDS / ROOM_FILTER_PHRASE / ENTITY_CONTINUATION_PATTERN',
-    description: 'Operation-specific sentence rewrite regexes and hardcoded 20-room allowlist for follow-up turns.',
-    liveItemCount: 12,
-    disposition: 'MIGRATE_TO_TYPED_GRAMMAR',
-    owner: 'ask-semantic-architecture',
-    successorIdentity: 'Semantic conversation-state delta refinement over prior SemanticRequestPlan (FR-ENT-3, FR-PLAN-6)',
-    parityFixtures: ['tests/ask/askFollowUpContext.test.js'],
-    collisionEvidence: 'Hardcoded 20-room regex misses custom property rooms ("sunroom", "mudroom", "workshop") and only supports allowlisted operations (§17.2 item 9).',
-    status: 'INVENTORIED_PENDING_WAVE_MIGRATION',
-    deletionCriterion: 'Retire sentence-concatenation rewrites once conversation state stores prior SemanticRequestPlan and resolved room/entity references.',
-  },
-  {
-    recognizerId: 'recognizer.handlers.domain_intent_extractors',
-    kind: 'HANDLER_LOCAL_VOCABULARY',
-    sourceFile: 'src/services/ask/ask*Intent.ts & src/services/ask/handlers/*.handler.ts',
-    symbolOrSection: 'askInventoryIntent, askMaintenanceIntent, askCoverageIntent, askOwnershipCostsIntent, askSellerPrepIntent, askStatusBoardIntent, warranties.handler.ts',
-    description: 'Handler-local regexes parsing category filters, time windows ("within 60 days", "overdue"), and status flags directly from raw message strings.',
+    recognizerId: 'recognizer.entity_aliases.inventory_item_aliases',
+    category: 'ENTITY_ALIAS_MAP',
+    sourceFile: 'src/services/ask/support/inventoryItemAliases.ts',
+    coveredSourceFiles: [
+      'src/services/ask/support/inventoryItemAliases.ts',
+      'src/services/ask/askEntityResolution.ts',
+    ],
+    exportedSymbols: ['INVENTORY_ITEM_ALIASES', 'expandInventoryItemAliases'],
     liveItemCount: 18,
-    disposition: 'MIGRATE_TO_TYPED_GRAMMAR',
-    owner: 'ask-semantic-architecture',
-    successorIdentity: 'SemanticRequestPlan facet fields (where, time, projection, subject, relations) + sharedSemanticLexicon',
-    parityFixtures: ['tests/ask/crossDomainSemanticArchitecturePhase0.test.js'],
-    collisionEvidence: 'Handler-local regexes diverge from router rules and cause silent filter drops when phrasing varies (§17.2 item 4).',
-    status: 'INVENTORIED_PENDING_WAVE_MIGRATION',
-    deletionCriterion: 'Remove handler raw-message regex parsing as each domain wave migrates to executing validated SemanticRequestPlan facets.',
+    affectedDomains: ['domain.inventory', 'domain.warranties_coverage', 'domain.maintenance'],
+    disposition: 'RETIRE_PHASE_2A',
+    canonicalReplacementTarget: 'Ontology Entity & Field Registry canonical aliases + SemanticEntityResolver.',
+    knownFailureModes: [
+      'Duplicated across askSemanticRouter ITEM_SYNONYMS, dataPointQueryPlan cues, and inventory.handler local regexes.',
+    ],
+  },
+  {
+    recognizerId: 'recognizer.data_point.query_plan_and_shapes',
+    category: 'DATA_POINT_LEXICAL_CUES',
+    sourceFile: 'src/services/ask/dataPoint/dataPointQueryPlan.ts',
+    coveredSourceFiles: [
+      'src/services/ask/dataPoint/dataPointCatalogue.ts',
+      'src/services/ask/dataPoint/dataPointLaunchHints.ts',
+      'src/services/ask/dataPoint/dataPointQueryPlan.ts',
+      'src/services/ask/dataPoint/dataPointQueryRunner.ts',
+      'src/services/ask/dataPoint/dataPointReader.ts',
+      'src/services/ask/dataPoint/dataPointShapes789.ts',
+      'src/services/ask/dataPoint/queryShapeRegistries.ts',
+    ],
+    exportedSymbols: [
+      'planDataPointQuery',
+      'planShape789Query',
+      'DATA_POINT_DEFINITIONS',
+      'QUERY_SHAPE_REGISTRIES',
+    ],
+    liveItemCount: 116,
+    affectedDomains: [
+      'domain.property_profile',
+      'domain.inventory',
+      'domain.maintenance',
+      'domain.warranties_coverage',
+      'domain.insurance_policies',
+      'domain.claims',
+      'domain.documents_records',
+      'domain.ownership_costs_finance',
+      'domain.buyer_journey',
+      'domain.seller_preparation',
+    ],
+    disposition: 'RETIRE_PHASE_2A',
+    canonicalReplacementTarget: 'Canonical SemanticQueryPlanner (FR-QUERY-1..8) over the 9 canonical query shapes.',
+    knownFailureModes: [
+      'Shape 7/8/9 regex matchers require exact surface phrasing ("without a warranty", "missing a serial number") and miss conversational paraphrases.',
+      'Field cues in dataPointCatalogue require lexical cue overlap rather than semantic slot binding.',
+    ],
+  },
+  {
+    recognizerId: 'recognizer.follow_up.context_patterns',
+    category: 'FOLLOW_UP_CONTEXT_PATTERNS',
+    sourceFile: 'src/services/ask/askFollowUpContext.ts',
+    coveredSourceFiles: ['src/services/ask/askFollowUpContext.ts'],
+    exportedSymbols: ['resolveAskFollowUpContext', 'FOLLOW_UP_PATTERNS'],
+    liveItemCount: 37,
+    affectedDomains: [
+      'domain.inventory',
+      'domain.warranties_coverage',
+      'domain.maintenance',
+      'domain.insurance_policies',
+      'domain.claims',
+      'domain.documents_records',
+      'domain.buyer_journey',
+      'domain.seller_preparation',
+    ],
+    disposition: 'RETIRE_PHASE_2B',
+    canonicalReplacementTarget: 'Stateful Turn-Continuity & Discourse Referent Graph (FR-DISC-1..4, Phase 2B).',
+    knownFailureModes: [
+      'Pronoun and ellipsis resolution ("what about the other one?", "is it covered?") relies on 35+ brittle surface regexes.',
+    ],
+  },
+  {
+    recognizerId: 'recognizer.composition.decompose_and_also_answer',
+    category: 'COMPOSITION_AND_ALSO_ANSWER',
+    sourceFile: 'src/services/ask/support/alsoAnswer.ts',
+    coveredSourceFiles: [
+      'src/services/ask/support/alsoAnswer.ts',
+      'src/services/ask/composition/compositeResult.ts',
+      'src/services/ask/composition/decompose.ts',
+      'src/services/ask/composition/resumeClarification.ts',
+      'src/services/ask/composition/runComposedTurn.ts',
+      'src/services/ask/composition/slotContext.ts',
+      'src/services/ask/composition/slots.ts',
+    ],
+    exportedSymbols: ['resolveAlsoAnswer', 'decomposeCompositeTurn', 'extractCompositionSlots'],
+    liveItemCount: 41,
+    affectedDomains: [
+      'domain.inventory',
+      'domain.warranties_coverage',
+      'domain.maintenance',
+      'domain.insurance_policies',
+      'domain.claims',
+      'domain.ownership_costs_finance',
+    ],
+    disposition: 'RETIRE_PHASE_2B',
+    canonicalReplacementTarget: 'Cross-Domain Multi-Intent & Join Planner (FR-COMP-1..4, Phase 2B).',
+    knownFailureModes: [
+      'Pairwise conjunction splitters and hardcoded alsoAnswer pairs only cover pre-authored 2-operation combinations.',
+    ],
+  },
+  {
+    recognizerId: 'recognizer.provisional_read.fallback_matchers',
+    category: 'PROVISIONAL_READ_REGEXES',
+    sourceFile: 'src/services/ask/support/provisionalRead.ts',
+    coveredSourceFiles: ['src/services/ask/support/provisionalRead.ts'],
+    exportedSymbols: ['resolveProvisionalRead'],
+    liveItemCount: 46,
+    affectedDomains: [
+      'domain.property_profile',
+      'domain.inventory',
+      'domain.warranties_coverage',
+      'domain.maintenance',
+      'domain.documents_records',
+    ],
+    disposition: 'RETIRE_PHASE_2A',
+    canonicalReplacementTarget: 'CanonicalSemanticUnderstander + SemanticQueryPlanner (Phase 2A).',
+    knownFailureModes: [
+      '46 fallback regexes duplicate data-point and handler-level recognizers with slightly different negation/filter semantics.',
+    ],
+  },
+  {
+    recognizerId: 'recognizer.conversational_capture.extraction_prefilter',
+    category: 'CAPTURE_PREFILTER_REGEXES',
+    sourceFile: 'src/services/ask/conversationalUnderstanding/extractionPreFilter.ts',
+    coveredSourceFiles: [
+      'src/services/ask/conversationalUnderstanding/extractionPreFilter.ts',
+      'src/services/ask/conversationalUnderstanding/conversationalCapture.ts',
+    ],
+    exportedSymbols: ['passesExtractionPreFilter', 'extractConversationalCandidates'],
+    liveItemCount: 12,
+    affectedDomains: [
+      'domain.inventory',
+      'domain.warranties_coverage',
+      'domain.maintenance',
+      'domain.timeline_home_events',
+      'domain.property_profile',
+    ],
+    disposition: 'RETIRE_PHASE_2B',
+    canonicalReplacementTarget: 'Unified Turn Understanding + Governed Mutation/Capture Proposal Planner (Phase 2B).',
+    knownFailureModes: [
+      'Declarative facts embedded inside questions can be dropped or misclassified before semantic understanding.',
+    ],
+  },
+  {
+    recognizerId: 'recognizer.handlers.domain_local_intent_matchers',
+    category: 'HANDLER_LOCAL_INTENT_REGEXES',
+    sourceFile: 'src/services/ask/handlers/warranties.handler.ts',
+    coveredSourceFiles: HANDLER_RECOGNIZER_SOURCE_FILES,
+    exportedSymbols: [
+      'matchesInventoryLookupIntent',
+      'warrantiesHandler',
+      'inventoryHandler',
+      'maintenanceHandler',
+      'coverageHandler',
+      'claimsHandler',
+      'documentsHandler',
+      'buyerPlanHandler',
+      'sellHoldRentHandler',
+      'capitalPlanningHandler',
+      'refinanceHandler',
+      'savingsOwnershipHandler',
+    ],
+    liveItemCount: 663,
+    affectedDomains: [
+      'domain.property_profile',
+      'domain.inventory',
+      'domain.maintenance',
+      'domain.warranties_coverage',
+      'domain.insurance_policies',
+      'domain.claims',
+      'domain.documents_records',
+      'domain.ownership_costs_finance',
+      'domain.projects_quotes_vendors',
+      'domain.risks_recalls_inspections',
+      'domain.timeline_home_events',
+      'domain.buyer_journey',
+      'domain.seller_preparation',
+      'domain.account_household_preferences',
+    ],
+    disposition: 'RETIRE_PHASE_2A',
+    canonicalReplacementTarget: 'Structured SemanticQueryPlan + typed operation arguments passed from CanonicalSemanticUnderstander (FR-QUERY-1, Phase 2A).',
+    knownFailureModes: [
+      'Handlers re-parse raw user message text with local regexes (e.g. /without\\s+warrant/i) that can contradict the router or dataPointQueryPlan.',
+    ],
+  },
+  {
+    recognizerId: 'recognizer.support.command_and_routing_normalizers',
+    category: 'SUPPORT_COMMAND_AND_NORMALIZATION_REGEXES',
+    sourceFile: 'src/services/ask/support/routingNormalization.ts',
+    coveredSourceFiles: SUPPORT_COMMAND_RECOGNIZER_SOURCE_FILES,
+    exportedSymbols: [
+      'normalizeRoutingMessage',
+      'ROUTING_VOCABULARY',
+      'COMMON_MISSPELLINGS',
+      'parseCommandInputs',
+    ],
+    liveItemCount: 343,
+    affectedDomains: [
+      'domain.property_profile',
+      'domain.inventory',
+      'domain.maintenance',
+      'domain.warranties_coverage',
+      'domain.insurance_policies',
+      'domain.claims',
+      'domain.documents_records',
+      'domain.ownership_costs_finance',
+      'domain.projects_quotes_vendors',
+      'domain.risks_recalls_inspections',
+      'domain.timeline_home_events',
+      'domain.buyer_journey',
+      'domain.seller_preparation',
+      'domain.account_household_preferences',
+    ],
+    disposition: 'RETIRE_PHASE_2B',
+    canonicalReplacementTarget: 'CanonicalSemanticUnderstander slot extraction + Ontology vocabulary normalization (Phase 2A/2B).',
+    knownFailureModes: [
+      '73 support command parsers and routing normalizers maintain independent regex extractors for dates, amounts, rooms, and command flags.',
+    ],
+  },
+  {
+    recognizerId: 'recognizer.core_runtime.operation_and_trust_guardrails',
+    category: 'BOUNDARY_AND_TRUST_GUARDRAILS',
+    sourceFile: 'src/services/ask/askOperationRegistry.ts',
+    coveredSourceFiles: CORE_RUNTIME_AND_BOUNDARY_RECOGNIZER_FILES,
+    exportedSymbols: [
+      'ASK_OPERATION_DEFINITIONS',
+      'validateAskAnswerTrust',
+      'evaluateAnswerTrustPolicy',
+      'ASK_ROUTE_RETIREMENT_REGISTRY',
+    ],
+    liveItemCount: 344,
+    affectedDomains: [
+      'domain.property_profile',
+      'domain.inventory',
+      'domain.maintenance',
+      'domain.warranties_coverage',
+      'domain.insurance_policies',
+      'domain.claims',
+      'domain.documents_records',
+      'domain.ownership_costs_finance',
+      'domain.projects_quotes_vendors',
+      'domain.risks_recalls_inspections',
+      'domain.timeline_home_events',
+      'domain.buyer_journey',
+      'domain.seller_preparation',
+      'domain.account_household_preferences',
+      'domain.safety_boundary',
+    ],
+    disposition: 'RETAIN_BOUNDARY_GUARDRAIL',
+    canonicalReplacementTarget: 'Operation registry metadata & deterministic answer-trust/safety guardrails retained under §6.2; inline routing/formatting regexes migrate to Phase 2A/2B semantic contracts.',
+    knownFailureModes: [
+      'Operation-registry regex patterns and presentation/trust validators mix boundary enforcement with lexical surface heuristics.',
+    ],
   },
 ] as const);
 
-const ALLOWED_DISPOSITIONS = new Set<RecognizerRetirementDisposition>([
-  'MIGRATE_TO_LEXICON',
-  'MIGRATE_TO_TYPED_GRAMMAR',
-  'REPLACE_WITH_PROPERTY_RESOLUTION',
-  'RETAIN_SAFETY_BOUNDARY',
-  'RETAIN_CERTIFIED_OPTIMIZATION',
-  'RETIRE',
-]);
+export function scanTypeScriptRecognizerSignals(sourceText: string): {
+  regexCount: number;
+  vocabularyDeclarationCount: number;
+  totalSignals: number;
+} {
+  const noComments = sourceText.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const newRegExpMatches = noComments.match(/\bnew\s+RegExp\s*\(/g) ?? [];
+  const regexLiteralMatches =
+    noComments.match(/(?:[:=,(]|return\s+|\[|\|\||&&|\?)\s*\/(?![/*])(?:\\.|\[(?:\\.|[^\]\\])*\]|[^/\\\n])+\/[gimsuy]*/g) ?? [];
+  const vocabDecls =
+    noComments.match(
+      /\b(?:const|export\s+const)\s+[A-Z0-9_]*(?:SYNONYM|ALIAS|EQUIVALENT|VOCABULARY|FILLER|CUE|KEYWORD|PHRASE)[A-Z0-9_]*\b/g,
+    ) ?? [];
+  const regexCount = regexLiteralMatches.length + newRegExpMatches.length;
+  const vocabularyDeclarationCount = vocabDecls.length;
+  return {
+    regexCount,
+    vocabularyDeclarationCount,
+    totalSignals: regexCount + vocabularyDeclarationCount,
+  };
+}
 
-export function validateRecognizerRetirementManifest(): string[] {
+function resolveDefaultBackendRoot(): string {
+  return path.resolve(__dirname, '../../../../..');
+}
+
+export function discoverLiveAskRecognizerSources(
+  backendRoot: string = resolveDefaultBackendRoot(),
+): readonly DiscoveredAskRecognizerSource[] {
+  const askRoot = path.join(backendRoot, 'src/services/ask');
+  if (!fs.existsSync(askRoot)) {
+    return [];
+  }
+
+  const relativeFiles: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === 'semantic' || entry.name === 'graphify-out') continue;
+        walk(fullPath);
+      } else if (entry.name.endsWith('.ts')) {
+        relativeFiles.push(path.relative(backendRoot, fullPath).replace(/\\/g, '/'));
+      }
+    }
+  };
+  walk(askRoot);
+  relativeFiles.sort();
+
+  const discovered: DiscoveredAskRecognizerSource[] = [];
+  for (const relativeFilePath of relativeFiles) {
+    const fullPath = path.join(backendRoot, relativeFilePath);
+    const sourceText = fs.readFileSync(fullPath, 'utf8');
+    const counts = scanTypeScriptRecognizerSignals(sourceText);
+    if (counts.totalSignals > 0) {
+      discovered.push({
+        relativeFilePath,
+        regexCount: counts.regexCount,
+        vocabularyDeclarationCount: counts.vocabularyDeclarationCount,
+        totalSignals: counts.totalSignals,
+      });
+    }
+  }
+
+  return Object.freeze(discovered);
+}
+
+export interface ValidateRecognizerRetirementOptions {
+  readonly backendRoot?: string;
+  readonly extraDiscoveredFiles?: readonly string[];
+}
+
+export function validateRecognizerRetirementManifest(
+  options: ValidateRecognizerRetirementOptions = {},
+): string[] {
   const issues: string[] = [];
+  const backendRoot = options.backendRoot ?? resolveDefaultBackendRoot();
   const seenIds = new Set<string>();
+  const fileToEntryId = new Map<string, string>();
 
   for (const entry of ASK_RECOGNIZER_RETIREMENT_MANIFEST) {
     if (seenIds.has(entry.recognizerId)) {
-      issues.push(`${entry.recognizerId}: duplicate recognizerId`);
+      issues.push(`Duplicate recognizerId '${entry.recognizerId}' in ASK_RECOGNIZER_RETIREMENT_MANIFEST.`);
     }
     seenIds.add(entry.recognizerId);
 
-    if (!ALLOWED_DISPOSITIONS.has(entry.disposition)) {
-      issues.push(`${entry.recognizerId}: invalid disposition ${entry.disposition}`);
+    if (entry.sourceFile.includes('*')) {
+      issues.push(`Recognizer '${entry.recognizerId}' uses wildcard sourceFile '${entry.sourceFile}'.`);
     }
+    if (entry.coveredSourceFiles.length === 0) {
+      issues.push(`Recognizer '${entry.recognizerId}' has no coveredSourceFiles.`);
+    }
+    if (!entry.coveredSourceFiles.includes(entry.sourceFile)) {
+      issues.push(
+        `Recognizer '${entry.recognizerId}' primary sourceFile '${entry.sourceFile}' must be included in coveredSourceFiles.`,
+      );
+    }
+
+    let computedSignalSum = 0;
+    for (const relFile of entry.coveredSourceFiles) {
+      if (relFile.includes('*')) {
+        issues.push(`Recognizer '${entry.recognizerId}' coveredSourceFile '${relFile}' contains a wildcard.`);
+        continue;
+      }
+      const existingOwner = fileToEntryId.get(relFile);
+      if (existingOwner && existingOwner !== entry.recognizerId) {
+        issues.push(
+          `Recognizer file '${relFile}' is claimed by both '${existingOwner}' and '${entry.recognizerId}'.`,
+        );
+      }
+      fileToEntryId.set(relFile, entry.recognizerId);
+
+      const fullPath = path.join(backendRoot, relFile);
+      if (!fs.existsSync(fullPath)) {
+        issues.push(`Recognizer '${entry.recognizerId}' coveredSourceFile '${relFile}' does not exist on disk.`);
+        continue;
+      }
+      const stats = scanTypeScriptRecognizerSignals(fs.readFileSync(fullPath, 'utf8'));
+      if (stats.totalSignals <= 0) {
+        issues.push(
+          `Recognizer '${entry.recognizerId}' coveredSourceFile '${relFile}' contains 0 live regex or vocabulary signals.`,
+        );
+      }
+      computedSignalSum += stats.totalSignals;
+    }
+
     if (entry.liveItemCount <= 0) {
-      issues.push(`${entry.recognizerId}: liveItemCount must be > 0 (got ${entry.liveItemCount})`);
+      issues.push(`Recognizer '${entry.recognizerId}' has non-positive liveItemCount=${entry.liveItemCount}.`);
     }
-    if (!entry.owner.trim() || !entry.successorIdentity.trim() || !entry.deletionCriterion.trim()) {
-      issues.push(`${entry.recognizerId}: owner, successorIdentity, and deletionCriterion are required`);
+    if (entry.recognizerId === 'recognizer.fast_path.rule_manifest') {
+      if (entry.liveItemCount !== FAST_PATH_RULE_MANIFEST.length) {
+        issues.push(
+          `FAST_PATH_RULE_MANIFEST liveItemCount (${entry.liveItemCount}) drifted from actual rule count (${FAST_PATH_RULE_MANIFEST.length}).`,
+        );
+      }
+    } else if (computedSignalSum > 0 && entry.liveItemCount !== computedSignalSum) {
+      issues.push(
+        `Recognizer '${entry.recognizerId}' liveItemCount (${entry.liveItemCount}) drifted from live repository signal count (${computedSignalSum}).`,
+      );
     }
-    if (entry.parityFixtures.length === 0) {
-      issues.push(`${entry.recognizerId}: must declare at least one parity fixture`);
+
+    if (!entry.canonicalReplacementTarget.trim()) {
+      issues.push(`Recognizer '${entry.recognizerId}' is missing canonicalReplacementTarget.`);
+    }
+    if (entry.affectedDomains.length === 0) {
+      issues.push(`Recognizer '${entry.recognizerId}' has no affectedDomains.`);
     }
   }
 
-  // Verify that every FAST_PATH_RULE_MANIFEST entry is accounted for between boundary and domain rule buckets.
-  const accountedFastPath = boundaryFastPathRules.length + domainFastPathRules.length;
-  if (accountedFastPath !== FAST_PATH_RULE_MANIFEST.length) {
-    issues.push(`FAST_PATH_RULE_MANIFEST count mismatch: ${accountedFastPath} accounted vs ${FAST_PATH_RULE_MANIFEST.length} total`);
+  const discoveredSources = discoverLiveAskRecognizerSources(backendRoot);
+  const discoveredFileSet = new Set(discoveredSources.map((s) => s.relativeFilePath));
+  for (const extra of options.extraDiscoveredFiles ?? []) {
+    discoveredFileSet.add(extra);
   }
 
-  // Verify shared semantic lexicon is non-empty and valid as successor target.
-  if (ASK_SHARED_SEMANTIC_LEXICON.length === 0) {
-    issues.push('ASK_SHARED_SEMANTIC_LEXICON is empty');
+  for (const discoveredFile of discoveredFileSet) {
+    if (!fileToEntryId.has(discoveredFile)) {
+      issues.push(
+        `Uninventoried Ask recognizer/vocabulary file '${discoveredFile}' discovered in repository but missing from ASK_RECOGNIZER_RETIREMENT_MANIFEST.`,
+      );
+    }
   }
 
   return issues;

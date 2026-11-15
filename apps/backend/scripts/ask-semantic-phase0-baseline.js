@@ -50,6 +50,14 @@ console.log(`  Prisma models: ${summary.schemaReconciliation.totalPrismaModels} 
 console.log(`  Prisma enums:  ${summary.schemaReconciliation.totalPrismaEnums}`);
 console.log(`  Property Context fact keys: ${summary.schemaReconciliation.propertyFactCatalogCount} (${summary.schemaReconciliation.propertyFactsMappedToDataPoints.length} mapped to data points, ${summary.schemaReconciliation.propertyFactsUncoveredByDataPointCatalogue.length} explicit uncovered/composite)\n`);
 
+console.log(`Mechanical Completeness Proof:`);
+console.log(`  discovered recognizer files:        ${summary.completenessProof.discoveredRecognizerFilesCount} (${summary.completenessProof.unaccountedRecognizerFiles.length} unaccounted)`);
+console.log(`  discovered relation access files:   ${summary.completenessProof.discoveredRelationAccessFilesCount} (${summary.completenessProof.unaccountedRelationAccessFiles.length} unaccounted)`);
+console.log(`  discovered scalar duplicate pairs:  ${summary.completenessProof.discoveredDuplicateScalarCandidatesCount} (${summary.completenessProof.unaccountedDuplicateScalarCandidates.length} unaccounted)`);
+console.log(`  explicit operation domain mappings: ${summary.completenessProof.totalOperationsCount} (${summary.completenessProof.unmappedOperations.length} unmapped)`);
+console.log(`  verified seeded archetype fixtures: ${summary.completenessProof.archetypeFixtureVerificationPassedCount}/${summary.counts.seededPropertyArchetypes}`);
+console.log(`  verified seeded family executions:  ${summary.completenessProof.familyFixtureExecutionPassedCount}/${summary.counts.independentSemanticFamilies}\n`);
+
 console.log(`Phase 0 Exit Criteria:`);
 console.log(`  inventoriesGenerated:                   ${summary.exitCriteria.inventoriesGenerated}`);
 console.log(`  contradictionsAndUncoveredDataExplicit: ${summary.exitCriteria.contradictionsAndUncoveredDataExplicit}`);

@@ -4,6 +4,7 @@ require('ts-node/register/transpile-only');
 
 const {
   ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES,
+  ASK_OPERATION_DOMAIN_OWNERSHIP,
   ASK_PHASE0_CONTAINMENT_REGRESSION_CASES,
   ASK_RECOGNIZER_RETIREMENT_MANIFEST,
   ASK_RELATIONSHIP_STORAGE_ACCESS_SITES,
@@ -19,7 +20,12 @@ const {
   buildSemanticCapabilityInventory,
   buildSemanticEntityRegistry,
   buildSemanticFieldRegistry,
+  discoverAskRelationStorageAccessFiles,
+  discoverCandidateDuplicateScalarFields,
+  discoverLiveAskRecognizerSources,
   evaluateScalarFieldCoalescence,
+  evaluateSeededArchetypeFixtures,
+  executeSeededFamilyAgainstFixtures,
   validateRecognizerRetirementManifest,
   validateRelationGovernanceBaseline,
   validateScalarFieldCoalescenceManifest,
@@ -30,8 +36,9 @@ const { parseDeterministicSemanticRequest } = require('../../src/services/ask/se
 const { classifyTransitionalWarrantyLinks } = require('../../src/services/ask/semantic/transitionalWarrantyRead.ts');
 const { selectAndRenderAskRemoteFallbackClaims } = require('../../src/services/ask/askRemoteFallbackTypedClaims.ts');
 const { DATA_POINT_CATALOGUE_VERSION, DATA_POINT_DEFINITIONS } = require('../../src/services/ask/dataPoint/dataPointCatalogue.ts');
+const { ASK_OPERATION_DEFINITIONS } = require('../../src/services/ask/askOperationRegistry.ts');
 
-test('Phase 0 Bullet 1 & 6: authoritative domain, entity, field, relation, capability, and schema reconciliation inventories validate without drift', () => {
+test('Phase 0 Bullet 1, 4 & 6: authoritative domain, entity, field, operation domain ownership, and schema reconciliation inventories validate without drift', () => {
   assert.deepEqual(validateSemanticOntologyBaseline(), []);
 
   const entities = buildSemanticEntityRegistry();
@@ -44,15 +51,39 @@ test('Phase 0 Bullet 1 & 6: authoritative domain, entity, field, relation, capab
   assert.equal(fields.length, DATA_POINT_DEFINITIONS.length);
   assert.equal(DATA_POINT_CATALOGUE_VERSION, 12);
   assert.equal(DATA_POINT_DEFINITIONS.length, 107);
-  assert.ok(capabilities.length >= 124);
+  assert.equal(capabilities.length, Object.keys(ASK_OPERATION_DEFINITIONS).length);
+  assert.equal(Object.keys(ASK_OPERATION_DOMAIN_OWNERSHIP).length, Object.keys(ASK_OPERATION_DEFINITIONS).length);
   assert.ok(reconciliation.totalPrismaModels >= 500);
   assert.ok(reconciliation.propertyFactsMappedToDataPoints.length > 0);
   assert.ok(reconciliation.propertyFactsUncoveredByDataPointCatalogue.length > 0);
+
+  // Negative check (Finding #4): an unmapped operation must fail validation instead of falling back to domain.property_profile
+  const unmappedIssues = validateSemanticOntologyBaseline({
+    unmappedOperationIds: ['UNMAPPED_SYNTHETIC_OPERATION'],
+  });
+  assert.equal(unmappedIssues.length, 1);
+  assert.match(unmappedIssues[0], /UNMAPPED_SYNTHETIC_OPERATION/);
 });
 
-test('Phase 0 Bullet 2: duplicate/legacy scalar field coalescence manifest validates against Prisma DMMF and enforces conflict semantics', () => {
+test('Phase 0 Bullet 2: duplicate/legacy scalar field coalescence manifest mechanically discovers DMMF candidates and enforces conflict semantics', () => {
   assert.deepEqual(validateScalarFieldCoalescenceManifest(), []);
-  assert.ok(ASK_SCALAR_FIELD_COALESCENCE_MANIFEST.length >= 11);
+  assert.equal(ASK_SCALAR_FIELD_COALESCENCE_MANIFEST.length, 13);
+
+  const candidates = discoverCandidateDuplicateScalarFields();
+  assert.ok(candidates.length >= 18, 'discovers shadow columns, cents/amount pairs, synonym stems, and cross-entity overlaps');
+
+  // Negative check (Finding #3): an unaccounted candidate duplicate scalar pair must fail validation
+  const missingPairIssues = validateScalarFieldCoalescenceManifest({
+    extraCandidatePairs: [
+      {
+        left: 'InventoryItem.syntheticLegacyCode',
+        right: 'InventoryItem.syntheticCanonicalCode',
+        rule: 'INTRA_MODEL_SYNONYM_OR_STEM_OVERLAP',
+      },
+    ],
+  });
+  assert.equal(missingPairIssues.length, 1);
+  assert.match(missingPairIssues[0], /InventoryItem\.syntheticLegacyCode/);
 
   // Coalesces when only legacy column is populated
   const legacyOnly = evaluateScalarFieldCoalescence('scalar_group.inventory_item.model_identity', {
@@ -100,20 +131,38 @@ test('Phase 0 Bullet 2: duplicate/legacy scalar field coalescence manifest valid
   assert.equal(roofYearVsItem.state, 'SEPARATE_MEANINGS_NOT_COALESCED');
 });
 
-test('Phase 0 Bullet 3: recognizer and vocabulary retirement manifest (FR-ONT-8) accounts for all pre-existing recognizers', () => {
+test('Phase 0 Bullet 3: recognizer and vocabulary retirement manifest (FR-ONT-8) mechanically scans all Ask recognizer files', () => {
   assert.deepEqual(validateRecognizerRetirementManifest(), []);
-  assert.ok(ASK_RECOGNIZER_RETIREMENT_MANIFEST.length >= 11);
+  assert.equal(ASK_RECOGNIZER_RETIREMENT_MANIFEST.length, 13);
+
+  const discovered = discoverLiveAskRecognizerSources();
+  assert.ok(discovered.length >= 230, 'mechanically discovers all regex and vocabulary-bearing Ask files');
 
   const dispositions = new Set(ASK_RECOGNIZER_RETIREMENT_MANIFEST.map((entry) => entry.disposition));
-  assert.ok(dispositions.has('RETAIN_SAFETY_BOUNDARY'));
-  assert.ok(dispositions.has('MIGRATE_TO_TYPED_GRAMMAR'));
-  assert.ok(dispositions.has('MIGRATE_TO_LEXICON'));
-  assert.ok(dispositions.has('REPLACE_WITH_PROPERTY_RESOLUTION'));
-  assert.ok(dispositions.has('RETIRE'));
+  assert.ok(dispositions.has('RETIRE_PHASE_2A'));
+  assert.ok(dispositions.has('RETIRE_PHASE_2B'));
+  assert.ok(dispositions.has('RETAIN_BOUNDARY_GUARDRAIL'));
+
+  // Negative check (Finding #1): a newly added uninventoried recognizer file must fail validation
+  const uninventoriedIssues = validateRecognizerRetirementManifest({
+    extraDiscoveredFiles: ['src/services/ask/handlers/uninventoriedNewRegex.handler.ts'],
+  });
+  assert.equal(uninventoriedIssues.length, 1);
+  assert.match(uninventoriedIssues[0], /uninventoriedNewRegex\.handler\.ts/);
 });
 
-test('Phase 0 Bullet 4 & 5: relationship meaning tags, duplicate-definition report, and traversable path bounds validate cleanly', () => {
+test('Phase 0 Bullet 4 & 5: relationship meaning tags, repository-scanned access sites, and traversable path bounds validate cleanly', () => {
   assert.deepEqual(validateRelationGovernanceBaseline(), []);
+
+  const discoveredRelationFiles = discoverAskRelationStorageAccessFiles();
+  assert.ok(discoveredRelationFiles.length >= 29);
+
+  // Negative check (Finding #2): an unlisted relation storage access file must fail validation
+  const unlistedSiteIssues = validateRelationGovernanceBaseline({
+    extraDiscoveredRelationFiles: ['src/services/ask/handlers/unlistedWarrantyReader.handler.ts'],
+  });
+  assert.equal(unlistedSiteIssues.length, 1);
+  assert.match(unlistedSiteIssues[0], /unlistedWarrantyReader\.handler\.ts/);
 
   const report = buildRelationshipDuplicateDefinitionReport();
   assert.equal(report.declaredPredicateCount, ASK_SEMANTIC_PREDICATE_MEANING_MANIFEST.length);
@@ -131,19 +180,40 @@ test('Phase 0 Bullet 4 & 5: relationship meaning tags, duplicate-definition repo
   assert.ok(claimDocPath.auditFlags.includes('DUAL_PARENT_INTERSECTION_ENFORCED'));
 });
 
-test('Phase 0 Bullet 8: seeded property archetypes and independent semantic families cover every §5 domain', () => {
+test('Phase 0 Bullet 8: seeded property archetypes instantiate executable fixture records and verify all 16 cross-domain families', () => {
   assert.deepEqual(validateSeededScenarioCatalogue(), []);
   assert.equal(ASK_SEEDED_PROPERTY_ARCHETYPES.length, 4);
-  assert.ok(ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES.length >= 16);
+  assert.equal(ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES.length, 16);
 
-  const nonBoundaryDomains = ASK_SEMANTIC_DOMAINS
-    .filter((d) => d.domainId !== 'domain.safety_boundary')
-    .map((d) => d.domainId);
-  for (const domainId of nonBoundaryDomains) {
-    assert.ok(
-      ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES.some((f) => f.domainId === domainId),
-      `Expected at least one independent semantic family for ${domainId}`,
-    );
+  // Finding #6: execute concrete fixture evaluation on all 4 property archetypes
+  const completeEval = evaluateSeededArchetypeFixtures('property.seeded.complete_single_family');
+  assert.equal(completeEval.passed, true);
+  assert.ok(completeEval.observedStates.includes('POPULATED'));
+  assert.ok(completeEval.warrantyReadStates.includes('BOTH_CONSISTENT'));
+  assert.ok(completeEval.warrantyReadStates.includes('EXPLICIT_NO_COVERAGE'));
+
+  const missingUnknownEval = evaluateSeededArchetypeFixtures('property.seeded.missing_and_unknown_states');
+  assert.equal(missingUnknownEval.passed, true);
+  assert.ok(missingUnknownEval.observedStates.includes('EMPTY_OR_MISSING'));
+  assert.ok(missingUnknownEval.observedStates.includes('UNKNOWN'));
+  assert.ok(missingUnknownEval.warrantyReadStates.includes('UNKNOWN'));
+
+  const conflictedEval = evaluateSeededArchetypeFixtures('property.seeded.conflicted_and_dual_parent_auth');
+  assert.equal(conflictedEval.passed, true);
+  assert.ok(conflictedEval.observedStates.includes('CONFLICTED'));
+  assert.ok(conflictedEval.warrantyReadStates.includes('CONFLICTED_LINKS'));
+  assert.equal(conflictedEval.scalarCoalescenceStates['ins-conflict-1:deductible'], 'CONFLICTED');
+  assert.equal(conflictedEval.scalarCoalescenceStates['item-fridge-conflict-1:model_identity'], 'CONFLICTED');
+  assert.deepEqual(conflictedEval.dualParentRestrictedClaimDocIdsForViewer, ['cdoc-restricted-1']);
+
+  const lifecycleEval = evaluateSeededArchetypeFixtures('property.seeded.buyer_and_seller_lifecycle');
+  assert.equal(lifecycleEval.passed, true);
+  assert.ok(lifecycleEval.observedStates.includes('POPULATED'));
+
+  // Execute all 16 cross-domain families against their concrete seeded archetype fixtures
+  for (const family of ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES) {
+    const execResult = executeSeededFamilyAgainstFixtures(family.familyId);
+    assert.equal(execResult.passed, true, `Expected family ${family.familyId} to pass fixture execution: ${execResult.issues.join('; ')}`);
   }
 });
 
@@ -224,8 +294,20 @@ test('Phase 0 Bullet 9 [CONTAINMENT_REGRESSION_NOT_COVERAGE_PROOF]: exact failur
   assert.deepEqual(crossDomain.facets, []);
 });
 
-test('Phase 0 Exit Criteria: buildAskSemanticPhase0BaselineSummary reports all exit gates satisfied and makes no 90% completion claim', () => {
+test('Phase 0 Exit Criteria (Finding #5): buildAskSemanticPhase0BaselineSummary mechanically proves completeness across all inventories and fixtures', () => {
   const summary = buildAskSemanticPhase0BaselineSummary();
+  assert.deepEqual(summary.completenessProof.unaccountedRecognizerFiles, []);
+  assert.deepEqual(summary.completenessProof.unaccountedRelationAccessFiles, []);
+  assert.deepEqual(summary.completenessProof.unaccountedDuplicateScalarCandidates, []);
+  assert.deepEqual(summary.completenessProof.unmappedOperations, []);
+  assert.equal(
+    summary.completenessProof.archetypeFixtureVerificationPassedCount,
+    ASK_SEEDED_PROPERTY_ARCHETYPES.length,
+  );
+  assert.equal(
+    summary.completenessProof.familyFixtureExecutionPassedCount,
+    ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES.length,
+  );
   assert.equal(summary.exitCriteria.inventoriesGenerated, true);
   assert.equal(summary.exitCriteria.contradictionsAndUncoveredDataExplicit, true);
   assert.equal(summary.exitCriteria.noNinetyPercentCompletionClaim, true);

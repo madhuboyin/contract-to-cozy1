@@ -34,7 +34,7 @@ import { ASK_TRAVERSABLE_RELATION_PATH_MANIFEST } from './relationGovernanceBase
 import answerContractManifest from '../../answerContract/answerContractManifest.json';
 import entityDispositionsManifest from '../../dataCatalogue/entityDispositions.json';
 
-export const ASK_SEMANTIC_ONTOLOGY_BASELINE_VERSION = 'phase0-ontology-baseline-1.0.0' as const;
+export const ASK_SEMANTIC_ONTOLOGY_BASELINE_VERSION = 'phase0-ontology-baseline-1.1.0' as const;
 
 export type SemanticDomainId =
   | 'domain.property_profile'
@@ -457,23 +457,310 @@ export interface SemanticCapabilityInventoryRow {
   readonly answerVariantCount: number;
 }
 
-function inferSemanticDomainForOperation(operationId: string): SemanticDomainId {
-  if (/^(EMERGENCY|LEGAL_TAX|MEDICAL|UNSUPPORTED|OUT_OF_SCOPE|RESTRICTED|BOUNDARY)/.test(operationId)) return 'domain.safety_boundary';
-  if (/^(INVENTORY|APPLIANCE|ROOM|MATERIAL_SPEC|PLANT)/.test(operationId)) return 'domain.inventory';
-  if (/^(MAINTENANCE|SEASONAL|DIY|HOME_HABIT)/.test(operationId)) return 'domain.maintenance';
-  if (/^(WARRANTY|COVERAGE)/.test(operationId)) return 'domain.warranties_coverage';
-  if (/^(INSURANCE|POLICY)/.test(operationId)) return 'domain.insurance_policies';
-  if (/^(CLAIM|INCIDENT_CLAIM)/.test(operationId)) return 'domain.claims';
-  if (/^(DOCUMENT|RECORD|HOME_RECORD)/.test(operationId)) return 'domain.documents_records';
-  if (/^(OWNERSHIP_COST|RESERVE|CAPITAL|REFINANCE|MORTGAGE|TAX|SELL_HOLD_RENT|BREAK_EVEN|SAVINGS|EQUITY)/.test(operationId)) return 'domain.ownership_costs_finance';
-  if (/^(PROJECT|RENOVATION|QUOTE|NEGOTIATION|PRICE_FINALIZATION|SERVICE_PRICE|BOOKING)/.test(operationId)) return 'domain.projects_quotes_vendors';
-  if (/^(RISK|RECALL|INSPECTION|HAZARD|RADAR|HOME_EVENT_RADAR|NEIGHBORHOOD|DO_NOTHING)/.test(operationId)) return 'domain.risks_recalls_inspections';
-  if (/^(HOME_EVENT|TIMELINE|PROPERTY_CHANGE)/.test(operationId)) return 'domain.timeline_home_events';
-  if (/^(BUYER|NEW_HOME)/.test(operationId)) return 'domain.buyer_journey';
-  if (/^(SELLER|SALE_)/.test(operationId)) return 'domain.seller_preparation';
-  if (/^(HOUSEHOLD|NOTIFICATION|SAVED|WORK_OVERVIEW|PREFERENCE|BRIEF)/.test(operationId)) return 'domain.account_household_preferences';
-  return 'domain.property_profile';
-}
+/**
+ * Authoritative, exhaustive domain ownership registry for all 231 AskOperationIds (FR-ONT-4).
+ * Replaces heuristic operation-name prefix regexes and forbids default-domain fallback guessing.
+ */
+export const ASK_OPERATION_DOMAIN_OWNERSHIP: Readonly<Record<AskOperationId, SemanticDomainId>> = Object.freeze({
+  // domain.safety_boundary
+  EMERGENCY_BOUNDARY: 'domain.safety_boundary',
+  UNSAFE_RESTRICTED_BOUNDARY: 'domain.safety_boundary',
+  OUT_OF_SCOPE_BOUNDARY: 'domain.safety_boundary',
+  GROUNDED_GUIDANCE: 'domain.safety_boundary',
+  CAPABILITY_DISCOVERY: 'domain.safety_boundary',
+
+  // domain.property_profile
+  PROPERTY_SUMMARY: 'domain.property_profile',
+  INTELLIGENCE_ENVELOPE_QUERY: 'domain.property_profile',
+  DATA_POINT_READ: 'domain.property_profile',
+  HOA_COMPLIANCE_STATUS: 'domain.property_profile',
+  HOA_COMPLIANCE_COMMAND: 'domain.property_profile',
+  PROPERTY_BRIEFS_LIST: 'domain.property_profile',
+  PROPERTY_BRIEF_COMMAND: 'domain.property_profile',
+  HOME_BRIEFING_SHARE_COMMAND: 'domain.property_profile',
+  HOME_BRIEFING_COMMAND: 'domain.property_profile',
+  HOME_BRIEFING_VIEW: 'domain.property_profile',
+  HOME_BASICS_GUIDE: 'domain.property_profile',
+  HOME_STATUS_BOARD: 'domain.property_profile',
+  STATUS_BOARD_COMMAND: 'domain.property_profile',
+  PROPERTY_PURCHASE_DATE_SET: 'domain.property_profile',
+  PROPERTY_CONTEXT_AREA_CAPTURE: 'domain.property_profile',
+  HOME_JOURNEY_SET: 'domain.property_profile',
+  CAPTURE_FACT_CONFIRM: 'domain.property_profile',
+  ENVIRONMENT_REPORT: 'domain.property_profile',
+  ENVIRONMENT_REPORT_COMMAND: 'domain.property_profile',
+  COMMUNITY_UPDATES: 'domain.property_profile',
+
+  // domain.inventory
+  INVENTORY_LOOKUP: 'domain.inventory',
+  REPLACEMENT_GUIDANCE: 'domain.inventory',
+  APPLIANCE_FAILURE_RISK: 'domain.inventory',
+  MATERIAL_SPECS_LIST: 'domain.inventory',
+  MATERIAL_SPEC_ADD: 'domain.inventory',
+  MATERIAL_SPEC_UPDATE: 'domain.inventory',
+  PLANT_CARE_OUTLOOK: 'domain.inventory',
+  ROOM_PLANT_RECOMMENDATIONS: 'domain.inventory',
+  HOME_PLANT_ADD: 'domain.inventory',
+  ITEM_REPLACEMENT_COST: 'domain.inventory',
+  ITEM_REPAIR_REPLACE_VERDICT: 'domain.inventory',
+  INVENTORY_ITEM_CORRECT: 'domain.inventory',
+  INVENTORY_ITEM_CREATE: 'domain.inventory',
+  ROOM_RENAME: 'domain.inventory',
+  ROOM_CREATE: 'domain.inventory',
+  HVAC_DECISION_START: 'domain.inventory',
+  HVAC_DECISION_CONTINUE: 'domain.inventory',
+  HVAC_SPECIALIST_ENGAGE: 'domain.inventory',
+  HVAC_DECISION_SCENARIO: 'domain.inventory',
+  HVAC_DECISION_ABANDON: 'domain.inventory',
+  HVAC_PREFERENCE_SAVE: 'domain.inventory',
+  HVAC_PREFERENCE_FORGET: 'domain.inventory',
+  HVAC_DECISION_OUTCOME_REPORT: 'domain.inventory',
+  HVAC_DECISION_OUTCOME_VIEW: 'domain.inventory',
+  HVAC_DECISION_OUTCOME_UNLINK: 'domain.inventory',
+
+  // domain.maintenance
+  MAINTENANCE_STATUS: 'domain.maintenance',
+  MAINTENANCE_TASK_CREATE: 'domain.maintenance',
+  MAINTENANCE_TASK_COMPLETE: 'domain.maintenance',
+  MAINTENANCE_TASK_UPDATE: 'domain.maintenance',
+  MAINTENANCE_FORECAST: 'domain.maintenance',
+  MAINTENANCE_BUDGET_FORECAST: 'domain.maintenance',
+  MAINTENANCE_TEMPLATES_BROWSE: 'domain.maintenance',
+  MAINTENANCE_EVIDENCE_ATTACH: 'domain.maintenance',
+  SEASONAL_HOME_CARE: 'domain.maintenance',
+  SEASONAL_CHECKLIST_SETUP: 'domain.maintenance',
+  SEASONAL_ITEM_COMMAND: 'domain.maintenance',
+  DIY_PROJECTS: 'domain.maintenance',
+  DIY_PROJECT_GUIDE: 'domain.maintenance',
+  DIY_STEP_UPDATE: 'domain.maintenance',
+  DIY_PROJECT_COMPLETE: 'domain.maintenance',
+  DIY_PROJECT_ABANDON: 'domain.maintenance',
+  DIY_TEMPLATE_BROWSE: 'domain.maintenance',
+  DIY_PROJECT_START: 'domain.maintenance',
+  DIY_COMPLETION_RECOVER: 'domain.maintenance',
+  DIY_PROJECT_NOTE_COMMAND: 'domain.maintenance',
+  DIY_SKILL_PROFILE_COMMAND: 'domain.maintenance',
+  HOME_HABITS: 'domain.maintenance',
+  HOME_HABIT_UPDATE: 'domain.maintenance',
+  HOME_HABIT_PREFERENCES_COMMAND: 'domain.maintenance',
+  HOME_HABITS_GENERATE: 'domain.maintenance',
+  HOME_ACTIONS: 'domain.maintenance',
+  OPERATIONAL_WORK_UPDATE: 'domain.maintenance',
+  HOME_WORK_ITEM_COMMAND: 'domain.maintenance',
+  HOME_WORK_ITEMS: 'domain.maintenance',
+  WORK_REQUEST_COMMAND: 'domain.maintenance',
+  WORK_OVERVIEW: 'domain.maintenance',
+  HOME_DEADLINE_MONITOR: 'domain.maintenance',
+
+  // domain.warranties_coverage
+  WARRANTY_LOOKUP: 'domain.warranties_coverage',
+  WARRANTY_UPDATE: 'domain.warranties_coverage',
+  CAPTURE_WARRANTY_CONFIRM: 'domain.warranties_coverage',
+  COVERAGE_GAPS: 'domain.warranties_coverage',
+  COVERAGE_COMPARISON_STATUS: 'domain.warranties_coverage',
+  COVERAGE_RECORD_CHECK: 'domain.warranties_coverage',
+  COVERAGE_TERM_REVIEW: 'domain.warranties_coverage',
+  COVERAGE_ANALYSIS_RUN: 'domain.warranties_coverage',
+  COVERAGE_COMMAND: 'domain.warranties_coverage',
+  COVERAGE_REVIEW_STATUS: 'domain.warranties_coverage',
+
+  // domain.insurance_policies
+  BUYER_INSURANCE_COMMAND: 'domain.insurance_policies',
+  BUYER_INSURANCE_READINESS: 'domain.insurance_policies',
+
+  // domain.claims
+  INCIDENT_CLAIM_STATUS: 'domain.claims',
+  CLAIM_FILE: 'domain.claims',
+  CLAIM_TRANSITION: 'domain.claims',
+  INCIDENT_CONTINUATION: 'domain.claims',
+  CLAIM_ACTIVITY_COMMAND: 'domain.claims',
+  CLAIM_CHECKLIST_VIEW: 'domain.claims',
+
+  // domain.documents_records
+  DOCUMENT_LOOKUP: 'domain.documents_records',
+  DOCUMENT_PROMOTION_REVIEW: 'domain.documents_records',
+  DOCUMENT_PROMOTION_CONFIRM: 'domain.documents_records',
+  HOME_DIGITAL_WILL: 'domain.documents_records',
+  HOME_DIGITAL_WILL_CREATE: 'domain.documents_records',
+  HOME_RECORD_STATE_COMMAND: 'domain.documents_records',
+  HOME_RECORD_EXPORT: 'domain.documents_records',
+  HOME_RECORD_EXPORT_SHARE: 'domain.documents_records',
+  HOME_RECORD_EXPORT_STATUS: 'domain.documents_records',
+  CAPTURE_EVIDENCE_CONFIRM: 'domain.documents_records',
+
+  // domain.ownership_costs_finance
+  SAVINGS_OPPORTUNITIES: 'domain.ownership_costs_finance',
+  SAVINGS_BENEFIT_COMMAND: 'domain.ownership_costs_finance',
+  OWNERSHIP_COSTS: 'domain.ownership_costs_finance',
+  OWNERSHIP_COST_COMMAND: 'domain.ownership_costs_finance',
+  REFINANCE_ANALYSIS: 'domain.ownership_costs_finance',
+  REFINANCE_RATE_MONITOR: 'domain.ownership_costs_finance',
+  REFINANCE_COMMAND: 'domain.ownership_costs_finance',
+  FINANCING_PROFILE_COMMAND: 'domain.ownership_costs_finance',
+  FINANCING_OVERVIEW: 'domain.ownership_costs_finance',
+  BREAK_EVEN_ANALYSIS: 'domain.ownership_costs_finance',
+  CAPITAL_RESERVE_PLAN: 'domain.ownership_costs_finance',
+  CAPITAL_ITEM_FUNDING_GOAL: 'domain.ownership_costs_finance',
+  ITEM_RESERVE_ALLOCATION: 'domain.ownership_costs_finance',
+  RESERVE_FUND_COMMAND: 'domain.ownership_costs_finance',
+  CAPITAL_TIMELINE_COMMAND: 'domain.ownership_costs_finance',
+  PROPERTY_TAX_APPEAL_READINESS: 'domain.ownership_costs_finance',
+  PROPERTY_TAX_APPEAL_COMMAND: 'domain.ownership_costs_finance',
+  PROPERTY_TAX_COMPARABLE_COMMAND: 'domain.ownership_costs_finance',
+
+  // domain.projects_quotes_vendors
+  PRICE_FINALIZATIONS_LIST: 'domain.projects_quotes_vendors',
+  PRICE_FINALIZATION_COMMAND: 'domain.projects_quotes_vendors',
+  HIRING_GUIDE: 'domain.projects_quotes_vendors',
+  SERVICE_PRICE_CHECKS: 'domain.projects_quotes_vendors',
+  SERVICE_PRICE_CHECK_RUN: 'domain.projects_quotes_vendors',
+  PROJECT_TRACKER_PROJECTS: 'domain.projects_quotes_vendors',
+  PROJECT_TRACKER_CREATE: 'domain.projects_quotes_vendors',
+  PROJECT_TRACKER_COMMAND: 'domain.projects_quotes_vendors',
+  HOME_UPGRADE_SCENARIOS: 'domain.projects_quotes_vendors',
+  HOME_UPGRADE_COMMAND: 'domain.projects_quotes_vendors',
+  NEGOTIATION_SHIELD_CASES: 'domain.projects_quotes_vendors',
+  NEGOTIATION_SHIELD_CASE_START: 'domain.projects_quotes_vendors',
+  NEGOTIATION_SHIELD_BUYER_COMMAND: 'domain.projects_quotes_vendors',
+  NEGOTIATION_SHIELD_CASE_ATTACH: 'domain.projects_quotes_vendors',
+  NEGOTIATION_SHIELD_CASE_UPDATE: 'domain.projects_quotes_vendors',
+  NEGOTIATION_SHIELD_CASE_ANALYZE: 'domain.projects_quotes_vendors',
+  QUOTE_COMPARISON_CREATE: 'domain.projects_quotes_vendors',
+  QUOTE_COMPARISON_REVIEW: 'domain.projects_quotes_vendors',
+  QUOTE_COMPARISON_COMMAND: 'domain.projects_quotes_vendors',
+  RENOVATION_PERMIT_READINESS: 'domain.projects_quotes_vendors',
+  RENOVATION_CASE_START: 'domain.projects_quotes_vendors',
+  RENOVATION_READINESS_COMMAND: 'domain.projects_quotes_vendors',
+  PERMIT_TRACKER_COMMAND: 'domain.projects_quotes_vendors',
+  PERMIT_TRACKER_STATUS: 'domain.projects_quotes_vendors',
+
+  // domain.risks_recalls_inspections
+  INSPECTION_FINDINGS: 'domain.risks_recalls_inspections',
+  INSPECTION_FINDING_UPDATE: 'domain.risks_recalls_inspections',
+  INSPECTION_NEGOTIATION_PACKAGE: 'domain.risks_recalls_inspections',
+  INSPECTION_FINDING_DECISION_COMMAND: 'domain.risks_recalls_inspections',
+  INSPECTION_REPORT_FINDINGS: 'domain.risks_recalls_inspections',
+  INSPECTION_REPORT_COMMAND: 'domain.risks_recalls_inspections',
+  INSPECTION_REPORT_COMPARE: 'domain.risks_recalls_inspections',
+  INSPECTION_REPORTS: 'domain.risks_recalls_inspections',
+  INSPECTION_REPORT_REVIEW: 'domain.risks_recalls_inspections',
+  INSPECTION_FINDINGS_CHECK: 'domain.risks_recalls_inspections',
+  RECALL_REVIEW: 'domain.risks_recalls_inspections',
+  RECALL_MATCH_UPDATE: 'domain.risks_recalls_inspections',
+  DO_NOTHING_SIMULATION: 'domain.risks_recalls_inspections',
+  DO_NOTHING_SCENARIO_COMMAND: 'domain.risks_recalls_inspections',
+  DO_NOTHING_SIMULATION_RUN: 'domain.risks_recalls_inspections',
+  PAST_HAZARD_EXPOSURE: 'domain.risks_recalls_inspections',
+  PAST_HAZARD_OUTCOME_COMMAND: 'domain.risks_recalls_inspections',
+  RISK_MITIGATION_PLAN: 'domain.risks_recalls_inspections',
+  HOME_EVENT_RADAR_FEED: 'domain.risks_recalls_inspections',
+  HOME_EVENT_RADAR_STATE: 'domain.risks_recalls_inspections',
+  HOME_EVENT_RADAR_MARK_DONE: 'domain.risks_recalls_inspections',
+  HOME_EVENT_RADAR_FEEDBACK: 'domain.risks_recalls_inspections',
+  HOME_EVENT_RADAR_TASK: 'domain.risks_recalls_inspections',
+  HOME_EVENT_RADAR_PREFERENCES: 'domain.risks_recalls_inspections',
+  NEIGHBORHOOD_CHANGE_FEED: 'domain.risks_recalls_inspections',
+  NEIGHBORHOOD_INTERACTION_COMMAND: 'domain.risks_recalls_inspections',
+
+  // domain.timeline_home_events
+  HOME_TIMELINE_EVENTS: 'domain.timeline_home_events',
+  HOME_EVENT_CORRECT: 'domain.timeline_home_events',
+  HOME_EVENT_UPDATE: 'domain.timeline_home_events',
+  HOME_EVENT_VISIBILITY: 'domain.timeline_home_events',
+  MAJOR_EVENT_ENTRY: 'domain.timeline_home_events',
+  HOME_CHANGE_SUMMARY: 'domain.timeline_home_events',
+  CAPTURE_EVENT_CONFIRM: 'domain.timeline_home_events',
+
+  // domain.buyer_journey
+  BUYER_CONTRACT_COMMAND: 'domain.buyer_journey',
+  BUYER_CLOSING_DISCLOSURE_COMMAND: 'domain.buyer_journey',
+  BUYER_LOAN_ESTIMATE_COMMAND: 'domain.buyer_journey',
+  BUYER_PLAN_SETUP_COMMAND: 'domain.buyer_journey',
+  BUYER_LOAN_ESTIMATES: 'domain.buyer_journey',
+  BUYER_CLOSING_ITEM_COMMAND: 'domain.buyer_journey',
+  BUYER_WALKTHROUGH_COMMAND: 'domain.buyer_journey',
+  BUYER_PLAN_STATUS: 'domain.buyer_journey',
+  BUYER_DEADLINES: 'domain.buyer_journey',
+  BUYER_DOCUMENT_READINESS: 'domain.buyer_journey',
+  BUYER_INSPECTION_REVIEW: 'domain.buyer_journey',
+  BUYER_TASK_COMPLETE: 'domain.buyer_journey',
+  BUYER_TASK_CREATE: 'domain.buyer_journey',
+  BUYER_TASK_UPDATE: 'domain.buyer_journey',
+  BUYER_MOVE_STATUS: 'domain.buyer_journey',
+  BUYER_FINANCING_READINESS: 'domain.buyer_journey',
+  BUYER_TITLE_ESCROW_READINESS: 'domain.buyer_journey',
+  BUYER_WALKTHROUGH_READINESS: 'domain.buyer_journey',
+  BUYER_DISCLOSURE_FUNDS_READINESS: 'domain.buyer_journey',
+  BUYER_CLOSING_DAY_READINESS: 'domain.buyer_journey',
+  BUYER_CONTRACT_TIMELINE: 'domain.buyer_journey',
+  BUYER_NEGOTIATION_READINESS: 'domain.buyer_journey',
+  BUYER_COST_READINESS: 'domain.buyer_journey',
+  BUYER_FINDING_DISPOSITION: 'domain.buyer_journey',
+  BUYER_LIFECYCLE_UPDATE: 'domain.buyer_journey',
+
+  // domain.seller_preparation
+  SELL_HOLD_RENT_ANALYSIS: 'domain.seller_preparation',
+  SELL_HOLD_RENT_COMMAND: 'domain.seller_preparation',
+  SELL_HOLD_RENT_GOAL_CAPTURE: 'domain.seller_preparation',
+  SELLER_PREP_CHECKLIST: 'domain.seller_preparation',
+  SELLER_PREP_ITEM_DECISION: 'domain.seller_preparation',
+  SELLER_PREP_CASE_COMMAND: 'domain.seller_preparation',
+
+  // domain.account_household_preferences
+  GUIDANCE_JOURNEYS_LIST: 'domain.account_household_preferences',
+  GUIDANCE_JOURNEY_CONTINUE: 'domain.account_household_preferences',
+  GUIDANCE_STEP_SKIP: 'domain.account_household_preferences',
+  GUIDANCE_STEP_ACKNOWLEDGE: 'domain.account_household_preferences',
+  GUIDANCE_JOURNEY_DISMISS: 'domain.account_household_preferences',
+  GUIDANCE_JOURNEY_CREATE: 'domain.account_household_preferences',
+  GUIDANCE_STEP_DECLARE: 'domain.account_household_preferences',
+  HOUSEHOLD_INVITATION: 'domain.account_household_preferences',
+  HOUSEHOLD_ACCESS_SUMMARY: 'domain.account_household_preferences',
+  SAVED_ARCHIVE_COMMAND: 'domain.account_household_preferences',
+  SAVED_RESULTS: 'domain.account_household_preferences',
+  NOTIFICATIONS_OVERVIEW: 'domain.account_household_preferences',
+  NOTIFICATION_COMMAND: 'domain.account_household_preferences',
+  NOTIFICATION_SETTINGS_OVERVIEW: 'domain.account_household_preferences',
+  NOTIFICATION_SETTINGS_COMMAND: 'domain.account_household_preferences',
+});
+
+export const SKILL_DOMAIN_ALLOWED_SEMANTIC_DOMAINS: Readonly<Record<string, readonly SemanticDomainId[]>> =
+  Object.freeze({
+    HOME_CARE: [
+      'domain.maintenance',
+      'domain.warranties_coverage',
+      'domain.risks_recalls_inspections',
+      'domain.inventory',
+      'domain.projects_quotes_vendors',
+      'domain.property_profile',
+      'domain.account_household_preferences',
+      'domain.timeline_home_events',
+      'domain.ownership_costs_finance',
+    ],
+    HOME_PROTECTION: [
+      'domain.warranties_coverage',
+      'domain.insurance_policies',
+      'domain.claims',
+      'domain.risks_recalls_inspections',
+    ],
+    HOME_FINANCE: ['domain.ownership_costs_finance', 'domain.projects_quotes_vendors'],
+    HOME_INTELLIGENCE: [
+      'domain.inventory',
+      'domain.documents_records',
+      'domain.property_profile',
+      'domain.maintenance',
+      'domain.account_household_preferences',
+      'domain.timeline_home_events',
+      'domain.warranties_coverage',
+    ],
+    HOME_PROJECTS: ['domain.projects_quotes_vendors'],
+    HOME_TRANSACTION: [
+      'domain.seller_preparation',
+      'domain.timeline_home_events',
+      'domain.buyer_journey',
+    ],
+    HOUSEHOLD: ['domain.account_household_preferences'],
+  });
 
 export function buildSemanticCapabilityInventory(): readonly SemanticCapabilityInventoryRow[] {
   const answerByOp = new Map(answerContractManifest.operations.map((entry) => [entry.operationId, entry]));
@@ -505,7 +792,7 @@ export function buildSemanticCapabilityInventory(): readonly SemanticCapabilityI
       capabilityId: `capability.${operationId.toLowerCase()}`,
       semanticJobId: `job.${operationId.toLowerCase()}`,
       operationId,
-      domainId: isBoundary ? 'domain.safety_boundary' : inferSemanticDomainForOperation(operationId),
+      domainId: ASK_OPERATION_DOMAIN_OWNERSHIP[operationId],
       requestClass,
       effectClass,
       messageRoutable: isAskMessageRoutableOperation(operationId),
@@ -518,11 +805,18 @@ export function buildSemanticCapabilityInventory(): readonly SemanticCapabilityI
   });
 }
 
-export function validateSemanticOntologyBaseline(): string[] {
+export interface ValidateSemanticOntologyOptions {
+  readonly unmappedOperationIds?: readonly string[];
+}
+
+export function validateSemanticOntologyBaseline(
+  options: ValidateSemanticOntologyOptions = {},
+): string[] {
   const issues: string[] = [];
   const entities = buildSemanticEntityRegistry();
   const fields = buildSemanticFieldRegistry();
   const capabilities = buildSemanticCapabilityInventory();
+  const registeredDomains = new Set<SemanticDomainId>(ASK_SEMANTIC_DOMAINS.map((d) => d.domainId));
 
   if (ASK_SEMANTIC_DOMAINS.length < 14) {
     issues.push(`Expected at least 14 §5 domains, found ${ASK_SEMANTIC_DOMAINS.length}`);
@@ -545,6 +839,40 @@ export function validateSemanticOntologyBaseline(): string[] {
   if (capabilities.length !== Object.keys(ASK_OPERATION_DEFINITIONS).length) {
     issues.push(`Capability inventory count (${capabilities.length}) disagrees with ASK_OPERATION_DEFINITIONS`);
   }
+
+  // Verify exhaustive operation domain ownership (zero fallback guessing) and skill-domain consistency.
+  const allOperationIds = new Set<string>([
+    ...Object.keys(ASK_OPERATION_DEFINITIONS),
+    ...(options.unmappedOperationIds ?? []),
+  ]);
+  for (const opId of allOperationIds) {
+    const ownedDomain = (ASK_OPERATION_DOMAIN_OWNERSHIP as Record<string, SemanticDomainId | undefined>)[opId];
+    if (!ownedDomain || !registeredDomains.has(ownedDomain)) {
+      issues.push(
+        `Operation '${opId}' is missing an explicit SemanticDomainId mapping in ASK_OPERATION_DOMAIN_OWNERSHIP.`,
+      );
+      continue;
+    }
+    if (opId in ASK_OPERATION_DEFINITIONS) {
+      const skill = getSkillForOperation(opId as AskOperationId);
+      if (skill) {
+        const allowedDomains = SKILL_DOMAIN_ALLOWED_SEMANTIC_DOMAINS[skill.domain];
+        if (!allowedDomains || !allowedDomains.includes(ownedDomain)) {
+          issues.push(
+            `Operation '${opId}' domain '${ownedDomain}' conflicts with skill '${skill.id}' domain '${skill.domain}'.`,
+          );
+        }
+      }
+    }
+  }
+  for (const mappedOp of Object.keys(ASK_OPERATION_DOMAIN_OWNERSHIP)) {
+    if (!(mappedOp in ASK_OPERATION_DEFINITIONS)) {
+      issues.push(
+        `ASK_OPERATION_DOMAIN_OWNERSHIP contains stale operationId '${mappedOp}' not present in ASK_OPERATION_DEFINITIONS.`,
+      );
+    }
+  }
+
   if (ASK_SEMANTIC_RELATION_REGISTRY.length === 0) {
     issues.push('ASK_SEMANTIC_RELATION_REGISTRY must contain at least the transitional warranty relation');
   }

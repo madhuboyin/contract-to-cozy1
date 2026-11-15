@@ -15,8 +15,9 @@
  *      until owner decision §22.7 explicitly approves equivalence.
  */
 import { Prisma } from '@prisma/client';
+import { DATA_POINT_DEFINITIONS } from '../../dataPoint/dataPointCatalogue';
 
-export const ASK_SCALAR_FIELD_COALESCENCE_MANIFEST_VERSION = 'phase0-scalar-coalescence-1.0.0' as const;
+export const ASK_SCALAR_FIELD_COALESCENCE_MANIFEST_VERSION = 'phase0-scalar-coalescence-1.1.0' as const;
 
 export type ScalarFieldDuplicateClassification =
   | 'CANONICAL_WITH_GOVERNED_COALESCENCE'
@@ -263,7 +264,193 @@ export const ASK_SCALAR_FIELD_COALESCENCE_MANIFEST: readonly ScalarFieldCoalesce
     provenancePreference: 'Acquisition closing date and sale closing date belong to distinct lifecycle cases. Fallback between them is permitted only when exactly one lifecycle case exists on the property and the receipt names the actual entity read.',
     ownerDecisionRef: null,
   },
+  {
+    semanticFieldGroupId: 'scalar_group.property.has_irrigation',
+    domainId: 'domain.property_profile',
+    classification: 'CANONICAL_WITH_GOVERNED_COALESCENCE',
+    businessMeaningSummary: 'Property irrigation presence stored on both Property.hasIrrigation and PropertyExteriorProfile.hasIrrigation.',
+    authoritativeStorage: { model: 'PropertyExteriorProfile', field: 'hasIrrigation' },
+    storageMembers: [
+      { model: 'PropertyExteriorProfile', field: 'hasIrrigation', prismaType: 'Boolean', role: 'AUTHORITATIVE', canonicalDataPointId: null },
+      { model: 'Property', field: 'hasIrrigation', prismaType: 'Boolean', role: 'LEGACY_ALIAS', canonicalDataPointId: null },
+    ],
+    orderedCoalescenceRule: ['PropertyExteriorProfile.hasIrrigation', 'Property.hasIrrigation'],
+    blankVersusNullPolicy: 'TRIM_EMPTY_STRING_AS_NULL',
+    conflictBehavior: 'CONFLICTED_WITH_PROVENANCE',
+    writeTarget: 'PropertyExteriorProfile.hasIrrigation',
+    backfillDisposition: 'CONSOLIDATE_TO_AUTHORITATIVE_ON_WRITE',
+    provenancePreference: 'Prefer PropertyExteriorProfile.hasIrrigation when populated; surface CONFLICTED if Property.hasIrrigation and PropertyExteriorProfile.hasIrrigation disagree.',
+    ownerDecisionRef: null,
+  },
+  {
+    semanticFieldGroupId: 'scalar_group.property.has_drainage_issues',
+    domainId: 'domain.property_profile',
+    classification: 'CANONICAL_WITH_GOVERNED_COALESCENCE',
+    businessMeaningSummary: 'Property drainage-issue flag stored on both Property.hasDrainageIssues and PropertyExteriorProfile.hasDrainageIssues.',
+    authoritativeStorage: { model: 'PropertyExteriorProfile', field: 'hasDrainageIssues' },
+    storageMembers: [
+      { model: 'PropertyExteriorProfile', field: 'hasDrainageIssues', prismaType: 'Boolean', role: 'AUTHORITATIVE', canonicalDataPointId: null },
+      { model: 'Property', field: 'hasDrainageIssues', prismaType: 'Boolean', role: 'LEGACY_ALIAS', canonicalDataPointId: null },
+    ],
+    orderedCoalescenceRule: ['PropertyExteriorProfile.hasDrainageIssues', 'Property.hasDrainageIssues'],
+    blankVersusNullPolicy: 'TRIM_EMPTY_STRING_AS_NULL',
+    conflictBehavior: 'CONFLICTED_WITH_PROVENANCE',
+    writeTarget: 'PropertyExteriorProfile.hasDrainageIssues',
+    backfillDisposition: 'CONSOLIDATE_TO_AUTHORITATIVE_ON_WRITE',
+    provenancePreference: 'Prefer PropertyExteriorProfile.hasDrainageIssues when populated; surface CONFLICTED if Property.hasDrainageIssues and PropertyExteriorProfile.hasDrainageIssues disagree.',
+    ownerDecisionRef: null,
+  },
 ] as const);
+
+export type CandidateDuplicateDiscoveryRule =
+  | 'NORMALIZED_OR_GEOCODED_SHADOW_COLUMN'
+  | 'CENTS_VS_AMOUNT_MONETARY_PAIR'
+  | 'INTRA_MODEL_SYNONYM_OR_STEM_OVERLAP'
+  | 'PROPERTY_VS_EXTERIOR_PROFILE_OVERLAP'
+  | 'CROSS_ENTITY_SYSTEM_INSTALL_YEAR_OVERLAP'
+  | 'CROSS_LIFECYCLE_CLOSE_DATE_OVERLAP';
+
+export interface CandidateDuplicateScalarPair {
+  readonly left: string;
+  readonly right: string;
+  readonly rule: CandidateDuplicateDiscoveryRule;
+}
+
+const INTRA_MODEL_KNOWN_SYNONYM_STEMS: ReadonlyArray<readonly [string, string]> = Object.freeze([
+  ['brand', 'manufacturer'],
+  ['model', 'modelNumber'],
+  ['serialNo', 'serialNumber'],
+  ['category', 'assetType'],
+  ['category', 'serviceCategory'],
+]);
+
+/**
+ * Mechanically derives candidate duplicate/shadow/overlapping scalar field pairs
+ * from Prisma DMMF (across all 20 catalogued DataPointEntity models + PropertyExteriorProfile)
+ * and DATA_POINT_DEFINITIONS so that omitted duplicate pairs fail Phase 0 validation.
+ */
+export function discoverCandidateDuplicateScalarFields(): readonly CandidateDuplicateScalarPair[] {
+  const modelsByName = new Map(Prisma.dmmf.datamodel.models.map((model) => [model.name, model]));
+  const targetModelNames = Array.from(
+    new Set([...DATA_POINT_DEFINITIONS.map((d) => d.entity), 'PropertyExteriorProfile']),
+  );
+
+  const pairs: CandidateDuplicateScalarPair[] = [];
+  const seenKey = new Set<string>();
+  const addPair = (left: string, right: string, rule: CandidateDuplicateDiscoveryRule): void => {
+    const sorted = [left, right].sort();
+    const key = `${sorted[0]}<->${sorted[1]}`;
+    if (seenKey.has(key)) return;
+    seenKey.add(key);
+    pairs.push({ left, right, rule });
+  };
+
+  for (const modelName of targetModelNames) {
+    const model = modelsByName.get(modelName);
+    if (!model) continue;
+    const scalarFields = model.fields
+      .filter((f) => f.kind === 'scalar' || f.kind === 'enum')
+      .map((f) => f.name);
+    const scalarSet = new Set(scalarFields);
+
+    // Rule 1: *Norm, normalized*, geocoded* shadow columns on the same model
+    for (const fieldName of scalarFields) {
+      if (fieldName.endsWith('Norm')) {
+        const base = fieldName.slice(0, -4);
+        if (scalarSet.has(base)) {
+          addPair(`${modelName}.${base}`, `${modelName}.${fieldName}`, 'NORMALIZED_OR_GEOCODED_SHADOW_COLUMN');
+        }
+      } else {
+        const prefixMatch = fieldName.match(/^(?:normalized|geocoded)([A-Z]\w*)$/);
+        if (prefixMatch) {
+          const rawCandidate = prefixMatch[1].charAt(0).toLowerCase() + prefixMatch[1].slice(1);
+          if (scalarSet.has(rawCandidate)) {
+            addPair(
+              `${modelName}.${rawCandidate}`,
+              `${modelName}.${fieldName}`,
+              'NORMALIZED_OR_GEOCODED_SHADOW_COLUMN',
+            );
+          }
+        }
+      }
+    }
+
+    // Rule 2: *Cents vs *Amount monetary representation pairs on the same model
+    for (const fieldName of scalarFields) {
+      if (fieldName.endsWith('Cents')) {
+        const stem = fieldName.slice(0, -5);
+        const amountField = `${stem}Amount`;
+        if (scalarSet.has(amountField)) {
+          addPair(`${modelName}.${amountField}`, `${modelName}.${fieldName}`, 'CENTS_VS_AMOUNT_MONETARY_PAIR');
+        }
+      }
+    }
+
+    // Rule 3: Intra-model synonym/stem overlaps (brand/manufacturer, model/modelNumber, serialNo/serialNumber, category/assetType/serviceCategory)
+    for (const [leftField, rightField] of INTRA_MODEL_KNOWN_SYNONYM_STEMS) {
+      if (scalarSet.has(leftField) && scalarSet.has(rightField)) {
+        addPair(
+          `${modelName}.${leftField}`,
+          `${modelName}.${rightField}`,
+          'INTRA_MODEL_SYNONYM_OR_STEM_OVERLAP',
+        );
+      }
+    }
+  }
+
+  // Rule 4: Property vs PropertyExteriorProfile overlapping scalar fields
+  const propertyModel = modelsByName.get('Property');
+  const exteriorModel = modelsByName.get('PropertyExteriorProfile');
+  if (propertyModel && exteriorModel) {
+    const ignoredCommon = new Set(['id', 'propertyId', 'createdAt', 'updatedAt']);
+    const propScalars = propertyModel.fields
+      .filter((f) => (f.kind === 'scalar' || f.kind === 'enum') && !ignoredCommon.has(f.name))
+      .map((f) => f.name);
+    const extScalars = exteriorModel.fields
+      .filter((f) => (f.kind === 'scalar' || f.kind === 'enum') && !ignoredCommon.has(f.name))
+      .map((f) => f.name);
+    for (const pField of propScalars) {
+      for (const eField of extScalars) {
+        if (pField === eField || (pField === 'lotSize' && eField === 'lotSizeSqFt')) {
+          addPair(
+            `Property.${pField}`,
+            `PropertyExteriorProfile.${eField}`,
+            'PROPERTY_VS_EXTERIOR_PROFILE_OVERLAP',
+          );
+        }
+      }
+    }
+  }
+
+  // Rule 5: Property *InstallYear / *ReplacementYear vs InventoryItem.installedOn
+  if (propertyModel && modelsByName.get('InventoryItem')) {
+    for (const f of propertyModel.fields) {
+      if ((f.kind === 'scalar' || f.kind === 'enum') && /(?:InstallYear|ReplacementYear)$/.test(f.name)) {
+        addPair(
+          `Property.${f.name}`,
+          'InventoryItem.installedOn',
+          'CROSS_ENTITY_SYSTEM_INSTALL_YEAR_OVERLAP',
+        );
+      }
+    }
+  }
+
+  // Rule 6: Cross-lifecycle targetCloseDate in DATA_POINT_DEFINITIONS
+  const closeDateDefs = DATA_POINT_DEFINITIONS.filter((d) => d.field === 'targetCloseDate');
+  for (let i = 0; i < closeDateDefs.length; i += 1) {
+    for (let j = i + 1; j < closeDateDefs.length; j += 1) {
+      if (closeDateDefs[i].entity !== closeDateDefs[j].entity) {
+        addPair(
+          `${closeDateDefs[i].entity}.${closeDateDefs[i].field}`,
+          `${closeDateDefs[j].entity}.${closeDateDefs[j].field}`,
+          'CROSS_LIFECYCLE_CLOSE_DATE_OVERLAP',
+        );
+      }
+    }
+  }
+
+  return Object.freeze(pairs);
+}
 
 export interface CoalescedScalarValueResult {
   readonly semanticFieldGroupId: string;
@@ -371,14 +558,23 @@ export function evaluateScalarFieldCoalescence(
   };
 }
 
+export interface ValidateScalarFieldCoalescenceOptions {
+  readonly extraCandidatePairs?: readonly CandidateDuplicateScalarPair[];
+}
+
 /**
  * Validates that every storage member in ASK_SCALAR_FIELD_COALESCENCE_MANIFEST
- * exists on the current Prisma schema DMMF with the declared type.
+ * exists on the current Prisma schema DMMF with the declared type AND that every
+ * candidate duplicate/shadow/overlapping scalar pair discovered from Prisma DMMF
+ * and DATA_POINT_DEFINITIONS is covered by a governed group in the manifest.
  */
-export function validateScalarFieldCoalescenceManifest(): string[] {
+export function validateScalarFieldCoalescenceManifest(
+  options: ValidateScalarFieldCoalescenceOptions = {},
+): string[] {
   const issues: string[] = [];
   const modelsByName = new Map(Prisma.dmmf.datamodel.models.map((model) => [model.name, model]));
   const seenIds = new Set<string>();
+  const groupMemberSets: Array<{ groupId: string; members: Set<string> }> = [];
 
   for (const entry of ASK_SCALAR_FIELD_COALESCENCE_MANIFEST) {
     if (seenIds.has(entry.semanticFieldGroupId)) {
@@ -390,7 +586,9 @@ export function validateScalarFieldCoalescenceManifest(): string[] {
       issues.push(`${entry.semanticFieldGroupId}: must inventory at least two storage members`);
     }
 
+    const memberSet = new Set<string>();
     for (const member of entry.storageMembers) {
+      memberSet.add(`${member.model}.${member.field}`);
       const model = modelsByName.get(member.model);
       if (!model) {
         issues.push(`${entry.semanticFieldGroupId}: Prisma model ${member.model} does not exist`);
@@ -405,6 +603,7 @@ export function validateScalarFieldCoalescenceManifest(): string[] {
         issues.push(`${entry.semanticFieldGroupId}: Prisma field ${member.model}.${member.field} has type ${field.type}, expected ${member.prismaType}`);
       }
     }
+    groupMemberSets.push({ groupId: entry.semanticFieldGroupId, members: memberSet });
 
     if (entry.classification === 'CANONICAL_WITH_GOVERNED_COALESCENCE') {
       if (!entry.authoritativeStorage) {
@@ -413,6 +612,21 @@ export function validateScalarFieldCoalescenceManifest(): string[] {
       if (entry.orderedCoalescenceRule.length < 2) {
         issues.push(`${entry.semanticFieldGroupId}: CANONICAL_WITH_GOVERNED_COALESCENCE requires at least 2 orderedCoalescenceRule sources`);
       }
+    }
+  }
+
+  const discoveredCandidates = [
+    ...discoverCandidateDuplicateScalarFields(),
+    ...(options.extraCandidatePairs ?? []),
+  ];
+  for (const candidate of discoveredCandidates) {
+    const isCovered = groupMemberSets.some(
+      (g) => g.members.has(candidate.left) && g.members.has(candidate.right),
+    );
+    if (!isCovered) {
+      issues.push(
+        `Unaccounted candidate duplicate scalar pair '${candidate.left}' <-> '${candidate.right}' (rule=${candidate.rule}) is missing from ASK_SCALAR_FIELD_COALESCENCE_MANIFEST.`,
+      );
     }
   }
 

@@ -4,14 +4,14 @@
  * - Cross-Domain Duplicate Relationship-Definition Report (including direct storage access outside canonical adapters)
  * - Traversable Relation-Path Inventory, Bounds & Dual-Parent Authorization Audit
  */
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 import { Prisma } from '@prisma/client';
 import { ASK_SEMANTIC_RELATION_REGISTRY } from '../semanticRelationRegistry';
 import { DATA_POINT_ITEM_ROW_CAP, DATA_POINT_RELATION_CHILD_CAP, DATA_POINT_RELATION_PARENT_CAP } from '../../dataPoint/dataPointReader';
 import { CROSS_ENTITY_RELATION_REGISTRY } from '../../dataPoint/queryShapeRegistries';
 
-export const ASK_RELATION_GOVERNANCE_BASELINE_VERSION = 'phase0-relation-governance-1.0.0' as const;
+export const ASK_RELATION_GOVERNANCE_BASELINE_VERSION = 'phase0-relation-governance-1.1.0' as const;
 
 export type PredicateUsageClass = 'READ' | 'WRITE' | 'DERIVED';
 
@@ -150,6 +150,7 @@ export const ASK_SEMANTIC_PREDICATE_MEANING_MANIFEST: readonly SemanticPredicate
 export type RelationshipAccessClassification =
   | 'CANONICAL_ADAPTER'
   | 'GOVERNED_CONSUMER_OF_CANONICAL_ADAPTER'
+  | 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT'
   | 'SPECIALIZED_DERIVED_ANALYSIS_PENDING_MIGRATION'
   | 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER';
 
@@ -161,6 +162,32 @@ export interface RelationshipStorageAccessSite {
   readonly storageColumnsAccessed: readonly string[];
   readonly classification: RelationshipAccessClassification;
   readonly contradictionOrDriftNote: string;
+}
+
+export const GOVERNED_RELATION_ACCESS_TOKENS: readonly string[] = Object.freeze([
+  'warrantyId',
+  'linkedWarranties',
+  'claimDocument',
+  'checklistItems',
+  'timelineEvents',
+  'readinessItems',
+  'PropertyRecordVersion',
+  'propertyRecordVersion',
+  'SaleReadinessItem',
+  'saleReadinessItem',
+  'HomeBuyerTask',
+  'homeBuyerTask',
+  'BuyerJourneyMilestone',
+  'buyerJourneyMilestone',
+  'ClaimChecklistItem',
+  'claimChecklistItem',
+  'ClaimTimelineEvent',
+  'claimTimelineEvent',
+]);
+
+export interface DiscoveredRelationAccessFile {
+  readonly relativeFilePath: string;
+  readonly matchedTokens: readonly string[];
 }
 
 export const ASK_RELATIONSHIP_STORAGE_ACCESS_SITES: readonly RelationshipStorageAccessSite[] = Object.freeze([
@@ -187,7 +214,7 @@ export const ASK_RELATIONSHIP_STORAGE_ACCESS_SITES: readonly RelationshipStorage
     semanticRelationId: 'relation.inventory_item.warranty',
     relativeFilePath: 'src/services/ask/askRecordCollections.service.ts',
     usage: 'READ',
-    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    storageColumnsAccessed: ['InventoryItem.warrantyId', 'SaleReadinessItem.saleReadinessItem', 'HomeBuyerTask.HomeBuyerTask'],
     classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
     contradictionOrDriftNote: 'Reads InventoryItem.warrantyId without reconciling Warranty.inventoryItemId (linkedWarranties); can disagree with Shape 9 / detail reads when only one link column is populated (§17.2 item 1).',
   },
@@ -259,7 +286,7 @@ export const ASK_RELATIONSHIP_STORAGE_ACCESS_SITES: readonly RelationshipStorage
     semanticRelationId: 'relation.inventory_item.warranty',
     relativeFilePath: 'src/services/ask/execution/askCapture.ts',
     usage: 'WRITE',
-    storageColumnsAccessed: ['InventoryItem.warrantyId', 'Warranty.inventoryItemId'],
+    storageColumnsAccessed: ['InventoryItem.warrantyId', 'Warranty.inventoryItemId', 'ClaimTimelineEvent.ClaimTimelineEvent'],
     classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
     contradictionOrDriftNote: 'Capture write path touches warranty link columns; governed by Phase 1 prohibition on ambiguous legacy link writes.',
   },
@@ -268,9 +295,268 @@ export const ASK_RELATIONSHIP_STORAGE_ACCESS_SITES: readonly RelationshipStorage
     semanticRelationId: 'relation.claim.claim_document',
     relativeFilePath: 'src/services/ask/dataPoint/dataPointReader.ts',
     usage: 'READ',
-    storageColumnsAccessed: ['ClaimDocument.claimId', 'ClaimDocument.documentId', 'PropertyRecord.propertyId', 'PropertyRecord.visibility'],
+    storageColumnsAccessed: [
+      'ClaimDocument.claimDocument',
+      'PropertyRecordVersion.PropertyRecordVersion',
+      'SaleReadinessItem.SaleReadinessItem',
+      'HomeBuyerTask.HomeBuyerTask',
+      'BuyerJourneyMilestone.BuyerJourneyMilestone',
+      'ClaimChecklistItem.ClaimChecklistItem',
+      'ClaimTimelineEvent.ClaimTimelineEvent',
+    ],
     classification: 'CANONICAL_ADAPTER',
     contradictionOrDriftNote: 'Enforces intersected dual-parent authorization: Claim.propertyId AND PropertyRecord role visibility (visibleRecordWhere).',
+  },
+  {
+    siteId: 'rel_site.ask_domain_command_registry',
+    semanticRelationId: 'relation.sale_case.readiness_item',
+    relativeFilePath: 'src/services/ask/askDomainCommandRegistry.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['SaleReadinessItem.SaleReadinessItem'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Registers governed command target metadata for SaleReadinessItem.',
+  },
+  {
+    siteId: 'rel_site.ask_operation_registry',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/ask/askOperationRegistry.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['SaleReadinessItem.SaleReadinessItem', 'HomeBuyerTask.HomeBuyerTask'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Declares operation entity contracts for HomeBuyerTask and SaleReadinessItem.',
+  },
+  {
+    siteId: 'rel_site.ask_record_detail_sections',
+    semanticRelationId: 'relation.sale_case.readiness_item',
+    relativeFilePath: 'src/services/ask/askRecordDetailSections.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['SaleReadinessItem.saleReadinessItem', 'HomeBuyerTask.HomeBuyerTask'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Queries prisma.saleReadinessItem.findFirst and HomeBuyerTaskService directly for record detail sections.',
+  },
+  {
+    siteId: 'rel_site.capture_link_reconciliation',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/ask/captureLinkReconciliation.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['HomeEvent.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Reconciles captured HomeEvent.warrantyId links directly against Prisma.',
+  },
+  {
+    siteId: 'rel_site.composition_authorization_view',
+    semanticRelationId: 'relation.property_record.record_version',
+    relativeFilePath: 'src/services/ask/composition/authorizationView.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['PropertyRecordVersion.PropertyRecordVersion'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Maps CompositeSourceType CurrentPropertyRecordVersion to PropertyRecordVersion authorization model.',
+  },
+  {
+    siteId: 'rel_site.composition_source_authorization',
+    semanticRelationId: 'relation.property_record.record_version',
+    relativeFilePath: 'src/services/ask/composition/sourceAuthorization.ts',
+    usage: 'READ',
+    storageColumnsAccessed: [
+      'PropertyRecordVersion.PropertyRecordVersion',
+      'SaleReadinessItem.SaleReadinessItem',
+      'HomeBuyerTask.HomeBuyerTask',
+      'BuyerJourneyMilestone.BuyerJourneyMilestone',
+      'ClaimChecklistItem.ClaimChecklistItem',
+      'ClaimTimelineEvent.ClaimTimelineEvent',
+    ],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Enforces composite-turn source authorization predicates across relation child models.',
+  },
+  {
+    siteId: 'rel_site.conversational_capture_readiness',
+    semanticRelationId: 'relation.sale_case.readiness_item',
+    relativeFilePath: 'src/services/ask/conversationalUnderstanding/conversationalCapture.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['PropertySaleCase.readinessItems'],
+    classification: 'GOVERNED_CONSUMER_OF_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Reads seller-prep overview readinessItems via service overview.',
+  },
+  {
+    siteId: 'rel_site.data_point_catalogue',
+    semanticRelationId: 'relation.claim.claim_document',
+    relativeFilePath: 'src/services/ask/dataPoint/dataPointCatalogue.ts',
+    usage: 'READ',
+    storageColumnsAccessed: [
+      'ClaimDocument.claimDocument',
+      'PropertyRecordVersion.PropertyRecordVersion',
+      'SaleReadinessItem.SaleReadinessItem',
+      'HomeBuyerTask.HomeBuyerTask',
+      'BuyerJourneyMilestone.BuyerJourneyMilestone',
+      'ClaimChecklistItem.ClaimChecklistItem',
+      'ClaimTimelineEvent.ClaimTimelineEvent',
+    ],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Declares RELATION_ENTITIES and audience floors for relation child data points.',
+  },
+  {
+    siteId: 'rel_site.data_point_query_plan',
+    semanticRelationId: 'relation.sale_case.readiness_item',
+    relativeFilePath: 'src/services/ask/dataPoint/dataPointQueryPlan.ts',
+    usage: 'READ',
+    storageColumnsAccessed: [
+      'SaleReadinessItem.saleReadinessItem',
+      'HomeBuyerTask.homeBuyerTask',
+      'ClaimChecklistItem.claimChecklistItem',
+    ],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Declares data-point query plan delegates for relation child entities.',
+  },
+  {
+    siteId: 'rel_site.execution_ask_confirm',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/ask/execution/askConfirm.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['Warranty.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Handles confirmation payload parameters containing warrantyId.',
+  },
+  {
+    siteId: 'rel_site.execution_execute_operation',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/ask/execution/executeOperation.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['HomeBuyerTask.homeBuyerTask'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Queries prisma.homeBuyerTask.findFirst during operation execution.',
+  },
+  {
+    siteId: 'rel_site.handler_buyer_confirm',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/ask/handlers/buyerConfirm.handler.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['HomeBuyerTask.homeBuyerTask'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Queries prisma.homeBuyerTask.findFirst and mutates via HomeBuyerTaskService.',
+  },
+  {
+    siteId: 'rel_site.handler_buyer_plan',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/ask/handlers/buyerPlan.handler.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask'],
+    classification: 'GOVERNED_CONSUMER_OF_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Consumes HomeBuyerTaskService for buyer plan presentation.',
+  },
+  {
+    siteId: 'rel_site.handler_capture_confirm',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/ask/handlers/captureConfirm.handler.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['Document.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Links uploaded Document.warrantyId during capture confirmation.',
+  },
+  {
+    siteId: 'rel_site.handler_claim_activity',
+    semanticRelationId: 'relation.claim.checklist_item',
+    relativeFilePath: 'src/services/ask/handlers/claimActivity.handler.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['ClaimChecklistItem.claimChecklistItem'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Queries and updates database.claimChecklistItem directly.',
+  },
+  {
+    siteId: 'rel_site.handler_data_point_read',
+    semanticRelationId: 'relation.property_record.record_version',
+    relativeFilePath: 'src/services/ask/handlers/dataPointRead.handler.ts',
+    usage: 'READ',
+    storageColumnsAccessed: [
+      'PropertyRecordVersion.PropertyRecordVersion',
+      'SaleReadinessItem.SaleReadinessItem',
+      'HomeBuyerTask.HomeBuyerTask',
+      'BuyerJourneyMilestone.BuyerJourneyMilestone',
+      'ClaimChecklistItem.ClaimChecklistItem',
+      'ClaimTimelineEvent.ClaimTimelineEvent',
+    ],
+    classification: 'GOVERNED_CONSUMER_OF_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Formats canonical dataPointReader results for relation child entities.',
+  },
+  {
+    siteId: 'rel_site.handler_home_record_writes',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/ask/handlers/homeRecordWrites.handler.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['Document.warrantyId', 'Warranty.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Reads Document.warrantyId and stages warranty update parameters.',
+  },
+  {
+    siteId: 'rel_site.handler_misc_handlers',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/ask/handlers/miscHandlers.handler.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['Warranty.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Queries prisma.warranty.findFirst by warrantyId in deadline monitor handler.',
+  },
+  {
+    siteId: 'rel_site.handler_record_confirm',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/ask/handlers/recordConfirm.handler.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['Warranty.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Applies confirmed record edits to prisma.warranty by warrantyId.',
+  },
+  {
+    siteId: 'rel_site.handler_savings_recurring_setup',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/ask/handlers/savingsRecurringSetup.handler.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['SavingsOpportunity.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Selects warrantyId on recurring setup rows to determine canonical source.',
+  },
+  {
+    siteId: 'rel_site.handler_sell_hold_rent',
+    semanticRelationId: 'relation.sale_case.readiness_item',
+    relativeFilePath: 'src/services/ask/handlers/sellHoldRent.handler.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['PropertySaleCase.readinessItems', 'SaleReadinessItem.SaleReadinessItem'],
+    classification: 'GOVERNED_CONSUMER_OF_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Formats seller-prep overview readinessItems with role-aware cost redaction.',
+  },
+  {
+    siteId: 'rel_site.handler_warranty_removal',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/ask/handlers/warrantyRemoval.handler.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['Warranty.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Stages and executes warranty removal confirmation by warrantyId.',
+  },
+  {
+    siteId: 'rel_site.handler_workflow_confirm',
+    semanticRelationId: 'relation.sale_case.readiness_item',
+    relativeFilePath: 'src/services/ask/handlers/workflowConfirm.handler.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['SaleReadinessItem.saleReadinessItem', 'Warranty.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Queries prisma.saleReadinessItem.findFirst and confirms warranty/readiness workflow mutations.',
+  },
+  {
+    siteId: 'rel_site.support_command_inputs',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/ask/support/commandInputs.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['Warranty.warrantyId'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Defines Zod validation schema for warrantyId command parameter.',
+  },
+  {
+    siteId: 'rel_site.support_write_capability',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/ask/support/writeCapability.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Declares write-capability side-effect metadata referencing HomeBuyerTask.',
   },
 ] as const);
 
@@ -522,10 +808,53 @@ export interface RelationshipDuplicateDefinitionReport {
   readonly sitesByClassification: Readonly<Record<RelationshipAccessClassification, number>>;
 }
 
+export function discoverAskRelationStorageAccessFiles(
+  backendRoot: string = resolve(__dirname, '../../../../..'),
+): readonly DiscoveredRelationAccessFile[] {
+  const askRoot = join(backendRoot, 'src/services/ask');
+  if (!existsSync(askRoot)) {
+    return [];
+  }
+
+  const relativeFiles: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === 'semantic' || entry.name === 'graphify-out') continue;
+        walk(fullPath);
+      } else if (entry.name.endsWith('.ts')) {
+        relativeFiles.push(relative(backendRoot, fullPath).replace(/\\/g, '/'));
+      }
+    }
+  };
+  walk(askRoot);
+  relativeFiles.sort();
+
+  const discovered: DiscoveredRelationAccessFile[] = [];
+  for (const relativeFilePath of relativeFiles) {
+    const absPath = resolve(backendRoot, relativeFilePath);
+    const sourceText = readFileSync(absPath, 'utf8');
+    const noComments = sourceText.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    const matchedTokens = GOVERNED_RELATION_ACCESS_TOKENS.filter((token) =>
+      new RegExp(`\\b${token}\\b`).test(noComments),
+    );
+    if (matchedTokens.length > 0) {
+      discovered.push({
+        relativeFilePath,
+        matchedTokens,
+      });
+    }
+  }
+
+  return Object.freeze(discovered);
+}
+
 export function buildRelationshipDuplicateDefinitionReport(): RelationshipDuplicateDefinitionReport {
   const sitesByClassification: Record<RelationshipAccessClassification, number> = {
     CANONICAL_ADAPTER: 0,
     GOVERNED_CONSUMER_OF_CANONICAL_ADAPTER: 0,
+    GOVERNED_CATALOGUE_OR_AUTH_CONTRACT: 0,
     SPECIALIZED_DERIVED_ANALYSIS_PENDING_MIGRATION: 0,
     DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER: 0,
   };
@@ -553,7 +882,23 @@ export function buildRelationshipDuplicateDefinitionReport(): RelationshipDuplic
   };
 }
 
-export function validateRelationGovernanceBaseline(backendRoot: string = resolve(__dirname, '../../../../..')): string[] {
+export interface ValidateRelationGovernanceOptions {
+  readonly backendRoot?: string;
+  readonly extraDiscoveredRelationFiles?: readonly string[];
+}
+
+export function validateRelationGovernanceBaseline(
+  backendRootOrOptions: string | ValidateRelationGovernanceOptions = resolve(__dirname, '../../../../..'),
+): string[] {
+  const backendRoot =
+    typeof backendRootOrOptions === 'string'
+      ? backendRootOrOptions
+      : (backendRootOrOptions.backendRoot ?? resolve(__dirname, '../../../../..'));
+  const extraDiscoveredRelationFiles =
+    typeof backendRootOrOptions === 'string'
+      ? []
+      : (backendRootOrOptions.extraDiscoveredRelationFiles ?? []);
+
   const issues: string[] = [];
   const seenPredicateIds = new Set<string>();
 
@@ -583,7 +928,15 @@ export function validateRelationGovernanceBaseline(backendRoot: string = resolve
   }
 
   // Verify every inventoried storage access site points to a real file in apps/backend.
+  const registeredRelativePaths = new Set<string>();
+  const seenSiteIds = new Set<string>();
   for (const site of ASK_RELATIONSHIP_STORAGE_ACCESS_SITES) {
+    if (seenSiteIds.has(site.siteId)) {
+      issues.push(`${site.siteId}: duplicate siteId in ASK_RELATIONSHIP_STORAGE_ACCESS_SITES`);
+    }
+    seenSiteIds.add(site.siteId);
+    registeredRelativePaths.add(site.relativeFilePath);
+
     const absPath = resolve(backendRoot, site.relativeFilePath);
     if (!existsSync(absPath)) {
       issues.push(`${site.siteId}: file ${site.relativeFilePath} does not exist at ${absPath}`);
@@ -596,6 +949,20 @@ export function validateRelationGovernanceBaseline(backendRoot: string = resolve
     });
     if (!matchesAnyColumn) {
       issues.push(`${site.siteId}: file ${site.relativeFilePath} no longer references any of [${site.storageColumnsAccessed.join(', ')}]`);
+    }
+  }
+
+  // Verify repository completeness: every Ask file referencing a governed relation token must be registered.
+  const discoveredRelationFiles = discoverAskRelationStorageAccessFiles(backendRoot);
+  const discoveredFilePaths = new Set<string>(discoveredRelationFiles.map((item) => item.relativeFilePath));
+  for (const extraFile of extraDiscoveredRelationFiles) {
+    discoveredFilePaths.add(extraFile);
+  }
+  for (const discoveredPath of discoveredFilePaths) {
+    if (!registeredRelativePaths.has(discoveredPath)) {
+      issues.push(
+        `Unlisted relation storage/token access file '${discoveredPath}' discovered in repository but missing from ASK_RELATIONSHIP_STORAGE_ACCESS_SITES.`,
+      );
     }
   }
 
