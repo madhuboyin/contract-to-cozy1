@@ -26,6 +26,7 @@ import {
 } from '../phase2a/phase2aSliceExecutor';
 import {
   assignMixedStackFacetOwnership,
+  normalizeToCanonicalSection5Domain,
   type MixedStackFacetOwnershipAssignment,
 } from './domainWaveManifest';
 import {
@@ -219,6 +220,11 @@ export interface CrossDomainPropertySnapshot extends Phase2aPropertySnapshot {
   readonly projects: readonly WaveProjectRecord[];
   readonly contractorQuotes: readonly WaveContractorQuoteRecord[];
   readonly savedResults: readonly WaveSavedResultRecord[];
+  readonly savedResultsState?: {
+    readonly status: 'AVAILABLE' | 'UNAVAILABLE';
+    readonly reason?: string;
+    readonly partial?: boolean;
+  };
 }
 
 export interface WaveFacetExecutionResult {
@@ -1189,9 +1195,15 @@ function executeNewStackFacet(
   }
 
   if (job === 'job.saved_results.lookup') {
+    const savedState = snapshot.savedResultsState;
+    const isUnavailable = savedState?.status === 'UNAVAILABLE';
     const visibleSaved = snapshot.savedResults.filter((s) => s.propertyId === snapshot.propertyId && canSeeRole(role, s.minimumRole));
     const rows = visibleSaved.map((s) => ({ id: s.id, label: s.title, subtitle: s.savedType }));
-    const summary = `${visibleSaved.length} saved result(s) visible to ${role}: ${visibleSaved.map((s) => s.title).join(', ')}.`;
+    const summary = isUnavailable
+      ? visibleSaved.length > 0
+        ? `${visibleSaved.length} saved result(s) loaded, but Saved retrieval was incomplete: ${savedState?.reason ?? 'one or more Saved readers failed.'}`
+        : `Saved results could not be loaded: ${savedState?.reason ?? 'Saved retrieval is temporarily unavailable.'}`
+      : `${visibleSaved.length} saved result(s) visible to ${role}: ${visibleSaved.map((s) => s.title).join(', ')}.`;
     const finalized = finalizeReceiptAndPresentation({
       facet,
       snapshot,
@@ -1204,14 +1216,17 @@ function executeNewStackFacet(
       title: 'Saved items',
       summaryBody: summary,
       variantId: 'variant.saved_results',
+      unknownCount: isUnavailable ? 1 : 0,
     });
     return {
       facetId: facet.id,
       owner,
-      status: 'EXECUTED',
+      status: isUnavailable ? 'PARTIAL_MISSING_SLOTS' : 'EXECUTED',
       summary,
       recordIds: rows.map((r) => r.id),
-      missingSlots: [],
+      missingSlots: isUnavailable
+        ? [savedState?.partial ? 'saved_results_partial' : 'saved_results_unavailable']
+        : [],
       redactedFieldIds,
       receipt: finalized.receipt,
       entailment: finalized.entailment,
@@ -1460,18 +1475,120 @@ function extractFinanceNumber(obj: unknown, keys: readonly string[]): number | n
   return null;
 }
 
+export interface CrossDomainSnapshotLoadScope {
+  readonly domains: ReadonlySet<SemanticDomainId>;
+  readonly jobs: ReadonlySet<string>;
+}
+
+export function deriveSnapshotLoadScope(facets: readonly SemanticFacet[]): CrossDomainSnapshotLoadScope {
+  const domains = new Set<SemanticDomainId>();
+  const jobs = new Set<string>();
+  for (const facet of facets) {
+    if (facet.evidence.jobMatch) jobs.add(facet.evidence.jobMatch);
+    for (const candidate of facet.domainCandidates) {
+      domains.add(normalizeToCanonicalSection5Domain(candidate.id));
+    }
+  }
+  return { domains, jobs };
+}
+
+function buildMinimalCrossDomainSnapshot(propertyId: string, timeZoneOverride?: string): CrossDomainPropertySnapshot {
+  const tz = safeTimezone(timeZoneOverride);
+  return {
+    propertyId,
+    asOfDate: localYmdInTimeZone(new Date(), tz),
+    timezone: tz,
+    closingDateIso: null,
+    rooms: [],
+    items: [],
+    maintenanceTasks: [],
+    extendedItems: [],
+    warranties: [],
+    maintenanceTaskMeta: [],
+    insurancePolicies: [],
+    claims: [],
+    documents: [],
+    claimDocLinks: [],
+    homeEvents: [],
+    taxBills: [],
+    financeSlots: null,
+    recalls: [],
+    environmentalRisks: [],
+    inspectionFindings: [],
+    buyerTasks: [],
+    sellerReadinessItems: [],
+    projects: [],
+    contractorQuotes: [],
+    savedResults: [],
+  };
+}
+
 /**
  * Loads a unified cross-domain snapshot for a property from Prisma models + Phase 2A inventory/maintenance snapshot.
+ * When `scope` is supplied, retrieval is bounded strictly to the models needed by the admitted facets.
  */
 export async function loadCrossDomainPropertySnapshot(
   propertyId: string,
   userId?: string,
   timeZoneOverride?: string,
+  scope?: CrossDomainSnapshotLoadScope,
 ): Promise<CrossDomainPropertySnapshot> {
-  const phase2aSnapshot = await loadPhase2aPropertySnapshot(propertyId);
+  const loadAll = !scope;
+  const hasDomain = (domainId: SemanticDomainId): boolean => loadAll || scope!.domains.has(domainId);
+  const hasJob = (...candidates: readonly string[]): boolean => loadAll || candidates.some((j) => scope!.jobs.has(j));
+
+  const needPhase2a = (
+    hasDomain('domain.inventory')
+    || hasDomain('domain.maintenance')
+    || hasDomain('domain.warranties_coverage')
+    || hasJob(
+      'query.maintenance_task.filter',
+      'query.inventory_item.relation_boolean',
+      'query.inventory_item.warranty_relation',
+      'job.inventory.replacement_guidance',
+      'query.inventory_item.field_read',
+      'query.warranty.filter',
+      'job.risk.recall_review',
+    )
+  );
+  const needWarranties = hasDomain('domain.warranties_coverage') || hasJob('query.warranty.filter');
+  const needDocuments = (
+    hasDomain('domain.inventory')
+    || hasDomain('domain.documents_records')
+    || hasJob('query.claim.documents', 'query.inventory_item.relation_boolean', 'job.inventory.replacement_guidance')
+  );
+  const needPolicies = hasDomain('domain.insurance_policies') || hasJob('query.insurance_policy.field_read');
+  const needClaims = hasDomain('domain.claims') || hasDomain('domain.documents_records') || hasJob('query.claim.filter', 'query.claim.documents');
+  const needHomeEvents = hasDomain('domain.timeline_home_events') || hasJob('query.home_event.repair_spend_aggregate');
+  const needTaxBills = hasDomain('domain.property_profile') || hasJob('query.property_tax_bill.compare_years', 'query.property_tax_bill.unpaid');
+  const needRecalls = hasDomain('domain.risks_recalls_inspections') || hasJob('job.risk.recall_review');
+  const needInspections = hasDomain('domain.risks_recalls_inspections') || hasJob('query.inspection_finding.actionable');
+  const needRiskMatches = hasDomain('domain.risks_recalls_inspections') || hasJob('job.risk.environment_weekly');
+  const needBuyerSeller = (
+    hasDomain('domain.buyer_journey')
+    || hasDomain('domain.seller_preparation')
+    || hasJob('query.buyer_task.before_closing', 'job.buyer.contingency_deadlines', 'job.seller.listing_readiness')
+  );
+  const needProjects = hasDomain('domain.projects_quotes_vendors') || hasJob('query.project.needs_permit');
+  const needQuotes = hasDomain('domain.projects_quotes_vendors') || hasJob('job.projects.quote_comparison');
+  const needFinance = hasDomain('domain.ownership_costs_finance') || hasJob('job.finance.own_rent_break_even', 'job.finance.refinance_break_even');
+  const needSaved = loadAll
+    ? Boolean(userId)
+    : hasDomain('domain.account_household_preferences') || hasJob('job.saved_results.lookup');
+
+  const phase2aPromise: Promise<Phase2aPropertySnapshot> = needPhase2a
+    ? loadPhase2aPropertySnapshot(propertyId)
+    : Promise.resolve({
+        propertyId,
+        asOfDate: new Date().toISOString().slice(0, 10),
+        rooms: [],
+        items: [],
+        maintenanceTasks: [],
+      });
   const prismaAny = prisma as unknown as Record<string, { findUnique?: Function; findFirst?: Function; findMany?: Function } | undefined>;
 
   const [
+    phase2aSnapshot,
     propertyRow,
     warrantyRows,
     documentRows,
@@ -1490,25 +1607,26 @@ export async function loadCrossDomainPropertySnapshot(
     refinanceScenarioRow,
     refinanceOppRow,
   ] = await Promise.all([
+    phase2aPromise,
     typeof prismaAny.property?.findUnique === 'function'
       ? prisma.property.findUnique({
           where: { id: propertyId },
           select: { id: true, state: true, timezone: true, lastAppraisedValue: true },
         })
       : Promise.resolve(null),
-    typeof prismaAny.warranty?.findMany === 'function'
+    needWarranties && typeof prismaAny.warranty?.findMany === 'function'
       ? prisma.warranty.findMany({
           where: { propertyId },
           select: { id: true, propertyId: true, providerName: true, category: true, expiryDate: true },
         })
       : Promise.resolve([]),
-    typeof prismaAny.document?.findMany === 'function'
+    needDocuments && typeof prismaAny.document?.findMany === 'function'
       ? prisma.document.findMany({
           where: { propertyId, deletedAt: null },
           select: { id: true, propertyId: true, inventoryItemId: true, name: true, description: true, type: true, metadata: true, deletedAt: true },
         })
       : Promise.resolve([]),
-    typeof prismaAny.insurancePolicy?.findMany === 'function'
+    needPolicies && typeof prismaAny.insurancePolicy?.findMany === 'function'
       ? prisma.insurancePolicy.findMany({
           where: { propertyId },
           select: {
@@ -1523,7 +1641,7 @@ export async function loadCrossDomainPropertySnapshot(
           },
         })
       : Promise.resolve([]),
-    typeof prismaAny.claim?.findMany === 'function'
+    needClaims && typeof prismaAny.claim?.findMany === 'function'
       ? prisma.claim.findMany({
           where: { propertyId },
           select: {
@@ -1540,19 +1658,19 @@ export async function loadCrossDomainPropertySnapshot(
           },
         })
       : Promise.resolve([]),
-    typeof prismaAny.homeEvent?.findMany === 'function'
+    needHomeEvents && typeof prismaAny.homeEvent?.findMany === 'function'
       ? prisma.homeEvent.findMany({
           where: { propertyId, deletedAt: null },
           select: { id: true, propertyId: true, title: true, type: true, occurredAt: true, amount: true },
         })
       : Promise.resolve([]),
-    typeof prismaAny.propertyTaxBillRecord?.findMany === 'function'
+    needTaxBills && typeof prismaAny.propertyTaxBillRecord?.findMany === 'function'
       ? prisma.propertyTaxBillRecord.findMany({
           where: { propertyId },
           select: { id: true, propertyId: true, taxYear: true, billAmount: true, status: true, supersededById: true },
         })
       : Promise.resolve([]),
-    typeof prismaAny.recallMatch?.findMany === 'function'
+    needRecalls && typeof prismaAny.recallMatch?.findMany === 'function'
       ? prisma.recallMatch.findMany({
           where: { propertyId },
           select: {
@@ -1564,7 +1682,7 @@ export async function loadCrossDomainPropertySnapshot(
           },
         })
       : Promise.resolve([]),
-    typeof prismaAny.inspectionFinding?.findMany === 'function'
+    needInspections && typeof prismaAny.inspectionFinding?.findMany === 'function'
       ? prisma.inspectionFinding.findMany({
           where: { propertyId },
           select: {
@@ -1577,7 +1695,7 @@ export async function loadCrossDomainPropertySnapshot(
           },
         })
       : Promise.resolve([]),
-    typeof prismaAny.homeBuyerChecklist?.findUnique === 'function'
+    needBuyerSeller && typeof prismaAny.homeBuyerChecklist?.findUnique === 'function'
       ? prisma.homeBuyerChecklist.findUnique({
           where: { propertyId },
           select: {
@@ -1588,7 +1706,7 @@ export async function loadCrossDomainPropertySnapshot(
           },
         })
       : Promise.resolve(null),
-    typeof prismaAny.propertySaleCase?.findUnique === 'function'
+    needBuyerSeller && typeof prismaAny.propertySaleCase?.findUnique === 'function'
       ? prisma.propertySaleCase.findUnique({
           where: { propertyId },
           select: {
@@ -1599,19 +1717,19 @@ export async function loadCrossDomainPropertySnapshot(
           },
         })
       : Promise.resolve(null),
-    typeof prismaAny.projectRecord?.findMany === 'function'
+    needProjects && typeof prismaAny.projectRecord?.findMany === 'function'
       ? prisma.projectRecord.findMany({
           where: { propertyId },
           select: { id: true, propertyId: true, name: true, status: true, permitApplicability: true },
         })
       : Promise.resolve([]),
-    typeof prismaAny.quoteComparisonQuote?.findMany === 'function'
+    needQuotes && typeof prismaAny.quoteComparisonQuote?.findMany === 'function'
       ? prisma.quoteComparisonQuote.findMany({
           where: { workspace: { propertyId } },
           select: { id: true, vendorName: true, quoteAmount: true, serviceLocation: true, workspace: { select: { propertyId: true } } },
         })
       : Promise.resolve([]),
-    typeof prismaAny.homeRiskReplayEventMatch?.findMany === 'function'
+    needRiskMatches && typeof prismaAny.homeRiskReplayEventMatch?.findMany === 'function'
       ? prisma.homeRiskReplayEventMatch.findMany({
           where: { propertyId },
           select: {
@@ -1622,21 +1740,21 @@ export async function loadCrossDomainPropertySnapshot(
           },
         })
       : Promise.resolve([]),
-    typeof prismaAny.sellHoldRentAnalysis?.findFirst === 'function'
+    needFinance && typeof prismaAny.sellHoldRentAnalysis?.findFirst === 'function'
       ? prisma.sellHoldRentAnalysis.findFirst({
           where: { propertyId },
           orderBy: { computedAt: 'desc' },
           select: { years: true, homeValueNowCents: true, netRentCents: true, drivers: true },
         })
       : Promise.resolve(null),
-    typeof prismaAny.refinanceScenarioSnapshot?.findFirst === 'function'
+    needFinance && typeof prismaAny.refinanceScenarioSnapshot?.findFirst === 'function'
       ? prisma.refinanceScenarioSnapshot.findFirst({
           where: { propertyId },
           orderBy: [{ isSaved: 'desc' }, { createdAt: 'desc' }],
           select: { targetRate: true, closingCost: true, metadataJson: true },
         })
       : Promise.resolve(null),
-    typeof prismaAny.refinanceOpportunity?.findFirst === 'function'
+    needFinance && typeof prismaAny.refinanceOpportunity?.findFirst === 'function'
       ? prisma.refinanceOpportunity.findFirst({
           where: { propertyId },
           orderBy: { evaluationDate: 'desc' },
@@ -1745,9 +1863,10 @@ export async function loadCrossDomainPropertySnapshot(
     ?? (typeof sellHoldRentRow?.netRentCents === 'number' && typeof horizonYears === 'number' && horizonYears > 0
       ? Math.round(sellHoldRentRow.netRentCents / (horizonYears * 12))
       : null);
+  // Property.lastAppraisedValue is already persisted in cents across backend services and seed data.
   const homeValueCents =
     sellHoldRentRow?.homeValueNowCents
-    ?? (typeof propertyRow?.lastAppraisedValue === 'number' ? Math.round(propertyRow.lastAppraisedValue * 100) : null);
+    ?? (typeof propertyRow?.lastAppraisedValue === 'number' ? Math.round(propertyRow.lastAppraisedValue) : null);
   const currentRateRaw =
     refinanceOppRow?.currentRate
     ?? extractFinanceNumber(scenMeta, ['currentRate', 'currentRatePct'])
@@ -1783,18 +1902,37 @@ export async function loadCrossDomainPropertySnapshot(
     : null;
 
   let savedResults: WaveSavedResultRecord[] = [];
-  if (userId && typeof prismaAny.askSavedArtifactPreference?.findMany === 'function') {
-    try {
-      const savedPage = await getAskSavedPage(userId, propertyId, { limit: 25 });
-      savedResults = savedPage.rows.map((row) => ({
-        id: row.artifactKey,
-        propertyId: row.propertyId,
-        title: row.title,
-        savedType: row.artifactType,
-        minimumRole: row.visibility.sensitivity === 'SENSITIVE' || row.visibility.scope === 'REQUESTER_ONLY' ? 'OWNER' : 'VIEWER',
-      }));
-    } catch {
-      savedResults = [];
+  let savedResultsState: CrossDomainPropertySnapshot['savedResultsState'];
+  if (needSaved) {
+    if (!userId) {
+      savedResultsState = { status: 'UNAVAILABLE', reason: 'User identity is required to load Saved results.' };
+    } else if (typeof prismaAny.askSavedArtifactPreference?.findMany !== 'function') {
+      savedResultsState = { status: 'UNAVAILABLE', reason: 'Saved artifact storage is unavailable.' };
+    } else {
+      try {
+        const savedPage = await getAskSavedPage(userId, propertyId, { limit: 25 });
+        savedResults = savedPage.rows.map((row) => ({
+          id: row.artifactKey,
+          propertyId: row.propertyId,
+          title: row.title,
+          savedType: row.artifactType,
+          minimumRole: row.visibility.sensitivity === 'SENSITIVE' || row.visibility.scope === 'REQUESTER_ONLY' ? 'OWNER' : 'VIEWER',
+        }));
+        const failedReaders = savedPage.types.filter((entry) => entry.state === 'FAILED');
+        savedResultsState = failedReaders.length > 0
+          ? {
+              status: 'UNAVAILABLE',
+              partial: true,
+              reason: `Saved readers failed: ${failedReaders.map((entry) => entry.artifactType).join(', ')}.`,
+            }
+          : { status: 'AVAILABLE' };
+      } catch (error) {
+        savedResults = [];
+        savedResultsState = {
+          status: 'UNAVAILABLE',
+          reason: error instanceof Error && error.message ? error.message : 'Unable to load Saved results.',
+        };
+      }
     }
   }
 
@@ -1922,6 +2060,7 @@ export async function loadCrossDomainPropertySnapshot(
       warrantyMonths: 0,
     })),
     savedResults,
+    ...(savedResultsState ? { savedResultsState } : {}),
   };
 }
 
@@ -2080,7 +2219,16 @@ export async function executeCrossDomainOnProperty(input: {
   readonly operationResult: AskOperationResult;
   readonly snapshot: CrossDomainPropertySnapshot;
 }> {
-  const snapshot = input.snapshotOverride ?? await loadCrossDomainPropertySnapshot(input.propertyId, input.userId, input.timeZone);
+  const parsed = parseCrossDomainSemanticRequest(input.rawText);
+  const snapshot = input.snapshotOverride
+    ?? (parsed.plan.outcome === 'MATCH'
+      ? await loadCrossDomainPropertySnapshot(
+          input.propertyId,
+          input.userId,
+          input.timeZone,
+          deriveSnapshotLoadScope(parsed.plan.facets),
+        )
+      : buildMinimalCrossDomainSnapshot(input.propertyId, input.timeZone));
   const execution = await executeCrossDomainWaves({
     rawText: input.rawText,
     snapshot,

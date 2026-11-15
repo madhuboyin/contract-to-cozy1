@@ -99,10 +99,12 @@ export interface MixedStackFacetOwnershipAssignment {
 
 export interface DomainMeasurementInput {
   readonly domainId: SemanticDomainId;
-  readonly scenarioCount: number;
+  readonly answerableScenarioCount: number;
   readonly resolvedCount: number;
   readonly inDomainNotUnderstoodCount: number;
+  readonly unsupportedEvaluated: number;
   readonly unsupportedCount: number;
+  readonly falseDeclineEvaluated: number;
   readonly falseDeclineCount: number;
   readonly incorrectHighConfidenceCount: number;
   readonly seededEvidencePassed: boolean;
@@ -318,19 +320,22 @@ export function buildMeasuredDomainCoverageProfiles(
     DOMAIN_ENABLEMENT_RECORDS.map((record) => {
       const m = byDomain.get(record.domainId);
       const meta = DOMAIN_SCOPE_METADATA[record.domainId];
-      const total = m?.scenarioCount ?? 0;
+      const answerableTotal = m?.answerableScenarioCount ?? 0;
       const resolved = m?.resolvedCount ?? 0;
-      const resolvedRate = total > 0 ? Number((resolved / total).toFixed(4)) : 0;
-      const notUnderstoodRate = total > 0 ? Number(((m?.inDomainNotUnderstoodCount ?? 0) / total).toFixed(4)) : 0;
-      const unsupportedRate = total > 0 ? Number(((m?.unsupportedCount ?? 0) / total).toFixed(4)) : 0;
-      const falseDeclineRate = total > 0 ? Number(((m?.falseDeclineCount ?? 0) / total).toFixed(4)) : 0;
+      const resolvedRate = answerableTotal > 0 ? Number((resolved / answerableTotal).toFixed(4)) : 0;
+      const notUnderstoodRate = answerableTotal > 0 ? Number(((m?.inDomainNotUnderstoodCount ?? 0) / answerableTotal).toFixed(4)) : 0;
+      const unsupportedTotal = m?.unsupportedEvaluated ?? 0;
+      const unsupportedRate = unsupportedTotal > 0 ? Number(((m?.unsupportedCount ?? 0) / unsupportedTotal).toFixed(4)) : 0;
+      const falseDeclineTotal = m?.falseDeclineEvaluated ?? answerableTotal;
+      const falseDeclineRate = falseDeclineTotal > 0 ? Number(((m?.falseDeclineCount ?? 0) / falseDeclineTotal).toFixed(4)) : 0;
       const incorrectHigh = m?.incorrectHighConfidenceCount ?? 0;
       const seededOk = m?.seededEvidencePassed ?? false;
       const metaOk = m?.metamorphicSuitePassed ?? false;
       const metaPairs = m?.metamorphicPairCount ?? 0;
       const replayQueries = m?.replayQueryCount ?? 0;
       const gatePassed = (
-        total > 0
+        answerableTotal > 0
+        && unsupportedTotal > 0
         && incorrectHigh === 0
         && seededOk
         && metaOk
@@ -347,14 +352,14 @@ export function buildMeasuredDomainCoverageProfiles(
         lexiconVersion: ASK_CROSS_DOMAIN_LEXICON_VERSION,
         supportedFamilies: meta.supportedFamilies,
         excludedFamilies: meta.excludedFamilies,
-        independentlyAuthoredScenarioCount: total,
+        independentlyAuthoredScenarioCount: answerableTotal,
         deterministicResolvedRate: resolvedRate,
         providerIncrementalResolvedRate: null,
         combinedResolvedRate: resolvedRate,
         inDomainNotUnderstoodRate: notUnderstoodRate,
         unsupportedRate,
         falseDeclineRate,
-        confidenceInterval95: wilson95Interval(resolved, total),
+        confidenceInterval95: wilson95Interval(resolved, answerableTotal),
         incorrectHighConfidenceCount: incorrectHigh,
         seededEvidencePassed: seededOk,
         metamorphicSuitePassed: metaOk,

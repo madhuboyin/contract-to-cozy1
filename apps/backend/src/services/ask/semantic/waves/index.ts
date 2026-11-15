@@ -1089,7 +1089,6 @@ export async function evaluateCrossDomainGovernanceReport(): Promise<{
     // 1. Execute real replay queries for this domain (including saved-result role replay when applicable).
     let replayExecutedCount = 0;
     let replayResolvedCount = 0;
-    let replayNotUnderstood = 0;
     for (const replayPrompt of battery.replayPrompts) {
       replayExecutedCount += 1;
       const res = domainId === 'domain.account_household_preferences'
@@ -1106,9 +1105,7 @@ export async function evaluateCrossDomainGovernanceReport(): Promise<{
             role: 'OWNER',
             propertyAuthorized: true,
           });
-      if (res.status === 'NONE_FITS') {
-        replayNotUnderstood += 1;
-      } else if (res.status === 'ANSWERED' || res.status === 'PARTIAL' || res.status === 'BOUNDARY' || res.status === 'CLARIFY') {
+      if (res.status === 'ANSWERED' || res.status === 'PARTIAL' || res.status === 'BOUNDARY' || res.status === 'CLARIFY') {
         replayResolvedCount += 1;
       }
     }
@@ -1156,10 +1153,8 @@ export async function evaluateCrossDomainGovernanceReport(): Promise<{
     const metaPassed = metaInfo?.passed ?? 0;
     const inDomainEvaluated = domainRows.length + (metaInfo?.total ?? 0) + replayExecutedCount + falseDeclineEvaluated;
     const inDomainResolved = rowResolved + metaPassed + replayResolvedCount + falseDeclineResolved;
-    const inDomainNotUnderstoodCount = Math.max(0, (inDomainEvaluated - inDomainResolved) + replayNotUnderstood);
-
-    const scenarioCount = inDomainEvaluated + unsupportedEvaluated;
-    const resolvedCount = inDomainResolved;
+    // inDomainEvaluated - inDomainResolved already includes replay misses (replayNotUnderstood) and false declines; do not double-count them.
+    const inDomainNotUnderstoodCount = Math.max(0, inDomainEvaluated - inDomainResolved);
 
     evaluationDetailsByDomain.push({
       domainId,
@@ -1176,10 +1171,12 @@ export async function evaluateCrossDomainGovernanceReport(): Promise<{
 
     measurements.push({
       domainId,
-      scenarioCount,
-      resolvedCount,
+      answerableScenarioCount: inDomainEvaluated,
+      resolvedCount: inDomainResolved,
       inDomainNotUnderstoodCount,
+      unsupportedEvaluated,
       unsupportedCount,
+      falseDeclineEvaluated,
       falseDeclineCount,
       incorrectHighConfidenceCount,
       seededEvidencePassed: domainRows.length > 0 && domainRows.every((r) => r.passed),

@@ -57,8 +57,12 @@ test('Waves 1-5 cover all 14 Section 5 homeowner domains and safety boundary wit
     assert.ok(detail, `Missing evaluation details for ${profile.domainId}`);
     assert.equal(profile.replayQueryCount, detail.replayExecutedCount);
     assert.ok(profile.replayQueryCount >= 1);
+    assert.equal(profile.independentlyAuthoredScenarioCount, detail.inDomainEvaluated);
+    assert.equal(detail.inDomainNotUnderstoodCount, Math.max(0, detail.inDomainEvaluated - detail.inDomainResolved));
+    assert.equal(profile.deterministicResolvedRate, 1);
+    assert.equal(profile.combinedResolvedRate, 1);
     assert.ok(detail.unsupportedCount >= 1, `Expected measured unsupported probes for ${profile.domainId}`);
-    assert.ok(profile.unsupportedRate > 0, `Expected non-zero unsupportedRate for ${profile.domainId}`);
+    assert.equal(profile.unsupportedRate, 1);
     assert.equal(detail.falseDeclineCount, 0);
     assert.equal(profile.falseDeclineRate, 0);
     assert.equal(profile.incorrectHighConfidenceCount, 0);
@@ -155,24 +159,34 @@ test('production dataPointReadResult routes Wave 1-5 MATCH queries through execu
   const origFindMany = new Map();
   const origFindUnique = new Map();
   const origFindFirst = new Map();
+  const modelCalls = {};
 
   propertyAccess.resolvePropertyAccess = async () => ({ allowed: true, role: 'OWNER', propertyId: 'prop-live-1', userId: 'user-1' });
   for (const [model, fn] of findManyStubs) {
     if (prisma[model]) {
       origFindMany.set(model, prisma[model].findMany);
-      prisma[model].findMany = async () => fn();
+      prisma[model].findMany = async () => {
+        modelCalls[model] = (modelCalls[model] ?? 0) + 1;
+        return fn();
+      };
     }
   }
   for (const [model, fn] of findUniqueStubs) {
     if (prisma[model]) {
       origFindUnique.set(model, prisma[model].findUnique);
-      prisma[model].findUnique = async () => fn();
+      prisma[model].findUnique = async () => {
+        modelCalls[model] = (modelCalls[model] ?? 0) + 1;
+        return fn();
+      };
     }
   }
   for (const [model, fn] of findFirstStubs) {
     if (prisma[model]) {
       origFindFirst.set(model, prisma[model].findFirst);
-      prisma[model].findFirst = async () => fn();
+      prisma[model].findFirst = async () => {
+        modelCalls[model] = (modelCalls[model] ?? 0) + 1;
+        return fn();
+      };
     }
   }
 
@@ -184,10 +198,22 @@ test('production dataPointReadResult routes Wave 1-5 MATCH queries through execu
     assert.equal(claimsResult.parameters.crossDomainExecution.facetResults[0].recordIds[0], 'claim-live-1');
     assert.equal(claimsResult.parameters.crossDomainExecution.facetResults[1].recordIds[0], 'claim-live-1:PHOTO_EVIDENCE');
     assert.ok(claimsResult.parameters?.semanticExecutionReceipt);
+    assert.equal(modelCalls.claim, 1);
+    assert.equal(modelCalls.document, 1);
+    assert.equal(modelCalls.askSavedArtifactPreference ?? 0, 0);
+    assert.equal(modelCalls.inventoryItem ?? 0, 0);
+    assert.equal(modelCalls.projectRecord ?? 0, 0);
+    assert.equal(modelCalls.sellHoldRentAnalysis ?? 0, 0);
 
     const projectResult = await dataPointReadResult('user-1', 'prop-live-1', 'which active projects still need a permit?');
     assert.equal(projectResult.status, 'ANSWERED');
     assert.equal(projectResult.parameters.crossDomainExecution.facetResults[0].recordIds[0], 'proj-live-1');
+    assert.equal(modelCalls.projectRecord, 1);
+    // Project query must not re-invoke claims, documents, Saved, or inventory models
+    assert.equal(modelCalls.claim, 1);
+    assert.equal(modelCalls.document, 1);
+    assert.equal(modelCalls.askSavedArtifactPreference ?? 0, 0);
+    assert.equal(modelCalls.inventoryItem ?? 0, 0);
   } finally {
     propertyAccess.resolvePropertyAccess = origResolve;
     for (const [model, orig] of origFindMany.entries()) {
@@ -573,6 +599,45 @@ test('production dataPointReadResult loads live manual/receipt links, canonical 
     assert.equal(spend.status, 'ANSWERED');
     assert.equal(spend.parameters.crossDomainExecution.facetResults[0].metrics.totalRepairSpendCents, 45000);
     assert.deepEqual(spend.parameters.crossDomainExecution.facetResults[0].recordIds, ['evt-ny-boundary']);
+
+    // 5. Property.lastAppraisedValue fallback preserves cent denomination (46_500_000 cents = $465k, not *100)
+    prisma.property.findUnique = async () => ({
+      id: 'prop-ny-1',
+      state: 'NY',
+      timezone: 'America/New_York',
+      lastAppraisedValue: 46500000,
+    });
+    prisma.sellHoldRentAnalysis.findFirst = async () => ({
+      id: 'shr-fallback-cents',
+      years: 5,
+      homeValueNowCents: null,
+      netRentCents: 12000000,
+      drivers: null,
+    });
+    const appraisalFallback = await dataPointReadResult('user-1', 'prop-ny-1', 'how long until owning beats renting?');
+    assert.equal(appraisalFallback.status, 'ANSWERED');
+    assert.equal(appraisalFallback.parameters.crossDomainExecution.facetResults[0].metrics.homeValueCents, 46500000);
+
+    // 6. Saved partial reader failure fails closed to READY_WITH_LIMITATIONS (not confident EXECUTED)
+    prisma.homeScoreReport.findMany = async () => {
+      throw new Error('simulated saved reader failure');
+    };
+    const partialSaved = await dataPointReadResult('user-1', 'prop-ny-1', 'show my saved items');
+    assert.equal(partialSaved.status, 'READY_WITH_LIMITATIONS');
+    assert.equal(partialSaved.reasonCode, 'CROSS_DOMAIN_PARTIAL');
+    assert.deepEqual(partialSaved.parameters.crossDomainExecution.facetResults[0].missingSlots, ['saved_results_partial']);
+    assert.ok(partialSaved.parameters.crossDomainExecution.facetResults[0].recordIds.includes('report:rep-live-1'));
+
+    // 7. Complete Saved failure returns limitation state, never confident ANSWERED "0 saved result(s)"
+    prisma.askSavedArtifactPreference.findMany = async () => {
+      throw new Error('database unreachable');
+    };
+    const failedSaved = await dataPointReadResult('user-1', 'prop-ny-1', 'show my saved items');
+    assert.equal(failedSaved.status, 'READY_WITH_LIMITATIONS');
+    assert.equal(failedSaved.reasonCode, 'CROSS_DOMAIN_PARTIAL');
+    assert.equal(failedSaved.parameters.crossDomainExecution.facetResults[0].status, 'PARTIAL_MISSING_SLOTS');
+    assert.deepEqual(failedSaved.parameters.crossDomainExecution.facetResults[0].missingSlots, ['saved_results_unavailable']);
+    assert.deepEqual(failedSaved.parameters.crossDomainExecution.facetResults[0].recordIds, []);
   } finally {
     propertyAccess.resolvePropertyAccess = origResolve;
     for (const [model, orig] of origFindMany.entries()) {
