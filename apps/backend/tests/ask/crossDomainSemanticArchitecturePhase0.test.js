@@ -20,17 +20,18 @@ const {
   buildSemanticCapabilityInventory,
   buildSemanticEntityRegistry,
   buildSemanticFieldRegistry,
-  discoverAskRelationStorageAccessFiles,
   discoverCandidateDuplicateScalarFields,
   discoverLiveAskRecognizerSources,
+  discoverRepositoryRelationStorageAccessFiles,
   evaluateScalarFieldCoalescence,
   evaluateSeededArchetypeFixtures,
-  executeSeededFamilyAgainstFixtures,
+  scanTypeScriptRecognizerSignals,
   validateRecognizerRetirementManifest,
   validateRelationGovernanceBaseline,
   validateScalarFieldCoalescenceManifest,
   validateSeededScenarioCatalogue,
   validateSemanticOntologyBaseline,
+  verifySeededFamilyFixtureReadiness,
 } = require('../../src/services/ask/semantic/phase0/index.ts');
 const { parseDeterministicSemanticRequest } = require('../../src/services/ask/semantic/deterministicSemanticParser.ts');
 const { classifyTransitionalWarrantyLinks } = require('../../src/services/ask/semantic/transitionalWarrantyRead.ts');
@@ -67,7 +68,7 @@ test('Phase 0 Bullet 1, 4 & 6: authoritative domain, entity, field, operation do
 
 test('Phase 0 Bullet 2: duplicate/legacy scalar field coalescence manifest mechanically discovers DMMF candidates and enforces conflict semantics', () => {
   assert.deepEqual(validateScalarFieldCoalescenceManifest(), []);
-  assert.equal(ASK_SCALAR_FIELD_COALESCENCE_MANIFEST.length, 13);
+  assert.equal(ASK_SCALAR_FIELD_COALESCENCE_MANIFEST.length, 17);
 
   const candidates = discoverCandidateDuplicateScalarFields();
   assert.ok(candidates.length >= 18, 'discovers shadow columns, cents/amount pairs, synonym stems, and cross-entity overlaps');
@@ -149,20 +150,34 @@ test('Phase 0 Bullet 3: recognizer and vocabulary retirement manifest (FR-ONT-8)
   });
   assert.equal(uninventoriedIssues.length, 1);
   assert.match(uninventoriedIssues[0], /uninventoriedNewRegex\.handler\.ts/);
+
+  // AST scanner check: lowercase vocabulary arrays, switch dispatchers, and string predicates are detected
+  const astSignals = scanTypeScriptRecognizerSignals(`
+    const lowercaseCues = ['warranty', 'coverage'];
+    export function matchIntent(input: string) {
+      if (input.includes('policy')) return 'insurance';
+      switch (input) { case 'claim': return 'claim'; default: return null; }
+    }
+  `);
+  assert.ok(astSignals.totalSignals >= 3, 'AST scanner detects lowercase arrays, .includes predicates, and string switches');
 });
 
 test('Phase 0 Bullet 4 & 5: relationship meaning tags, repository-scanned access sites, and traversable path bounds validate cleanly', () => {
   assert.deepEqual(validateRelationGovernanceBaseline(), []);
 
-  const discoveredRelationFiles = discoverAskRelationStorageAccessFiles();
-  assert.ok(discoveredRelationFiles.length >= 29);
+  const discoveredRelationFiles = discoverRepositoryRelationStorageAccessFiles();
+  assert.ok(discoveredRelationFiles.length >= 80, 'scans all of src/ including out-of-tree services');
+  assert.ok(
+    discoveredRelationFiles.some((f) => !f.relativeFilePath.startsWith('src/services/ask/')),
+    'discovers relation consumers outside src/services/ask/',
+  );
 
-  // Negative check (Finding #2): an unlisted relation storage access file must fail validation
+  // Negative check (Finding #2): an unlisted out-of-tree relation storage access file must fail validation
   const unlistedSiteIssues = validateRelationGovernanceBaseline({
-    extraDiscoveredRelationFiles: ['src/services/ask/handlers/unlistedWarrantyReader.handler.ts'],
+    extraDiscoveredRelationFiles: ['src/services/coverage/unlistedWarrantyConsumer.service.ts'],
   });
   assert.equal(unlistedSiteIssues.length, 1);
-  assert.match(unlistedSiteIssues[0], /unlistedWarrantyReader\.handler\.ts/);
+  assert.match(unlistedSiteIssues[0], /unlistedWarrantyConsumer\.service\.ts/);
 
   const report = buildRelationshipDuplicateDefinitionReport();
   assert.equal(report.declaredPredicateCount, ASK_SEMANTIC_PREDICATE_MEANING_MANIFEST.length);
@@ -210,10 +225,10 @@ test('Phase 0 Bullet 8: seeded property archetypes instantiate executable fixtur
   assert.equal(lifecycleEval.passed, true);
   assert.ok(lifecycleEval.observedStates.includes('POPULATED'));
 
-  // Execute all 16 cross-domain families against their concrete seeded archetype fixtures
+  // Verify Phase 0 fixture-readiness & data-state coverage across all 16 cross-domain families
   for (const family of ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES) {
-    const execResult = executeSeededFamilyAgainstFixtures(family.familyId);
-    assert.equal(execResult.passed, true, `Expected family ${family.familyId} to pass fixture execution: ${execResult.issues.join('; ')}`);
+    const readinessResult = verifySeededFamilyFixtureReadiness(family.familyId);
+    assert.equal(readinessResult.passed, true, `Expected family ${family.familyId} to pass fixture readiness: ${readinessResult.issues.join('; ')}`);
   }
 });
 
@@ -305,7 +320,7 @@ test('Phase 0 Exit Criteria (Finding #5): buildAskSemanticPhase0BaselineSummary 
     ASK_SEEDED_PROPERTY_ARCHETYPES.length,
   );
   assert.equal(
-    summary.completenessProof.familyFixtureExecutionPassedCount,
+    summary.completenessProof.familyFixtureReadinessPassedCount,
     ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES.length,
   );
   assert.equal(summary.exitCriteria.inventoriesGenerated, true);

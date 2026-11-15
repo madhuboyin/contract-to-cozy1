@@ -558,6 +558,501 @@ export const ASK_RELATIONSHIP_STORAGE_ACCESS_SITES: readonly RelationshipStorage
     classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
     contradictionOrDriftNote: 'Declares write-capability side-effect metadata referencing HomeBuyerTask.',
   },
+  {
+    siteId: 'rel_site.repo_controllers_home_management_controller',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/controllers/home-management.controller.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (READ) accessing [warrantyId] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_controllers_homebuyertask_controller',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/controllers/homeBuyerTask.controller.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [HomeBuyerTask] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_index',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/index.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['homeBuyerTask.homeBuyerTask'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Repository contract/route/type/validator referencing [homeBuyerTask].',
+  },
+  {
+    siteId: 'rel_site.repo_modules_propertycontext_application_evaluatefeaturecontext',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/modules/propertyContext/application/evaluateFeatureContext.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [warrantyId] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_modules_propertycontext_application_relationalcaptureadapters',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/modules/propertyContext/application/relationalCaptureAdapters.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [warrantyId] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_modules_propertycontext_infrastructure_prismaassemblers',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/modules/propertyContext/infrastructure/prismaAssemblers.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (READ) accessing [warrantyId] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_routes_home_management_routes',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/routes/home-management.routes.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Repository contract/route/type/validator referencing [warrantyId].',
+  },
+  {
+    siteId: 'rel_site.repo_routes_homebuyertask_routes',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/routes/homeBuyerTask.routes.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['homeBuyerTask.homeBuyerTask'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Repository contract/route/type/validator referencing [homeBuyerTask].',
+  },
+  {
+    siteId: 'rel_site.repo_services_homebuyertask_service',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/HomeBuyerTask.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask', 'homeBuyerTask.homeBuyerTask', 'buyerJourneyMilestone.buyerJourneyMilestone'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [HomeBuyerTask, homeBuyerTask, buyerJourneyMilestone] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_riskassessment_service',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/RiskAssessment.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [warrantyId] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_buyeracquisition_service',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/buyerAcquisition.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask', 'homeBuyerTask.homeBuyerTask', 'buyerJourneyMilestone.buyerJourneyMilestone'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [HomeBuyerTask, homeBuyerTask, buyerJourneyMilestone] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_buyerclosingday_service',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/buyerClosingDay.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask', 'homeBuyerTask.homeBuyerTask', 'buyerJourneyMilestone.buyerJourneyMilestone'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [HomeBuyerTask, homeBuyerTask, buyerJourneyMilestone] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_buyerclosingdisclosure_service',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/buyerClosingDisclosure.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['homeBuyerTask.homeBuyerTask', 'buyerJourneyMilestone.buyerJourneyMilestone'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [homeBuyerTask, buyerJourneyMilestone] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_buyercontract_service',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/buyerContract.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask', 'homeBuyerTask.homeBuyerTask', 'buyerJourneyMilestone.buyerJourneyMilestone'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [HomeBuyerTask, homeBuyerTask, buyerJourneyMilestone] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_buyerinsurance_service',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/buyerInsurance.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask', 'homeBuyerTask.homeBuyerTask', 'buyerJourneyMilestone.buyerJourneyMilestone'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [HomeBuyerTask, homeBuyerTask, buyerJourneyMilestone] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_buyerpurchaselenderreadiness_service',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/buyerPurchaseLenderReadiness.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['homeBuyerTask.homeBuyerTask', 'buyerJourneyMilestone.buyerJourneyMilestone'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [homeBuyerTask, buyerJourneyMilestone] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_buyerpurchaseloanestimate_service',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/buyerPurchaseLoanEstimate.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['homeBuyerTask.homeBuyerTask', 'buyerJourneyMilestone.buyerJourneyMilestone'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [homeBuyerTask, buyerJourneyMilestone] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_buyertitleescrow_service',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/buyerTitleEscrow.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask', 'homeBuyerTask.homeBuyerTask', 'buyerJourneyMilestone.buyerJourneyMilestone'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [HomeBuyerTask, homeBuyerTask, buyerJourneyMilestone] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_buyerwalkthrough_service',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/buyerWalkthrough.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask', 'homeBuyerTask.homeBuyerTask', 'buyerJourneyMilestone.buyerJourneyMilestone'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [HomeBuyerTask, homeBuyerTask, buyerJourneyMilestone] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_claims_claims_service',
+    semanticRelationId: 'relation.claim.checklist_item',
+    relativeFilePath: 'src/services/claims/claims.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['InventoryItem.warrantyId', 'Claim.claimDocument', 'Claim.checklistItems', 'Claim.timelineEvents', 'claimChecklistItem.claimChecklistItem', 'claimTimelineEvent.claimTimelineEvent'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [warrantyId, claimDocument, checklistItems, timelineEvents, claimChecklistItem, claimTimelineEvent] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_coverage_contextpolicy',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/coverage/contextPolicy.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Repository contract/route/type/validator referencing [warrantyId].',
+  },
+  {
+    siteId: 'rel_site.repo_services_coverageconflict_service',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/coverageConflict.service.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (READ) accessing [warrantyId] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_decisionplatform_hvacrepairreplaceengine_service',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/decisionPlatform/hvacRepairReplaceEngine.service.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (READ) accessing [warrantyId] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_entrycontext_service',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/entryContext.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [HomeBuyerTask] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_home_management_service',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/home-management.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [warrantyId] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_homeactionsourcepromotion_service',
+    semanticRelationId: 'relation.sale_case.readiness_item',
+    relativeFilePath: 'src/services/homeActionSourcePromotion.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['InventoryItem.linkedWarranties', 'saleReadinessItem.saleReadinessItem'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [linkedWarranties, saleReadinessItem] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_homeactions_service',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/homeActions.service.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (READ) accessing [warrantyId] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_homeevents_service',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/homeEvents.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [warrantyId] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_homeevents_homeevents_autogen',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/homeEvents/homeEvents.autogen.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [warrantyId] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_homerecords_service',
+    semanticRelationId: 'relation.property_record.record_version',
+    relativeFilePath: 'src/services/homeRecords.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['PropertyRecordVersion.PropertyRecordVersion', 'propertyRecordVersion.propertyRecordVersion'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [PropertyRecordVersion, propertyRecordVersion] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_homerecordsextraction_service',
+    semanticRelationId: 'relation.property_record.record_version',
+    relativeFilePath: 'src/services/homeRecordsExtraction.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['propertyRecordVersion.propertyRecordVersion'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [propertyRecordVersion] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_homesavings_service',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/homeSavings.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [warrantyId] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_homesavings_categories_warrantyhome',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/homeSavings/categories/warrantyHome.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [warrantyId] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_homescorereport_service',
+    semanticRelationId: 'relation.claim.timeline_event',
+    relativeFilePath: 'src/services/homeScoreReport.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['Claim.timelineEvents'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [timelineEvents] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_homestatusboard_service',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/homeStatusBoard.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['InventoryItem.linkedWarranties'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [linkedWarranties] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_household_service',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/household.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask', 'homeBuyerTask.homeBuyerTask'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [HomeBuyerTask, homeBuyerTask] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_incidents_integrations_maintenancetask_adapter',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/incidents/integrations/maintenanceTask.adapter.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [warrantyId] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_intelligence_compoundruleregistry',
+    semanticRelationId: 'relation.sale_case.readiness_item',
+    relativeFilePath: 'src/services/intelligence/compoundRuleRegistry.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['SaleReadinessItem.SaleReadinessItem'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Repository contract/route/type/validator referencing [SaleReadinessItem].',
+  },
+  {
+    siteId: 'rel_site.repo_services_intelligence_homeactionproducerownership',
+    semanticRelationId: 'relation.sale_case.readiness_item',
+    relativeFilePath: 'src/services/intelligence/homeActionProducerOwnership.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['SaleReadinessItem.SaleReadinessItem', 'saleReadinessItem.saleReadinessItem'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Repository contract/route/type/validator referencing [SaleReadinessItem, saleReadinessItem].',
+  },
+  {
+    siteId: 'rel_site.repo_services_intelligence_intelligenceconsumerregistry',
+    semanticRelationId: 'relation.sale_case.readiness_item',
+    relativeFilePath: 'src/services/intelligence/intelligenceConsumerRegistry.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['SaleReadinessItem.SaleReadinessItem'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Repository contract/route/type/validator referencing [SaleReadinessItem].',
+  },
+  {
+    siteId: 'rel_site.repo_services_movingconciergetask_service',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/movingConciergeTask.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask', 'homeBuyerTask.homeBuyerTask'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [HomeBuyerTask, homeBuyerTask] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_negotiationshield_service',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/negotiationShield.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['homeBuyerTask.homeBuyerTask'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [homeBuyerTask] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_orchestration_service',
+    semanticRelationId: 'relation.claim.checklist_item',
+    relativeFilePath: 'src/services/orchestration.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['Claim.checklistItems'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [checklistItems] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_orchestrationintegration_service',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/orchestrationIntegration.service.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (READ) accessing [HomeBuyerTask] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_projecttracker_service',
+    semanticRelationId: 'relation.property_record.record_version',
+    relativeFilePath: 'src/services/projectTracker.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['InventoryItem.warrantyId', 'propertyRecordVersion.propertyRecordVersion'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [warrantyId, propertyRecordVersion] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_propertydocuments_propertydocumentinventory_service',
+    semanticRelationId: 'relation.property_record.record_version',
+    relativeFilePath: 'src/services/propertyDocuments/propertyDocumentInventory.service.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['InventoryItem.warrantyId', 'propertyRecordVersion.propertyRecordVersion'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (READ) accessing [warrantyId, propertyRecordVersion] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_propertysalecase_service',
+    semanticRelationId: 'relation.sale_case.readiness_item',
+    relativeFilePath: 'src/services/propertySaleCase.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['InventoryItem.warrantyId', 'Claim.timelineEvents', 'PropertySaleCase.readinessItems', 'SaleReadinessItem.SaleReadinessItem', 'saleReadinessItem.saleReadinessItem'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [warrantyId, timelineEvents, readinessItems, SaleReadinessItem, saleReadinessItem] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_quotehomerecordimport_service',
+    semanticRelationId: 'relation.property_record.record_version',
+    relativeFilePath: 'src/services/quoteHomeRecordImport.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['propertyRecordVersion.propertyRecordVersion'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [propertyRecordVersion] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_renovationcase_service',
+    semanticRelationId: 'relation.sale_case.readiness_item',
+    relativeFilePath: 'src/services/renovationCase.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['PropertySaleCase.readinessItems'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [readinessItems] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_seasonalchecklist_service',
+    semanticRelationId: 'relation.claim.checklist_item',
+    relativeFilePath: 'src/services/seasonalChecklist.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['Claim.checklistItems'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [checklistItems] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_services_skills_context_buyerplancontext_provider',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/skills/context/buyerPlanContext.provider.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Out-of-tree repository consumer (WRITE) accessing [HomeBuyerTask] directly outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.repo_types_claims_types',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/types/claims.types.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Repository contract/route/type/validator referencing [warrantyId].',
+  },
+  {
+    siteId: 'rel_site.repo_types_homeowner_management_types',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/types/homeowner-management.types.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Repository contract/route/type/validator referencing [warrantyId].',
+  },
+  {
+    siteId: 'rel_site.repo_validators_claims_validators',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/validators/claims.validators.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Repository contract/route/type/validator referencing [warrantyId].',
+  },
+  {
+    siteId: 'rel_site.repo_validators_inventory_validators',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/validators/inventory.validators.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Repository contract/route/type/validator referencing [warrantyId].',
+  },
 ] as const);
 
 export type RelationPathAuditFlag =
@@ -808,11 +1303,11 @@ export interface RelationshipDuplicateDefinitionReport {
   readonly sitesByClassification: Readonly<Record<RelationshipAccessClassification, number>>;
 }
 
-export function discoverAskRelationStorageAccessFiles(
+export function discoverRepositoryRelationStorageAccessFiles(
   backendRoot: string = resolve(__dirname, '../../../../..'),
 ): readonly DiscoveredRelationAccessFile[] {
-  const askRoot = join(backendRoot, 'src/services/ask');
-  if (!existsSync(askRoot)) {
+  const srcRoot = join(backendRoot, 'src');
+  if (!existsSync(srcRoot)) {
     return [];
   }
 
@@ -821,14 +1316,25 @@ export function discoverAskRelationStorageAccessFiles(
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const fullPath = join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (entry.name === 'semantic' || entry.name === 'graphify-out') continue;
+        if (
+          entry.name === 'semantic' ||
+          entry.name === 'graphify-out' ||
+          entry.name === 'node_modules' ||
+          entry.name === 'dist'
+        ) {
+          continue;
+        }
         walk(fullPath);
-      } else if (entry.name.endsWith('.ts')) {
+      } else if (
+        entry.name.endsWith('.ts') &&
+        !entry.name.endsWith('.test.ts') &&
+        !entry.name.endsWith('.spec.ts')
+      ) {
         relativeFiles.push(relative(backendRoot, fullPath).replace(/\\/g, '/'));
       }
     }
   };
-  walk(askRoot);
+  walk(srcRoot);
   relativeFiles.sort();
 
   const discovered: DiscoveredRelationAccessFile[] = [];
@@ -849,6 +1355,9 @@ export function discoverAskRelationStorageAccessFiles(
 
   return Object.freeze(discovered);
 }
+
+/** @deprecated Use discoverRepositoryRelationStorageAccessFiles (repository-wide FR-ONT-7 discovery). */
+export const discoverAskRelationStorageAccessFiles = discoverRepositoryRelationStorageAccessFiles;
 
 export function buildRelationshipDuplicateDefinitionReport(): RelationshipDuplicateDefinitionReport {
   const sitesByClassification: Record<RelationshipAccessClassification, number> = {

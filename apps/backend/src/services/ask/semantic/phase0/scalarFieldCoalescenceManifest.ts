@@ -300,6 +300,78 @@ export const ASK_SCALAR_FIELD_COALESCENCE_MANIFEST: readonly ScalarFieldCoalesce
     provenancePreference: 'Prefer PropertyExteriorProfile.hasDrainageIssues when populated; surface CONFLICTED if Property.hasDrainageIssues and PropertyExteriorProfile.hasDrainageIssues disagree.',
     ownerDecisionRef: null,
   },
+  {
+    semanticFieldGroupId: 'scalar_group.inventory_draft_item.brand_vs_manufacturer',
+    domainId: 'domain.inventory',
+    classification: 'INTENTIONALLY_DISTINCT_BUSINESS_MEANING',
+    businessMeaningSummary: 'InventoryDraftItem.brand and InventoryDraftItem.manufacturer remain distinct business fields per FR-ONT-2.',
+    authoritativeStorage: null,
+    storageMembers: [
+      { model: 'InventoryDraftItem', field: 'brand', prismaType: 'String', role: 'DISTINCT_PEER', canonicalDataPointId: null },
+      { model: 'InventoryDraftItem', field: 'manufacturer', prismaType: 'String', role: 'DISTINCT_PEER', canonicalDataPointId: null },
+    ],
+    orderedCoalescenceRule: [],
+    blankVersusNullPolicy: 'TRIM_EMPTY_STRING_AS_NULL',
+    conflictBehavior: 'NEVER_COALESCE_SEPARATE_FIELDS',
+    writeTarget: null,
+    backfillDisposition: 'KEEP_SEPARATE_SCHEMA_COLUMNS',
+    provenancePreference: 'Keep brand and manufacturer distinct on InventoryDraftItem.',
+    ownerDecisionRef: null,
+  },
+  {
+    semanticFieldGroupId: 'scalar_group.inventory_draft_item.model_vs_model_number',
+    domainId: 'domain.inventory',
+    classification: 'CANONICAL_WITH_GOVERNED_COALESCENCE',
+    businessMeaningSummary: 'InventoryDraftItem.modelNumber and InventoryDraftItem.model represent the draft item model identifier.',
+    authoritativeStorage: { model: 'InventoryDraftItem', field: 'modelNumber' },
+    storageMembers: [
+      { model: 'InventoryDraftItem', field: 'modelNumber', prismaType: 'String', role: 'AUTHORITATIVE', canonicalDataPointId: null },
+      { model: 'InventoryDraftItem', field: 'model', prismaType: 'String', role: 'LEGACY_ALIAS', canonicalDataPointId: null },
+    ],
+    orderedCoalescenceRule: ['InventoryDraftItem.modelNumber', 'InventoryDraftItem.model'],
+    blankVersusNullPolicy: 'TRIM_EMPTY_STRING_AS_NULL',
+    conflictBehavior: 'CONFLICTED_WITH_PROVENANCE',
+    writeTarget: 'InventoryDraftItem.modelNumber',
+    backfillDisposition: 'CONSOLIDATE_TO_AUTHORITATIVE_ON_WRITE',
+    provenancePreference: 'Prefer InventoryDraftItem.modelNumber; surface CONFLICTED if both populated and unequal.',
+    ownerDecisionRef: null,
+  },
+  {
+    semanticFieldGroupId: 'scalar_group.inventory_draft_item.serial_no_vs_serial_number',
+    domainId: 'domain.inventory',
+    classification: 'CANONICAL_WITH_GOVERNED_COALESCENCE',
+    businessMeaningSummary: 'InventoryDraftItem.serialNumber and InventoryDraftItem.serialNo represent the draft item serial identifier.',
+    authoritativeStorage: { model: 'InventoryDraftItem', field: 'serialNumber' },
+    storageMembers: [
+      { model: 'InventoryDraftItem', field: 'serialNumber', prismaType: 'String', role: 'AUTHORITATIVE', canonicalDataPointId: null },
+      { model: 'InventoryDraftItem', field: 'serialNo', prismaType: 'String', role: 'LEGACY_ALIAS', canonicalDataPointId: null },
+    ],
+    orderedCoalescenceRule: ['InventoryDraftItem.serialNumber', 'InventoryDraftItem.serialNo'],
+    blankVersusNullPolicy: 'TRIM_EMPTY_STRING_AS_NULL',
+    conflictBehavior: 'CONFLICTED_WITH_PROVENANCE',
+    writeTarget: 'InventoryDraftItem.serialNumber',
+    backfillDisposition: 'CONSOLIDATE_TO_AUTHORITATIVE_ON_WRITE',
+    provenancePreference: 'Prefer InventoryDraftItem.serialNumber; surface CONFLICTED if both populated and unequal.',
+    ownerDecisionRef: null,
+  },
+  {
+    semanticFieldGroupId: 'scalar_group.recall_product.brand_vs_manufacturer',
+    domainId: 'domain.risks_recalls_inspections',
+    classification: 'INTENTIONALLY_DISTINCT_BUSINESS_MEANING',
+    businessMeaningSummary: 'RecallProduct.brand and RecallProduct.manufacturer remain distinct business fields per FR-ONT-2.',
+    authoritativeStorage: null,
+    storageMembers: [
+      { model: 'RecallProduct', field: 'brand', prismaType: 'String', role: 'DISTINCT_PEER', canonicalDataPointId: null },
+      { model: 'RecallProduct', field: 'manufacturer', prismaType: 'String', role: 'DISTINCT_PEER', canonicalDataPointId: null },
+    ],
+    orderedCoalescenceRule: [],
+    blankVersusNullPolicy: 'TRIM_EMPTY_STRING_AS_NULL',
+    conflictBehavior: 'NEVER_COALESCE_SEPARATE_FIELDS',
+    writeTarget: null,
+    backfillDisposition: 'KEEP_SEPARATE_SCHEMA_COLUMNS',
+    provenancePreference: 'Keep brand and manufacturer distinct on RecallProduct.',
+    ownerDecisionRef: null,
+  },
 ] as const);
 
 export type CandidateDuplicateDiscoveryRule =
@@ -322,18 +394,23 @@ const INTRA_MODEL_KNOWN_SYNONYM_STEMS: ReadonlyArray<readonly [string, string]> 
   ['serialNo', 'serialNumber'],
   ['category', 'assetType'],
   ['category', 'serviceCategory'],
+  ['zip', 'zipCode'],
+  ['postalCode', 'zipCode'],
+  ['city', 'municipality'],
+  ['state', 'stateCode'],
+  ['amount', 'totalAmount'],
+  ['cost', 'costCents'],
+  ['price', 'priceCents'],
 ]);
 
 /**
  * Mechanically derives candidate duplicate/shadow/overlapping scalar field pairs
- * from Prisma DMMF (across all 20 catalogued DataPointEntity models + PropertyExteriorProfile)
- * and DATA_POINT_DEFINITIONS so that omitted duplicate pairs fail Phase 0 validation.
+ * across ALL Prisma DMMF models (not just catalogued entities) and DATA_POINT_DEFINITIONS
+ * so that omitted duplicate/legacy scalar pairs anywhere in the schema fail Phase 0 validation.
  */
 export function discoverCandidateDuplicateScalarFields(): readonly CandidateDuplicateScalarPair[] {
   const modelsByName = new Map(Prisma.dmmf.datamodel.models.map((model) => [model.name, model]));
-  const targetModelNames = Array.from(
-    new Set([...DATA_POINT_DEFINITIONS.map((d) => d.entity), 'PropertyExteriorProfile']),
-  );
+  const targetModelNames = Prisma.dmmf.datamodel.models.map((model) => model.name);
 
   const pairs: CandidateDuplicateScalarPair[] = [];
   const seenKey = new Set<string>();

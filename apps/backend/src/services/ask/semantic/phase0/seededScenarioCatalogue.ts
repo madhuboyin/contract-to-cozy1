@@ -1240,7 +1240,7 @@ export function evaluateSeededArchetypeFixtures(archetypeId: string): SeededArch
   };
 }
 
-export interface SeededFamilyFixtureExecutionResult {
+export interface SeededFamilyFixtureReadinessResult {
   readonly familyId: string;
   readonly passed: boolean;
   readonly evaluatedArchetypeIds: readonly string[];
@@ -1248,7 +1248,17 @@ export interface SeededFamilyFixtureExecutionResult {
   readonly issues: readonly string[];
 }
 
-export function executeSeededFamilyAgainstFixtures(familyId: string): SeededFamilyFixtureExecutionResult {
+/** @deprecated Use SeededFamilyFixtureReadinessResult. */
+export type SeededFamilyFixtureExecutionResult = SeededFamilyFixtureReadinessResult;
+
+/**
+ * Verifies Phase 0 fixture-readiness & data-state coverage for a seeded semantic family:
+ * checks that referenced archetypes exist, cover `family.domainId`, pass
+ * `evaluateSeededArchetypeFixtures`, and instantiate all `requiredDataStateVariants`.
+ * Prompt/paraphrase parsing, plan construction, and `expectedPlanSummary` assertions
+ * are executed incrementally in Phases 1–3 as typed-grammar & planner slices ship.
+ */
+export function verifySeededFamilyFixtureReadiness(familyId: string): SeededFamilyFixtureReadinessResult {
   const family = ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES.find((f) => f.familyId === familyId);
   if (!family) {
     return {
@@ -1299,6 +1309,9 @@ export function executeSeededFamilyAgainstFixtures(familyId: string): SeededFami
   };
 }
 
+/** @deprecated Use verifySeededFamilyFixtureReadiness. */
+export const executeSeededFamilyAgainstFixtures = verifySeededFamilyFixtureReadiness;
+
 export function validateSeededScenarioCatalogue(): string[] {
   const issues: string[] = [];
   const nonBoundaryDomains = ASK_SEMANTIC_DOMAINS
@@ -1331,9 +1344,9 @@ export function validateSeededScenarioCatalogue(): string[] {
     if (family.adjacentNegatives.length < 2) {
       issues.push(`${family.familyId}: must declare at least 2 adjacentNegatives`);
     }
-    const execResult = executeSeededFamilyAgainstFixtures(family.familyId);
-    if (!execResult.passed) {
-      issues.push(...execResult.issues);
+    const readinessResult = verifySeededFamilyFixtureReadiness(family.familyId);
+    if (!readinessResult.passed) {
+      issues.push(...readinessResult.issues);
     }
   }
 

@@ -35,7 +35,7 @@ import {
   ASK_TRAVERSABLE_RELATION_PATH_MANIFEST,
   auditDualParentSchemaModels,
   buildRelationshipDuplicateDefinitionReport,
-  discoverAskRelationStorageAccessFiles,
+  discoverRepositoryRelationStorageAccessFiles,
   validateRelationGovernanceBaseline,
 } from './relationGovernanceBaseline';
 import {
@@ -44,7 +44,7 @@ import {
   ASK_SEEDED_PROPERTY_ARCHETYPES,
   ASK_SEEDED_SCENARIO_CATALOGUE_VERSION,
   evaluateSeededArchetypeFixtures,
-  executeSeededFamilyAgainstFixtures,
+  verifySeededFamilyFixtureReadiness,
   validateSeededScenarioCatalogue,
 } from './seededScenarioCatalogue';
 
@@ -66,7 +66,7 @@ export interface AskSemanticPhase0CompletenessProof {
   readonly totalOperationsCount: number;
   readonly unmappedOperations: readonly string[];
   readonly archetypeFixtureVerificationPassedCount: number;
-  readonly familyFixtureExecutionPassedCount: number;
+  readonly familyFixtureReadinessPassedCount: number;
 }
 
 export interface AskSemanticPhase0BaselineSummary {
@@ -127,7 +127,7 @@ export function buildAskSemanticPhase0BaselineSummary(): AskSemanticPhase0Baseli
     .map((item) => item.relativeFilePath)
     .filter((filePath) => !inventoriedRecognizerSet.has(filePath));
 
-  const discoveredRelationFiles = discoverAskRelationStorageAccessFiles();
+  const discoveredRelationFiles = discoverRepositoryRelationStorageAccessFiles();
   const inventoriedRelationSet = new Set(
     ASK_RELATIONSHIP_STORAGE_ACCESS_SITES.map((site) => site.relativeFilePath),
   );
@@ -151,8 +151,8 @@ export function buildAskSemanticPhase0BaselineSummary(): AskSemanticPhase0Baseli
   const archetypeFixtureVerificationPassedCount = ASK_SEEDED_PROPERTY_ARCHETYPES.filter(
     (a) => evaluateSeededArchetypeFixtures(a.archetypeId).passed,
   ).length;
-  const familyFixtureExecutionPassedCount = ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES.filter(
-    (f) => executeSeededFamilyAgainstFixtures(f.familyId).passed,
+  const familyFixtureReadinessPassedCount = ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES.filter(
+    (f) => verifySeededFamilyFixtureReadiness(f.familyId).passed,
   ).length;
 
   const completenessProof: AskSemanticPhase0CompletenessProof = {
@@ -167,7 +167,7 @@ export function buildAskSemanticPhase0BaselineSummary(): AskSemanticPhase0Baseli
     totalOperationsCount: allOperationIds.length,
     unmappedOperations,
     archetypeFixtureVerificationPassedCount,
-    familyFixtureExecutionPassedCount,
+    familyFixtureReadinessPassedCount,
   };
 
   const validatorIssues = {
@@ -187,7 +187,7 @@ export function buildAskSemanticPhase0BaselineSummary(): AskSemanticPhase0Baseli
     unaccountedDuplicateScalarCandidates.length === 0 &&
     unmappedOperations.length === 0 &&
     archetypeFixtureVerificationPassedCount === ASK_SEEDED_PROPERTY_ARCHETYPES.length &&
-    familyFixtureExecutionPassedCount === ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES.length;
+    familyFixtureReadinessPassedCount === ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES.length;
 
   const contradictionsComplete =
     unaccountedRelationAccessFiles.length === 0 &&
