@@ -22,6 +22,7 @@ const { askTopicTokens, PROTECTION_TOPIC_SEPARATION_FAMILIES } = require('../../
 const { extractSeparatedProtectionConcepts } = require('../../src/services/ask/askSemanticEmbedding.ts');
 const { canAnswerContractBypassRelevance, isSourceScanOnlyAnswerContract } = require('../../src/services/ask/answerContract/operationAnswerContract.ts');
 const { assertValidTransitionalWarrantyLinkWrite } = require('../../src/services/ask/semantic/transitionalWarrantyRead.ts');
+const { dataPointReadResult } = require('../../src/services/ask/handlers/dataPointRead.handler.ts');
 const { savedResultsFromPage } = require('../../src/services/ask/handlers/savedResults.handler.ts');
 const {
   PHASE1_SELECTED_BASIC_READ_FAMILIES,
@@ -427,6 +428,11 @@ test('Phase 1 runtime wiring covers all 13 selected families across dataPointRea
     'src/services/ask/handlers/dataPointRead.handler.ts',
     'src/services/ask/handlers/savedResults.handler.ts',
   ]);
+  assert.equal(wiring.verifiedFamilyIds.length, PHASE1_SELECTED_BASIC_READ_FAMILIES.length);
+  assert.deepEqual(
+    [...wiring.verifiedFamilyIds].sort(),
+    PHASE1_SELECTED_BASIC_READ_FAMILIES.map((f) => f.familyId).sort(),
+  );
 });
 
 test('repository-wide legacy InventoryItem.warrantyId write containment passes on repo and catches unguarded writers', () => {
@@ -481,7 +487,7 @@ test('dataPointReadGrammarAgreement and savedResultsGrammarAgreement gate runtim
   assert.equal(savedDisagree.outcome, 'DISAGREE');
 });
 
-test('savedResultsFromPage emits a SemanticReadReceipt that passes verifySemanticReadReceiptEntailment', () => {
+test('savedResultsFromPage emits a CAPABILITY SemanticReadReceipt with real property/role context that passes verifySemanticReadReceiptEntailment', () => {
   const result = savedResultsFromPage({
     page: {
       rows: [
@@ -522,10 +528,35 @@ test('savedResultsFromPage emits a SemanticReadReceipt that passes verifySemanti
       roomScopePhrase: '',
       dateScopePhrase: '10',
     },
+    propertyId: 'prop-99',
+    role: 'OWNER',
+    facetId: 'facet-saved-1',
   });
 
-  assert.ok(result.parameters?.semanticExecutionReceipt);
-  SemanticReadReceiptSchema.parse(result.parameters.semanticExecutionReceipt);
+  const receipt = result.parameters?.semanticExecutionReceipt;
+  assert.ok(receipt);
+  SemanticReadReceiptSchema.parse(receipt);
+  assert.equal(receipt.requestClass, 'CAPABILITY');
+  assert.equal(receipt.target.operationAdapter, 'saved-results.read');
+  assert.equal(receipt.authorization.propertyId, 'prop-99');
+  assert.equal(receipt.authorization.role, 'OWNER');
+  assert.equal(receipt.facetId, 'facet-saved-1');
   const verdict = verifySemanticReadReceiptEntailment(result);
   assert.equal(verdict.outcome, 'PASS');
+});
+
+test('dataPointReadResult fails closed when the typed grammar returns NONE_FITS', async () => {
+  const propertyAccess = require('../../src/services/propertyAccess.service.ts');
+  const { prisma } = require('../../src/lib/prisma.ts');
+  const origResolve = propertyAccess.resolvePropertyAccess;
+  const origFindProperty = prisma.property.findUnique;
+  propertyAccess.resolvePropertyAccess = async () => ({ allowed: true, role: 'OWNER', propertyId: 'prop-1', userId: 'user-1' });
+  prisma.property.findUnique = async () => ({ timezone: 'UTC' });
+  try {
+    const res = await dataPointReadResult('user-1', 'prop-1', 'what is my property tax amount in 2025 with extra unknown tokens foo bar baz');
+    assert.equal(res.reasonCode, 'DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED');
+  } finally {
+    propertyAccess.resolvePropertyAccess = origResolve;
+    prisma.property.findUnique = origFindProperty;
+  }
 });

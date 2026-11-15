@@ -32,9 +32,11 @@ export interface QueryField {
   readonly words: readonly string[];
   readonly label: string;
 }
+export type QueryEntity = DataPointEntity | 'InventoryRoom' | 'HomeEvent';
+
 export interface QueryTemplate {
   readonly id: string;
-  readonly entity: DataPointEntity;
+  readonly entity: QueryEntity;
   readonly delegate: string;
   /** Compound plural nouns that select this template. A bare "items" or "tasks" selects nothing. */
   readonly nouns: readonly string[];
@@ -67,7 +69,7 @@ const f = (point: string, type: FieldType, column: string, words: string[], labe
 
 export const QUERY_TEMPLATES: readonly QueryTemplate[] = Object.freeze([
   {
-    id: 'inventory', entity: 'InventoryItem', delegate: 'inventoryItem', nouns: ['appliances', 'inventory items', 'household items', 'items in my inventory', 'everything in my home', 'everything in my house', 'all my appliances', 'all of my appliances', 'hvac items', 'hvac systems', 'hvac equipment', 'plumbing items'], singularNouns: ['appliance', 'inventory item'], plural: 'inventory items', singular: 'inventory item',
+    id: 'inventory', entity: 'InventoryItem', delegate: 'inventoryItem', nouns: ['appliances', 'inventory items', 'household items', 'items in my inventory', 'everything in my home', 'everything in my house', 'all my appliances', 'all of my appliances', 'home systems', 'hvac items', 'hvac systems', 'hvac equipment', 'plumbing items'], singularNouns: ['appliance', 'inventory item', 'home system', 'hvac system'], plural: 'inventory items', singular: 'inventory item',
     labelSelect: { name: true }, labelFields: ['name'], countFloor: 'VIEWER',
     fields: {
       installedOn: f('item.installedOn', 'date', 'installedOn', ['installed', 'install date', 'age', 'old', 'older', 'oldest', 'newest', 'newer'], 'installed'),
@@ -217,6 +219,20 @@ export const QUERY_TEMPLATES: readonly QueryTemplate[] = Object.freeze([
     },
     dateField: 'openedAt',
   },
+  {
+    id: 'rooms', entity: 'InventoryRoom', delegate: 'inventoryRoom', nouns: ['rooms', 'inventory rooms', 'home rooms'], singularNouns: ['room'], plural: 'rooms', singular: 'room',
+    labelSelect: { name: true }, labelFields: ['name'], countFloor: 'VIEWER',
+    fields: {},
+    enumWords: {},
+    dateField: null,
+  },
+  {
+    id: 'events', entity: 'HomeEvent', delegate: 'homeEvent', nouns: ['home events', 'timeline events'], singularNouns: ['home event', 'timeline event'], plural: 'home events', singular: 'home event',
+    labelSelect: { title: true }, labelFields: ['title'], countFloor: 'VIEWER',
+    fields: {},
+    enumWords: {},
+    dateField: null,
+  },
 ] as QueryTemplate[]);
 
 export interface Predicate { readonly field: string; readonly op: Operator; readonly value: string | number | readonly string[]; readonly describe: string }
@@ -243,7 +259,7 @@ const norm = (m: string) => ` ${m.replace(/(\d),(?=\d{3}\b)/g, '$1').toLowerCase
 const NUMBER_WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, fifteen: 15, twenty: 20, thirty: 30, sixty: 60, ninety: 90 };
 const num = (w: string): number | null => { const k = w.replace(/,/g, ''); if (/^\d+(?:\.\d+)?$/.test(k)) return Number(k); return NUMBER_WORDS[k] ?? null; };
 
-export function templateFor(entity: DataPointEntity): QueryTemplate | undefined { return QUERY_TEMPLATES.find((t) => t.entity === entity); }
+export function templateFor(entity: QueryEntity): QueryTemplate | undefined { return QUERY_TEMPLATES.find((t) => t.entity === entity); }
 export function pointOf(template: QueryTemplate, field: string): DataPointDefinition { const p = DATA_POINT_BY_ID.get(template.fields[field].point); if (!p) throw new Error(`template ${template.id} field ${field} is not a catalogued data point`); return p; }
 
 function pickTemplate(text: string): { template: QueryTemplate; plural: boolean } | 'AMBIGUOUS' | null {
@@ -399,7 +415,7 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
   const sumQ = /\b(total(?! assessed)|sum|combined|altogether|add up|spen[dt])\b|\bhow much (?:have|did) (?:i|we) (?:been )?(?:paid|received|get|got)\b/.test(text);
   const avgQ = /\b(average|mean|typical)\b/.test(text);
   const superlative = /\b(most expensive|most valuable|priciest|costliest|most costly|least expensive|cheapest|oldest|newest|youngest|largest|highest|lowest|biggest|soonest|earliest|latest|next to expire|expires? (?:first|soonest|next(?! (?:month|week|year|\d)))|expiring (?:first|soonest|next(?! (?:month|week|year|\d)))|due (?:first|soonest|next(?! (?:month|week|year|\d)))|first to expire)\b/.exec(text);
-  const listQ = /\b(list|show|what|which)\b.*\b(?:do i have|have i got|are there|i have|i own)\b|\b(?:list|show) (?:all )?(?:of )?(?:my|our|the)\b/.test(text);
+  const listQ = /\b(list|show|what|which)\b.*\b(?:do i have|have i got|are there|i have|i own)\b|\b(?:list|show) (?:all )?(?:of )?(?:my|our|the)\b|^\s*(?:list|show)\s+/.test(text);
 
   const limitAsk = (() => { const k = /\b(?:top|first|my)?\s*(\d+|three|five|ten)\b\s+(?:most|oldest|newest|cheapest|priciest|costliest)/.exec(text) ?? /\btop (\d+|three|five|ten)\b/.exec(text); return k ? num(k[1]) : null; })();
   const limit = (n: number | null | undefined, dflt: number) => Math.max(1, Math.min(QUERY_MAX_LIMIT, n ?? dflt));

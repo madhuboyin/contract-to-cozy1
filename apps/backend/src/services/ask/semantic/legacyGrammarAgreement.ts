@@ -90,14 +90,21 @@ export const PRISMA_ENTITY_TO_PHASE1_SUBJECT: Readonly<Record<string, string>> =
   Property: 'entity.property',
   InventoryRoom: 'entity.inventory_room',
   InventoryItem: 'entity.inventory_item',
+  HomeSystem: 'entity.home_system',
   PropertyMaintenanceTask: 'entity.maintenance_task',
   Warranty: 'entity.warranty',
   InsurancePolicy: 'entity.insurance_policy',
   PropertyTaxBillRecord: 'entity.tax_bill',
-  HomeReserveFund: 'entity.tax_bill',
-  Document: 'entity.document',
+  PropertyTaxAssessmentRecord: 'entity.tax_bill',
+  HomeReserveFund: 'entity.reserve_fund',
+  PropertyRecord: 'entity.property_record',
+  PropertyRecordVersion: 'entity.property_record',
+  Document: 'entity.property_record',
   HomeEvent: 'entity.home_event',
   HomeBuyerTask: 'entity.buyer_task',
+  SaleReadinessItem: 'entity.sale_readiness_item',
+  Claim: 'entity.claim',
+  HomeBuyerChecklist: 'entity.buyer_checklist',
 });
 
 export function dataPointReadGrammarAgreement(
@@ -108,8 +115,14 @@ export function dataPointReadGrammarAgreement(
     readonly polarity?: 'POSITIVE' | 'NEGATIVE';
   },
 ): LegacyGrammarAgreement | null {
-  const subjectEntityId = PRISMA_ENTITY_TO_PHASE1_SUBJECT[spec.prismaEntity];
+  let subjectEntityId = PRISMA_ENTITY_TO_PHASE1_SUBJECT[spec.prismaEntity];
   if (!subjectEntityId) return null;
+  if (spec.prismaEntity === 'InventoryItem') {
+    const precheck = parseDeterministicSemanticRequest(message);
+    if (precheck.outcome === 'MATCH' && precheck.facets[0]?.subject?.entityId === 'entity.home_system') {
+      subjectEntityId = 'entity.home_system';
+    }
+  }
   return verifyLegacyCandidateGrammarAgreement(message, {
     requestClass: 'DATA_QUERY',
     subjectEntityId,

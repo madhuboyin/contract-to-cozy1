@@ -11,6 +11,15 @@ import path from 'node:path';
 import { verifyProtectionLexemeSeparation } from '../sharedSemanticLexicon';
 import { WARRANTY_RELATION_MEANINGS } from '../transitionalWarrantyRead';
 import { operationAnswerContractCoverage } from '../../answerContract/operationAnswerContract';
+import { parseDeterministicSemanticRequest } from '../deterministicSemanticParser';
+import {
+  dataPointReadGrammarAgreement,
+  savedResultsGrammarAgreement,
+  warrantyShapeGrammarAgreement,
+} from '../legacyGrammarAgreement';
+import { planDataPointQuery } from '../../dataPoint/dataPointQueryPlan';
+import { resolveDataPoint } from '../../dataPoint/dataPointCatalogue';
+import { planShape789 } from '../../dataPoint/dataPointShapes789';
 import {
   ASK_PHASE1_FAMILY_MANIFEST_VERSION,
   PHASE1_SELECTED_BASIC_READ_FAMILIES,
@@ -70,13 +79,16 @@ export function verifyPhase1RuntimeWiring(backendRoot: string = DEFAULT_BACKEND_
   readonly valid: boolean;
   readonly issues: readonly string[];
   readonly verifiedHandlerFiles: readonly string[];
+  readonly verifiedFamilyIds: readonly string[];
 } {
   const issues: string[] = [];
   const verifiedHandlerFiles: string[] = [];
+  const verifiedFamilyIds: string[] = [];
 
   const requiredChecks: Array<{
     relativePath: string;
     requiredTokens: readonly string[];
+    forbiddenTokens?: readonly string[];
   }> = [
     {
       relativePath: 'src/services/ask/handlers/dataPointRead.handler.ts',
@@ -85,6 +97,12 @@ export function verifyPhase1RuntimeWiring(backendRoot: string = DEFAULT_BACKEND_
         'warrantyShapeGrammarAgreement',
         'buildSemanticReadReceipt',
         'verifySemanticReadReceiptEntailment',
+        'agreement?.facet?.id',
+        '!queryAgreement || queryAgreement.outcome !== \'AGREE\'',
+        '!singlePointAgreement || singlePointAgreement.outcome !== \'AGREE\'',
+      ],
+      forbiddenTokens: [
+        'agreement.plan.outcome === \'MATCH\' && agreement.outcome !== \'AGREE\'',
       ],
     },
     {
@@ -93,6 +111,9 @@ export function verifyPhase1RuntimeWiring(backendRoot: string = DEFAULT_BACKEND_
         'savedResultsGrammarAgreement',
         'buildSemanticReadReceipt',
         'verifySemanticReadReceiptEntailment',
+        'requestClass: \'CAPABILITY\'',
+        'operationAdapter: \'saved-results.read\'',
+        'deps?.propertyAccess?.role',
       ],
     },
   ];
@@ -105,8 +126,11 @@ export function verifyPhase1RuntimeWiring(backendRoot: string = DEFAULT_BACKEND_
     }
     const source = fs.readFileSync(fullPath, 'utf8');
     const missingTokens = check.requiredTokens.filter((token) => !source.includes(token));
+    const forbiddenFound = (check.forbiddenTokens ?? []).filter((token) => source.includes(token));
     if (missingTokens.length > 0) {
       issues.push(`Phase 1 handler ${check.relativePath} is missing runtime wiring: ${missingTokens.join(', ')}`);
+    } else if (forbiddenFound.length > 0) {
+      issues.push(`Phase 1 handler ${check.relativePath} retains fail-open guard(s): ${forbiddenFound.join(', ')}`);
     } else {
       verifiedHandlerFiles.push(check.relativePath);
     }
@@ -116,8 +140,55 @@ export function verifyPhase1RuntimeWiring(backendRoot: string = DEFAULT_BACKEND_
     const handlerPath = PHASE1_CAPABILITY_HANDLER_FILES[family.canonicalAdapterKey];
     if (!handlerPath) {
       issues.push(`Selected Phase 1 family ${family.familyId} (${family.canonicalAdapterKey}) has no mapped runtime handler.`);
-    } else if (!verifiedHandlerFiles.includes(handlerPath)) {
+      continue;
+    }
+    if (!verifiedHandlerFiles.includes(handlerPath)) {
       issues.push(`Selected Phase 1 family ${family.familyId} maps to unverified handler ${handlerPath}.`);
+      continue;
+    }
+
+    let hasExecutableAgreedExample = false;
+    for (const prompt of family.representativeExamples) {
+      const plan = parseDeterministicSemanticRequest(prompt);
+      if (plan.outcome !== 'MATCH' || !plan.facets[0]?.confidenceSignals.grammarComplete) {
+        issues.push(`Phase 1 family ${family.familyId} prompt "${prompt}" failed deterministic grammar parse.`);
+        continue;
+      }
+      if (family.canonicalAdapterKey === 'saved-results.read') {
+        const agreement = savedResultsGrammarAgreement(prompt, 'LIST');
+        if (agreement.outcome === 'AGREE' && agreement.facet) hasExecutableAgreedExample = true;
+        continue;
+      }
+      const shapePlan = planShape789(prompt);
+      if (shapePlan && (shapePlan.shape === 'NO_WARRANTY' || shapePlan.shape === 'HAS_WARRANTY')) {
+        const agreement = warrantyShapeGrammarAgreement(prompt, shapePlan);
+        if (agreement.outcome === 'AGREE' && agreement.facet) hasExecutableAgreedExample = true;
+        continue;
+      }
+      const queryOutcome = planDataPointQuery(prompt, new Date('2026-11-15T12:00:00Z'));
+      if (queryOutcome.kind === 'PLAN') {
+        const projection = queryOutcome.plan.shape === 'AGGREGATE' && queryOutcome.plan.aggregate?.fn === 'COUNT' ? 'COUNT' : 'LIST';
+        const agreement = dataPointReadGrammarAgreement(prompt, {
+          prismaEntity: queryOutcome.plan.template.entity,
+          projection,
+        });
+        if (agreement?.outcome === 'AGREE' && agreement.facet) hasExecutableAgreedExample = true;
+        continue;
+      }
+      const point = resolveDataPoint(prompt);
+      if (point) {
+        const agreement = dataPointReadGrammarAgreement(prompt, {
+          prismaEntity: point.entity,
+          projection: 'DETAIL',
+        });
+        if (agreement?.outcome === 'AGREE' && agreement.facet) hasExecutableAgreedExample = true;
+      }
+    }
+
+    if (!hasExecutableAgreedExample) {
+      issues.push(`Selected Phase 1 family ${family.familyId} has no executable agreed runtime path through ${family.canonicalAdapterKey}.`);
+    } else {
+      verifiedFamilyIds.push(family.familyId);
     }
   }
 
@@ -125,6 +196,7 @@ export function verifyPhase1RuntimeWiring(backendRoot: string = DEFAULT_BACKEND_
     valid: issues.length === 0,
     issues,
     verifiedHandlerFiles,
+    verifiedFamilyIds,
   };
 }
 

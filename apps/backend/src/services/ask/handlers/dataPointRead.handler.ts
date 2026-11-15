@@ -84,7 +84,7 @@ const RANK_ROLE = ['VIEWER', 'CONTRIBUTOR', 'OWNER'] as const;
 const NUMBER_FAMILY_LABEL = (family: string, value: unknown) => formatDataPointValue({ family } as unknown as DataPointDefinition, value);
 
 /** Shapes 3-6 (list, filter, sort/top-k, aggregate), FR-DATA-10/15. The plan is allowlisted and pure (dataPointQueryPlan); the audience floor of EVERY field the plan touches is checked here before anything is read. */
-async function dataPointQueryResult(propertyId: string, role: string, plan: QueryPlan): Promise<AskOperationResult> {
+async function dataPointQueryResult(propertyId: string, role: string, plan: QueryPlan, agreement: LegacyGrammarAgreement | null = null): Promise<AskOperationResult> {
   const t = plan.template;
   const touchedFields = [...new Set([...plan.touched, ...(plan.showField ? [plan.showField] : []), ...(plan.aggregate?.field ? [plan.aggregate.field] : [])])];
   let floor = ROLE_RANK[t.countFloor];
@@ -135,10 +135,12 @@ async function dataPointQueryResult(propertyId: string, role: string, plan: Quer
   const asOf = new Date().toISOString();
   const resolvedCount = plan.shape === 'AGGREGATE' ? run.total : run.rows.length;
   const queryReceipt = buildSemanticReadReceipt({
-    facetId: `query-${t.id}-${plan.shape.toLowerCase()}`,
-    entityId: `entity.${t.id}`,
+    facetId: agreement?.facet?.id ?? `query-${t.id}-${plan.shape.toLowerCase()}`,
+    entityId: agreement?.facet?.subject?.entityId ?? `entity.${t.id}`,
     projection: plan.shape === 'AGGREGATE' ? (plan.aggregate?.fn === 'COUNT' ? 'COUNT' : 'AGGREGATE') : 'LIST',
-    predicateIds: plan.predicates.length ? plan.predicates.map((p) => `predicate.${t.id}.${p.field}`) : [`predicate.${t.id}.all`],
+    predicateIds: agreement?.facet?.relations.length
+      ? agreement.facet.relations.map((r) => r.predicateId)
+      : plan.predicates.length ? plan.predicates.map((p) => `predicate.${t.id}.${p.field}`) : [`predicate.${t.id}.all`],
     resolvedRecordIds: plan.shape === 'AGGREGATE' ? Array.from({ length: run.total }, (_, idx) => `${t.id}-${idx + 1}`) : run.rows.map((r) => r.id),
     confirmedCount: resolvedCount,
     unknownCount: run.unrecorded,
@@ -318,26 +320,28 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
   }
   if (queryOutcome.kind === 'CLARIFY') return notice(queryOutcome.reasonCode, 'data-point-query-clarify', queryOutcome.title, queryOutcome.body);
   if (queryOutcome.kind === 'PLAN') {
+    let queryAgreement: LegacyGrammarAgreement | null = null;
     if (!forcedPoint) {
       const projection = queryOutcome.plan.shape === 'AGGREGATE' && queryOutcome.plan.aggregate?.fn === 'COUNT' ? 'COUNT' : 'LIST';
-      const agreement = dataPointReadGrammarAgreement(message, {
+      queryAgreement = dataPointReadGrammarAgreement(message, {
         prismaEntity: queryOutcome.plan.template.entity,
         projection,
       });
-      if (agreement && agreement.plan.outcome === 'MATCH' && agreement.outcome !== 'AGREE') {
+      if (!queryAgreement || queryAgreement.outcome !== 'AGREE') {
         return notice('DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED', 'data-point-semantic-agreement-required', 'I need a clearer question', 'I could not verify the target entity and projection independently, so I did not run this read.');
       }
     }
-    return dataPointQueryResult(propertyId, role, queryOutcome.plan);
+    return dataPointQueryResult(propertyId, role, queryOutcome.plan, queryAgreement);
   }
   const point = forcedPoint ?? resolveDataPoint(message);
   if (!point) return notice('DATA_POINT_NOT_IDENTIFIED', 'data-point-unidentified', 'Which detail do you mean?', 'Tell me the detail and the item, for example “the serial number of my refrigerator” or “when my furnace was installed”.');
+  let singlePointAgreement: LegacyGrammarAgreement | null = null;
   if (!forcedPoint) {
-    const agreement = dataPointReadGrammarAgreement(message, {
+    singlePointAgreement = dataPointReadGrammarAgreement(message, {
       prismaEntity: point.entity,
       projection: 'DETAIL',
     });
-    if (agreement && agreement.plan.outcome === 'MATCH' && agreement.outcome !== 'AGREE') {
+    if (!singlePointAgreement || singlePointAgreement.outcome !== 'AGREE') {
       return notice('DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED', 'data-point-semantic-agreement-required', 'I need a clearer question', 'I could not verify the target entity and detail projection independently, so I did not run this read.');
     }
   }
@@ -377,8 +381,8 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
   const limits = [...new Set(present.map((r) => r.limitation).filter((x): x is string => Boolean(x)))];
   sentences.push(...limits);
   const singlePointReceipt = buildSemanticReadReceipt({
-    facetId: `point-${readPoint.id}`,
-    entityId: `entity.${readPoint.entity}`,
+    facetId: singlePointAgreement?.facet?.id ?? `point-${readPoint.id}`,
+    entityId: singlePointAgreement?.facet?.subject?.entityId ?? `entity.${readPoint.entity}`,
     projection: 'DETAIL',
     predicateIds: [`predicate.${readPoint.id}.present`],
     resolvedRecordIds: present.map((r) => r.id),

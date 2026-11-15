@@ -7,7 +7,7 @@ export const SemanticReadReceiptSchema = z.object({
   schemaVersion: z.literal(ASK_SEMANTIC_RECEIPT_VERSION),
   planVersion: z.literal(ASK_SEMANTIC_PLAN_VERSION),
   facetId: z.string().min(1),
-  requestClass: z.literal('DATA_QUERY'),
+  requestClass: z.enum(['DATA_QUERY', 'CAPABILITY']),
   target: z.object({ entityId: z.string().min(1), operationAdapter: z.string().min(1) }).strict(),
   projection: z.enum(['EXISTS', 'COUNT', 'LIST', 'DETAIL', 'AGGREGATE', 'COMPARE', 'TIMELINE']),
   predicateIds: z.array(z.string().min(1)).min(1),
@@ -29,6 +29,7 @@ export type SemanticReadReceipt = z.infer<typeof SemanticReadReceiptSchema>;
 
 export interface BuildSemanticReadReceiptInput {
   readonly facetId: string;
+  readonly requestClass?: 'DATA_QUERY' | 'CAPABILITY';
   readonly entityId: string;
   readonly operationAdapter?: string;
   readonly projection: SemanticReadReceipt['projection'];
@@ -57,7 +58,7 @@ export function buildSemanticReadReceipt(input: BuildSemanticReadReceiptInput): 
     schemaVersion: ASK_SEMANTIC_RECEIPT_VERSION,
     planVersion: ASK_SEMANTIC_PLAN_VERSION,
     facetId: input.facetId,
-    requestClass: 'DATA_QUERY',
+    requestClass: input.requestClass ?? 'DATA_QUERY',
     target: {
       entityId: input.entityId,
       operationAdapter: input.operationAdapter ?? 'data-point-read.read',

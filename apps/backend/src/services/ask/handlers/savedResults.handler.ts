@@ -186,7 +186,14 @@ const BOUNDARY: AskPresentationBlock = {
  * The answer for one page of Saved. Pure: the handler reads the page, this decides what is said. It states the count and what is being
  * shown, never calls a partial page complete or empty, and keeps every chip so a constraint can always be widened or cleared.
  */
-export function savedResultsFromPage(input: { page: AskSavedPage; state: SavedResultsState; viewState: AskViewState }): AskOperationResult {
+export function savedResultsFromPage(input: {
+  page: AskSavedPage;
+  state: SavedResultsState;
+  viewState: AskViewState;
+  propertyId?: string;
+  role?: string;
+  facetId?: string;
+}): AskOperationResult {
   const { page, state, viewState } = input;
   const rows = page.rows.slice(0, state.limit);
   const chips = savedResultsChips(page, state);
@@ -223,16 +230,18 @@ export function savedResultsFromPage(input: { page: AskSavedPage; state: SavedRe
   }
   blocks.push(BOUNDARY);
   const semanticExecutionReceipt = buildSemanticReadReceipt({
-    facetId: 'saved-results-read',
+    facetId: input.facetId ?? 'saved-results-read',
+    requestClass: 'CAPABILITY',
     entityId: 'entity.saved_result',
+    operationAdapter: 'saved-results.read',
     projection: 'LIST',
     predicateIds: ['predicate.saved_result.all'],
     resolvedRecordIds: rows.map((row) => row.artifactKey),
     confirmedCount: rows.length,
     unknownCount: gaps.length,
     displayedCount: rows.length,
-    propertyId: 'property',
-    role: 'VIEWER',
+    propertyId: input.propertyId ?? 'property',
+    role: input.role ?? 'VIEWER',
     sourceType: 'SavedResult',
     answerVariantId: 'saved-results-summary',
   });
@@ -272,9 +281,10 @@ async function loadSavedViewState(sourceExecutionId: string | null | undefined, 
   return source?.operationId === 'SAVED_RESULTS' ? loadAskViewState(sourceExecutionId, userId) : null;
 }
 
-registerCapabilityHandler('saved.results', async (envelope) => {
+registerCapabilityHandler('saved.results', async (envelope, deps) => {
   const prior = await loadSavedViewState(envelope.launchContext?.sourceExecutionId, envelope.userId);
   const { state, refinement } = resolveSavedState(envelope.message, prior);
+  let agreementFacetId: string | undefined;
   if (!prior && !refinement && !state.type && !state.freshness && !state.search && !state.archived) {
     const agreement = savedResultsGrammarAgreement(envelope.message, 'LIST');
     if (agreement.outcome !== 'AGREE') {
@@ -294,10 +304,18 @@ registerCapabilityHandler('saved.results', async (envelope) => {
         suggestions: [],
       };
     }
+    agreementFacetId = agreement.facet?.id;
   }
   try {
     const page = await getAskSavedPage(envelope.userId, envelope.propertyId!, { archived: state.archived, artifactType: state.type, freshness: state.freshness, limit: state.limit, search: state.search });
-    return savedResultsFromPage({ page, state, viewState: buildSavedViewState(prior, state) });
+    return savedResultsFromPage({
+      page,
+      state,
+      viewState: buildSavedViewState(prior, state),
+      propertyId: envelope.propertyId!,
+      role: deps?.propertyAccess?.role ?? 'VIEWER',
+      facetId: agreementFacetId,
+    });
   } catch (caught) {
     if (!(caught instanceof AskWorkRestrictedError)) throw caught;
     return {
