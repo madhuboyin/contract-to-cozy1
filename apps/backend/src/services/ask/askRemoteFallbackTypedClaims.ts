@@ -263,7 +263,7 @@ export async function selectAndRenderAskRemoteFallbackClaims(input: {
   const candidates = buildAskRemoteFallbackClaimCandidates(input.facts);
   if (!candidates.length) return [];
   const allowed = new Map(candidates.map((claim) => [signature(claim), claim]));
-  let selected = candidates.slice(0, ASK_LLM_PURPOSE_CONTRACTS.ASK_COZY_REMOTE_FALLBACK_SYNTHESIS.maxOutputClaims);
+  let selected: typeof candidates = [];
   try {
     const parsed = ProviderOutputSchema.parse(await input.provider.select({
       purpose: 'ASK_COZY_REMOTE_FALLBACK_SYNTHESIS',
@@ -274,11 +274,11 @@ export async function selectAndRenderAskRemoteFallbackClaims(input: {
       const canonical = allowed.get(signature(claim));
       return canonical ? [[signature(canonical), canonical] as const] : [];
     })).values()];
-    // A valid empty or fully rejected selection means "no supported claim".
-    // Only transport/schema failure uses the deterministic candidate fallback.
     selected = validated.slice(0, ASK_LLM_PURPOSE_CONTRACTS.ASK_COZY_REMOTE_FALLBACK_SYNTHESIS.maxOutputClaims);
   } catch {
-    // Deterministic candidates remain the safe fallback when selection fails.
+    // Fail closed on provider transport or schema failure (FR-ANS-2 / §17.2 #2):
+    // never emit top-N arbitrary property claims when selector execution fails.
+    selected = [];
   }
   const factsByKey = new Map(input.facts.map((fact) => [fact.key, fact]));
   return selected.map((claim) => renderClaim(claim, factsByKey)).filter((claim): claim is RenderedAskRemoteFallbackClaim => Boolean(claim));

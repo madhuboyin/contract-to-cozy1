@@ -7,7 +7,10 @@ export const ASK_DETERMINISTIC_SEMANTIC_PARSER_VERSION = 'typed-grammar-0.4.0' a
 interface Annotation extends SemanticSourceSpan {
   lexeme: GeneratedSemanticLexeme;
 }
-const STOP_WORDS = new Set(['a', 'all', 'any', 'are', 'of', 'please', 'provide', 'the', 'which']);
+const STOP_WORDS = new Set([
+  'a', 'all', 'an', 'any', 'are', 'did', 'do', 'does', 'for', 'in', 'is', 'me', 'my',
+  'of', 'our', 'please', 'provide', 'that', 'the', 'these', 'this', 'those', 'to', 'what', 'which',
+]);
 const MIN_FUZZY_TOKEN_LENGTH = 5;
 const IRREGULAR_MORPHOLOGY = new Map<string, string>([
   ['did', 'do'],

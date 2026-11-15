@@ -26,7 +26,7 @@
 
 ## 0. Implementation status
 
-**Last updated:** 2026-11-14
+**Last updated:** 2026-11-15
 
 This section is the maintained repository implementation ledger for this FRD. It records code that exists and has received the validation named below; it does not change the requirements, declare a phase complete, or imply cross-domain language coverage beyond the implemented family. Update this section whenever an implementation slice changes status, scope, contract version, validation evidence, or a known boundary.
 
@@ -34,9 +34,11 @@ This section is the maintained repository implementation ledger for this FRD. It
 
 | Area | Status | Current implementation |
 |---|---|---|
+| Phase 0 baseline & invariants (`§18 Phase 0`) | Implemented | `src/services/ask/semantic/phase0/index.ts` and `scripts/ask-semantic-phase0-baseline.js` generate and validate the authoritative cross-domain ontology baseline (`semanticOntologyBaseline.ts`, 14 `§5` domains + safety boundary, 20 catalogued `DataPointEntity` models, 107 approved data points reconciled against 525 Prisma models, 734 enums, and 118 `PROPERTY_FACT_CATALOG` entries), duplicate/legacy scalar field coalescence manifest (`scalarFieldCoalescenceManifest.ts`, 11 groups with `evaluateScalarFieldCoalescence`), recognizer-retirement manifest (`recognizerRetirementManifest.ts`, 11 recognizer sources / 1,542 items under `FR-ONT-8`), relationship meaning-tag manifest, duplicate-definition report and traversable relation-path bounds (`relationGovernanceBaseline.ts`, 11 predicate meaning tags, 12 storage access sites, 10 bounded relation paths, 17 dual-parent schema models audited), and seeded property archetypes + 16 independent semantic families across all 14 domains + 8 containment regression cases labelled `CONTAINMENT_REGRESSION_NOT_COVERAGE_PROOF` (`seededScenarioCatalogue.ts`). |
+| Remote fallback fail-closed containment | Implemented | `askRemoteFallbackTypedClaims.ts` now fails closed with an empty claim selection (`[]`) when the remote claim-selection provider throws or fails schema validation, eliminating the top-6 unrelated property-claim fallback on provider error. |
 | Canonical plan contract | Implemented foundation | `semanticRequestPlan.ts`, schema version `1.3.0`, defines the common deterministic/provider plan envelope, bounded facets, source spans, target kinds, projections, polarity and a recursive typed `WHERE` contract. Facet validation requires registered subject/relation/target/predicate agreement and a two-way match between declared data-query relations and `WHERE` predicates. Plan validation also requires unique stable facet ids, in-plan dependency references and an acyclic dependency graph. |
 | Shared semantic lexicon | Implemented for the first warranty/inventory subset | `sharedSemanticLexicon.ts`, version `phase1-subset-1.0.0`, generates normalized runtime lexemes with canonical-label or reviewed-alias lineage and keeps warranty identities separate from insurance, policy and claim vocabulary. |
-| Deterministic typed grammar | Implemented for the declared warranty/inventory family | `deterministicSemanticParser.ts`, version `typed-grammar-0.4.0`, performs offset-preserving tokenization, registry annotation, bounded typo recovery, morphological normalization, typed slot assembly, unresolved-span reporting and stable facet construction. |
+| Deterministic typed grammar | Implemented for the declared warranty/inventory family | `deterministicSemanticParser.ts`, version `typed-grammar-0.4.0`, performs offset-preserving tokenization, registry annotation, bounded typo recovery, morphological normalization, conversational determiner/possessive handling, typed slot assembly, unresolved-span reporting and stable facet construction. |
 | Typo handling | Implemented for bounded single-token aliases | One-edit matching is limited to registry aliases of at least five characters and requires one unique best semantic identity per role. Exact annotations remain authoritative. |
 | Morphology | Implemented for the initial possession and number subset | Common `do`/`have` tense forms and bounded singular/plural forms share semantic annotations while retaining original spans. This is not yet a general morphological engine. |
 | Property-backed entity resolution contract | Implemented as a pure authorization-bounded seam | `propertyEntityResolver.ts`, version `property-entity-resolver-0.1.0`, returns `RESOLVED`, `MULTIPLE_MATCHES`, `MISSING`, `UNAUTHORISED` or `NOT_APPLICABLE`; hidden matches return no record identity or label. Live property loading and parser attachment remain to be integrated. |
@@ -49,8 +51,9 @@ This section is the maintained repository implementation ledger for this FRD. It
 
 ### 0.2 Current evidence
 
-- Focused semantic and data-point suites: 22 tests passing on 2026-11-14.
-- Backend TypeScript validation: `npm run typecheck` passing on 2026-11-14.
+- Phase 0 baseline CLI and invariant check: `node scripts/ask-semantic-phase0-baseline.js` passing with 0 validator issues on 2026-11-15.
+- Focused semantic, Phase 0 baseline, remote fallback and data-point suites: 30 tests passing in `crossDomainSemanticArchitecturePhase0.test.js`, `crossDomainSemanticArchitecturePhase1.test.js`, and `askRemoteFallbackTypedClaims.test.js` on 2026-11-15.
+- Backend TypeScript validation: `npm run typecheck` passing on 2026-11-15.
 - Repository hygiene: `git diff --check` passing for the current slice.
 - Runtime services and a database were not started; the focused data-point suite exercised its existing environment-independent fallback and emitted expected unavailable-local-database diagnostics.
 - Graphify was refreshed after each completed code slice; known extraction warnings remain for the optional SQL parser dependency and two unrelated frontend syntax-extraction failures.
