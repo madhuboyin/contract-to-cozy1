@@ -723,11 +723,12 @@ test('Semantic receipts use domain-appropriate predicates, quote comparison resp
     ['Winterization Readiness Checklist', 'Confidential Refinance Brief'],
   );
 
-  // 2. Quote comparison attaches kitchen scope and excludes earlier non-kitchen quotes
+  // 2. Quote comparison attaches kitchen scope and keeps two_resolved_quotes UNRESOLVED until unambiguously resolved
   const quotePlan = parseCrossDomainSemanticRequest('compare these two kitchen contractor quotes');
   assert.equal(quotePlan.plan.outcome, 'MATCH');
   assert.equal(quotePlan.plan.facets[0].where?.predicateId, 'predicate.contractor_quote.compared_in_scope');
   assert.equal(quotePlan.plan.facets[0].where?.targetRecordId, 'kitchen');
+  assert.deepEqual(quotePlan.plan.facets[0].requiredSlots, [{ slotId: 'slot.quotes.two_resolved_quotes', state: 'UNRESOLVED' }]);
 
   const mixedQuotesSnapshot = {
     ...base,
@@ -788,6 +789,58 @@ test('Semantic receipts use domain-appropriate predicates, quote comparison resp
   assert.equal(partialQuoteRes.status, 'PARTIAL');
   assert.equal(partialQuoteRes.facetResults[0].status, 'PARTIAL_MISSING_SLOTS');
   assert.deepEqual(partialQuoteRes.facetResults[0].recordIds, ['quote-1']);
+
+  // If > 2 kitchen quotes exist without explicit quote IDs bound, fail closed rather than slicing first 2
+  const ambiguousQuoteRes = await executeCrossDomainWaves({
+    rawText: 'compare these two kitchen contractor quotes',
+    snapshot: {
+      ...base,
+      contractorQuotes: [
+        ...base.contractorQuotes,
+        {
+          id: 'quote-3',
+          propertyId: base.propertyId,
+          roomTag: 'Kitchen',
+          vendorName: 'Northside Kitchens',
+          amountCents: 2990000,
+          timelineDays: 20,
+          warrantyMonths: 24,
+        },
+      ],
+    },
+    role: 'OWNER',
+    propertyAuthorized: true,
+  });
+  assert.equal(ambiguousQuoteRes.status, 'PARTIAL');
+  assert.equal(ambiguousQuoteRes.facetResults[0].status, 'PARTIAL_MISSING_SLOTS');
+  assert.deepEqual(ambiguousQuoteRes.facetResults[0].missingSlots, ['slot.quotes.two_resolved_quotes']);
+  assert.deepEqual(ambiguousQuoteRes.facetResults[0].recordIds, []);
+  assert.equal(ambiguousQuoteRes.facetResults[0].metrics.ambiguousQuoteSelection, true);
+  assert.equal(ambiguousQuoteRes.facetResults[0].metrics.candidateCount, 3);
+
+  // Authoritative persisted RENT analysis must never be overridden by fallback crossover model
+  const persistedRentWins = await executeCrossDomainWaves({
+    rawText: 'how long until owning beats renting?',
+    snapshot: {
+      ...base,
+      financeSlots: {
+        ...base.financeSlots,
+        netHoldCents: 8000000,
+        netRentCents: 12000000,
+        sellHoldRentWinner: 'RENT',
+      },
+    },
+    role: 'OWNER',
+    propertyAuthorized: true,
+  });
+  assert.equal(persistedRentWins.status, 'ANSWERED');
+  const rentWinsFacet = persistedRentWins.facetResults[0];
+  assert.equal(rentWinsFacet.metrics.breaksEvenWithinHorizon, false);
+  assert.equal(rentWinsFacet.metrics.crossoverYear, null);
+  assert.equal(rentWinsFacet.metrics.ownAdvantageAtHorizonCents, -4000000);
+  assert.equal(rentWinsFacet.metrics.sellHoldRentWinner, 'RENT');
+  assert.match(rentWinsFacet.summary, /^Owning does not beat renting/i);
+  assert.doesNotMatch(rentWinsFacet.summary, /starting in year/i);
 
   // 3. Rich list presentation renders real titles for claims & projects instead of raw IDs
   const claimsAndProjects = await executeCrossDomainWaves({

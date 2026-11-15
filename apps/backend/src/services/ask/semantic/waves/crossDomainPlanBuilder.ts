@@ -837,7 +837,7 @@ function compileClauseSpecFromAnnotations(
         : null,
       time: null,
       fields: [{ fieldId: 'field.contractor_quote.amount_cents' }, { fieldId: 'field.contractor_quote.vendor_name' }],
-      requiredSlots: [{ slotId: 'slot.quotes.two_resolved_quotes', state: 'RESOLVED' }],
+      requiredSlots: [{ slotId: 'slot.quotes.two_resolved_quotes', state: 'UNRESOLVED' }],
     };
   }
 

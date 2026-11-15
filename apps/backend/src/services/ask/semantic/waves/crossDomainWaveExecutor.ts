@@ -411,6 +411,8 @@ function computeOwnVsRentBreakEven(slots: WaveFinanceSlots): {
   readonly netOwningCostAtHorizonCents: number;
   readonly ownAdvantageAtHorizonCents: number;
   readonly sellHoldRentWinner: string | null;
+  readonly hasPersistedOutcome: boolean;
+  readonly hasPersistedNet: boolean;
 } {
   const horizonYears = Math.max(1, Math.round(slots.horizonYears ?? 5));
   const annualRentYear1 = slots.monthlyRentCents!;
@@ -424,7 +426,7 @@ function computeOwnVsRentBreakEven(slots: WaveFinanceSlots): {
   let cumAppreciationCents = 0;
   const transactionFrictionCents = Math.round(homeValue * 0.06);
 
-  let crossoverYear: number | null = null;
+  let fallbackCrossoverYear: number | null = null;
   let cumulativeRentAtHorizonCents = 0;
   let netOwningCostAtHorizonCents = 0;
 
@@ -436,8 +438,8 @@ function computeOwnVsRentBreakEven(slots: WaveFinanceSlots): {
     cumAppreciationCents += Math.round(appreciatedValue * 0.035);
     const netOwningCostCents = cumCarryingCents + cumFinancingCents + transactionFrictionCents - cumAppreciationCents;
 
-    if (crossoverYear === null && netOwningCostCents <= cumRentCents) {
-      crossoverYear = year;
+    if (fallbackCrossoverYear === null && netOwningCostCents <= cumRentCents) {
+      fallbackCrossoverYear = year;
     }
     if (year === horizonYears) {
       cumulativeRentAtHorizonCents = cumRentCents;
@@ -450,18 +452,47 @@ function computeOwnVsRentBreakEven(slots: WaveFinanceSlots): {
     && Number.isFinite(slots.netHoldCents)
     && typeof slots.netRentCents === 'number'
     && Number.isFinite(slots.netRentCents);
-  const ownAdvantageAtHorizonCents = hasPersistedNet
+  const persistedAdvantageCents = hasPersistedNet
     ? Math.round(slots.netHoldCents! - slots.netRentCents!)
-    : cumulativeRentAtHorizonCents - netOwningCostAtHorizonCents;
+    : null;
+  const winnerUpper = slots.sellHoldRentWinner ? slots.sellHoldRentWinner.toUpperCase() : null;
+  const hasPersistedOutcome = hasPersistedNet || winnerUpper !== null;
+
+  if (hasPersistedOutcome) {
+    const persistedOwningBeatsRent =
+      winnerUpper === 'HOLD' || winnerUpper === 'OWN'
+        ? (persistedAdvantageCents !== null ? persistedAdvantageCents >= 0 : true)
+        : winnerUpper !== null
+          ? false
+          : persistedAdvantageCents! >= 0;
+
+    return {
+      horizonYears,
+      crossoverYear: persistedOwningBeatsRent
+        ? (fallbackCrossoverYear !== null && fallbackCrossoverYear <= horizonYears ? fallbackCrossoverYear : horizonYears)
+        : null,
+      breaksEvenWithinHorizon: persistedOwningBeatsRent,
+      cumulativeRentAtHorizonCents,
+      netOwningCostAtHorizonCents,
+      ownAdvantageAtHorizonCents: persistedAdvantageCents ?? (cumulativeRentAtHorizonCents - netOwningCostAtHorizonCents),
+      sellHoldRentWinner: slots.sellHoldRentWinner ?? null,
+      hasPersistedOutcome: true,
+      hasPersistedNet,
+    };
+  }
+
+  const ownAdvantageAtHorizonCents = cumulativeRentAtHorizonCents - netOwningCostAtHorizonCents;
 
   return {
     horizonYears,
-    crossoverYear,
-    breaksEvenWithinHorizon: ownAdvantageAtHorizonCents >= 0 || (crossoverYear !== null && crossoverYear <= horizonYears),
+    crossoverYear: fallbackCrossoverYear,
+    breaksEvenWithinHorizon: ownAdvantageAtHorizonCents >= 0 || (fallbackCrossoverYear !== null && fallbackCrossoverYear <= horizonYears),
     cumulativeRentAtHorizonCents,
     netOwningCostAtHorizonCents,
     ownAdvantageAtHorizonCents,
-    sellHoldRentWinner: slots.sellHoldRentWinner ?? null,
+    sellHoldRentWinner: null,
+    hasPersistedOutcome: false,
+    hasPersistedNet: false,
   };
 }
 
@@ -1063,13 +1094,17 @@ function executeNewStackFacet(
 
       const ownRentResult = missingSlots.length === 0 && slots ? computeOwnVsRentBreakEven(slots) : null;
       const status = missingSlots.length > 0 ? 'PARTIAL_MISSING_SLOTS' : 'EXECUTED';
+      const formatSignedDollars = (cents: number): string =>
+        cents < 0 ? `-$${(Math.abs(cents) / 100).toFixed(2)}` : `$${(cents / 100).toFixed(2)}`;
       const summary = ownRentResult === null
         ? `Cannot compute own-vs-rent break-even without missing required financial inputs: ${missingSlots.join(', ')}.`
-        : ownRentResult.crossoverYear === null
-          ? `Owning does not beat renting within the 30-year analysis window at $${(slots!.monthlyRentCents! / 100).toFixed(2)}/mo rent and $${(slots!.homeValueCents! / 100).toFixed(2)} home value (estimated ${ownRentResult.horizonYears}-year net advantage -$${(Math.abs(ownRentResult.ownAdvantageAtHorizonCents) / 100).toFixed(2)}).`
-          : ownRentResult.breaksEvenWithinHorizon
-            ? `Owning beats renting starting in year ${ownRentResult.crossoverYear} (within your ${ownRentResult.horizonYears}-year horizon; estimated net owning advantage $${(ownRentResult.ownAdvantageAtHorizonCents / 100).toFixed(2)} vs $${(ownRentResult.cumulativeRentAtHorizonCents / 100).toFixed(2)} cumulative rent).`
-            : `Owning beats renting in year ${ownRentResult.crossoverYear}, which is beyond your ${ownRentResult.horizonYears}-year horizon.`;
+        : ownRentResult.hasPersistedOutcome && !ownRentResult.breaksEvenWithinHorizon
+          ? `Owning does not beat renting within your ${ownRentResult.horizonYears}-year horizon per persisted analysis${ownRentResult.sellHoldRentWinner ? ` (winner: ${ownRentResult.sellHoldRentWinner}` : ''}${ownRentResult.hasPersistedNet ? `${ownRentResult.sellHoldRentWinner ? '; ' : ' ('}net owning advantage ${formatSignedDollars(ownRentResult.ownAdvantageAtHorizonCents)})` : ownRentResult.sellHoldRentWinner ? ')' : ''}.`
+          : ownRentResult.crossoverYear === null
+            ? `Owning does not beat renting within the 30-year analysis window at $${(slots!.monthlyRentCents! / 100).toFixed(2)}/mo rent and $${(slots!.homeValueCents! / 100).toFixed(2)} home value (estimated ${ownRentResult.horizonYears}-year net advantage ${formatSignedDollars(ownRentResult.ownAdvantageAtHorizonCents)}).`
+            : ownRentResult.breaksEvenWithinHorizon
+              ? `Owning beats renting starting in year ${ownRentResult.crossoverYear} (within your ${ownRentResult.horizonYears}-year horizon; estimated net owning advantage ${formatSignedDollars(ownRentResult.ownAdvantageAtHorizonCents)} vs $${(ownRentResult.cumulativeRentAtHorizonCents / 100).toFixed(2)} cumulative rent).`
+              : `Owning beats renting in year ${ownRentResult.crossoverYear}, which is beyond your ${ownRentResult.horizonYears}-year horizon.`;
 
       const rows = status === 'EXECUTED'
         ? [{
@@ -1435,15 +1470,23 @@ function executeNewStackFacet(
     const matchingQuotes = requestedScope
       ? propertyQuotes.filter((q) => quoteMatchesRequestedScope(q, requestedScope))
       : propertyQuotes;
-    const chosen = matchingQuotes.slice(0, 2);
-    const hasEnoughQuotes = chosen.length >= 2;
+    const exactPairResolved = matchingQuotes.length === 2;
+    const isAmbiguousMultiQuote = matchingQuotes.length > 2;
+    const chosen = exactPairResolved ? matchingQuotes : isAmbiguousMultiQuote ? [] : matchingQuotes;
     const rows = chosen.map((q) => ({ id: q.id, label: q.vendorName, subtitle: `$${(q.amountCents / 100).toFixed(2)} · ${q.timelineDays} days` }));
-    const summary = hasEnoughQuotes
+    const summary = exactPairResolved
       ? `Compared ${chosen[0].vendorName} ($${(chosen[0].amountCents / 100).toFixed(2)}) vs ${chosen[1].vendorName} ($${(chosen[1].amountCents / 100).toFixed(2)}).`
-      : requestedScope
-        ? `Need at least two ${requestedScope} contractor quotes to compare (found ${chosen.length}).`
-        : `Need two contractor quotes to compare (found ${chosen.length}).`;
-    const delta = hasEnoughQuotes ? chosen[0].amountCents - chosen[1].amountCents : null;
+      : isAmbiguousMultiQuote
+        ? `Found ${matchingQuotes.length}${requestedScope ? ` ${requestedScope}` : ''} contractor quotes (${matchingQuotes.map((q) => `${q.vendorName} ($${(q.amountCents / 100).toFixed(2)})`).join(', ')}); please specify which two quotes to compare.`
+        : requestedScope
+          ? `Need at least two ${requestedScope} contractor quotes to compare (found ${matchingQuotes.length}).`
+          : `Need two contractor quotes to compare (found ${matchingQuotes.length}).`;
+    const delta = exactPairResolved ? chosen[0].amountCents - chosen[1].amountCents : null;
+    const unknownCount = exactPairResolved
+      ? 0
+      : isAmbiguousMultiQuote
+        ? matchingQuotes.length
+        : Math.max(1, 2 - matchingQuotes.length);
     const finalized = finalizeReceiptAndPresentation({
       facet,
       snapshot,
@@ -1456,22 +1499,24 @@ function executeNewStackFacet(
       title: 'Contractor quote comparison',
       summaryBody: summary,
       variantId: 'variant.quote_comparison',
-      unknownCount: hasEnoughQuotes ? 0 : Math.max(1, 2 - chosen.length),
+      unknownCount,
     });
     return {
       facetId: facet.id,
       owner,
-      status: hasEnoughQuotes ? 'EXECUTED' : 'PARTIAL_MISSING_SLOTS',
+      status: exactPairResolved ? 'EXECUTED' : 'PARTIAL_MISSING_SLOTS',
       summary,
       recordIds: rows.map((r) => r.id),
       rows: finalized.rows,
-      missingSlots: hasEnoughQuotes ? [] : ['two_contractor_quotes'],
+      missingSlots: exactPairResolved ? [] : ['slot.quotes.two_resolved_quotes'],
       redactedFieldIds,
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
       metrics: {
         deltaCents: delta,
+        candidateCount: matchingQuotes.length,
+        ...(isAmbiguousMultiQuote ? { ambiguousQuoteSelection: true } : {}),
         ...(requestedScope ? { requestedScope } : {}),
       },
     };
@@ -2010,6 +2055,7 @@ export async function loadCrossDomainPropertySnapshot(
     needQuotes && typeof prismaAny.quoteComparisonQuote?.findMany === 'function'
       ? prisma.quoteComparisonQuote.findMany({
           where: { workspace: { propertyId } },
+          orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
           select: {
             id: true,
             vendorName: true,
