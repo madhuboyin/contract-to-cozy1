@@ -38,6 +38,8 @@ test('Waves 1-5 cover all 14 Section 5 homeowner domains and safety boundary wit
   assert.equal(report.manifestIntegrity.valid, true, `Manifest issues: ${report.manifestIntegrity.issues.join('; ')}`);
   assert.equal(report.manifestIntegrity.verifiedWithProfiles, true);
   assert.equal(report.coverageProfiles.length, 15);
+  assert.equal(report.evaluationDetailsByDomain.length, 15);
+  const detailsByDomain = new Map(report.evaluationDetailsByDomain.map((d) => [d.domainId, d]));
   for (const profile of report.coverageProfiles) {
     assert.equal(profile.parserVersion, ASK_CROSS_DOMAIN_PARSER_VERSION);
     assert.equal(profile.lexiconVersion, ASK_CROSS_DOMAIN_LEXICON_VERSION);
@@ -51,7 +53,15 @@ test('Waves 1-5 cover all 14 Section 5 homeowner domains and safety boundary wit
       && profile.confidenceInterval95.upper <= 1
       && profile.confidenceInterval95.lower <= profile.confidenceInterval95.upper,
     );
+    const detail = detailsByDomain.get(profile.domainId);
+    assert.ok(detail, `Missing evaluation details for ${profile.domainId}`);
+    assert.equal(profile.replayQueryCount, detail.replayExecutedCount);
     assert.ok(profile.replayQueryCount >= 1);
+    assert.ok(detail.unsupportedCount >= 1, `Expected measured unsupported probes for ${profile.domainId}`);
+    assert.ok(profile.unsupportedRate > 0, `Expected non-zero unsupportedRate for ${profile.domainId}`);
+    assert.equal(detail.falseDeclineCount, 0);
+    assert.equal(profile.falseDeclineRate, 0);
+    assert.equal(profile.incorrectHighConfidenceCount, 0);
   }
   assert.ok(OFFLINE_LEXICON_ENRICHMENT_PROPOSALS.some((p) => p.status === 'REJECTED_COLLISION'));
   assert.ok(OFFLINE_LEXICON_ENRICHMENT_PROPOSALS.some((p) => p.status === 'APPROVED'));
@@ -115,6 +125,7 @@ test('production dataPointReadResult routes Wave 1-5 MATCH queries through execu
     ]],
     ['quoteComparisonQuote', () => []],
     ['homeRiskReplayEventMatch', () => []],
+    ['askSavedArtifactPreference', () => []],
     ['claim', () => [
       {
         id: 'claim-live-1',
@@ -128,13 +139,22 @@ test('production dataPointReadResult routes Wave 1-5 MATCH queries through execu
   ];
 
   const findUniqueStubs = [
-    ['property', () => ({ id: 'prop-live-1', state: 'TX', timezone: 'UTC' })],
+    ['property', () => ({ id: 'prop-live-1', state: 'TX', timezone: 'UTC', lastAppraisedValue: null })],
     ['homeBuyerChecklist', () => null],
     ['propertySaleCase', () => null],
+    ['user', () => ({ role: 'HOMEOWNER' })],
+    ['propertyOnboarding', () => null],
+  ];
+
+  const findFirstStubs = [
+    ['sellHoldRentAnalysis', () => null],
+    ['refinanceScenarioSnapshot', () => null],
+    ['refinanceOpportunity', () => null],
   ];
 
   const origFindMany = new Map();
   const origFindUnique = new Map();
+  const origFindFirst = new Map();
 
   propertyAccess.resolvePropertyAccess = async () => ({ allowed: true, role: 'OWNER', propertyId: 'prop-live-1', userId: 'user-1' });
   for (const [model, fn] of findManyStubs) {
@@ -147,6 +167,12 @@ test('production dataPointReadResult routes Wave 1-5 MATCH queries through execu
     if (prisma[model]) {
       origFindUnique.set(model, prisma[model].findUnique);
       prisma[model].findUnique = async () => fn();
+    }
+  }
+  for (const [model, fn] of findFirstStubs) {
+    if (prisma[model]) {
+      origFindFirst.set(model, prisma[model].findFirst);
+      prisma[model].findFirst = async () => fn();
     }
   }
 
@@ -169,6 +195,9 @@ test('production dataPointReadResult routes Wave 1-5 MATCH queries through execu
     }
     for (const [model, orig] of origFindUnique.entries()) {
       prisma[model].findUnique = orig;
+    }
+    for (const [model, orig] of origFindFirst.entries()) {
+      prisma[model].findFirst = orig;
     }
   }
 });
@@ -290,4 +319,273 @@ test('fail-closed unresolved tokens, role redaction, unauthorized property acces
     snapshot,
   });
   assert.equal(badFollowUp.outcome, 'CLARIFY_UNRESOLVED');
+});
+
+test('production dataPointReadResult loads live manual/receipt links, canonical finance/saved data, and property timezone', async () => {
+  const propertyAccess = require('../../src/services/propertyAccess.service.ts');
+  const { prisma } = require('../../src/lib/prisma.ts');
+  const origResolve = propertyAccess.resolvePropertyAccess;
+
+  const currentLocalYear = Number(
+    new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric' }).format(new Date()),
+  );
+  // 202x-01-01T02:00:00.000Z is UTC year 202x, but Dec 31 (year 202x - 1) 21:00 EST in America/New_York
+  const lastYearNyBoundaryEventDate = new Date(`${currentLocalYear}-01-01T02:00:00.000Z`);
+  let observedDocQueryWhere = null;
+
+  const findManyStubs = [
+    ['inventoryRoom', () => [{ id: 'room-k', propertyId: 'prop-ny-1', name: 'Kitchen' }]],
+    ['inventoryItem', () => [
+      {
+        id: 'item-covered',
+        propertyId: 'prop-ny-1',
+        roomId: 'room-k',
+        name: 'Dishwasher',
+        category: 'APPLIANCE',
+        replacementCostCents: 90000,
+        installedOn: null,
+        purchasedOn: null,
+        lastServicedOn: null,
+        technicalSpecs: null,
+      },
+      {
+        id: 'item-missing',
+        propertyId: 'prop-ny-1',
+        roomId: 'room-k',
+        name: 'Microwave',
+        category: 'APPLIANCE',
+        replacementCostCents: 45000,
+        installedOn: null,
+        purchasedOn: null,
+        lastServicedOn: null,
+        technicalSpecs: null,
+      },
+    ]],
+    ['warranty', () => []],
+    ['propertyMaintenanceTask', () => []],
+    ['document', (args) => {
+      observedDocQueryWhere = args?.where ?? null;
+      return [
+        {
+          id: 'doc-manual-1',
+          propertyId: 'prop-ny-1',
+          inventoryItemId: 'item-covered',
+          name: 'Bosch Dishwasher Owner Manual',
+          description: 'Installation & operating manual',
+          type: 'OTHER',
+          metadata: null,
+          deletedAt: null,
+        },
+        {
+          id: 'doc-receipt-1',
+          propertyId: 'prop-ny-1',
+          inventoryItemId: 'item-covered',
+          name: 'Appliance Receipt',
+          description: 'Purchase invoice',
+          type: 'INVOICE',
+          metadata: null,
+          deletedAt: null,
+        },
+        {
+          id: 'doc-deleted-manual',
+          propertyId: 'prop-ny-1',
+          inventoryItemId: 'item-missing',
+          name: 'Microwave Manual',
+          description: null,
+          type: 'OTHER',
+          metadata: null,
+          deletedAt: new Date('2026-01-05T00:00:00.000Z'),
+        },
+      ];
+    }],
+    ['insurancePolicy', () => []],
+    ['homeEvent', () => [
+      {
+        id: 'evt-ny-boundary',
+        propertyId: 'prop-ny-1',
+        type: 'REPAIR',
+        title: 'Holiday Pipe Repair',
+        occurredAt: lastYearNyBoundaryEventDate,
+        amount: 450,
+      },
+    ]],
+    ['propertyTaxBillRecord', () => []],
+    ['recallMatch', () => []],
+    ['inspectionFinding', () => []],
+    ['projectRecord', () => []],
+    ['quoteComparisonQuote', () => []],
+    ['homeRiskReplayEventMatch', () => []],
+    ['claim', () => []],
+    ['askSavedArtifactPreference', () => []],
+    ['askConfirmationReceipt', () => []],
+    ['quoteComparisonWorkspace', () => []],
+    ['recommendationSnapshot', () => []],
+    ['propertyBrief', () => []],
+    ['seasonalChecklist', () => []],
+    ['sellHoldRentAnalysis', () => []],
+    ['coverageComparison', () => []],
+    ['financingScenario', () => []],
+    ['replaceRepairAnalysis', () => []],
+    ['homeCapitalTimelineAnalysis', () => []],
+    ['homeScoreReport', () => []],
+    ['homeReportExport', (args) => {
+      if (args?.where?.regeneratedFromId) return [];
+      return [
+        {
+          id: 'rep-live-1',
+          type: 'HOME_REPORT_PACK',
+          status: 'READY',
+          requestedAt: new Date('2026-10-01T12:00:00.000Z'),
+          completedAt: new Date('2026-10-01T12:05:00.000Z'),
+          expiresAt: new Date('2027-10-01T12:05:00.000Z'),
+          regeneratedFromId: null,
+          shareToken: null,
+          shareRevokedAt: null,
+        },
+      ];
+    }],
+    ['refinanceScenarioSnapshot', () => [
+      {
+        id: 'refi-saved-1',
+        targetRate: 5.5,
+        targetTerm: 'THIRTY_YEAR',
+        monthlySavings: 240,
+        createdAt: new Date('2026-10-10T12:00:00.000Z'),
+        updatedAt: new Date('2026-10-10T12:00:00.000Z'),
+      },
+    ]],
+  ];
+
+  const findUniqueStubs = [
+    ['property', () => ({
+      id: 'prop-ny-1',
+      state: 'NY',
+      timezone: 'America/New_York',
+      lastAppraisedValue: 480000,
+    })],
+    ['homeBuyerChecklist', () => null],
+    ['propertySaleCase', () => null],
+    ['user', () => ({ role: 'HOMEOWNER' })],
+    ['propertyOnboarding', () => ({
+      propertyId: 'prop-ny-1',
+      ownershipState: 'ESTABLISHED_OWNER',
+      entryPath: null,
+      propertyOrigin: null,
+      entryContextVersion: 'v1',
+      entryContextCapturedAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    })],
+  ];
+
+  const findFirstStubs = [
+    ['sellHoldRentAnalysis', () => ({
+      id: 'shr-live-1',
+      years: 5,
+      homeValueNowCents: 48000000,
+      netRentCents: 12000000,
+      drivers: { annualOwnershipCostCents: 2400000, annualRentalNetCents: 2640000 },
+    })],
+    ['refinanceScenarioSnapshot', () => ({
+      id: 'refi-snap-1',
+      targetRate: 5.5,
+      closingCost: 6000,
+      metadataJson: {
+        currentRatePct: 6.75,
+        loanBalanceCents: 38000000,
+      },
+    })],
+    ['refinanceOpportunity', () => null],
+  ];
+
+  const origFindMany = new Map();
+  const origFindUnique = new Map();
+  const origFindFirst = new Map();
+  const origCount = new Map();
+
+  propertyAccess.resolvePropertyAccess = async () => ({ allowed: true, role: 'OWNER', propertyId: 'prop-ny-1', userId: 'user-1' });
+  for (const [model, fn] of findManyStubs) {
+    if (prisma[model]) {
+      origFindMany.set(model, prisma[model].findMany);
+      prisma[model].findMany = async (args) => fn(args);
+    }
+  }
+  for (const [model, fn] of findUniqueStubs) {
+    if (prisma[model]) {
+      origFindUnique.set(model, prisma[model].findUnique);
+      prisma[model].findUnique = async (args) => fn(args);
+    }
+  }
+  for (const [model, fn] of findFirstStubs) {
+    if (prisma[model]) {
+      origFindFirst.set(model, prisma[model].findFirst);
+      prisma[model].findFirst = async (args) => fn(args);
+    }
+  }
+  for (const model of [
+    'homeReportExport',
+    'refinanceScenarioSnapshot',
+    'quoteComparisonWorkspace',
+    'recommendationSnapshot',
+    'propertyBrief',
+    'seasonalChecklist',
+    'sellHoldRentAnalysis',
+    'coverageComparison',
+    'financingScenario',
+    'replaceRepairAnalysis',
+    'homeCapitalTimelineAnalysis',
+    'homeScoreReport',
+  ]) {
+    if (prisma[model]?.count) {
+      origCount.set(model, prisma[model].count);
+      prisma[model].count = async () => (model === 'homeReportExport' || model === 'refinanceScenarioSnapshot' ? 1 : 0);
+    }
+  }
+
+  try {
+    // 1. Live manual/receipt linking & deletedAt filtering
+    const docsResult = await dataPointReadResult('user-1', 'prop-ny-1', 'which appliances have neither a manual nor a receipt?');
+    assert.equal(docsResult.status, 'ANSWERED');
+    assert.equal(observedDocQueryWhere?.deletedAt, null);
+    assert.deepEqual(docsResult.parameters.crossDomainExecution.facetResults[0].recordIds, ['item-missing']);
+
+    // 2. Live canonical finance (own vs rent & refinance break-even)
+    const ownVsRent = await dataPointReadResult('user-1', 'prop-ny-1', 'how long until owning beats renting?');
+    assert.equal(ownVsRent.status, 'ANSWERED');
+    assert.equal(ownVsRent.parameters.crossDomainExecution.facetResults[0].metrics.monthlyRentCents, 200000);
+    assert.equal(ownVsRent.parameters.crossDomainExecution.facetResults[0].metrics.homeValueCents, 48000000);
+    assert.equal(ownVsRent.parameters.crossDomainExecution.facetResults[0].metrics.horizonYears, 5);
+
+    const refi = await dataPointReadResult('user-1', 'prop-ny-1', 'would refinancing break even within three years?');
+    assert.equal(refi.status, 'ANSWERED');
+    assert.equal(refi.parameters.crossDomainExecution.facetResults[0].metrics.closingCostsCents, 600000);
+    assert.equal(refi.parameters.crossDomainExecution.facetResults[0].metrics.currentRateBps, 675);
+    assert.equal(refi.parameters.crossDomainExecution.facetResults[0].metrics.candidateRateBps, 550);
+
+    // 3. Live canonical Saved via getAskSavedPage
+    const saved = await dataPointReadResult('user-1', 'prop-ny-1', 'show my saved items');
+    assert.equal(saved.status, 'ANSWERED');
+    const savedIds = saved.parameters.crossDomainExecution.facetResults[0].recordIds;
+    assert.ok(savedIds.includes('report:rep-live-1'), `Expected report:rep-live-1 in ${JSON.stringify(savedIds)}`);
+    assert.ok(savedIds.includes('refinance:refi-saved-1'), `Expected refinance:refi-saved-1 in ${JSON.stringify(savedIds)}`);
+
+    // 4. Property timezone preserved in calendar repair spend ("last year" boundary in America/New_York)
+    const spend = await dataPointReadResult('user-1', 'prop-ny-1', 'how much did I spend on repairs last year?');
+    assert.equal(spend.status, 'ANSWERED');
+    assert.equal(spend.parameters.crossDomainExecution.facetResults[0].metrics.totalRepairSpendCents, 45000);
+    assert.deepEqual(spend.parameters.crossDomainExecution.facetResults[0].recordIds, ['evt-ny-boundary']);
+  } finally {
+    propertyAccess.resolvePropertyAccess = origResolve;
+    for (const [model, orig] of origFindMany.entries()) {
+      prisma[model].findMany = orig;
+    }
+    for (const [model, orig] of origFindUnique.entries()) {
+      prisma[model].findUnique = orig;
+    }
+    for (const [model, orig] of origFindFirst.entries()) {
+      prisma[model].findFirst = orig;
+    }
+    for (const [model, orig] of origCount.entries()) {
+      prisma[model].count = orig;
+    }
+  }
 });

@@ -16,6 +16,8 @@ import {
 import { prisma } from '../../../../lib/prisma';
 import { type AskPresentationBlock } from '../../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../../askOperationRegistry';
+import { getAskSavedPage } from '../../askSaved.service';
+import { safeTimezone } from '../../support/propertyContext';
 import {
   executePhase2aVerticalSlice,
   loadPhase2aPropertySnapshot,
@@ -254,20 +256,56 @@ function canSeeRole(role: AskUserRole, minimumRole: AskUserRole): boolean {
   return ROLE_RANK[role] >= ROLE_RANK[minimumRole];
 }
 
-function monthRangeIso(referenceDate: string, offsetMonths: number): { startIso: string; endIso: string } {
-  const ref = new Date(`${referenceDate.slice(0, 10)}T00:00:00.000Z`);
-  const year = ref.getUTCFullYear();
-  const month = ref.getUTCMonth() + offsetMonths;
-  const start = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
-  const end = new Date(Date.UTC(year, month + 1, 1, 0, 0, 0, 0));
-  return { startIso: start.toISOString(), endIso: end.toISOString() };
+function datePartsInTimeZone(dateInput: Date | string, timeZone: string): { year: number; month: number; day: number } {
+  const raw = typeof dateInput === 'string' ? dateInput.trim() : dateInput.toISOString();
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (dateOnly) {
+    return {
+      year: Number(dateOnly[1]),
+      month: Number(dateOnly[2]),
+      day: Number(dateOnly[3]),
+    };
+  }
+  const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+  if (Number.isNaN(date.getTime())) {
+    return { year: 1970, month: 1, day: 1 };
+  }
+  const tz = safeTimezone(timeZone);
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  return {
+    year: Number(parts.find((p) => p.type === 'year')?.value ?? date.getUTCFullYear()),
+    month: Number(parts.find((p) => p.type === 'month')?.value ?? (date.getUTCMonth() + 1)),
+    day: Number(parts.find((p) => p.type === 'day')?.value ?? date.getUTCDate()),
+  };
 }
 
-function weekWindowIso(referenceDate: string): { startIso: string; endIso: string } {
-  const ref = new Date(`${referenceDate.slice(0, 10)}T00:00:00.000Z`);
-  const start = new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), ref.getUTCDate() - 1));
-  const end = new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), ref.getUTCDate() + 7));
-  return { startIso: start.toISOString(), endIso: end.toISOString() };
+function localYmdInTimeZone(dateInput: Date | string, timeZone: string): string {
+  const { year, month, day } = datePartsInTimeZone(dateInput, timeZone);
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function targetYearMonthInTimeZone(referenceDate: string, offsetMonths: number, timeZone: string): { year: number; month: number } {
+  const base = datePartsInTimeZone(referenceDate, timeZone);
+  const shifted = new Date(Date.UTC(base.year, base.month - 1 + offsetMonths, 15));
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+  };
+}
+
+function weekWindowYmd(referenceDate: string, timeZone: string): { startYmd: string; endYmd: string } {
+  const base = datePartsInTimeZone(referenceDate, timeZone);
+  const start = new Date(Date.UTC(base.year, base.month - 1, base.day - 1));
+  const end = new Date(Date.UTC(base.year, base.month - 1, base.day + 7));
+  return {
+    startYmd: start.toISOString().slice(0, 10),
+    endYmd: end.toISOString().slice(0, 10),
+  };
 }
 
 function finalizeReceiptAndPresentation(input: {
@@ -377,7 +415,7 @@ function executeNewStackFacet(
   if (job === 'query.maintenance_task.filter') {
     const categories = firstPredicateTargetCategorySet(facet.where);
     const metaByTaskId = new Map(snapshot.maintenanceTaskMeta.map((m) => [m.taskId, m.category]));
-    const refTime = new Date(`${snapshot.asOfDate.slice(0, 10)}T00:00:00.000Z`).getTime();
+    const refLocalYmd = localYmdInTimeZone(snapshot.asOfDate, snapshot.timezone);
     const matches = snapshot.maintenanceTasks.filter((task) => {
       if (task.propertyId !== snapshot.propertyId) return false;
       if (categories && categories.length > 0) {
@@ -385,10 +423,12 @@ function executeNewStackFacet(
         return categories.includes(taskCat) && (task.status === 'PENDING' || task.status === 'IN_PROGRESS');
       }
       if (facet.time?.kind === 'CALENDAR_PERIOD' && facet.time.unit === 'MONTH') {
-        const range = monthRangeIso(snapshot.asOfDate, facet.time.offset);
-        return task.status === 'PENDING' && task.nextDueDate >= range.startIso && task.nextDueDate < range.endIso;
+        if (task.status !== 'PENDING' || !task.nextDueDate) return false;
+        const targetYm = targetYearMonthInTimeZone(snapshot.asOfDate, facet.time.offset, snapshot.timezone);
+        const dueParts = datePartsInTimeZone(task.nextDueDate, snapshot.timezone);
+        return dueParts.year === targetYm.year && dueParts.month === targetYm.month;
       }
-      return task.status === 'PAST_DUE' || (task.status === 'PENDING' && new Date(task.nextDueDate).getTime() < refTime);
+      return task.status === 'PAST_DUE' || (task.status === 'PENDING' && Boolean(task.nextDueDate) && localYmdInTimeZone(task.nextDueDate, snapshot.timezone) < refLocalYmd);
     });
     const rows = matches.map((m) => ({ id: m.id, label: m.title, subtitle: `Due ${m.nextDueDate}` }));
     const summary = matches.length === 0 ? 'No matching maintenance tasks found.' : `${matches.length} maintenance task(s): ${matches.map((m) => m.title).join(', ')}.`;
@@ -521,8 +561,10 @@ function executeNewStackFacet(
   }
 
   if (job === 'query.warranty.filter') {
-    const refMs = new Date(`${snapshot.asOfDate.slice(0, 10)}T00:00:00.000Z`).getTime();
-    const expired = snapshot.warranties.filter((w) => w.propertyId === snapshot.propertyId && new Date(w.expiryDate).getTime() < refMs);
+    const refLocalYmd = localYmdInTimeZone(snapshot.asOfDate, snapshot.timezone);
+    const expired = snapshot.warranties.filter(
+      (w) => w.propertyId === snapshot.propertyId && Boolean(w.expiryDate) && localYmdInTimeZone(w.expiryDate, snapshot.timezone) < refLocalYmd,
+    );
     const rows = expired.map((w) => ({ id: w.id, label: w.providerName, subtitle: `Expired ${w.expiryDate}` }));
     const summary = `${expired.length} expired warranty record(s): ${expired.map((w) => w.providerName).join(', ')}.`;
     const finalized = finalizeReceiptAndPresentation({
@@ -712,12 +754,13 @@ function executeNewStackFacet(
   }
 
   if (job === 'query.home_event.repair_spend_aggregate') {
-    const refYear = new Date(`${snapshot.asOfDate.slice(0, 10)}T00:00:00.000Z`).getUTCFullYear();
+    const refYear = datePartsInTimeZone(snapshot.asOfDate, snapshot.timezone).year;
     const targetYear = refYear - 1;
     const events = snapshot.homeEvents.filter((evt) =>
       evt.propertyId === snapshot.propertyId
       && evt.eventCategory === 'REPAIR'
-      && new Date(evt.occurredAt).getUTCFullYear() === targetYear
+      && Boolean(evt.occurredAt)
+      && datePartsInTimeZone(evt.occurredAt, snapshot.timezone).year === targetYear
       && typeof evt.actualCostCents === 'number',
     );
     const totalCents = events.reduce((acc, e) => acc + (e.actualCostCents ?? 0), 0);
@@ -756,7 +799,7 @@ function executeNewStackFacet(
   }
 
   if (job === 'query.property_tax_bill.compare_years') {
-    const refYear = new Date(`${snapshot.asOfDate.slice(0, 10)}T00:00:00.000Z`).getUTCFullYear();
+    const refYear = datePartsInTimeZone(snapshot.asOfDate, snapshot.timezone).year;
     const activeBills = snapshot.taxBills.filter((b) => b.propertyId === snapshot.propertyId && b.lifecycleStatus === 'ACTIVE');
     const thisYearBill = activeBills.find((b) => b.taxYear === refYear) ?? null;
     const lastYearBill = activeBills.find((b) => b.taxYear === refYear - 1) ?? null;
@@ -868,6 +911,19 @@ function executeNewStackFacet(
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
+      metrics: missingSlots.length === 0
+        ? job === 'job.finance.own_rent_break_even'
+          ? {
+              monthlyRentCents: slots!.monthlyRentCents,
+              homeValueCents: slots!.homeValueCents,
+              horizonYears: slots!.horizonYears,
+            }
+          : {
+              currentRateBps: slots!.currentRateBps,
+              candidateRateBps: slots!.candidateRateBps,
+              closingCostsCents: slots!.closingCostsCents,
+            }
+        : undefined,
     };
   }
 
@@ -904,8 +960,13 @@ function executeNewStackFacet(
   }
 
   if (job === 'job.risk.environment_weekly') {
-    const win = weekWindowIso(snapshot.asOfDate);
-    const risks = snapshot.environmentalRisks.filter((r) => r.propertyId === snapshot.propertyId && r.windowEndIso >= win.startIso && r.windowStartIso <= win.endIso);
+    const win = weekWindowYmd(snapshot.asOfDate, snapshot.timezone);
+    const risks = snapshot.environmentalRisks.filter((r) => {
+      if (r.propertyId !== snapshot.propertyId) return false;
+      const startYmd = r.windowStartIso ? localYmdInTimeZone(r.windowStartIso, snapshot.timezone) : win.startYmd;
+      const endYmd = r.windowEndIso ? localYmdInTimeZone(r.windowEndIso, snapshot.timezone) : win.endYmd;
+      return endYmd >= win.startYmd && startYmd <= win.endYmd;
+    });
     const rows = risks.map((r) => ({ id: r.id, label: r.hazardType, subtitle: r.severity }));
     const freshness = risks[0]?.lastUpdatedIso ?? `${snapshot.asOfDate.slice(0, 10)}T00:00:00.000Z`;
     const sourceAvailable = risks.length > 0 ? risks.every((r) => r.sourceAvailable) : true;
@@ -1388,15 +1449,27 @@ function mapPermitStatus(applicability: string): WaveProjectRecord['permitStatus
   return 'UNKNOWN';
 }
 
+function extractFinanceNumber(obj: unknown, keys: readonly string[]): number | null {
+  if (!obj || typeof obj !== 'object') return null;
+  const record = obj as Record<string, unknown>;
+  for (const key of keys) {
+    const raw = record[key];
+    if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+    if (typeof raw === 'string' && raw.trim() && Number.isFinite(Number(raw))) return Number(raw);
+  }
+  return null;
+}
+
 /**
  * Loads a unified cross-domain snapshot for a property from Prisma models + Phase 2A inventory/maintenance snapshot.
  */
 export async function loadCrossDomainPropertySnapshot(
   propertyId: string,
-  _userId?: string,
+  userId?: string,
+  timeZoneOverride?: string,
 ): Promise<CrossDomainPropertySnapshot> {
   const phase2aSnapshot = await loadPhase2aPropertySnapshot(propertyId);
-  const prismaAny = prisma as unknown as Record<string, { findUnique?: Function; findMany?: Function } | undefined>;
+  const prismaAny = prisma as unknown as Record<string, { findUnique?: Function; findFirst?: Function; findMany?: Function } | undefined>;
 
   const [
     propertyRow,
@@ -1413,11 +1486,14 @@ export async function loadCrossDomainPropertySnapshot(
     projectRows,
     quoteRows,
     riskMatchRows,
+    sellHoldRentRow,
+    refinanceScenarioRow,
+    refinanceOppRow,
   ] = await Promise.all([
     typeof prismaAny.property?.findUnique === 'function'
       ? prisma.property.findUnique({
           where: { id: propertyId },
-          select: { id: true, state: true },
+          select: { id: true, state: true, timezone: true, lastAppraisedValue: true },
         })
       : Promise.resolve(null),
     typeof prismaAny.warranty?.findMany === 'function'
@@ -1428,8 +1504,8 @@ export async function loadCrossDomainPropertySnapshot(
       : Promise.resolve([]),
     typeof prismaAny.document?.findMany === 'function'
       ? prisma.document.findMany({
-          where: { propertyId },
-          select: { id: true, propertyId: true, name: true, type: true },
+          where: { propertyId, deletedAt: null },
+          select: { id: true, propertyId: true, inventoryItemId: true, name: true, description: true, type: true, metadata: true, deletedAt: true },
         })
       : Promise.resolve([]),
     typeof prismaAny.insurancePolicy?.findMany === 'function'
@@ -1546,17 +1622,54 @@ export async function loadCrossDomainPropertySnapshot(
           },
         })
       : Promise.resolve([]),
+    typeof prismaAny.sellHoldRentAnalysis?.findFirst === 'function'
+      ? prisma.sellHoldRentAnalysis.findFirst({
+          where: { propertyId },
+          orderBy: { computedAt: 'desc' },
+          select: { years: true, homeValueNowCents: true, netRentCents: true, drivers: true },
+        })
+      : Promise.resolve(null),
+    typeof prismaAny.refinanceScenarioSnapshot?.findFirst === 'function'
+      ? prisma.refinanceScenarioSnapshot.findFirst({
+          where: { propertyId },
+          orderBy: [{ isSaved: 'desc' }, { createdAt: 'desc' }],
+          select: { targetRate: true, closingCost: true, metadataJson: true },
+        })
+      : Promise.resolve(null),
+    typeof prismaAny.refinanceOpportunity?.findFirst === 'function'
+      ? prisma.refinanceOpportunity.findFirst({
+          where: { propertyId },
+          orderBy: { evaluationDate: 'desc' },
+          select: { currentRate: true, marketRate: true, closingCostAssumption: true, metadataJson: true },
+        })
+      : Promise.resolve(null),
   ]);
 
+  const activeDocumentRows = (documentRows as Array<any>).filter((doc) => doc.deletedAt === null || doc.deletedAt === undefined);
   const manualDocByItem = new Map<string, string>();
   const receiptDocByItem = new Map<string, string>();
-  const propertyDocuments: WaveDocumentRecord[] = (documentRows as Array<any>).map((doc) => {
+  const propertyDocuments: WaveDocumentRecord[] = activeDocumentRows.map((doc) => {
     const typeUpper = String(doc.type ?? 'OTHER').toUpperCase();
+    const meta = doc.metadata && typeof doc.metadata === 'object' ? (doc.metadata as Record<string, unknown>) : null;
+    const metaKind = String(meta?.documentKind ?? meta?.kind ?? meta?.category ?? meta?.role ?? '').toUpperCase();
+    const textHint = `${String(doc.name ?? '')} ${String(doc.description ?? '')} ${metaKind}`.trim();
+    const isReceipt = typeUpper === 'INVOICE' || metaKind === 'RECEIPT' || /\breceipt\b|\binvoice\b|\bpurchase\b/i.test(textHint);
+    const isManual = metaKind === 'MANUAL' || /\bmanual\b|\bhandbook\b|\bowner'?s?\s+guide\b|\buser\s+guide\b|\binstruction/i.test(textHint);
+
+    if (typeof doc.inventoryItemId === 'string' && doc.inventoryItemId) {
+      if (isReceipt && !receiptDocByItem.has(doc.inventoryItemId)) {
+        receiptDocByItem.set(doc.inventoryItemId, doc.id);
+      }
+      if (isManual && !manualDocByItem.has(doc.inventoryItemId)) {
+        manualDocByItem.set(doc.inventoryItemId, doc.id);
+      }
+    }
+
     return {
       id: doc.id,
       propertyId: doc.propertyId ?? propertyId,
       title: String(doc.name ?? 'Document'),
-      documentType: typeUpper,
+      documentType: isReceipt ? 'RECEIPT' : isManual ? 'MANUAL' : typeUpper,
       lifecycleStatus: 'ACTIVE',
       visibleToRoles: ['OWNER', 'EDITOR', 'VIEWER'],
     };
@@ -1616,9 +1729,79 @@ export async function loadCrossDomainPropertySnapshot(
       ? new Date(saleCaseRow.targetCloseDate).toISOString().slice(0, 10)
       : null;
 
+  const propertyTimezone = safeTimezone(timeZoneOverride ?? propertyRow?.timezone);
+
+  const shrDrivers = sellHoldRentRow?.drivers;
+  const scenMeta = refinanceScenarioRow?.metadataJson;
+  const oppMeta = refinanceOppRow?.metadataJson;
+
+  const horizonYears = sellHoldRentRow?.years ?? extractFinanceNumber(scenMeta, ['horizonYears']);
+  const extractedMonthlyRentCents =
+    extractFinanceNumber(shrDrivers, ['monthlyRentCents', 'estimatedMonthlyRentCents'])
+    ?? (() => {
+      const dollars = extractFinanceNumber(shrDrivers, ['monthlyRent', 'estimatedMonthlyRent']);
+      return dollars !== null ? Math.round(dollars * 100) : null;
+    })()
+    ?? (typeof sellHoldRentRow?.netRentCents === 'number' && typeof horizonYears === 'number' && horizonYears > 0
+      ? Math.round(sellHoldRentRow.netRentCents / (horizonYears * 12))
+      : null);
+  const homeValueCents =
+    sellHoldRentRow?.homeValueNowCents
+    ?? (typeof propertyRow?.lastAppraisedValue === 'number' ? Math.round(propertyRow.lastAppraisedValue * 100) : null);
+  const currentRateRaw =
+    refinanceOppRow?.currentRate
+    ?? extractFinanceNumber(scenMeta, ['currentRate', 'currentRatePct'])
+    ?? extractFinanceNumber(oppMeta, ['currentRate', 'currentRatePct']);
+  const currentRateBps = currentRateRaw !== null
+    ? Math.round(currentRateRaw * 100)
+    : extractFinanceNumber(scenMeta, ['currentRateBps']);
+  const candidateRateRaw = refinanceScenarioRow?.targetRate ?? refinanceOppRow?.marketRate ?? null;
+  const candidateRateBps = candidateRateRaw !== null ? Math.round(candidateRateRaw * 100) : null;
+  const closingCostsCents = refinanceScenarioRow?.closingCost !== null && refinanceScenarioRow?.closingCost !== undefined
+    ? toCents(refinanceScenarioRow.closingCost)
+    : refinanceOppRow?.closingCostAssumption !== null && refinanceOppRow?.closingCostAssumption !== undefined
+      ? toCents(refinanceOppRow.closingCostAssumption)
+      : null;
+
+  const hasAnyFinanceSlot = [
+    extractedMonthlyRentCents,
+    homeValueCents,
+    horizonYears,
+    currentRateBps,
+    candidateRateBps,
+    closingCostsCents,
+  ].some((v) => v !== null);
+  const financeSlots: WaveFinanceSlots | null = hasAnyFinanceSlot
+    ? {
+        monthlyRentCents: extractedMonthlyRentCents,
+        homeValueCents,
+        horizonYears,
+        currentRateBps,
+        candidateRateBps,
+        closingCostsCents,
+      }
+    : null;
+
+  let savedResults: WaveSavedResultRecord[] = [];
+  if (userId && typeof prismaAny.askSavedArtifactPreference?.findMany === 'function') {
+    try {
+      const savedPage = await getAskSavedPage(userId, propertyId, { limit: 25 });
+      savedResults = savedPage.rows.map((row) => ({
+        id: row.artifactKey,
+        propertyId: row.propertyId,
+        title: row.title,
+        savedType: row.artifactType,
+        minimumRole: row.visibility.sensitivity === 'SENSITIVE' || row.visibility.scope === 'REQUESTER_ONLY' ? 'OWNER' : 'VIEWER',
+      }));
+    } catch {
+      savedResults = [];
+    }
+  }
+
   return {
     ...phase2aSnapshot,
-    timezone: 'UTC',
+    asOfDate: localYmdInTimeZone(new Date(), propertyTimezone),
+    timezone: propertyTimezone,
     closingDateIso,
     extendedItems,
     warranties: (warrantyRows as Array<any>).map((w) => ({
@@ -1672,7 +1855,7 @@ export async function loadCrossDomainPropertySnapshot(
       status: mapTaxStatus(String(b.status)),
       lifecycleStatus: b.supersededById ? 'SUPERSEDED' : 'ACTIVE',
     })),
-    financeSlots: null,
+    financeSlots,
     recalls: (recallRows as Array<any>)
       .filter((r) => !['DISMISSED', 'RESOLVED'].includes(String(r.status ?? 'OPEN').toUpperCase()))
       .map((r) => ({
@@ -1738,7 +1921,7 @@ export async function loadCrossDomainPropertySnapshot(
       timelineDays: 0,
       warrantyMonths: 0,
     })),
-    savedResults: [],
+    savedResults,
   };
 }
 
@@ -1890,13 +2073,14 @@ export async function executeCrossDomainOnProperty(input: {
   readonly role: string;
   readonly propertyAuthorized: boolean;
   readonly rawText: string;
+  readonly timeZone?: string;
   readonly snapshotOverride?: CrossDomainPropertySnapshot;
 }): Promise<{
   readonly execution: CrossDomainExecutionResult;
   readonly operationResult: AskOperationResult;
   readonly snapshot: CrossDomainPropertySnapshot;
 }> {
-  const snapshot = input.snapshotOverride ?? await loadCrossDomainPropertySnapshot(input.propertyId, input.userId);
+  const snapshot = input.snapshotOverride ?? await loadCrossDomainPropertySnapshot(input.propertyId, input.userId, input.timeZone);
   const execution = await executeCrossDomainWaves({
     rawText: input.rawText,
     snapshot,

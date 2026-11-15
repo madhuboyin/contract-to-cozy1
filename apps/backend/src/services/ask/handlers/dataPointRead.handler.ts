@@ -334,6 +334,7 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
         role,
         propertyAuthorized: true,
         rawText: message,
+        timeZone,
       });
       return crossDomainExecution.operationResult;
     }

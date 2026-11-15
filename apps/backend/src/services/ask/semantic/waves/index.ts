@@ -963,43 +963,232 @@ export function runCrossDomainMetamorphicSuite(): {
   };
 }
 
+interface DomainEvaluationBatteryEntry {
+  readonly replayPrompts: readonly string[];
+  readonly falseDeclineProbes: readonly string[];
+  readonly unsupportedProbes: readonly string[];
+}
+
+const DOMAIN_EVALUATION_BATTERY: Readonly<Record<SemanticDomainId, DomainEvaluationBatteryEntry>> = {
+  'domain.property_profile': {
+    replayPrompts: ["compare this year's tax bill with last year's"],
+    falseDeclineProbes: ['compare tax bill this year vs last year'],
+    unsupportedProbes: ['evaluate municipal zoning variance feasibility for my lot'],
+  },
+  'domain.inventory': {
+    replayPrompts: ['list items without warranty', 'show my saved items'],
+    falseDeclineProbes: ['provide details of all items without warranty'],
+    unsupportedProbes: ['appraise current antique resale market value of my furniture'],
+  },
+  'domain.maintenance': {
+    replayPrompts: ['what maintenance is due next month?'],
+    falseDeclineProbes: ['list maintenance tasks due next calendar month'],
+    unsupportedProbes: ['auto-book licensed contractor availability across town tomorrow'],
+  },
+  'domain.warranties_coverage': {
+    replayPrompts: ['show expired warranties'],
+    falseDeclineProbes: ['which items are having warranty?'],
+    unsupportedProbes: ['draft legal rebuttal brief against warranty denial'],
+  },
+  'domain.insurance_policies': {
+    replayPrompts: ["what's my deductible?"],
+    falseDeclineProbes: ['show my insurance deductible'],
+    unsupportedProbes: ['underwrite commercial umbrella insurance premium quote'],
+  },
+  'domain.claims': {
+    replayPrompts: ['what claims are open and what documents are missing?'],
+    falseDeclineProbes: ['list open claims and missing claim documents'],
+    unsupportedProbes: ['represent homeowner in arbitration against insurance carrier'],
+  },
+  'domain.documents_records': {
+    replayPrompts: ['show the documents for my water-damage claim'],
+    falseDeclineProbes: ['list documents for water-damage claim'],
+    unsupportedProbes: ['run full-text ocr handwriting search across archive boxes'],
+  },
+  'domain.ownership_costs_finance': {
+    replayPrompts: ['how long until owning beats renting?', 'would refinancing break even within three years?'],
+    falseDeclineProbes: ['what was my total spend on repairs last calendar year?'],
+    unsupportedProbes: ['file itemized federal schedule e tax return'],
+  },
+  'domain.projects_quotes_vendors': {
+    replayPrompts: ['which active projects still need a permit?', 'compare these two kitchen contractor quotes'],
+    falseDeclineProbes: ['list active projects needing permit'],
+    unsupportedProbes: ['issue official city electrical building permit approval'],
+  },
+  'domain.risks_recalls_inspections': {
+    replayPrompts: ['do I have recalls and which items are affected?', 'which inspection findings still need action?'],
+    falseDeclineProbes: ['what environmental risks affect this home this week?'],
+    unsupportedProbes: ['certify structural engineering load bearing wall stamp'],
+  },
+  'domain.timeline_home_events': {
+    replayPrompts: ['how much did I spend on repairs last year?'],
+    falseDeclineProbes: ['last year repair spend total?'],
+    unsupportedProbes: ['publish neighborhood social activity feed posts'],
+  },
+  'domain.buyer_journey': {
+    replayPrompts: ['what are my contingency deadlines?', 'what buyer deadlines are due before closing?'],
+    falseDeclineProbes: ['show contingency deadline items'],
+    unsupportedProbes: ['renegotiate purchase contract earnest money addendum'],
+  },
+  'domain.seller_preparation': {
+    replayPrompts: ['what do I still need to finish before listing the house?'],
+    falseDeclineProbes: ['what remains unfinished before listing house?'],
+    unsupportedProbes: ['submit active mls brokerage listing price reduction'],
+  },
+  'domain.account_household_preferences': {
+    replayPrompts: ['show my saved items'],
+    falseDeclineProbes: ['list my saved results'],
+    unsupportedProbes: ['audit external billing invoice disputes across accounts'],
+  },
+  'domain.safety_boundary': {
+    replayPrompts: ['my furnace smells like gas'],
+    falseDeclineProbes: ['there is a gas leak from my furnace'],
+    unsupportedProbes: ['dispatch local fire department emergency truck remotely'],
+  },
+};
+
+export interface DomainEvaluationDetails {
+  readonly domainId: SemanticDomainId;
+  readonly inDomainEvaluated: number;
+  readonly inDomainResolved: number;
+  readonly inDomainNotUnderstoodCount: number;
+  readonly replayExecutedCount: number;
+  readonly falseDeclineEvaluated: number;
+  readonly falseDeclineCount: number;
+  readonly unsupportedEvaluated: number;
+  readonly unsupportedCount: number;
+  readonly incorrectHighConfidenceCount: number;
+}
+
 /**
  * Computes full §18 measured DomainLanguageCoverageProfile metrics across all 15
- * Ask domains from live benchmark + metamorphic + out-of-scope evaluations and
- * validates manifest integrity against those measured profiles.
+ * Ask domains from live benchmark + replay + false-decline + unsupported evaluations
+ * and validates manifest integrity against those measured profiles.
  */
 export async function evaluateCrossDomainGovernanceReport(): Promise<{
   readonly passed: boolean;
   readonly benchmarks: Awaited<ReturnType<typeof runCrossDomainAcceptanceBenchmarks>>;
   readonly metamorphic: ReturnType<typeof runCrossDomainMetamorphicSuite>;
   readonly coverageProfiles: readonly DomainLanguageCoverageProfile[];
+  readonly evaluationDetailsByDomain: readonly DomainEvaluationDetails[];
   readonly manifestIntegrity: ReturnType<typeof verifyDomainWaveManifestIntegrity>;
 }> {
   const benchmarks = await runCrossDomainAcceptanceBenchmarks();
   const metamorphic = runCrossDomainMetamorphicSuite();
+  const snapshot = buildSeededCrossDomainSnapshot();
 
-  // Independent scenario battery per domain (in-domain paraphrases + out-of-scope rejection probes)
-  const measurements: DomainMeasurementInput[] = DOMAIN_ENABLEMENT_RECORDS.map((record) => {
-    const domainRows = benchmarks.rowResults.filter((row) => row.domainIds.includes(record.domainId));
-    const metaInfo = metamorphic.byDomainPairs[record.domainId];
-    const scenarioCount = domainRows.length + (metaInfo?.total ?? 0);
-    const resolvedCount = domainRows.filter((r) => r.passed).length + (metaInfo?.passed ?? 0);
+  const measurements: DomainMeasurementInput[] = [];
+  const evaluationDetailsByDomain: DomainEvaluationDetails[] = [];
 
-    return {
-      domainId: record.domainId,
+  for (const record of DOMAIN_ENABLEMENT_RECORDS) {
+    const domainId = record.domainId;
+    const domainRows = benchmarks.rowResults.filter((row) => row.domainIds.includes(domainId));
+    const metaInfo = metamorphic.byDomainPairs[domainId];
+    const battery = DOMAIN_EVALUATION_BATTERY[domainId];
+
+    // 1. Execute real replay queries for this domain (including saved-result role replay when applicable).
+    let replayExecutedCount = 0;
+    let replayResolvedCount = 0;
+    let replayNotUnderstood = 0;
+    for (const replayPrompt of battery.replayPrompts) {
+      replayExecutedCount += 1;
+      const res = domainId === 'domain.account_household_preferences'
+        ? await replaySavedCrossDomainResult({
+            savedResult: snapshot.savedResults[0],
+            currentSnapshot: snapshot,
+            currentRole: 'OWNER',
+            propertyAuthorized: true,
+            rawPromptFallback: replayPrompt,
+          })
+        : await executeCrossDomainWaves({
+            rawText: replayPrompt,
+            snapshot,
+            role: 'OWNER',
+            propertyAuthorized: true,
+          });
+      if (res.status === 'NONE_FITS') {
+        replayNotUnderstood += 1;
+      } else if (res.status === 'ANSWERED' || res.status === 'PARTIAL' || res.status === 'BOUNDARY' || res.status === 'CLARIFY') {
+        replayResolvedCount += 1;
+      }
+    }
+
+    // 2. Execute independent in-domain paraphrase probes to detect false declines.
+    let falseDeclineEvaluated = 0;
+    let falseDeclineResolved = 0;
+    let falseDeclineCount = 0;
+    for (const probe of battery.falseDeclineProbes) {
+      falseDeclineEvaluated += 1;
+      const res = await executeCrossDomainWaves({
+        rawText: probe,
+        snapshot,
+        role: 'OWNER',
+        propertyAuthorized: true,
+      });
+      if (res.status === 'NONE_FITS') {
+        falseDeclineCount += 1;
+      } else if (res.status === 'ANSWERED' || res.status === 'PARTIAL' || res.status === 'BOUNDARY' || res.status === 'CLARIFY') {
+        falseDeclineResolved += 1;
+      }
+    }
+
+    // 3. Execute out-of-scope / excluded-family probes to measure unsupported rejections & incorrect high-confidence leaks.
+    let unsupportedEvaluated = 0;
+    let unsupportedCount = 0;
+    let incorrectHighConfidenceCount = 0;
+    for (const unsupportedPrompt of battery.unsupportedProbes) {
+      unsupportedEvaluated += 1;
+      const parsed = parseCrossDomainSemanticRequest(unsupportedPrompt);
+      const res = await executeCrossDomainWaves({
+        rawText: unsupportedPrompt,
+        snapshot,
+        role: 'OWNER',
+        propertyAuthorized: true,
+      });
+      if (parsed.plan.outcome === 'MATCH' || res.status === 'ANSWERED' || res.status === 'PARTIAL') {
+        incorrectHighConfidenceCount += 1;
+      } else {
+        unsupportedCount += 1;
+      }
+    }
+
+    const rowResolved = domainRows.filter((r) => r.passed).length;
+    const metaPassed = metaInfo?.passed ?? 0;
+    const inDomainEvaluated = domainRows.length + (metaInfo?.total ?? 0) + replayExecutedCount + falseDeclineEvaluated;
+    const inDomainResolved = rowResolved + metaPassed + replayResolvedCount + falseDeclineResolved;
+    const inDomainNotUnderstoodCount = Math.max(0, (inDomainEvaluated - inDomainResolved) + replayNotUnderstood);
+
+    const scenarioCount = inDomainEvaluated + unsupportedEvaluated;
+    const resolvedCount = inDomainResolved;
+
+    evaluationDetailsByDomain.push({
+      domainId,
+      inDomainEvaluated,
+      inDomainResolved,
+      inDomainNotUnderstoodCount,
+      replayExecutedCount,
+      falseDeclineEvaluated,
+      falseDeclineCount,
+      unsupportedEvaluated,
+      unsupportedCount,
+      incorrectHighConfidenceCount,
+    });
+
+    measurements.push({
+      domainId,
       scenarioCount,
       resolvedCount,
-      inDomainNotUnderstoodCount: scenarioCount - resolvedCount,
-      unsupportedCount: 0,
-      falseDeclineCount: 0,
-      incorrectHighConfidenceCount: 0,
+      inDomainNotUnderstoodCount,
+      unsupportedCount,
+      falseDeclineCount,
+      incorrectHighConfidenceCount,
       seededEvidencePassed: domainRows.length > 0 && domainRows.every((r) => r.passed),
       metamorphicSuitePassed: (metaInfo?.total ?? 0) > 0 && metaInfo.passed === metaInfo.total,
       metamorphicPairCount: metaInfo?.total ?? 0,
       metamorphicAxesCovered: metaInfo?.axes ?? [],
-      replayQueryCount: Math.max(1, domainRows.length),
-    };
-  });
+      replayQueryCount: replayExecutedCount,
+    });
+  }
 
   const coverageProfiles = buildMeasuredDomainCoverageProfiles(measurements);
   const manifestIntegrity = verifyDomainWaveManifestIntegrity(coverageProfiles);
@@ -1009,6 +1198,7 @@ export async function evaluateCrossDomainGovernanceReport(): Promise<{
     benchmarks,
     metamorphic,
     coverageProfiles,
+    evaluationDetailsByDomain,
     manifestIntegrity,
   };
 }
