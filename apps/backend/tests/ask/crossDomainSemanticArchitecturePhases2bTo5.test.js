@@ -14,6 +14,7 @@ const {
   DOMAIN_WAVE_MANIFEST,
   OFFLINE_LEXICON_ENRICHMENT_PROPOSALS,
   assignMixedStackFacetOwnership,
+  buildOperationResultFromCrossDomainExecution,
   buildSeededCrossDomainSnapshot,
   evaluateCrossDomainGovernanceReport,
   executeCrossDomainFollowUp,
@@ -577,15 +578,55 @@ test('production dataPointReadResult loads live manual/receipt links, canonical 
     // 2. Live canonical finance (own vs rent & refinance break-even)
     const ownVsRent = await dataPointReadResult('user-1', 'prop-ny-1', 'how long until owning beats renting?');
     assert.equal(ownVsRent.status, 'ANSWERED');
-    assert.equal(ownVsRent.parameters.crossDomainExecution.facetResults[0].metrics.monthlyRentCents, 200000);
-    assert.equal(ownVsRent.parameters.crossDomainExecution.facetResults[0].metrics.homeValueCents, 48000000);
-    assert.equal(ownVsRent.parameters.crossDomainExecution.facetResults[0].metrics.horizonYears, 5);
+    const ownRentFacet = ownVsRent.parameters.crossDomainExecution.facetResults[0];
+    assert.equal(ownRentFacet.metrics.monthlyRentCents, 200000);
+    assert.equal(ownRentFacet.metrics.homeValueCents, 48000000);
+    assert.equal(ownRentFacet.metrics.horizonYears, 5);
+    assert.equal(typeof ownRentFacet.metrics.breaksEvenWithinHorizon, 'boolean');
+    assert.ok('crossoverYear' in ownRentFacet.metrics);
+    assert.deepEqual(ownRentFacet.receipt.predicateIds, ['predicate.property.evaluates_break_even']);
 
     const refi = await dataPointReadResult('user-1', 'prop-ny-1', 'would refinancing break even within three years?');
     assert.equal(refi.status, 'ANSWERED');
-    assert.equal(refi.parameters.crossDomainExecution.facetResults[0].metrics.closingCostsCents, 600000);
-    assert.equal(refi.parameters.crossDomainExecution.facetResults[0].metrics.currentRateBps, 675);
-    assert.equal(refi.parameters.crossDomainExecution.facetResults[0].metrics.candidateRateBps, 550);
+    const refiFacet = refi.parameters.crossDomainExecution.facetResults[0];
+    assert.equal(refiFacet.metrics.closingCostsCents, 600000);
+    assert.equal(refiFacet.metrics.currentRateBps, 675);
+    assert.equal(refiFacet.metrics.candidateRateBps, 550);
+    assert.equal(refiFacet.metrics.breaksEvenWithinHorizon, true);
+    assert.ok(typeof refiFacet.metrics.breakEvenMonths === 'number' && refiFacet.metrics.breakEvenMonths <= 36);
+    assert.ok(typeof refiFacet.metrics.monthlySavingsCents === 'number' && refiFacet.metrics.monthlySavingsCents > 0);
+    assert.match(refiFacet.summary, /^Yes\b/i);
+    assert.deepEqual(refiFacet.receipt.predicateIds, ['predicate.property.evaluates_break_even']);
+
+    // Canonical persisted breakEvenMonths / monthlySavings exceeding 3-year horizon -> No
+    prisma.refinanceScenarioSnapshot.findFirst = async () => ({
+      id: 'refi-snap-slow',
+      targetRate: 6.25,
+      closingCost: 6000,
+      monthlySavings: 125,
+      breakEvenMonths: 48,
+      metadataJson: { currentRatePct: 6.75 },
+    });
+    const slowRefi = await dataPointReadResult('user-1', 'prop-ny-1', 'would refinancing break even within three years?');
+    assert.equal(slowRefi.status, 'ANSWERED');
+    const slowRefiFacet = slowRefi.parameters.crossDomainExecution.facetResults[0];
+    assert.equal(slowRefiFacet.metrics.breakEvenMonths, 48);
+    assert.equal(slowRefiFacet.metrics.monthlySavingsCents, 12500);
+    assert.equal(slowRefiFacet.metrics.breaksEvenWithinHorizon, false);
+    assert.match(slowRefiFacet.summary, /^No\b/i);
+
+    // Missing both loanBalance and persisted savings/breakEvenMonths -> fail closed PARTIAL
+    prisma.refinanceScenarioSnapshot.findFirst = async () => ({
+      id: 'refi-snap-missing-bal',
+      targetRate: 5.5,
+      closingCost: 6000,
+      monthlySavings: null,
+      breakEvenMonths: null,
+      metadataJson: { currentRatePct: 6.75 },
+    });
+    const missingBalRefi = await dataPointReadResult('user-1', 'prop-ny-1', 'would refinancing break even within three years?');
+    assert.equal(missingBalRefi.status, 'READY_WITH_LIMITATIONS');
+    assert.ok(missingBalRefi.parameters.crossDomainExecution.facetResults[0].missingSlots.includes('loanBalanceCents'));
 
     // 3. Live canonical Saved via getAskSavedPage
     const saved = await dataPointReadResult('user-1', 'prop-ny-1', 'show my saved items');
@@ -653,4 +694,115 @@ test('production dataPointReadResult loads live manual/receipt links, canonical 
       prisma[model].count = orig;
     }
   }
+});
+
+test('Semantic receipts use domain-appropriate predicates, quote comparison respects requested scope, and rich lists expose human titles', async () => {
+  const base = buildSeededCrossDomainSnapshot();
+
+  // 1. Receipt lineage uses registered capability/scope predicates (never unrelated tax/inspection/project/buyer predicates)
+  const envRes = await executeCrossDomainWaves({
+    rawText: 'what environmental risks affect this home this week?',
+    snapshot: base,
+    role: 'OWNER',
+    propertyAuthorized: true,
+  });
+  assert.deepEqual(envRes.facetResults[0].receipt.predicateIds, ['predicate.environmental_risk.active_in_week']);
+
+  const savedRes = await executeCrossDomainWaves({
+    rawText: 'show my saved items',
+    snapshot: base,
+    role: 'OWNER',
+    propertyAuthorized: true,
+  });
+  assert.deepEqual(savedRes.facetResults[0].receipt.predicateIds, ['predicate.saved_result.visible_to_role']);
+  const savedOp = buildOperationResultFromCrossDomainExecution(savedRes);
+  const savedListBlock = savedOp.blocks.find((b) => b.type === 'GROUPED_LIST');
+  assert.ok(savedListBlock && savedListBlock.type === 'GROUPED_LIST');
+  assert.deepEqual(
+    savedListBlock.sections[0].items.map((item) => item.title),
+    ['Winterization Readiness Checklist', 'Confidential Refinance Brief'],
+  );
+
+  // 2. Quote comparison attaches kitchen scope and excludes earlier non-kitchen quotes
+  const quotePlan = parseCrossDomainSemanticRequest('compare these two kitchen contractor quotes');
+  assert.equal(quotePlan.plan.outcome, 'MATCH');
+  assert.equal(quotePlan.plan.facets[0].where?.predicateId, 'predicate.contractor_quote.compared_in_scope');
+  assert.equal(quotePlan.plan.facets[0].where?.targetRecordId, 'kitchen');
+
+  const mixedQuotesSnapshot = {
+    ...base,
+    contractorQuotes: [
+      {
+        id: 'quote-bath-1',
+        propertyId: base.propertyId,
+        roomTag: 'Bathroom',
+        vendorName: 'Bath Craft LLC',
+        amountCents: 1400000,
+        timelineDays: 10,
+        warrantyMonths: 12,
+      },
+      {
+        id: 'quote-bath-2',
+        propertyId: base.propertyId,
+        roomTag: 'Bathroom',
+        vendorName: 'Tile Pros',
+        amountCents: 1650000,
+        timelineDays: 12,
+        warrantyMonths: 24,
+      },
+      ...base.contractorQuotes,
+    ],
+  };
+
+  const kitchenQuoteRes = await executeCrossDomainWaves({
+    rawText: 'compare these two kitchen contractor quotes',
+    snapshot: mixedQuotesSnapshot,
+    role: 'OWNER',
+    propertyAuthorized: true,
+  });
+  assert.equal(kitchenQuoteRes.status, 'ANSWERED');
+  assert.deepEqual(kitchenQuoteRes.facetResults[0].recordIds, ['quote-1', 'quote-2']);
+  assert.deepEqual(kitchenQuoteRes.facetResults[0].receipt.predicateIds, ['predicate.contractor_quote.compared_in_scope']);
+  const quoteOp = buildOperationResultFromCrossDomainExecution(kitchenQuoteRes);
+  const quoteListBlock = quoteOp.blocks.find((b) => b.type === 'GROUPED_LIST');
+  assert.ok(quoteListBlock && quoteListBlock.type === 'GROUPED_LIST');
+  assert.deepEqual(
+    quoteListBlock.sections[0].items.map((item) => item.title),
+    ['Harbor Kitchen Craft', 'Summit Remodelers'],
+  );
+
+  // If < 2 kitchen quotes exist, fail closed to PARTIAL rather than pulling bathroom quotes
+  const partialQuoteRes = await executeCrossDomainWaves({
+    rawText: 'compare these two kitchen contractor quotes',
+    snapshot: {
+      ...base,
+      contractorQuotes: [
+        mixedQuotesSnapshot.contractorQuotes[0],
+        mixedQuotesSnapshot.contractorQuotes[1],
+        base.contractorQuotes[0],
+      ],
+    },
+    role: 'OWNER',
+    propertyAuthorized: true,
+  });
+  assert.equal(partialQuoteRes.status, 'PARTIAL');
+  assert.equal(partialQuoteRes.facetResults[0].status, 'PARTIAL_MISSING_SLOTS');
+  assert.deepEqual(partialQuoteRes.facetResults[0].recordIds, ['quote-1']);
+
+  // 3. Rich list presentation renders real titles for claims & projects instead of raw IDs
+  const claimsAndProjects = await executeCrossDomainWaves({
+    rawText: 'what claims are open and which active projects still need a permit?',
+    snapshot: base,
+    role: 'OWNER',
+    propertyAuthorized: true,
+  });
+  assert.equal(claimsAndProjects.status, 'ANSWERED');
+  const richOp = buildOperationResultFromCrossDomainExecution(claimsAndProjects);
+  const richList = richOp.blocks.find((b) => b.type === 'GROUPED_LIST');
+  assert.ok(richList && richList.type === 'GROUPED_LIST');
+  const renderedTitles = richList.sections.flatMap((s) => s.items.map((i) => i.title));
+  assert.ok(renderedTitles.includes('Water-damage claim'), `Missing claim title in ${JSON.stringify(renderedTitles)}`);
+  assert.ok(renderedTitles.includes('200A Electrical Panel Upgrade'), `Missing project title in ${JSON.stringify(renderedTitles)}`);
+  assert.ok(!renderedTitles.includes('claim-water-damage'), 'Raw claim ID must not be rendered as title');
+  assert.ok(!renderedTitles.includes('proj-panel-upgrade'), 'Raw project ID must not be rendered as title');
 });

@@ -43,6 +43,7 @@ interface WaveLexemeSpec {
  */
 const WAVE_LEXEME_SPECS: readonly WaveLexemeSpec[] = Object.freeze([
   // Entities
+  { role: 'ENTITY', semanticId: 'entity.inventory_room', canonicalLabel: 'room', reviewedAliases: ['bathroom', 'bath', 'mudroom', 'attic', 'bedroom', 'exterior'] },
   { role: 'ENTITY', semanticId: 'entity.inventory_item', canonicalLabel: 'inventory item', reviewedAliases: ['thing', 'things', 'hot water tank'] },
   { role: 'ENTITY', semanticId: 'entity.maintenance_task', canonicalLabel: 'maintenance task', reviewedAliases: ['task', 'tasks', 'upkeep'] },
   { role: 'ENTITY', semanticId: 'entity.project', canonicalLabel: 'project', reviewedAliases: ['projects', 'renovation project', 'renovation'] },
@@ -67,6 +68,8 @@ const WAVE_LEXEME_SPECS: readonly WaveLexemeSpec[] = Object.freeze([
   // Categories & Statuses
   { role: 'CATEGORY', semanticId: 'category.maintenance.plumbing', canonicalLabel: 'plumbing', reviewedAliases: [] },
   { role: 'CATEGORY', semanticId: 'category.maintenance.electrical', canonicalLabel: 'electrical', reviewedAliases: [] },
+  { role: 'CATEGORY', semanticId: 'category.quote_scope.hvac', canonicalLabel: 'hvac', reviewedAliases: [] },
+  { role: 'CATEGORY', semanticId: 'category.quote_scope.roofing', canonicalLabel: 'roofing', reviewedAliases: [] },
   { role: 'STATUS', semanticId: 'status.open', canonicalLabel: 'open', reviewedAliases: ['incomplete', 'remaining', 'remains', 'unfinished', 'finish'] },
   { role: 'STATUS', semanticId: 'status.expired', canonicalLabel: 'expired', reviewedAliases: ['out of warranty', 'out'] },
   { role: 'STATUS', semanticId: 'status.unpaid', canonicalLabel: 'unpaid', reviewedAliases: [] },
@@ -339,6 +342,26 @@ interface ClauseSpec {
 interface AnnotationSignalIndex {
   readonly ids: ReadonlySet<string>;
   readonly firstId: (prefix: string) => string | null;
+  readonly quoteScope: string | null;
+}
+
+function resolveQuoteScopeFromAnnotations(annotations: readonly LexiconAnnotation[]): string | null {
+  for (const annotation of annotations) {
+    const { semanticId, phrase } = annotation.lexeme;
+    if (semanticId === 'entity.inventory_room' && phrase !== 'room' && phrase !== 'rooms') {
+      return phrase === 'bath' ? 'bathroom' : phrase;
+    }
+    if (semanticId.startsWith('category.maintenance.') || semanticId.startsWith('category.quote_scope.')) {
+      return phrase;
+    }
+    if (semanticId === 'entity.property' && phrase === 'roof') {
+      return 'roof';
+    }
+    if (semanticId === 'entity.home_system' && phrase !== 'home system' && phrase !== 'home systems') {
+      return phrase;
+    }
+  }
+  return null;
 }
 
 function indexAnnotations(annotations: readonly LexiconAnnotation[]): AnnotationSignalIndex {
@@ -351,6 +374,7 @@ function indexAnnotations(annotations: readonly LexiconAnnotation[]): Annotation
       }
       return null;
     },
+    quoteScope: resolveQuoteScopeFromAnnotations(annotations),
   };
 }
 
@@ -797,6 +821,7 @@ function compileClauseSpecFromAnnotations(
 
   // Compare contractor quotes
   if (has('projection.compare') && has('entity.contractor_quote')) {
+    const requestedScope = sig.quoteScope;
     return {
       domainId: 'domain.projects_quotes_vendors',
       entityId: 'entity.contractor_quote',
@@ -804,8 +829,12 @@ function compileClauseSpecFromAnnotations(
       jobMatch: 'job.projects.quote_comparison',
       projection: 'COMPARE',
       polarity: null,
-      relations: [],
-      where: null,
+      relations: requestedScope
+        ? [{ semanticRelationId: 'relation.contractor_quote.comparison', predicateId: 'predicate.contractor_quote.compared_in_scope', targetEntityId: 'entity.contractor_quote' }]
+        : [],
+      where: requestedScope
+        ? { kind: 'PREDICATE', predicateId: 'predicate.contractor_quote.compared_in_scope', relationPathId: 'path.contractor_quote.comparison', targetRecordId: requestedScope }
+        : null,
       time: null,
       fields: [{ fieldId: 'field.contractor_quote.amount_cents' }, { fieldId: 'field.contractor_quote.vendor_name' }],
       requiredSlots: [{ slotId: 'slot.quotes.two_resolved_quotes', state: 'RESOLVED' }],

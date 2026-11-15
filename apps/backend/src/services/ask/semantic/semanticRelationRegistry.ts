@@ -282,6 +282,67 @@ export const ASK_SEMANTIC_RELATION_REGISTRY: readonly SemanticRelationRegistrati
       'predicate.inspection_report.has_actionable_finding',
     ],
   },
+  // Wave 3-5 canonical capability & scope relations
+  {
+    semanticRelationId: 'relation.property.finance_break_even',
+    meaningVersion: 'property-finance-break-even@1.0.0',
+    sourceEntityId: 'entity.property',
+    targetEntityId: 'entity.property',
+    relationPathId: 'path.property.finance_break_even',
+    canonicalAdapterId: 'cross-domain-wave-executor',
+    canonicalStoragePath: 'SellHoldRentAnalysis|RefinanceScenarioSnapshot',
+    cardinality: 'ONE_TO_MANY',
+    maximumTraversalDepth: 1,
+    cyclePolicy: 'FORBID',
+    predicateIds: [
+      'predicate.property.evaluates_break_even',
+    ],
+  },
+  {
+    semanticRelationId: 'relation.environmental_risk.weekly',
+    meaningVersion: 'environmental-risk-weekly@1.0.0',
+    sourceEntityId: 'entity.property',
+    targetEntityId: 'entity.environmental_risk',
+    relationPathId: 'path.environmental_risk.weekly',
+    canonicalAdapterId: 'cross-domain-wave-executor',
+    canonicalStoragePath: 'HomeRiskReplayEventMatch.homeRiskEventId',
+    cardinality: 'ONE_TO_MANY',
+    maximumTraversalDepth: 2,
+    cyclePolicy: 'FORBID',
+    predicateIds: [
+      'predicate.environmental_risk.active_in_week',
+    ],
+  },
+  {
+    semanticRelationId: 'relation.contractor_quote.comparison',
+    meaningVersion: 'contractor-quote-comparison@1.0.0',
+    sourceEntityId: 'entity.contractor_quote',
+    targetEntityId: 'entity.contractor_quote',
+    relationPathId: 'path.contractor_quote.comparison',
+    canonicalAdapterId: 'cross-domain-wave-executor',
+    canonicalStoragePath: 'QuoteComparisonQuote.workspaceId',
+    cardinality: 'ONE_TO_MANY',
+    maximumTraversalDepth: 2,
+    cyclePolicy: 'FORBID',
+    predicateIds: [
+      'predicate.contractor_quote.compared_in_scope',
+    ],
+  },
+  {
+    semanticRelationId: 'relation.saved_result.lookup',
+    meaningVersion: 'saved-result-lookup@1.0.0',
+    sourceEntityId: 'entity.property',
+    targetEntityId: 'entity.saved_result',
+    relationPathId: 'path.saved_result.lookup',
+    canonicalAdapterId: 'cross-domain-wave-executor',
+    canonicalStoragePath: 'AskSavedArtifactPreference.propertyId',
+    cardinality: 'ONE_TO_MANY',
+    maximumTraversalDepth: 1,
+    cyclePolicy: 'FORBID',
+    predicateIds: [
+      'predicate.saved_result.visible_to_role',
+    ],
+  },
 ] as const);
 
 export function findSemanticPredicateRegistration(predicateId: string, relationPathId: string): SemanticRelationRegistration | null {

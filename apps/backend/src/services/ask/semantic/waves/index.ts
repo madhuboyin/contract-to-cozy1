@@ -568,8 +568,15 @@ export async function runCrossDomainAcceptanceBenchmarks(): Promise<{
     r.status === 'ANSWERED' ? null : 'expected replacement guidance');
 
   // ROW_19: how long until owning beats renting?
-  await expectRow('ROW_19', ['domain.ownership_costs_finance', 'domain.property_profile'], 'how long until owning beats renting?', (r) =>
-    r.facetResults[0]?.status === 'EXECUTED' ? null : 'expected own-rent result');
+  await expectRow('ROW_19', ['domain.ownership_costs_finance', 'domain.property_profile'], 'how long until owning beats renting?', (r) => {
+    const f = r.facetResults[0];
+    return f?.status === 'EXECUTED'
+      && typeof f.metrics?.crossoverYear === 'number'
+      && typeof f.metrics?.breaksEvenWithinHorizon === 'boolean'
+      && /\byear\s+\d+\b/i.test(f.summary)
+      ? null
+      : 'expected own-rent break-even crossover year and horizon comparison';
+  });
 
   // ROW_20: what are my contingency deadlines?
   await expectRow('ROW_20', ['domain.buyer_journey'], 'what are my contingency deadlines?', (r) =>

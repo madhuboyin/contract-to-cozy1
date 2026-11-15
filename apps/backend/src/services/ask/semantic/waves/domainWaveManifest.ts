@@ -252,7 +252,13 @@ export const DOMAIN_WAVE_MANIFEST: readonly DomainWaveDefinition[] = Object.free
     phaseLabel: 'Phase 4A / Wave 3',
     title: 'Property Core, Finance/Tax/Cost, Timeline Events & Risks/Recalls',
     domainIds: ['domain.property_profile', 'domain.ownership_costs_finance', 'domain.risks_recalls_inspections', 'domain.timeline_home_events'],
-    registeredRelationIds: ['relation.home_event.repair_expense', 'relation.property_tax_bill.period', 'relation.recall.inventory_item'],
+    registeredRelationIds: [
+      'relation.home_event.repair_expense',
+      'relation.property_tax_bill.period',
+      'relation.recall.inventory_item',
+      'relation.property.finance_break_even',
+      'relation.environmental_risk.weekly',
+    ],
     registeredJobIds: [
       'query.home_event.repair_spend_aggregate',
       'query.property_tax_bill.compare_years',
@@ -270,7 +276,13 @@ export const DOMAIN_WAVE_MANIFEST: readonly DomainWaveDefinition[] = Object.free
     phaseLabel: 'Phase 4B / Wave 4',
     title: 'Documents/Records, Projects/Permits/Quotes, Buyer & Seller Preparation',
     domainIds: ['domain.documents_records', 'domain.projects_quotes_vendors', 'domain.buyer_journey', 'domain.seller_preparation'],
-    registeredRelationIds: ['relation.buyer_checklist.buyer_task', 'relation.sale_case.readiness_item', 'relation.project.permit', 'relation.inspection_report.finding'],
+    registeredRelationIds: [
+      'relation.buyer_checklist.buyer_task',
+      'relation.sale_case.readiness_item',
+      'relation.project.permit',
+      'relation.inspection_report.finding',
+      'relation.contractor_quote.comparison',
+    ],
     registeredJobIds: [
       'query.buyer_task.before_closing',
       'job.buyer.contingency_deadlines',
@@ -287,7 +299,7 @@ export const DOMAIN_WAVE_MANIFEST: readonly DomainWaveDefinition[] = Object.free
     phaseLabel: 'Phase 5 / Wave 5',
     title: 'Operations, Saved Work, Safety Boundary & 6-Facet Cross-Domain Composition',
     domainIds: ['domain.account_household_preferences', 'domain.safety_boundary'],
-    registeredRelationIds: [],
+    registeredRelationIds: ['relation.saved_result.lookup'],
     registeredJobIds: ['job.saved_results.lookup', 'job.safety.boundary_refusal'],
     canonicalExecutorId: 'cross-domain-wave-executor',
   },

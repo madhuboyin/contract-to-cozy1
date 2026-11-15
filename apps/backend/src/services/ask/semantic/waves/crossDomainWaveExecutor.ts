@@ -18,6 +18,7 @@ import { type AskPresentationBlock } from '../../../../productFramework/ask/ask.
 import { type AskOperationResult } from '../../askOperationRegistry';
 import { getAskSavedPage } from '../../askSaved.service';
 import { safeTimezone } from '../../support/propertyContext';
+import { computeMonthlyPayment } from '../../../tools/mortgageMath';
 import {
   executePhase2aVerticalSlice,
   loadPhase2aPropertySnapshot,
@@ -126,6 +127,13 @@ export interface WaveFinanceSlots {
   readonly currentRateBps: number | null;
   readonly candidateRateBps: number | null;
   readonly closingCostsCents: number | null;
+  readonly loanBalanceCents?: number | null;
+  readonly remainingTermMonths?: number | null;
+  readonly monthlySavingsCents?: number | null;
+  readonly breakEvenMonths?: number | null;
+  readonly netHoldCents?: number | null;
+  readonly netRentCents?: number | null;
+  readonly sellHoldRentWinner?: string | null;
 }
 
 export interface WaveRecallRecord {
@@ -184,6 +192,7 @@ export interface WaveContractorQuoteRecord {
   readonly id: string;
   readonly propertyId: string;
   readonly roomTag: string;
+  readonly scopeText?: string | null;
   readonly vendorName: string;
   readonly amountCents: number;
   readonly timelineDays: number;
@@ -233,6 +242,7 @@ export interface WaveFacetExecutionResult {
   readonly status: 'EXECUTED' | 'PARTIAL_MISSING_SLOTS' | 'UNRESOLVED' | 'BLOCKED';
   readonly summary: string;
   readonly recordIds: readonly string[];
+  readonly rows?: ReadonlyArray<{ readonly id: string; readonly label: string; readonly subtitle?: string }>;
   readonly missingSlots: readonly string[];
   readonly redactedFieldIds: readonly string[];
   readonly receipt: SemanticReadReceipt | null;
@@ -332,6 +342,7 @@ function finalizeReceiptAndPresentation(input: {
   readonly receipt: SemanticReadReceipt;
   readonly entailment: SemanticReceiptEntailmentVerdict;
   readonly equivalence: Phase2aRichPresentationEquivalenceReport;
+  readonly rows: ReadonlyArray<{ readonly id: string; readonly label: string; readonly subtitle?: string }>;
 } {
   const resolvedRecordIds = input.rows.map((r) => r.id);
   const unknownCount = input.unknownCount ?? 0;
@@ -385,7 +396,153 @@ function finalizeReceiptAndPresentation(input: {
     throw new Error(`Wave presentation equivalence failed (${input.facet.evidence.jobMatch}): ${equivalence.reasons.join(', ')}`);
   }
 
-  return { receipt, entailment, equivalence };
+  return { receipt, entailment, equivalence, rows: input.rows };
+}
+
+/**
+ * Computes cumulative year-by-year net owning vs renting comparison and crossover year.
+ * Returns null crossoverYear if owning does not overtake renting within the evaluation window.
+ */
+function computeOwnVsRentBreakEven(slots: WaveFinanceSlots): {
+  readonly horizonYears: number;
+  readonly crossoverYear: number | null;
+  readonly breaksEvenWithinHorizon: boolean;
+  readonly cumulativeRentAtHorizonCents: number;
+  readonly netOwningCostAtHorizonCents: number;
+  readonly ownAdvantageAtHorizonCents: number;
+  readonly sellHoldRentWinner: string | null;
+} {
+  const horizonYears = Math.max(1, Math.round(slots.horizonYears ?? 5));
+  const annualRentYear1 = slots.monthlyRentCents!;
+  const homeValue = slots.homeValueCents!;
+  const financingRate = (slots.currentRateBps ?? 650) / 10000;
+  const maxYears = Math.max(horizonYears, 30);
+
+  let cumRentCents = 0;
+  let cumCarryingCents = 0;
+  let cumFinancingCents = 0;
+  let cumAppreciationCents = 0;
+  const transactionFrictionCents = Math.round(homeValue * 0.06);
+
+  let crossoverYear: number | null = null;
+  let cumulativeRentAtHorizonCents = 0;
+  let netOwningCostAtHorizonCents = 0;
+
+  for (let year = 1; year <= maxYears; year += 1) {
+    cumRentCents += Math.round(annualRentYear1 * 12 * Math.pow(1.03, year - 1));
+    const appreciatedValue = homeValue * Math.pow(1.035, year - 1);
+    cumCarryingCents += Math.round(appreciatedValue * 0.022);
+    cumFinancingCents += Math.round(homeValue * 0.8 * financingRate);
+    cumAppreciationCents += Math.round(appreciatedValue * 0.035);
+    const netOwningCostCents = cumCarryingCents + cumFinancingCents + transactionFrictionCents - cumAppreciationCents;
+
+    if (crossoverYear === null && netOwningCostCents <= cumRentCents) {
+      crossoverYear = year;
+    }
+    if (year === horizonYears) {
+      cumulativeRentAtHorizonCents = cumRentCents;
+      netOwningCostAtHorizonCents = netOwningCostCents;
+    }
+  }
+
+  const hasPersistedNet =
+    typeof slots.netHoldCents === 'number'
+    && Number.isFinite(slots.netHoldCents)
+    && typeof slots.netRentCents === 'number'
+    && Number.isFinite(slots.netRentCents);
+  const ownAdvantageAtHorizonCents = hasPersistedNet
+    ? Math.round(slots.netHoldCents! - slots.netRentCents!)
+    : cumulativeRentAtHorizonCents - netOwningCostAtHorizonCents;
+
+  return {
+    horizonYears,
+    crossoverYear,
+    breaksEvenWithinHorizon: ownAdvantageAtHorizonCents >= 0 || (crossoverYear !== null && crossoverYear <= horizonYears),
+    cumulativeRentAtHorizonCents,
+    netOwningCostAtHorizonCents,
+    ownAdvantageAtHorizonCents,
+    sellHoldRentWinner: slots.sellHoldRentWinner ?? null,
+  };
+}
+
+/**
+ * Evaluates refinance monthly savings and break-even months against a horizon (in years).
+ * Uses canonical persisted fields when available, otherwise computes via mortgageMath.
+ */
+function computeRefinanceBreakEven(
+  slots: WaveFinanceSlots,
+  horizonYears: number,
+): {
+  readonly monthlySavingsCents: number | null;
+  readonly breakEvenMonths: number | null;
+  readonly breaksEvenWithinHorizon: boolean | null;
+  readonly missingComputationInput: string | null;
+} {
+  const closingCostsCents = slots.closingCostsCents!;
+  const currentRateBps = slots.currentRateBps!;
+  const candidateRateBps = slots.candidateRateBps!;
+
+  let monthlySavingsCents: number | null =
+    typeof slots.monthlySavingsCents === 'number' && Number.isFinite(slots.monthlySavingsCents)
+      ? Math.round(slots.monthlySavingsCents)
+      : null;
+
+  if (monthlySavingsCents === null && typeof slots.loanBalanceCents === 'number' && slots.loanBalanceCents > 0) {
+    const remainingTermMonths = Math.max(12, Math.round(slots.remainingTermMonths ?? 360));
+    const oldPaymentDollars = computeMonthlyPayment({
+      balanceNow: slots.loanBalanceCents / 100,
+      annualRate: currentRateBps / 10000,
+      remainingTermMonths,
+    });
+    const newPaymentDollars = computeMonthlyPayment({
+      balanceNow: slots.loanBalanceCents / 100,
+      annualRate: candidateRateBps / 10000,
+      remainingTermMonths,
+    });
+    monthlySavingsCents = Math.round((oldPaymentDollars - newPaymentDollars) * 100);
+  }
+
+  let breakEvenMonths: number | null =
+    typeof slots.breakEvenMonths === 'number' && Number.isFinite(slots.breakEvenMonths)
+      ? Math.round(slots.breakEvenMonths)
+      : null;
+
+  if (breakEvenMonths === null && monthlySavingsCents !== null) {
+    breakEvenMonths = monthlySavingsCents > 0 ? Math.ceil(closingCostsCents / monthlySavingsCents) : null;
+  }
+
+  if (monthlySavingsCents === null && breakEvenMonths === null) {
+    return {
+      monthlySavingsCents: null,
+      breakEvenMonths: null,
+      breaksEvenWithinHorizon: null,
+      missingComputationInput: 'loanBalanceCents',
+    };
+  }
+
+  const horizonMonths = Math.max(1, Math.round(horizonYears)) * 12;
+  const breaksEvenWithinHorizon =
+    monthlySavingsCents !== null && monthlySavingsCents <= 0
+      ? false
+      : breakEvenMonths !== null && breakEvenMonths > 0 && breakEvenMonths <= horizonMonths;
+
+  return {
+    monthlySavingsCents,
+    breakEvenMonths,
+    breaksEvenWithinHorizon,
+    missingComputationInput: null,
+  };
+}
+
+function quoteMatchesRequestedScope(quote: WaveContractorQuoteRecord, requestedScope: string): boolean {
+  const scopeNorm = requestedScope.trim().toLowerCase();
+  if (!scopeNorm) return true;
+  const haystack = `${quote.roomTag ?? ''} ${quote.scopeText ?? ''} ${quote.vendorName ?? ''}`.toLowerCase();
+  if (haystack.includes(scopeNorm)) return true;
+  if (scopeNorm === 'bathroom' && /\bbath\b/.test(haystack)) return true;
+  if (scopeNorm === 'roof' && /\broof(ing)?\b/.test(haystack)) return true;
+  if (scopeNorm === 'roofing' && /\broof(ing)?\b/.test(haystack)) return true;
+  return false;
 }
 
 function evaluateWherePredicates(where: SemanticWhereExpression | null): string[] {
@@ -458,6 +615,7 @@ function executeNewStackFacet(
       status: 'EXECUTED',
       summary,
       recordIds: rows.map((r) => r.id),
+      rows: finalized.rows,
       missingSlots: [],
       redactedFieldIds,
       receipt: finalized.receipt,
@@ -490,6 +648,7 @@ function executeNewStackFacet(
       status: 'EXECUTED',
       summary,
       recordIds: rows.map((r) => r.id),
+      rows: finalized.rows,
       missingSlots: [],
       redactedFieldIds,
       receipt: finalized.receipt,
@@ -512,12 +671,23 @@ function executeNewStackFacet(
     });
     const summaryBlock = sub.operationResult.blocks.find((b) => b.type === 'SUMMARY');
     const summaryText = summaryBlock && summaryBlock.type === 'SUMMARY' ? summaryBlock.body : sub.status;
+    const groupedBlock = sub.operationResult.blocks.find((b) => b.type === 'GROUPED_LIST');
+    const subRows = groupedBlock && groupedBlock.type === 'GROUPED_LIST'
+      ? groupedBlock.sections.flatMap((section) =>
+          section.items.map((item) => ({
+            id: item.id,
+            label: item.title,
+            ...(item.description ? { subtitle: item.description } : {}),
+          })),
+        )
+      : [];
     return {
       facetId: facet.id,
       owner,
       status: sub.status === 'ANSWERED' ? 'EXECUTED' : 'BLOCKED',
       summary: summaryText,
       recordIds: sub.receipt?.resolvedRecordIds ?? [...sub.activeEntityIds],
+      rows: subRows,
       missingSlots: [],
       redactedFieldIds: [...sub.redactedFields],
       receipt: sub.receipt,
@@ -558,6 +728,7 @@ function executeNewStackFacet(
       status: 'EXECUTED',
       summary,
       recordIds: rows.map((r) => r.id),
+      rows: finalized.rows,
       missingSlots: [],
       redactedFieldIds,
       receipt: finalized.receipt,
@@ -592,6 +763,7 @@ function executeNewStackFacet(
       status: 'EXECUTED',
       summary,
       recordIds: rows.map((r) => r.id),
+      rows: finalized.rows,
       missingSlots: [],
       redactedFieldIds,
       receipt: finalized.receipt,
@@ -629,6 +801,7 @@ function executeNewStackFacet(
       status: 'EXECUTED',
       summary,
       recordIds: rows.map((r) => r.id),
+      rows: finalized.rows,
       missingSlots: [],
       redactedFieldIds,
       receipt: finalized.receipt,
@@ -660,6 +833,7 @@ function executeNewStackFacet(
       status: 'EXECUTED',
       summary,
       recordIds: rows.map((r) => r.id),
+      rows: finalized.rows,
       missingSlots: [],
       redactedFieldIds,
       receipt: finalized.receipt,
@@ -719,6 +893,7 @@ function executeNewStackFacet(
         status: 'EXECUTED',
         summary,
         recordIds: missingRows.map((r) => r.id),
+        rows: finalized.rows,
         missingSlots: [],
         redactedFieldIds,
         receipt: finalized.receipt,
@@ -751,6 +926,7 @@ function executeNewStackFacet(
       status: 'EXECUTED',
       summary,
       recordIds: rows.map((r) => r.id),
+      rows: finalized.rows,
       missingSlots: [],
       redactedFieldIds,
       receipt: finalized.receipt,
@@ -795,6 +971,7 @@ function executeNewStackFacet(
       status: 'EXECUTED',
       summary,
       recordIds: rows.map((r) => r.id),
+      rows: finalized.rows,
       missingSlots: [],
       redactedFieldIds,
       receipt: finalized.receipt,
@@ -834,6 +1011,7 @@ function executeNewStackFacet(
       status: 'EXECUTED',
       summary,
       recordIds: rows.map((r) => r.id),
+      rows: finalized.rows,
       missingSlots: [],
       redactedFieldIds,
       receipt: finalized.receipt,
@@ -866,6 +1044,7 @@ function executeNewStackFacet(
       status: 'EXECUTED',
       summary,
       recordIds: rows.map((r) => r.id),
+      rows: finalized.rows,
       missingSlots: [],
       redactedFieldIds,
       receipt: finalized.receipt,
@@ -881,18 +1060,100 @@ function executeNewStackFacet(
       if (!slots?.monthlyRentCents) missingSlots.push('monthlyRentCents');
       if (!slots?.homeValueCents) missingSlots.push('homeValueCents');
       if (!slots?.horizonYears) missingSlots.push('horizonYears');
-    } else {
-      if (!slots?.currentRateBps) missingSlots.push('currentRateBps');
-      if (!slots?.candidateRateBps) missingSlots.push('candidateRateBps');
-      if (!slots?.closingCostsCents) missingSlots.push('closingCostsCents');
+
+      const ownRentResult = missingSlots.length === 0 && slots ? computeOwnVsRentBreakEven(slots) : null;
+      const status = missingSlots.length > 0 ? 'PARTIAL_MISSING_SLOTS' : 'EXECUTED';
+      const summary = ownRentResult === null
+        ? `Cannot compute own-vs-rent break-even without missing required financial inputs: ${missingSlots.join(', ')}.`
+        : ownRentResult.crossoverYear === null
+          ? `Owning does not beat renting within the 30-year analysis window at $${(slots!.monthlyRentCents! / 100).toFixed(2)}/mo rent and $${(slots!.homeValueCents! / 100).toFixed(2)} home value (estimated ${ownRentResult.horizonYears}-year net advantage -$${(Math.abs(ownRentResult.ownAdvantageAtHorizonCents) / 100).toFixed(2)}).`
+          : ownRentResult.breaksEvenWithinHorizon
+            ? `Owning beats renting starting in year ${ownRentResult.crossoverYear} (within your ${ownRentResult.horizonYears}-year horizon; estimated net owning advantage $${(ownRentResult.ownAdvantageAtHorizonCents / 100).toFixed(2)} vs $${(ownRentResult.cumulativeRentAtHorizonCents / 100).toFixed(2)} cumulative rent).`
+            : `Owning beats renting in year ${ownRentResult.crossoverYear}, which is beyond your ${ownRentResult.horizonYears}-year horizon.`;
+
+      const rows = status === 'EXECUTED'
+        ? [{
+            id: snapshot.propertyId,
+            label: 'Own-vs-rent break-even analysis',
+            ...(ownRentResult?.crossoverYear !== null && ownRentResult?.crossoverYear !== undefined
+              ? { subtitle: `Crossover year ${ownRentResult.crossoverYear} (${ownRentResult.horizonYears}-year horizon)` }
+              : {}),
+          }]
+        : [];
+      const finalized = finalizeReceiptAndPresentation({
+        facet,
+        snapshot,
+        role,
+        projection: 'DETAIL',
+        operationAdapter: adapterId,
+        sourceType: 'Property',
+        predicateIds: ['predicate.property.evaluates_break_even'],
+        rows,
+        title: 'Own-vs-rent break-even analysis',
+        summaryBody: summary,
+        variantId: 'variant.finance_break_even',
+        unknownCount: missingSlots.length > 0 ? missingSlots.length : 0,
+      });
+      return {
+        facetId: facet.id,
+        owner,
+        status,
+        summary,
+        recordIds: rows.map((r) => r.id),
+        rows: finalized.rows,
+        missingSlots,
+        redactedFieldIds,
+        receipt: finalized.receipt,
+        entailment: finalized.entailment,
+        presentationEquivalence: finalized.equivalence,
+        metrics: ownRentResult
+          ? {
+              monthlyRentCents: slots!.monthlyRentCents,
+              homeValueCents: slots!.homeValueCents,
+              horizonYears: ownRentResult.horizonYears,
+              crossoverYear: ownRentResult.crossoverYear,
+              breaksEvenWithinHorizon: ownRentResult.breaksEvenWithinHorizon,
+              cumulativeRentAtHorizonCents: ownRentResult.cumulativeRentAtHorizonCents,
+              netOwningCostAtHorizonCents: ownRentResult.netOwningCostAtHorizonCents,
+              ownAdvantageAtHorizonCents: ownRentResult.ownAdvantageAtHorizonCents,
+              ...(ownRentResult.sellHoldRentWinner ? { sellHoldRentWinner: ownRentResult.sellHoldRentWinner } : {}),
+            }
+          : undefined,
+      };
     }
+
+    if (!slots?.currentRateBps) missingSlots.push('currentRateBps');
+    if (!slots?.candidateRateBps) missingSlots.push('candidateRateBps');
+    if (!slots?.closingCostsCents) missingSlots.push('closingCostsCents');
+    const resolvedHorizonSlot = facet.requiredSlots.some(
+      (slot) => slot.slotId === 'slot.refinance.horizon_years' && slot.state === 'RESOLVED',
+    );
+    const horizonYears = resolvedHorizonSlot ? 3 : Math.max(1, Math.round(slots?.horizonYears ?? 3));
+
+    const refiResult = missingSlots.length === 0 && slots ? computeRefinanceBreakEven(slots, horizonYears) : null;
+    if (refiResult?.missingComputationInput) {
+      missingSlots.push(refiResult.missingComputationInput);
+    }
+
     const status = missingSlots.length > 0 ? 'PARTIAL_MISSING_SLOTS' : 'EXECUTED';
-    const summary = missingSlots.length > 0
-      ? `Cannot compute break-even without missing required financial inputs: ${missingSlots.join(', ')}.`
-      : job === 'job.finance.refinance_break_even'
-        ? `Refinance break-even computed over ${slots!.horizonYears ?? 3} year horizon (closing costs $${((slots!.closingCostsCents ?? 0) / 100).toFixed(2)}).`
-        : `Own-vs-rent break-even computed for ${slots!.horizonYears} year horizon at $${((slots!.monthlyRentCents ?? 0) / 100).toFixed(2)}/mo rent.`;
-    const rows = [{ id: snapshot.propertyId, label: `Property ${snapshot.propertyId}` }];
+    const horizonMonths = horizonYears * 12;
+    const summary = missingSlots.length > 0 || !refiResult
+      ? `Cannot compute refinance break-even without missing required financial inputs: ${missingSlots.join(', ')}.`
+      : refiResult.monthlySavingsCents !== null && refiResult.monthlySavingsCents <= 0
+        ? `No — refinancing from ${(slots!.currentRateBps! / 100).toFixed(2)}% to ${(slots!.candidateRateBps! / 100).toFixed(2)}% does not produce positive monthly savings.`
+        : refiResult.breaksEvenWithinHorizon
+          ? `Yes — refinancing breaks even in ${refiResult.breakEvenMonths} month(s) (within your ${horizonYears}-year / ${horizonMonths}-month horizon), saving $${((refiResult.monthlySavingsCents ?? 0) / 100).toFixed(2)}/mo on $${((slots!.closingCostsCents ?? 0) / 100).toFixed(2)} closing costs.`
+          : `No — refinancing breaks even in ${refiResult.breakEvenMonths} month(s), exceeding your ${horizonYears}-year (${horizonMonths}-month) horizon${refiResult.monthlySavingsCents !== null ? ` (saving $${(refiResult.monthlySavingsCents / 100).toFixed(2)}/mo)` : ''}.`;
+
+    const rows = status === 'EXECUTED'
+      ? [{
+          id: snapshot.propertyId,
+          label: 'Refinance break-even analysis',
+          ...(refiResult?.breakEvenMonths !== null && refiResult?.breakEvenMonths !== undefined
+            ? { subtitle: `${refiResult.breakEvenMonths} mo break-even (${horizonYears}-year horizon)` }
+            : {}),
+        }]
+      : [];
     const finalized = finalizeReceiptAndPresentation({
       facet,
       snapshot,
@@ -900,11 +1161,12 @@ function executeNewStackFacet(
       projection: 'DETAIL',
       operationAdapter: adapterId,
       sourceType: 'Property',
-      predicateIds: ['predicate.property_tax_bill.for_period'],
+      predicateIds: ['predicate.property.evaluates_break_even'],
       rows,
-      title: 'Financial break-even analysis',
+      title: 'Refinance break-even analysis',
       summaryBody: summary,
       variantId: 'variant.finance_break_even',
+      unknownCount: missingSlots.length > 0 ? missingSlots.length : 0,
     });
     return {
       facetId: facet.id,
@@ -912,23 +1174,23 @@ function executeNewStackFacet(
       status,
       summary,
       recordIds: rows.map((r) => r.id),
+      rows: finalized.rows,
       missingSlots,
       redactedFieldIds,
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
-      metrics: missingSlots.length === 0
-        ? job === 'job.finance.own_rent_break_even'
-          ? {
-              monthlyRentCents: slots!.monthlyRentCents,
-              homeValueCents: slots!.homeValueCents,
-              horizonYears: slots!.horizonYears,
-            }
-          : {
-              currentRateBps: slots!.currentRateBps,
-              candidateRateBps: slots!.candidateRateBps,
-              closingCostsCents: slots!.closingCostsCents,
-            }
+      metrics: status === 'EXECUTED' && refiResult
+        ? {
+            currentRateBps: slots!.currentRateBps,
+            candidateRateBps: slots!.candidateRateBps,
+            closingCostsCents: slots!.closingCostsCents,
+            breaksEvenWithinHorizon: refiResult.breaksEvenWithinHorizon,
+            breakEvenMonths: refiResult.breakEvenMonths,
+            monthlySavingsCents: refiResult.monthlySavingsCents,
+            horizonYears,
+            horizonMonths,
+          }
         : undefined,
     };
   }
@@ -957,6 +1219,7 @@ function executeNewStackFacet(
       status: 'EXECUTED',
       summary,
       recordIds: rows.map((r) => r.id),
+      rows: finalized.rows,
       missingSlots: [],
       redactedFieldIds,
       receipt: finalized.receipt,
@@ -984,7 +1247,7 @@ function executeNewStackFacet(
       projection: 'LIST',
       operationAdapter: adapterId,
       sourceType: 'EnvironmentalRisk',
-      predicateIds: ['predicate.inspection_report.has_actionable_finding'],
+      predicateIds: ['predicate.environmental_risk.active_in_week'],
       rows,
       title: 'Weekly environmental risks',
       summaryBody: summary,
@@ -996,6 +1259,7 @@ function executeNewStackFacet(
       status: 'EXECUTED',
       summary,
       recordIds: rows.map((r) => r.id),
+      rows: finalized.rows,
       missingSlots: [],
       redactedFieldIds,
       receipt: finalized.receipt,
@@ -1028,6 +1292,7 @@ function executeNewStackFacet(
       status: 'EXECUTED',
       summary,
       recordIds: rows.map((r) => r.id),
+      rows: finalized.rows,
       missingSlots: [],
       redactedFieldIds,
       receipt: finalized.receipt,
@@ -1064,6 +1329,7 @@ function executeNewStackFacet(
       status: 'EXECUTED',
       summary,
       recordIds: rows.map((r) => r.id),
+      rows: finalized.rows,
       missingSlots: [],
       redactedFieldIds,
       receipt: finalized.receipt,
@@ -1095,6 +1361,7 @@ function executeNewStackFacet(
       status: 'EXECUTED',
       summary,
       recordIds: rows.map((r) => r.id),
+      rows: finalized.rows,
       missingSlots: [],
       redactedFieldIds,
       receipt: finalized.receipt,
@@ -1149,6 +1416,7 @@ function executeNewStackFacet(
       status: 'EXECUTED',
       summary,
       recordIds: rows.map((r) => r.id),
+      rows,
       missingSlots: [],
       redactedFieldIds,
       receipt,
@@ -1159,13 +1427,23 @@ function executeNewStackFacet(
   }
 
   if (job === 'job.projects.quote_comparison') {
-    const quotes = snapshot.contractorQuotes.filter((q) => q.propertyId === snapshot.propertyId);
-    const chosen = quotes.slice(0, 2);
+    const requestedScope =
+      facet.where?.kind === 'PREDICATE' && facet.where.predicateId === 'predicate.contractor_quote.compared_in_scope'
+        ? (facet.where.targetRecordId ?? null)
+        : null;
+    const propertyQuotes = snapshot.contractorQuotes.filter((q) => q.propertyId === snapshot.propertyId);
+    const matchingQuotes = requestedScope
+      ? propertyQuotes.filter((q) => quoteMatchesRequestedScope(q, requestedScope))
+      : propertyQuotes;
+    const chosen = matchingQuotes.slice(0, 2);
+    const hasEnoughQuotes = chosen.length >= 2;
     const rows = chosen.map((q) => ({ id: q.id, label: q.vendorName, subtitle: `$${(q.amountCents / 100).toFixed(2)} · ${q.timelineDays} days` }));
-    const summary = chosen.length >= 2
+    const summary = hasEnoughQuotes
       ? `Compared ${chosen[0].vendorName} ($${(chosen[0].amountCents / 100).toFixed(2)}) vs ${chosen[1].vendorName} ($${(chosen[1].amountCents / 100).toFixed(2)}).`
-      : 'Need two contractor quotes to compare.';
-    const delta = chosen.length >= 2 ? chosen[0].amountCents - chosen[1].amountCents : null;
+      : requestedScope
+        ? `Need at least two ${requestedScope} contractor quotes to compare (found ${chosen.length}).`
+        : `Need two contractor quotes to compare (found ${chosen.length}).`;
+    const delta = hasEnoughQuotes ? chosen[0].amountCents - chosen[1].amountCents : null;
     const finalized = finalizeReceiptAndPresentation({
       facet,
       snapshot,
@@ -1173,24 +1451,29 @@ function executeNewStackFacet(
       projection: 'COMPARE',
       operationAdapter: adapterId,
       sourceType: 'ContractorQuote',
-      predicateIds: ['predicate.project.needs_permit_or_unresolved'],
+      predicateIds: ['predicate.contractor_quote.compared_in_scope'],
       rows,
       title: 'Contractor quote comparison',
       summaryBody: summary,
       variantId: 'variant.quote_comparison',
+      unknownCount: hasEnoughQuotes ? 0 : Math.max(1, 2 - chosen.length),
     });
     return {
       facetId: facet.id,
       owner,
-      status: chosen.length >= 2 ? 'EXECUTED' : 'PARTIAL_MISSING_SLOTS',
+      status: hasEnoughQuotes ? 'EXECUTED' : 'PARTIAL_MISSING_SLOTS',
       summary,
       recordIds: rows.map((r) => r.id),
-      missingSlots: chosen.length >= 2 ? [] : ['two_contractor_quotes'],
+      rows: finalized.rows,
+      missingSlots: hasEnoughQuotes ? [] : ['two_contractor_quotes'],
       redactedFieldIds,
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
-      metrics: { deltaCents: delta },
+      metrics: {
+        deltaCents: delta,
+        ...(requestedScope ? { requestedScope } : {}),
+      },
     };
   }
 
@@ -1211,7 +1494,7 @@ function executeNewStackFacet(
       projection: 'LIST',
       operationAdapter: adapterId,
       sourceType: 'SavedResult',
-      predicateIds: ['predicate.buyer_checklist.has_active_task'],
+      predicateIds: ['predicate.saved_result.visible_to_role'],
       rows,
       title: 'Saved items',
       summaryBody: summary,
@@ -1224,6 +1507,7 @@ function executeNewStackFacet(
       status: isUnavailable ? 'PARTIAL_MISSING_SLOTS' : 'EXECUTED',
       summary,
       recordIds: rows.map((r) => r.id),
+      rows: finalized.rows,
       missingSlots: isUnavailable
         ? [savedState?.partial ? 'saved_results_partial' : 'saved_results_unavailable']
         : [],
@@ -1726,7 +2010,16 @@ export async function loadCrossDomainPropertySnapshot(
     needQuotes && typeof prismaAny.quoteComparisonQuote?.findMany === 'function'
       ? prisma.quoteComparisonQuote.findMany({
           where: { workspace: { propertyId } },
-          select: { id: true, vendorName: true, quoteAmount: true, serviceLocation: true, workspace: { select: { propertyId: true } } },
+          select: {
+            id: true,
+            vendorName: true,
+            quoteAmount: true,
+            serviceLocation: true,
+            serviceCategory: true,
+            serviceLabelRaw: true,
+            scopeSummary: true,
+            workspace: { select: { propertyId: true, scopeSummary: true, serviceCategory: true } },
+          },
         })
       : Promise.resolve([]),
     needRiskMatches && typeof prismaAny.homeRiskReplayEventMatch?.findMany === 'function'
@@ -1744,21 +2037,30 @@ export async function loadCrossDomainPropertySnapshot(
       ? prisma.sellHoldRentAnalysis.findFirst({
           where: { propertyId },
           orderBy: { computedAt: 'desc' },
-          select: { years: true, homeValueNowCents: true, netRentCents: true, drivers: true },
+          select: { years: true, winner: true, homeValueNowCents: true, netHoldCents: true, netRentCents: true, drivers: true },
         })
       : Promise.resolve(null),
     needFinance && typeof prismaAny.refinanceScenarioSnapshot?.findFirst === 'function'
       ? prisma.refinanceScenarioSnapshot.findFirst({
           where: { propertyId },
           orderBy: [{ isSaved: 'desc' }, { createdAt: 'desc' }],
-          select: { targetRate: true, closingCost: true, metadataJson: true },
+          select: { targetRate: true, targetTerm: true, closingCost: true, monthlySavings: true, breakEvenMonths: true, metadataJson: true },
         })
       : Promise.resolve(null),
     needFinance && typeof prismaAny.refinanceOpportunity?.findFirst === 'function'
       ? prisma.refinanceOpportunity.findFirst({
           where: { propertyId },
           orderBy: { evaluationDate: 'desc' },
-          select: { currentRate: true, marketRate: true, closingCostAssumption: true, metadataJson: true },
+          select: {
+            currentRate: true,
+            marketRate: true,
+            loanBalance: true,
+            monthlySavings: true,
+            breakEvenMonths: true,
+            closingCostAssumption: true,
+            remainingTermMonths: true,
+            metadataJson: true,
+          },
         })
       : Promise.resolve(null),
   ]);
@@ -1881,6 +2183,32 @@ export async function loadCrossDomainPropertySnapshot(
     : refinanceOppRow?.closingCostAssumption !== null && refinanceOppRow?.closingCostAssumption !== undefined
       ? toCents(refinanceOppRow.closingCostAssumption)
       : null;
+  const loanBalanceCents = refinanceOppRow?.loanBalance !== null && refinanceOppRow?.loanBalance !== undefined
+    ? toCents(refinanceOppRow.loanBalance)
+    : extractFinanceNumber(scenMeta, ['loanBalanceCents'])
+      ?? extractFinanceNumber(oppMeta, ['loanBalanceCents']);
+  const scenarioTermRaw = typeof refinanceScenarioRow?.targetTerm === 'number' ? refinanceScenarioRow.targetTerm : null;
+  const remainingTermMonths = scenarioTermRaw !== null && scenarioTermRaw > 0
+    ? (scenarioTermRaw <= 50 ? Math.round(scenarioTermRaw * 12) : Math.round(scenarioTermRaw))
+    : typeof refinanceOppRow?.remainingTermMonths === 'number' && refinanceOppRow.remainingTermMonths > 0
+      ? Math.round(refinanceOppRow.remainingTermMonths)
+      : extractFinanceNumber(scenMeta, ['remainingTermMonths'])
+        ?? extractFinanceNumber(oppMeta, ['remainingTermMonths']);
+  const monthlySavingsCents = refinanceScenarioRow?.monthlySavings !== null && refinanceScenarioRow?.monthlySavings !== undefined
+    ? toCents(refinanceScenarioRow.monthlySavings)
+    : refinanceOppRow?.monthlySavings !== null && refinanceOppRow?.monthlySavings !== undefined
+      ? toCents(refinanceOppRow.monthlySavings)
+      : extractFinanceNumber(scenMeta, ['monthlySavingsCents'])
+        ?? extractFinanceNumber(oppMeta, ['monthlySavingsCents']);
+  const breakEvenMonths = typeof refinanceScenarioRow?.breakEvenMonths === 'number'
+    ? Math.round(refinanceScenarioRow.breakEvenMonths)
+    : typeof refinanceOppRow?.breakEvenMonths === 'number'
+      ? Math.round(refinanceOppRow.breakEvenMonths)
+      : extractFinanceNumber(scenMeta, ['breakEvenMonths'])
+        ?? extractFinanceNumber(oppMeta, ['breakEvenMonths']);
+  const netHoldCents = typeof sellHoldRentRow?.netHoldCents === 'number' ? Math.round(sellHoldRentRow.netHoldCents) : null;
+  const netRentCents = typeof sellHoldRentRow?.netRentCents === 'number' ? Math.round(sellHoldRentRow.netRentCents) : null;
+  const sellHoldRentWinner = typeof sellHoldRentRow?.winner === 'string' && sellHoldRentRow.winner ? sellHoldRentRow.winner : null;
 
   const hasAnyFinanceSlot = [
     extractedMonthlyRentCents,
@@ -1889,6 +2217,11 @@ export async function loadCrossDomainPropertySnapshot(
     currentRateBps,
     candidateRateBps,
     closingCostsCents,
+    loanBalanceCents,
+    monthlySavingsCents,
+    breakEvenMonths,
+    netHoldCents,
+    netRentCents,
   ].some((v) => v !== null);
   const financeSlots: WaveFinanceSlots | null = hasAnyFinanceSlot
     ? {
@@ -1898,6 +2231,13 @@ export async function loadCrossDomainPropertySnapshot(
         currentRateBps,
         candidateRateBps,
         closingCostsCents,
+        loanBalanceCents,
+        remainingTermMonths,
+        monthlySavingsCents,
+        breakEvenMonths,
+        netHoldCents,
+        netRentCents,
+        sellHoldRentWinner,
       }
     : null;
 
@@ -2050,15 +2390,26 @@ export async function loadCrossDomainPropertySnapshot(
       status: mapProjectStatus(String(p.status)),
       permitStatus: mapPermitStatus(String(p.permitApplicability)),
     })),
-    contractorQuotes: (quoteRows as Array<any>).map((q) => ({
-      id: q.id,
-      propertyId: q.workspace?.propertyId ?? propertyId,
-      roomTag: q.serviceLocation ?? 'GENERAL',
-      vendorName: q.vendorName,
-      amountCents: toCents(q.quoteAmount),
-      timelineDays: 0,
-      warrantyMonths: 0,
-    })),
+    contractorQuotes: (quoteRows as Array<any>).map((q) => {
+      const scopeParts = [
+        q.serviceLocation,
+        q.serviceCategory,
+        q.serviceLabelRaw,
+        q.scopeSummary,
+        q.workspace?.scopeSummary,
+        q.workspace?.serviceCategory,
+      ].filter((v): v is string => typeof v === 'string' && v.trim().length > 0);
+      return {
+        id: q.id,
+        propertyId: q.workspace?.propertyId ?? propertyId,
+        roomTag: q.serviceLocation ?? q.serviceCategory ?? 'GENERAL',
+        scopeText: scopeParts.join(' '),
+        vendorName: q.vendorName,
+        amountCents: toCents(q.quoteAmount),
+        timelineDays: 0,
+        warrantyMonths: 0,
+      };
+    }),
     savedResults,
     ...(savedResultsState ? { savedResultsState } : {}),
   };
@@ -2158,16 +2509,23 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
 
   const listSections = execution.facetResults
     .filter((f) => f.recordIds.length > 0 && f.receipt && f.receipt.projection !== 'COUNT')
-    .map((facetResult) => ({
-      id: `section-${facetResult.facetId}`,
-      title: facetResult.owner.domainId,
-      count: facetResult.recordIds.length,
-      items: facetResult.recordIds.map((id) => ({
-        id,
-        title: id,
-        meta: [facetResult.owner.adapterId],
-      })),
-    }));
+    .map((facetResult) => {
+      const rowById = new Map((facetResult.rows ?? []).map((row) => [row.id, row]));
+      return {
+        id: `section-${facetResult.facetId}`,
+        title: facetResult.owner.domainId,
+        count: facetResult.recordIds.length,
+        items: facetResult.recordIds.map((id) => {
+          const row = rowById.get(id);
+          return {
+            id,
+            title: row?.label && row.label.trim().length > 0 ? row.label : id,
+            ...(row?.subtitle ? { description: row.subtitle } : {}),
+            meta: [facetResult.owner.adapterId],
+          };
+        }),
+      };
+    });
 
   if (listSections.length > 0) {
     blocks.push({
