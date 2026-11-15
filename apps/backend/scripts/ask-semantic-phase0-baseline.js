@@ -53,6 +53,7 @@ console.log(`  Property Context fact keys: ${summary.schemaReconciliation.proper
 console.log(`Mechanical Completeness Proof:`);
 console.log(`  discovered recognizer files:        ${summary.completenessProof.discoveredRecognizerFilesCount} (${summary.completenessProof.unaccountedRecognizerFiles.length} unaccounted)`);
 console.log(`  discovered relation access files:   ${summary.completenessProof.discoveredRelationAccessFilesCount} (${summary.completenessProof.unaccountedRelationAccessFiles.length} unaccounted)`);
+console.log(`  discovered relation access pairs:   ${summary.completenessProof.discoveredRelationAccessPairsCount} (${summary.completenessProof.unaccountedRelationAccessPairs.length} unaccounted)`);
 console.log(`  discovered scalar duplicate pairs:  ${summary.completenessProof.discoveredDuplicateScalarCandidatesCount} (${summary.completenessProof.unaccountedDuplicateScalarCandidates.length} unaccounted)`);
 console.log(`  explicit operation domain mappings: ${summary.completenessProof.totalOperationsCount} (${summary.completenessProof.unmappedOperations.length} unmapped)`);
 console.log(`  verified seeded archetype fixtures: ${summary.completenessProof.archetypeFixtureVerificationPassedCount}/${summary.counts.seededPropertyArchetypes}`);

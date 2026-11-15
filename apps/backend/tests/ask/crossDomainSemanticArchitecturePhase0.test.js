@@ -171,6 +171,10 @@ test('Phase 0 Bullet 4 & 5: relationship meaning tags, repository-scanned access
     discoveredRelationFiles.some((f) => !f.relativeFilePath.startsWith('src/services/ask/')),
     'discovers relation consumers outside src/services/ask/',
   );
+  assert.ok(
+    discoveredRelationFiles.some((f) => f.relativeFilePath.startsWith('src/services/ask/semantic/phase1/')),
+    'scans runtime semantic/ directories instead of skipping all semantic directories',
+  );
 
   // Negative check (Finding #2): an unlisted out-of-tree relation storage access file must fail validation
   const unlistedSiteIssues = validateRelationGovernanceBaseline({
@@ -178,6 +182,18 @@ test('Phase 0 Bullet 4 & 5: relationship meaning tags, repository-scanned access
   });
   assert.equal(unlistedSiteIssues.length, 1);
   assert.match(unlistedSiteIssues[0], /unlistedWarrantyConsumer\.service\.ts/);
+
+  // Negative check: an already-registered file accessing a second uninventoried relationship must fail validation
+  const unlistedPairIssues = validateRelationGovernanceBaseline({
+    extraDiscoveredRelationAccessPairs: [
+      {
+        relativeFilePath: 'src/services/ask/handlers/warranties.handler.ts',
+        semanticRelationId: 'relation.sale_case.readiness_item',
+      },
+    ],
+  });
+  assert.equal(unlistedPairIssues.length, 1);
+  assert.match(unlistedPairIssues[0], /relation\.sale_case\.readiness_item/);
 
   const report = buildRelationshipDuplicateDefinitionReport();
   assert.equal(report.declaredPredicateCount, ASK_SEMANTIC_PREDICATE_MEANING_MANIFEST.length);
@@ -313,6 +329,7 @@ test('Phase 0 Exit Criteria (Finding #5): buildAskSemanticPhase0BaselineSummary 
   const summary = buildAskSemanticPhase0BaselineSummary();
   assert.deepEqual(summary.completenessProof.unaccountedRecognizerFiles, []);
   assert.deepEqual(summary.completenessProof.unaccountedRelationAccessFiles, []);
+  assert.deepEqual(summary.completenessProof.unaccountedRelationAccessPairs, []);
   assert.deepEqual(summary.completenessProof.unaccountedDuplicateScalarCandidates, []);
   assert.deepEqual(summary.completenessProof.unmappedOperations, []);
   assert.equal(

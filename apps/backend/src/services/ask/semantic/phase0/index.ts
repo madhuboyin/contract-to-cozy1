@@ -61,6 +61,8 @@ export interface AskSemanticPhase0CompletenessProof {
   readonly discoveredRelationAccessFilesCount: number;
   readonly inventoriedRelationAccessFilesCount: number;
   readonly unaccountedRelationAccessFiles: readonly string[];
+  readonly discoveredRelationAccessPairsCount: number;
+  readonly unaccountedRelationAccessPairs: readonly string[];
   readonly discoveredDuplicateScalarCandidatesCount: number;
   readonly unaccountedDuplicateScalarCandidates: readonly string[];
   readonly totalOperationsCount: number;
@@ -131,9 +133,22 @@ export function buildAskSemanticPhase0BaselineSummary(): AskSemanticPhase0Baseli
   const inventoriedRelationSet = new Set(
     ASK_RELATIONSHIP_STORAGE_ACCESS_SITES.map((site) => site.relativeFilePath),
   );
+  const inventoriedRelationPairSet = new Set(
+    ASK_RELATIONSHIP_STORAGE_ACCESS_SITES.map(
+      (site) => `${site.relativeFilePath}::${site.semanticRelationId}`,
+    ),
+  );
   const unaccountedRelationAccessFiles = discoveredRelationFiles
     .map((item) => item.relativeFilePath)
     .filter((filePath) => !inventoriedRelationSet.has(filePath));
+  const discoveredRelationAccessPairs = discoveredRelationFiles.flatMap((item) =>
+    item.discoveredSemanticRelationIds.map(
+      (semanticRelationId) => `${item.relativeFilePath}::${semanticRelationId}`,
+    ),
+  );
+  const unaccountedRelationAccessPairs = discoveredRelationAccessPairs.filter(
+    (pairKey) => !inventoriedRelationPairSet.has(pairKey),
+  );
 
   const discoveredScalarCandidates = discoverCandidateDuplicateScalarFields();
   const groupMemberSets = ASK_SCALAR_FIELD_COALESCENCE_MANIFEST.map(
@@ -162,6 +177,8 @@ export function buildAskSemanticPhase0BaselineSummary(): AskSemanticPhase0Baseli
     discoveredRelationAccessFilesCount: discoveredRelationFiles.length,
     inventoriedRelationAccessFilesCount: inventoriedRelationSet.size,
     unaccountedRelationAccessFiles,
+    discoveredRelationAccessPairsCount: discoveredRelationAccessPairs.length,
+    unaccountedRelationAccessPairs,
     discoveredDuplicateScalarCandidatesCount: discoveredScalarCandidates.length,
     unaccountedDuplicateScalarCandidates,
     totalOperationsCount: allOperationIds.length,
@@ -184,6 +201,7 @@ export function buildAskSemanticPhase0BaselineSummary(): AskSemanticPhase0Baseli
     totalValidatorIssues === 0 &&
     unaccountedRecognizerFiles.length === 0 &&
     unaccountedRelationAccessFiles.length === 0 &&
+    unaccountedRelationAccessPairs.length === 0 &&
     unaccountedDuplicateScalarCandidates.length === 0 &&
     unmappedOperations.length === 0 &&
     archetypeFixtureVerificationPassedCount === ASK_SEEDED_PROPERTY_ARCHETYPES.length &&
@@ -191,6 +209,7 @@ export function buildAskSemanticPhase0BaselineSummary(): AskSemanticPhase0Baseli
 
   const contradictionsComplete =
     unaccountedRelationAccessFiles.length === 0 &&
+    unaccountedRelationAccessPairs.length === 0 &&
     unaccountedDuplicateScalarCandidates.length === 0 &&
     relationshipDuplicateReport.directStorageOutsideCanonicalAdapterCount > 0 &&
     schemaReconciliation.propertyFactsUncoveredByDataPointCatalogue.length > 0 &&

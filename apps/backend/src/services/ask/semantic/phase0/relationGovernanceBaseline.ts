@@ -164,30 +164,35 @@ export interface RelationshipStorageAccessSite {
   readonly contradictionOrDriftNote: string;
 }
 
-export const GOVERNED_RELATION_ACCESS_TOKENS: readonly string[] = Object.freeze([
-  'warrantyId',
-  'linkedWarranties',
-  'claimDocument',
-  'checklistItems',
-  'timelineEvents',
-  'readinessItems',
-  'PropertyRecordVersion',
-  'propertyRecordVersion',
-  'SaleReadinessItem',
-  'saleReadinessItem',
-  'HomeBuyerTask',
-  'homeBuyerTask',
-  'BuyerJourneyMilestone',
-  'buyerJourneyMilestone',
-  'ClaimChecklistItem',
-  'claimChecklistItem',
-  'ClaimTimelineEvent',
-  'claimTimelineEvent',
-]);
+export const GOVERNED_RELATION_TOKEN_TO_RELATION_ID: Readonly<Record<string, string>> = Object.freeze({
+  warrantyId: 'relation.inventory_item.warranty',
+  linkedWarranties: 'relation.inventory_item.warranty',
+  claimDocument: 'relation.claim.claim_document',
+  checklistItems: 'relation.claim.checklist_item',
+  timelineEvents: 'relation.claim.timeline_event',
+  readinessItems: 'relation.sale_case.readiness_item',
+  PropertyRecordVersion: 'relation.property_record.record_version',
+  propertyRecordVersion: 'relation.property_record.record_version',
+  SaleReadinessItem: 'relation.sale_case.readiness_item',
+  saleReadinessItem: 'relation.sale_case.readiness_item',
+  HomeBuyerTask: 'relation.buyer_checklist.buyer_task',
+  homeBuyerTask: 'relation.buyer_checklist.buyer_task',
+  BuyerJourneyMilestone: 'relation.buyer_checklist.buyer_milestone',
+  buyerJourneyMilestone: 'relation.buyer_checklist.buyer_milestone',
+  ClaimChecklistItem: 'relation.claim.checklist_item',
+  claimChecklistItem: 'relation.claim.checklist_item',
+  ClaimTimelineEvent: 'relation.claim.timeline_event',
+  claimTimelineEvent: 'relation.claim.timeline_event',
+});
+
+export const GOVERNED_RELATION_ACCESS_TOKENS: readonly string[] = Object.freeze(
+  Object.keys(GOVERNED_RELATION_TOKEN_TO_RELATION_ID),
+);
 
 export interface DiscoveredRelationAccessFile {
   readonly relativeFilePath: string;
   readonly matchedTokens: readonly string[];
+  readonly discoveredSemanticRelationIds: readonly string[];
 }
 
 export const ASK_RELATIONSHIP_STORAGE_ACCESS_SITES: readonly RelationshipStorageAccessSite[] = Object.freeze([
@@ -1053,6 +1058,465 @@ export const ASK_RELATIONSHIP_STORAGE_ACCESS_SITES: readonly RelationshipStorage
     classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
     contradictionOrDriftNote: 'Repository contract/route/type/validator referencing [warrantyId].',
   },
+  {
+    siteId: 'rel_site.services_homebuyertask_service__buyer_checklist_buyer_milestone',
+    semanticRelationId: 'relation.buyer_checklist.buyer_milestone',
+    relativeFilePath: 'src/services/HomeBuyerTask.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['buyerJourneyMilestone.buyerJourneyMilestone'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository WRITE access to [buyerJourneyMilestone] for relation.buyer_checklist.buyer_milestone outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_ask_askrecordcollections_service__buyer_checklist_buyer_task',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/ask/askRecordCollections.service.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository READ access to [HomeBuyerTask] for relation.buyer_checklist.buyer_task outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_ask_askrecordcollections_service__sale_case_readiness_item',
+    semanticRelationId: 'relation.sale_case.readiness_item',
+    relativeFilePath: 'src/services/ask/askRecordCollections.service.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['saleReadinessItem.saleReadinessItem'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository READ access to [saleReadinessItem] for relation.sale_case.readiness_item outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_ask_askrecorddetailsections__buyer_checklist_buyer_task',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/ask/askRecordDetailSections.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Governed catalogue/semantic/authorization contract referencing [HomeBuyerTask] for relation.buyer_checklist.buyer_task.',
+  },
+  {
+    siteId: 'rel_site.services_ask_composition_sourceauthorization__buyer_checklist_buyer_milestone',
+    semanticRelationId: 'relation.buyer_checklist.buyer_milestone',
+    relativeFilePath: 'src/services/ask/composition/sourceAuthorization.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['BuyerJourneyMilestone.BuyerJourneyMilestone'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Governed catalogue/semantic/authorization contract referencing [BuyerJourneyMilestone] for relation.buyer_checklist.buyer_milestone.',
+  },
+  {
+    siteId: 'rel_site.services_ask_composition_sourceauthorization__buyer_checklist_buyer_task',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/ask/composition/sourceAuthorization.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Governed catalogue/semantic/authorization contract referencing [HomeBuyerTask] for relation.buyer_checklist.buyer_task.',
+  },
+  {
+    siteId: 'rel_site.services_ask_composition_sourceauthorization__claim_checklist_item',
+    semanticRelationId: 'relation.claim.checklist_item',
+    relativeFilePath: 'src/services/ask/composition/sourceAuthorization.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['ClaimChecklistItem.ClaimChecklistItem'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Governed catalogue/semantic/authorization contract referencing [ClaimChecklistItem] for relation.claim.checklist_item.',
+  },
+  {
+    siteId: 'rel_site.services_ask_composition_sourceauthorization__claim_timeline_event',
+    semanticRelationId: 'relation.claim.timeline_event',
+    relativeFilePath: 'src/services/ask/composition/sourceAuthorization.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['ClaimTimelineEvent.ClaimTimelineEvent'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Governed catalogue/semantic/authorization contract referencing [ClaimTimelineEvent] for relation.claim.timeline_event.',
+  },
+  {
+    siteId: 'rel_site.services_ask_composition_sourceauthorization__sale_case_readiness_item',
+    semanticRelationId: 'relation.sale_case.readiness_item',
+    relativeFilePath: 'src/services/ask/composition/sourceAuthorization.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['SaleReadinessItem.SaleReadinessItem'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Governed catalogue/semantic/authorization contract referencing [SaleReadinessItem] for relation.sale_case.readiness_item.',
+  },
+  {
+    siteId: 'rel_site.services_ask_datapoint_datapointcatalogue__buyer_checklist_buyer_milestone',
+    semanticRelationId: 'relation.buyer_checklist.buyer_milestone',
+    relativeFilePath: 'src/services/ask/dataPoint/dataPointCatalogue.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['BuyerJourneyMilestone.BuyerJourneyMilestone'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Governed catalogue/semantic/authorization contract referencing [BuyerJourneyMilestone] for relation.buyer_checklist.buyer_milestone.',
+  },
+  {
+    siteId: 'rel_site.services_ask_datapoint_datapointcatalogue__buyer_checklist_buyer_task',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/ask/dataPoint/dataPointCatalogue.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Governed catalogue/semantic/authorization contract referencing [HomeBuyerTask] for relation.buyer_checklist.buyer_task.',
+  },
+  {
+    siteId: 'rel_site.services_ask_datapoint_datapointcatalogue__claim_checklist_item',
+    semanticRelationId: 'relation.claim.checklist_item',
+    relativeFilePath: 'src/services/ask/dataPoint/dataPointCatalogue.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['ClaimChecklistItem.ClaimChecklistItem'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Governed catalogue/semantic/authorization contract referencing [ClaimChecklistItem] for relation.claim.checklist_item.',
+  },
+  {
+    siteId: 'rel_site.services_ask_datapoint_datapointcatalogue__claim_timeline_event',
+    semanticRelationId: 'relation.claim.timeline_event',
+    relativeFilePath: 'src/services/ask/dataPoint/dataPointCatalogue.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['ClaimTimelineEvent.ClaimTimelineEvent'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Governed catalogue/semantic/authorization contract referencing [ClaimTimelineEvent] for relation.claim.timeline_event.',
+  },
+  {
+    siteId: 'rel_site.services_ask_datapoint_datapointcatalogue__property_record_record_version',
+    semanticRelationId: 'relation.property_record.record_version',
+    relativeFilePath: 'src/services/ask/dataPoint/dataPointCatalogue.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['PropertyRecordVersion.PropertyRecordVersion'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Governed catalogue/semantic/authorization contract referencing [PropertyRecordVersion] for relation.property_record.record_version.',
+  },
+  {
+    siteId: 'rel_site.services_ask_datapoint_datapointcatalogue__sale_case_readiness_item',
+    semanticRelationId: 'relation.sale_case.readiness_item',
+    relativeFilePath: 'src/services/ask/dataPoint/dataPointCatalogue.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['SaleReadinessItem.SaleReadinessItem'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Governed catalogue/semantic/authorization contract referencing [SaleReadinessItem] for relation.sale_case.readiness_item.',
+  },
+  {
+    siteId: 'rel_site.services_ask_datapoint_datapointqueryplan__buyer_checklist_buyer_task',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/ask/dataPoint/dataPointQueryPlan.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask', 'homeBuyerTask.homeBuyerTask'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository READ access to [HomeBuyerTask, homeBuyerTask] for relation.buyer_checklist.buyer_task outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_ask_datapoint_datapointqueryplan__claim_checklist_item',
+    semanticRelationId: 'relation.claim.checklist_item',
+    relativeFilePath: 'src/services/ask/dataPoint/dataPointQueryPlan.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['ClaimChecklistItem.ClaimChecklistItem', 'claimChecklistItem.claimChecklistItem'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository READ access to [ClaimChecklistItem, claimChecklistItem] for relation.claim.checklist_item outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_ask_datapoint_datapointreader__buyer_checklist_buyer_milestone',
+    semanticRelationId: 'relation.buyer_checklist.buyer_milestone',
+    relativeFilePath: 'src/services/ask/dataPoint/dataPointReader.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['BuyerJourneyMilestone.BuyerJourneyMilestone', 'buyerJourneyMilestone.buyerJourneyMilestone'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository READ access to [BuyerJourneyMilestone, buyerJourneyMilestone] for relation.buyer_checklist.buyer_milestone outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_ask_datapoint_datapointreader__buyer_checklist_buyer_task',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/ask/dataPoint/dataPointReader.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask', 'homeBuyerTask.homeBuyerTask'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository READ access to [HomeBuyerTask, homeBuyerTask] for relation.buyer_checklist.buyer_task outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_ask_datapoint_datapointreader__claim_checklist_item',
+    semanticRelationId: 'relation.claim.checklist_item',
+    relativeFilePath: 'src/services/ask/dataPoint/dataPointReader.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['ClaimChecklistItem.ClaimChecklistItem', 'claimChecklistItem.claimChecklistItem'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository READ access to [ClaimChecklistItem, claimChecklistItem] for relation.claim.checklist_item outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_ask_datapoint_datapointreader__claim_timeline_event',
+    semanticRelationId: 'relation.claim.timeline_event',
+    relativeFilePath: 'src/services/ask/dataPoint/dataPointReader.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['ClaimTimelineEvent.ClaimTimelineEvent', 'claimTimelineEvent.claimTimelineEvent'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository READ access to [ClaimTimelineEvent, claimTimelineEvent] for relation.claim.timeline_event outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_ask_datapoint_datapointreader__property_record_record_version',
+    semanticRelationId: 'relation.property_record.record_version',
+    relativeFilePath: 'src/services/ask/dataPoint/dataPointReader.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['PropertyRecordVersion.PropertyRecordVersion', 'propertyRecordVersion.propertyRecordVersion'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository READ access to [PropertyRecordVersion, propertyRecordVersion] for relation.property_record.record_version outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_ask_datapoint_datapointreader__sale_case_readiness_item',
+    semanticRelationId: 'relation.sale_case.readiness_item',
+    relativeFilePath: 'src/services/ask/dataPoint/dataPointReader.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['SaleReadinessItem.SaleReadinessItem', 'saleReadinessItem.saleReadinessItem'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository READ access to [SaleReadinessItem, saleReadinessItem] for relation.sale_case.readiness_item outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_ask_execution_askcapture__claim_timeline_event',
+    semanticRelationId: 'relation.claim.timeline_event',
+    relativeFilePath: 'src/services/ask/execution/askCapture.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['ClaimTimelineEvent.ClaimTimelineEvent'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository WRITE access to [ClaimTimelineEvent] for relation.claim.timeline_event outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_ask_handlers_datapointread_handler__buyer_checklist_buyer_milestone',
+    semanticRelationId: 'relation.buyer_checklist.buyer_milestone',
+    relativeFilePath: 'src/services/ask/handlers/dataPointRead.handler.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['BuyerJourneyMilestone.BuyerJourneyMilestone'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository READ access to [BuyerJourneyMilestone] for relation.buyer_checklist.buyer_milestone outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_ask_handlers_datapointread_handler__buyer_checklist_buyer_task',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/ask/handlers/dataPointRead.handler.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository READ access to [HomeBuyerTask] for relation.buyer_checklist.buyer_task outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_ask_handlers_datapointread_handler__claim_checklist_item',
+    semanticRelationId: 'relation.claim.checklist_item',
+    relativeFilePath: 'src/services/ask/handlers/dataPointRead.handler.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['ClaimChecklistItem.ClaimChecklistItem'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository READ access to [ClaimChecklistItem] for relation.claim.checklist_item outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_ask_handlers_datapointread_handler__claim_timeline_event',
+    semanticRelationId: 'relation.claim.timeline_event',
+    relativeFilePath: 'src/services/ask/handlers/dataPointRead.handler.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['ClaimTimelineEvent.ClaimTimelineEvent'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository READ access to [ClaimTimelineEvent] for relation.claim.timeline_event outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_ask_handlers_datapointread_handler__sale_case_readiness_item',
+    semanticRelationId: 'relation.sale_case.readiness_item',
+    relativeFilePath: 'src/services/ask/handlers/dataPointRead.handler.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['SaleReadinessItem.SaleReadinessItem'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository READ access to [SaleReadinessItem] for relation.sale_case.readiness_item outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_ask_handlers_workflowconfirm_handler__inventory_item_warranty',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/ask/handlers/workflowConfirm.handler.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository WRITE access to [warrantyId] for relation.inventory_item.warranty outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_ask_semantic_phase1_index__inventory_item_warranty',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/ask/semantic/phase1/index.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Governed catalogue/semantic/authorization contract referencing [warrantyId] for relation.inventory_item.warranty.',
+  },
+  {
+    siteId: 'rel_site.services_ask_semantic_phase1_phase1familymanifest__buyer_checklist_buyer_task',
+    semanticRelationId: 'relation.buyer_checklist.buyer_task',
+    relativeFilePath: 'src/services/ask/semantic/phase1/phase1FamilyManifest.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Governed catalogue/semantic/authorization contract referencing [HomeBuyerTask] for relation.buyer_checklist.buyer_task.',
+  },
+  {
+    siteId: 'rel_site.services_ask_semantic_phase1_phase1familymanifest__property_record_record_version',
+    semanticRelationId: 'relation.property_record.record_version',
+    relativeFilePath: 'src/services/ask/semantic/phase1/phase1FamilyManifest.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['PropertyRecordVersion.PropertyRecordVersion'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Governed catalogue/semantic/authorization contract referencing [PropertyRecordVersion] for relation.property_record.record_version.',
+  },
+  {
+    siteId: 'rel_site.services_ask_semantic_phase1_phase1familymanifest__sale_case_readiness_item',
+    semanticRelationId: 'relation.sale_case.readiness_item',
+    relativeFilePath: 'src/services/ask/semantic/phase1/phase1FamilyManifest.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['SaleReadinessItem.SaleReadinessItem'],
+    classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
+    contradictionOrDriftNote: 'Governed catalogue/semantic/authorization contract referencing [SaleReadinessItem] for relation.sale_case.readiness_item.',
+  },
+  {
+    siteId: 'rel_site.services_buyeracquisition_service__buyer_checklist_buyer_milestone',
+    semanticRelationId: 'relation.buyer_checklist.buyer_milestone',
+    relativeFilePath: 'src/services/buyerAcquisition.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['buyerJourneyMilestone.buyerJourneyMilestone'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository WRITE access to [buyerJourneyMilestone] for relation.buyer_checklist.buyer_milestone outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_buyerclosingday_service__buyer_checklist_buyer_milestone',
+    semanticRelationId: 'relation.buyer_checklist.buyer_milestone',
+    relativeFilePath: 'src/services/buyerClosingDay.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['buyerJourneyMilestone.buyerJourneyMilestone'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository WRITE access to [buyerJourneyMilestone] for relation.buyer_checklist.buyer_milestone outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_buyerclosingdisclosure_service__buyer_checklist_buyer_milestone',
+    semanticRelationId: 'relation.buyer_checklist.buyer_milestone',
+    relativeFilePath: 'src/services/buyerClosingDisclosure.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['buyerJourneyMilestone.buyerJourneyMilestone'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository WRITE access to [buyerJourneyMilestone] for relation.buyer_checklist.buyer_milestone outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_buyercontract_service__buyer_checklist_buyer_milestone',
+    semanticRelationId: 'relation.buyer_checklist.buyer_milestone',
+    relativeFilePath: 'src/services/buyerContract.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['buyerJourneyMilestone.buyerJourneyMilestone'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository WRITE access to [buyerJourneyMilestone] for relation.buyer_checklist.buyer_milestone outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_buyerinsurance_service__buyer_checklist_buyer_milestone',
+    semanticRelationId: 'relation.buyer_checklist.buyer_milestone',
+    relativeFilePath: 'src/services/buyerInsurance.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['buyerJourneyMilestone.buyerJourneyMilestone'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository WRITE access to [buyerJourneyMilestone] for relation.buyer_checklist.buyer_milestone outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_buyerpurchaselenderreadiness_service__buyer_checklist_buyer_milestone',
+    semanticRelationId: 'relation.buyer_checklist.buyer_milestone',
+    relativeFilePath: 'src/services/buyerPurchaseLenderReadiness.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['buyerJourneyMilestone.buyerJourneyMilestone'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository WRITE access to [buyerJourneyMilestone] for relation.buyer_checklist.buyer_milestone outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_buyerpurchaseloanestimate_service__buyer_checklist_buyer_milestone',
+    semanticRelationId: 'relation.buyer_checklist.buyer_milestone',
+    relativeFilePath: 'src/services/buyerPurchaseLoanEstimate.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['buyerJourneyMilestone.buyerJourneyMilestone'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository WRITE access to [buyerJourneyMilestone] for relation.buyer_checklist.buyer_milestone outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_buyertitleescrow_service__buyer_checklist_buyer_milestone',
+    semanticRelationId: 'relation.buyer_checklist.buyer_milestone',
+    relativeFilePath: 'src/services/buyerTitleEscrow.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['buyerJourneyMilestone.buyerJourneyMilestone'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository WRITE access to [buyerJourneyMilestone] for relation.buyer_checklist.buyer_milestone outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_buyerwalkthrough_service__buyer_checklist_buyer_milestone',
+    semanticRelationId: 'relation.buyer_checklist.buyer_milestone',
+    relativeFilePath: 'src/services/buyerWalkthrough.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['buyerJourneyMilestone.buyerJourneyMilestone'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository WRITE access to [buyerJourneyMilestone] for relation.buyer_checklist.buyer_milestone outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_claims_claims_service__claim_claim_document',
+    semanticRelationId: 'relation.claim.claim_document',
+    relativeFilePath: 'src/services/claims/claims.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['Claim.claimDocument'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository WRITE access to [claimDocument] for relation.claim.claim_document outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_claims_claims_service__claim_timeline_event',
+    semanticRelationId: 'relation.claim.timeline_event',
+    relativeFilePath: 'src/services/claims/claims.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['Claim.timelineEvents', 'claimTimelineEvent.claimTimelineEvent'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository WRITE access to [timelineEvents, claimTimelineEvent] for relation.claim.timeline_event outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_claims_claims_service__inventory_item_warranty',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/claims/claims.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository WRITE access to [warrantyId] for relation.inventory_item.warranty outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_homeactionsourcepromotion_service__inventory_item_warranty',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/homeActionSourcePromotion.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['InventoryItem.linkedWarranties'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository WRITE access to [linkedWarranties] for relation.inventory_item.warranty outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_projecttracker_service__inventory_item_warranty',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/projectTracker.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository WRITE access to [warrantyId] for relation.inventory_item.warranty outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_propertydocuments_propertydocumentinventory_service__inventory_item_warranty',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/propertyDocuments/propertyDocumentInventory.service.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository READ access to [warrantyId] for relation.inventory_item.warranty outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_propertysalecase_service__claim_timeline_event',
+    semanticRelationId: 'relation.claim.timeline_event',
+    relativeFilePath: 'src/services/propertySaleCase.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['Claim.timelineEvents'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository WRITE access to [timelineEvents] for relation.claim.timeline_event outside canonical adapter (FR-ONT-7).',
+  },
+  {
+    siteId: 'rel_site.services_propertysalecase_service__inventory_item_warranty',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    relativeFilePath: 'src/services/propertySaleCase.service.ts',
+    usage: 'WRITE',
+    storageColumnsAccessed: ['InventoryItem.warrantyId'],
+    classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Repository WRITE access to [warrantyId] for relation.inventory_item.warranty outside canonical adapter (FR-ONT-7).',
+  },
 ] as const);
 
 export type RelationPathAuditFlag =
@@ -1317,11 +1781,14 @@ export function discoverRepositoryRelationStorageAccessFiles(
       const fullPath = join(dir, entry.name);
       if (entry.isDirectory()) {
         if (
-          entry.name === 'semantic' ||
           entry.name === 'graphify-out' ||
           entry.name === 'node_modules' ||
           entry.name === 'dist'
         ) {
+          continue;
+        }
+        // Only exclude the Phase 0 self-manifest directory so runtime semantic/ directories are scanned.
+        if (fullPath.replace(/\\/g, '/').endsWith('/src/services/ask/semantic/phase0')) {
           continue;
         }
         walk(fullPath);
@@ -1346,9 +1813,13 @@ export function discoverRepositoryRelationStorageAccessFiles(
       new RegExp(`\\b${token}\\b`).test(noComments),
     );
     if (matchedTokens.length > 0) {
+      const discoveredSemanticRelationIds = Array.from(
+        new Set(matchedTokens.map((token) => GOVERNED_RELATION_TOKEN_TO_RELATION_ID[token])),
+      ).sort();
       discovered.push({
         relativeFilePath,
         matchedTokens,
+        discoveredSemanticRelationIds,
       });
     }
   }
@@ -1394,6 +1865,10 @@ export function buildRelationshipDuplicateDefinitionReport(): RelationshipDuplic
 export interface ValidateRelationGovernanceOptions {
   readonly backendRoot?: string;
   readonly extraDiscoveredRelationFiles?: readonly string[];
+  readonly extraDiscoveredRelationAccessPairs?: ReadonlyArray<{
+    readonly relativeFilePath: string;
+    readonly semanticRelationId: string;
+  }>;
 }
 
 export function validateRelationGovernanceBaseline(
@@ -1407,6 +1882,10 @@ export function validateRelationGovernanceBaseline(
     typeof backendRootOrOptions === 'string'
       ? []
       : (backendRootOrOptions.extraDiscoveredRelationFiles ?? []);
+  const extraDiscoveredRelationAccessPairs =
+    typeof backendRootOrOptions === 'string'
+      ? []
+      : (backendRootOrOptions.extraDiscoveredRelationAccessPairs ?? []);
 
   const issues: string[] = [];
   const seenPredicateIds = new Set<string>();
@@ -1438,6 +1917,7 @@ export function validateRelationGovernanceBaseline(
 
   // Verify every inventoried storage access site points to a real file in apps/backend.
   const registeredRelativePaths = new Set<string>();
+  const registeredFileRelationPairs = new Set<string>();
   const seenSiteIds = new Set<string>();
   for (const site of ASK_RELATIONSHIP_STORAGE_ACCESS_SITES) {
     if (seenSiteIds.has(site.siteId)) {
@@ -1445,6 +1925,7 @@ export function validateRelationGovernanceBaseline(
     }
     seenSiteIds.add(site.siteId);
     registeredRelativePaths.add(site.relativeFilePath);
+    registeredFileRelationPairs.add(`${site.relativeFilePath}::${site.semanticRelationId}`);
 
     const absPath = resolve(backendRoot, site.relativeFilePath);
     if (!existsSync(absPath)) {
@@ -1461,16 +1942,30 @@ export function validateRelationGovernanceBaseline(
     }
   }
 
-  // Verify repository completeness: every Ask file referencing a governed relation token must be registered.
-  const discoveredRelationFiles = discoverAskRelationStorageAccessFiles(backendRoot);
-  const discoveredFilePaths = new Set<string>(discoveredRelationFiles.map((item) => item.relativeFilePath));
-  for (const extraFile of extraDiscoveredRelationFiles) {
-    discoveredFilePaths.add(extraFile);
+  // Verify repository completeness per (file, semanticRelationId) access pair (FR-ONT-7).
+  const discoveredRelationFiles = discoverRepositoryRelationStorageAccessFiles(backendRoot);
+  for (const item of discoveredRelationFiles) {
+    for (const semanticRelationId of item.discoveredSemanticRelationIds) {
+      const pairKey = `${item.relativeFilePath}::${semanticRelationId}`;
+      if (!registeredFileRelationPairs.has(pairKey)) {
+        issues.push(
+          `Unlisted relation access pair '${item.relativeFilePath}' -> '${semanticRelationId}' discovered in repository but missing from ASK_RELATIONSHIP_STORAGE_ACCESS_SITES.`,
+        );
+      }
+    }
   }
-  for (const discoveredPath of discoveredFilePaths) {
-    if (!registeredRelativePaths.has(discoveredPath)) {
+  for (const extraPair of extraDiscoveredRelationAccessPairs) {
+    const pairKey = `${extraPair.relativeFilePath}::${extraPair.semanticRelationId}`;
+    if (!registeredFileRelationPairs.has(pairKey)) {
       issues.push(
-        `Unlisted relation storage/token access file '${discoveredPath}' discovered in repository but missing from ASK_RELATIONSHIP_STORAGE_ACCESS_SITES.`,
+        `Unlisted relation access pair '${extraPair.relativeFilePath}' -> '${extraPair.semanticRelationId}' discovered in repository but missing from ASK_RELATIONSHIP_STORAGE_ACCESS_SITES.`,
+      );
+    }
+  }
+  for (const extraFile of extraDiscoveredRelationFiles) {
+    if (!registeredRelativePaths.has(extraFile)) {
+      issues.push(
+        `Unlisted relation storage/token access file '${extraFile}' discovered in repository but missing from ASK_RELATIONSHIP_STORAGE_ACCESS_SITES.`,
       );
     }
   }
