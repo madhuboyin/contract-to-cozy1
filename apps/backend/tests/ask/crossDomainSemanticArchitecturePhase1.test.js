@@ -64,6 +64,27 @@ test('facet validation keeps subject, relation, target and where predicate regis
   assert.equal(SemanticRequestPlanSchema.safeParse(mismatchedWhere).success, false);
 });
 
+test('plan validation requires unique stable facet ids and an acyclic dependency graph', () => {
+  const base = parseDeterministicSemanticRequest('which appliances have warranties');
+  const dependent = structuredClone(base.facets[0]);
+  dependent.id = 'facet-dependent';
+  dependent.dependsOn = [base.facets[0].id];
+  const composed = { ...base, facets: [base.facets[0], dependent] };
+  assert.equal(SemanticRequestPlanSchema.safeParse(composed).success, true);
+
+  const duplicateId = structuredClone(composed);
+  duplicateId.facets[1].id = duplicateId.facets[0].id;
+  assert.equal(SemanticRequestPlanSchema.safeParse(duplicateId).success, false);
+
+  const missingDependency = structuredClone(composed);
+  missingDependency.facets[1].dependsOn = ['facet-not-in-plan'];
+  assert.equal(SemanticRequestPlanSchema.safeParse(missingDependency).success, false);
+
+  const cyclic = structuredClone(composed);
+  cyclic.facets[0].dependsOn = [cyclic.facets[1].id];
+  assert.equal(SemanticRequestPlanSchema.safeParse(cyclic).success, false);
+});
+
 test('the Boolean assembler preserves explicit coordination and clarifies ambiguous negative OR', () => {
   const warranty = { kind: 'PREDICATE', predicateId: 'predicate.inventory_item.has_warranty_record', relationPathId: 'path.inventory_item.warranty' };
   const noWarranty = { kind: 'PREDICATE', predicateId: 'predicate.inventory_item.has_no_warranty_record', relationPathId: 'path.inventory_item.warranty' };

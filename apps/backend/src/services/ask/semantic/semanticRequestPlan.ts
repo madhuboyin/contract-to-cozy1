@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { findSemanticPredicateRegistration, findSemanticRelationConstraintRegistration } from './semanticRelationRegistry';
 
-export const ASK_SEMANTIC_PLAN_VERSION = '1.2.0' as const;
+export const ASK_SEMANTIC_PLAN_VERSION = '1.3.0' as const;
 
 const SpanSchema = z.object({
   start: z.number().int().nonnegative(),
@@ -135,7 +135,40 @@ export const SemanticRequestPlanSchema = z.discriminatedUnion('outcome', [
     outcome: z.enum(['NONE_FITS', 'INSUFFICIENT_TEXT', 'BOUNDARY', 'SCHEMA_INVALID', 'PROVIDER_UNAVAILABLE']),
     facets: z.array(SemanticFacetSchema).max(0),
   }),
-]);
+]).superRefine((plan, context) => {
+  if (plan.outcome !== 'MATCH') return;
+  const facetIds = new Set<string>();
+  for (const [index, facet] of plan.facets.entries()) {
+    if (facetIds.has(facet.id)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['facets', index, 'id'], message: 'facet ids must be unique' });
+    facetIds.add(facet.id);
+    if (new Set(facet.dependsOn).size !== facet.dependsOn.length) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['facets', index, 'dependsOn'], message: 'facet dependencies must be unique' });
+    }
+  }
+
+  const dependencies = new Map(plan.facets.map((facet) => [facet.id, facet.dependsOn]));
+  for (const [index, facet] of plan.facets.entries()) {
+    for (const dependencyId of facet.dependsOn) {
+      if (dependencyId === facet.id) context.addIssue({ code: z.ZodIssueCode.custom, path: ['facets', index, 'dependsOn'], message: 'facet cannot depend on itself' });
+      else if (!dependencies.has(dependencyId)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['facets', index, 'dependsOn'], message: 'facet dependency must reference this plan' });
+    }
+  }
+
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const visit = (facetId: string): boolean => {
+    if (visiting.has(facetId)) return true;
+    if (visited.has(facetId)) return false;
+    visiting.add(facetId);
+    const cyclic = (dependencies.get(facetId) ?? []).some((dependencyId) => dependencies.has(dependencyId) && visit(dependencyId));
+    visiting.delete(facetId);
+    visited.add(facetId);
+    return cyclic;
+  };
+  if (plan.facets.some((facet) => visit(facet.id))) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['facets'], message: 'facet dependency graph must be acyclic' });
+  }
+});
 
 export type SemanticRequestPlan = z.infer<typeof SemanticRequestPlanSchema>;
 export type SemanticFacet = z.infer<typeof SemanticFacetSchema>;

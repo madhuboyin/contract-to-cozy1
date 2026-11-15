@@ -34,7 +34,7 @@ This section is the maintained repository implementation ledger for this FRD. It
 
 | Area | Status | Current implementation |
 |---|---|---|
-| Canonical plan contract | Implemented foundation | `semanticRequestPlan.ts`, schema version `1.2.0`, defines the common deterministic/provider plan envelope, bounded facets, source spans, target kinds, projections, polarity and a recursive typed `WHERE` contract. Facet validation now requires registered subject/relation/target/predicate agreement and a two-way match between declared data-query relations and `WHERE` predicates. |
+| Canonical plan contract | Implemented foundation | `semanticRequestPlan.ts`, schema version `1.3.0`, defines the common deterministic/provider plan envelope, bounded facets, source spans, target kinds, projections, polarity and a recursive typed `WHERE` contract. Facet validation requires registered subject/relation/target/predicate agreement and a two-way match between declared data-query relations and `WHERE` predicates. Plan validation also requires unique stable facet ids, in-plan dependency references and an acyclic dependency graph. |
 | Shared semantic lexicon | Implemented for the first warranty/inventory subset | `sharedSemanticLexicon.ts`, version `phase1-subset-1.0.0`, generates normalized runtime lexemes with canonical-label or reviewed-alias lineage and keeps warranty identities separate from insurance, policy and claim vocabulary. |
 | Deterministic typed grammar | Implemented for the declared warranty/inventory family | `deterministicSemanticParser.ts`, version `typed-grammar-0.4.0`, performs offset-preserving tokenization, registry annotation, bounded typo recovery, morphological normalization, typed slot assembly, unresolved-span reporting and stable facet construction. |
 | Typo handling | Implemented for bounded single-token aliases | One-edit matching is limited to registry aliases of at least five characters and requires one unique best semantic identity per role. Exact annotations remain authoritative. |
@@ -49,7 +49,7 @@ This section is the maintained repository implementation ledger for this FRD. It
 
 ### 0.2 Current evidence
 
-- Focused semantic and data-point suites: 21 tests passing on 2026-11-14.
+- Focused semantic and data-point suites: 22 tests passing on 2026-11-14.
 - Backend TypeScript validation: `npm run typecheck` passing on 2026-11-14.
 - Repository hygiene: `git diff --check` passing for the current slice.
 - Runtime services and a database were not started; the focused data-point suite exercised its existing environment-independent fallback and emitted expected unavailable-local-database diagnostics.
@@ -63,7 +63,7 @@ This section is the maintained repository implementation ledger for this FRD. It
 - Complete inventory and maintenance coverage required by Phase 2A, including due-date/item relations and inventory fact queries.
 - `CAPABILITY` semantic-job planning, `COMMAND` confirmation previews, follow-up refinement and semantic conversation state.
 - Generated cross-domain entity, field, relation and capability registries plus their drift/conformance checks; only the explicit transitional warranty relation subset is registered today.
-- Indexed protected-span mapping, structured provider integration, deterministic/provider reconciliation and stable multi-facet dependency handling.
+- Indexed protected-span mapping, structured provider integration, deterministic/provider reconciliation and multi-facet execution handling; dependency identity/reference/cycle validation now exists at the plan-contract boundary.
 - The cross-domain sealed evaluation manifest, metamorphic runner, coverage reports and remaining implementation artifacts in §19.
 
 ---
