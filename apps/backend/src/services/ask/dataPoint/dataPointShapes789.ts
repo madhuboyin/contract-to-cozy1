@@ -10,7 +10,7 @@ const norm = (m: string) => ` ${m.toLowerCase().replace(/[^a-z0-9$.%' -]+/g, ' '
 const ITEM_NOUN = /\b(?:appliances?|items?|inventory items?|household items?|items in my inventory|everything in my (?:home|house)|hvac (?:items|systems|equipment)|systems)\b/;
 const COUNT = /\bhow many\b/;
 const LEAD = /^\s*(?:what|which|how many|how much|list|show|provide|tell me|do any|do i have|are there|are any|have i|has my|have my|how has|how have|is my|are my|did my|compare|give me|find)\b/i;
-const NO_VALUE = /\b(?:no|without|missing|lacking|lacks|unrecorded)\b|\b(?:don'?t|do not|doesn'?t|does not) have\b|\bnot (?:been )?(?:recorded|listed|entered|filled in|on file)\b/;
+const NO_VALUE = /\b(?:no|without|missing|lacking|lacks|unrecorded|not having)\b|\b(?:don'?t|do not|doesn'?t|does not) have\b|\bnot (?:been )?(?:recorded|listed|entered|filled in|on file)\b/;
 
 export type Shape789Plan =
   | { readonly shape: 'TIME_SERIES'; readonly pointId: string; readonly entity: 'PropertyTaxBillRecord' | 'PropertyTaxAssessmentRecord'; readonly column: string; readonly maxPeriods: number; readonly label: string }

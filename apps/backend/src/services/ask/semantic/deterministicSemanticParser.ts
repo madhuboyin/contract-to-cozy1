@@ -292,8 +292,13 @@ export function parseDeterministicSemanticRequest(rawText: string): SemanticRequ
       .map((annotation) => annotation.lexeme.semanticId),
   )];
   const fields = fieldIds.map((fieldId) => ({ fieldId }));
+  const showScalarDetail =
+    projectionAnnotation?.lexeme.semanticId === 'projection.list'
+    && /^show$/i.test(projectionAnnotation.text)
+    && fields.length > 0
+    && !/\b(?:list|all|warranties|policies|items|appliances|tasks|bills|records|events|rooms)\b/i.test(rawText);
   const projection = projectionAnnotation?.lexeme.semanticId === 'projection.count' ? 'COUNT'
-    : projectionAnnotation?.lexeme.semanticId === 'projection.detail' ? 'DETAIL'
+    : projectionAnnotation?.lexeme.semanticId === 'projection.detail' || showScalarDetail ? 'DETAIL'
     : projectionAnnotation?.lexeme.semanticId === 'projection.exists' ? 'EXISTS'
     : projectionAnnotation?.lexeme.semanticId === 'projection.list' ? 'LIST'
     : fields.length > 0 && meta.defaultProjection === 'DETAIL' ? 'DETAIL' : meta.defaultProjection;

@@ -406,7 +406,8 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
   // A singular noun names ONE record ("my claim roof hail", "my warranty"): only a superlative ("the oldest appliance", "which warranty expires first") may use it; everything else needs the plural kind.
   const preSuperlative = /\b(most expensive|most valuable|priciest|costliest|most costly|least expensive|cheapest|oldest|newest|youngest|largest|highest|lowest|biggest|soonest|earliest|latest|next to expire|expires? (?:first|soonest|next(?! (?:month|week|year|\d)))|expiring (?:first|soonest|next(?! (?:month|week|year|\d)))|due (?:first|soonest|next(?! (?:month|week|year|\d)))|first to expire)\b/.test(text);
   const aggregateWord = /\b(average|mean|typical|total(?! assessed)|sum|combined|altogether)\b/.test(text);
-  if (!plural && !preSuperlative && !(template.singularAggregate && aggregateWord)) return { kind: 'NONE' };
+  const systemDetail = template.id === 'inventory' && /\bdetails?\b/.test(text) && /\b(?:hvac system|home system)\b/.test(text);
+  if (!plural && !preSuperlative && !(template.singularAggregate && aggregateWord) && !systemDetail) return { kind: 'NONE' };
 
   // ---- shape ----
   // "claim number of my claim" and "serial number of my fridge" are point reads, not counts: "number of" counts only over a plural noun.
@@ -478,7 +479,7 @@ export function planDataPointQuery(message: string, now: Date = new Date(), time
     const shown = predicates[0].field;
     return { kind: 'PLAN', plan: { shape: 'FILTER', template, predicates, sort: template.fields[shown]?.sortable ? { field: shown, dir: 'asc' } : null, limit: QUERY_MAX_LIMIT, aggregate: null, touched: [...touched], showField: template.fields[shown]?.type === 'enum' ? null : shown, excludesClosed } };
   }
-  if (listQ && plural) {
+  if (listQ && (plural || systemDetail)) {
     return { kind: 'PLAN', plan: { shape: 'LIST', template, predicates: [], sort: null, limit: QUERY_MAX_LIMIT, aggregate: null, touched: [], showField: null, excludesClosed } };
   }
   return { kind: 'NONE' };

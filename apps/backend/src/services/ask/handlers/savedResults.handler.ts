@@ -237,7 +237,7 @@ export function savedResultsFromPage(input: {
     projection: 'LIST',
     predicateIds: ['predicate.saved_result.all'],
     resolvedRecordIds: rows.map((row) => row.artifactKey),
-    confirmedCount: rows.length,
+    confirmedCount: total ?? rows.length,
     unknownCount: gaps.length,
     displayedCount: rows.length,
     propertyId: input.propertyId ?? 'property',

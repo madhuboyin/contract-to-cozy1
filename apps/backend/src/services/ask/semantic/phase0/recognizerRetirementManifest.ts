@@ -582,7 +582,7 @@ export const ASK_RECOGNIZER_RETIREMENT_MANIFEST: readonly RecognizerInventoryEnt
       'DATA_POINT_DEFINITIONS',
       'QUERY_SHAPE_REGISTRIES',
     ],
-    liveItemCount: 243,
+    liveItemCount: 247,
     affectedDomains: [
       'domain.property_profile',
       'domain.inventory',
@@ -723,7 +723,7 @@ export const ASK_RECOGNIZER_RETIREMENT_MANIFEST: readonly RecognizerInventoryEnt
       'refinanceHandler',
       'savingsOwnershipHandler',
     ],
-    liveItemCount: 1366,
+    liveItemCount: 1368,
     affectedDomains: [
       'domain.property_profile',
       'domain.inventory',

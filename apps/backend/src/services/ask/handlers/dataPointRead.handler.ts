@@ -133,7 +133,6 @@ async function dataPointQueryResult(propertyId: string, role: string, plan: Quer
   }
   const sources = plan.shape === 'AGGREGATE' || !run.rows.length ? [{ ...sourceRef('Property', propertyId), ...minRole }] : run.rows.slice(0, 10).map((r) => ({ ...sourceRef(t.entity as CompositeSourceType, r.id), ...minRole }));
   const asOf = new Date().toISOString();
-  const resolvedCount = plan.shape === 'AGGREGATE' ? run.total : run.rows.length;
   const queryReceipt = buildSemanticReadReceipt({
     facetId: agreement?.facet?.id ?? `query-${t.id}-${plan.shape.toLowerCase()}`,
     entityId: agreement?.facet?.subject?.entityId ?? `entity.${t.id}`,
@@ -141,10 +140,10 @@ async function dataPointQueryResult(propertyId: string, role: string, plan: Quer
     predicateIds: agreement?.facet?.relations.length
       ? agreement.facet.relations.map((r) => r.predicateId)
       : plan.predicates.length ? plan.predicates.map((p) => `predicate.${t.id}.${p.field}`) : [`predicate.${t.id}.all`],
-    resolvedRecordIds: plan.shape === 'AGGREGATE' ? Array.from({ length: run.total }, (_, idx) => `${t.id}-${idx + 1}`) : run.rows.map((r) => r.id),
-    confirmedCount: resolvedCount,
+    resolvedRecordIds: plan.shape === 'AGGREGATE' ? [] : run.rows.map((r) => r.id),
+    confirmedCount: run.total,
     unknownCount: run.unrecorded,
-    displayedCount: plan.shape === 'AGGREGATE' ? run.total : Math.min(run.rows.length, 10),
+    displayedCount: plan.shape === 'AGGREGATE' ? 0 : Math.min(run.rows.length, 10),
     propertyId,
     role,
     sourceType: t.entity,
@@ -322,7 +321,9 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
   if (queryOutcome.kind === 'PLAN') {
     let queryAgreement: LegacyGrammarAgreement | null = null;
     if (!forcedPoint) {
-      const projection = queryOutcome.plan.shape === 'AGGREGATE' && queryOutcome.plan.aggregate?.fn === 'COUNT' ? 'COUNT' : 'LIST';
+      const projection = queryOutcome.plan.shape === 'AGGREGATE' && queryOutcome.plan.aggregate?.fn === 'COUNT'
+        ? 'COUNT'
+        : /\bdetails?\b/i.test(message) ? 'DETAIL' : 'LIST';
       queryAgreement = dataPointReadGrammarAgreement(message, {
         prismaEntity: queryOutcome.plan.template.entity,
         projection,

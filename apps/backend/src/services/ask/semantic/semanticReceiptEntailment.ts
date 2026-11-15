@@ -17,7 +17,13 @@ export function verifySemanticReadReceiptEntailment(result: AskOperationResult):
   if (!variant || variant.type !== 'SUMMARY') return fail('ANSWER_VARIANT_MISSING');
   if (receipt.population.totalMatchCount !== receipt.population.confirmedCount) return fail('CONFIRMED_POPULATION_MISMATCH');
   if (new Set(receipt.resolvedRecordIds).size !== receipt.resolvedRecordIds.length) return fail('DUPLICATE_RESOLVED_RECORD');
-  if (receipt.resolvedRecordIds.length !== receipt.population.totalMatchCount) return fail('RESOLVED_RECORD_COUNT_MISMATCH');
+  if (receipt.resolvedRecordIds.length > receipt.population.totalMatchCount) return fail('RESOLVED_RECORD_COUNT_EXCEEDS_POPULATION');
+  if ((receipt.projection === 'LIST' || receipt.projection === 'DETAIL') && receipt.resolvedRecordIds.length < receipt.population.displayedCount) {
+    return fail('RESOLVED_RECORD_COUNT_MISMATCH');
+  }
+  if ((receipt.projection === 'COUNT' || receipt.projection === 'AGGREGATE') && receipt.resolvedRecordIds.length > 0 && receipt.resolvedRecordIds.length !== receipt.population.totalMatchCount) {
+    return fail('RESOLVED_RECORD_COUNT_MISMATCH');
+  }
   if (receipt.population.displayedCount > receipt.population.totalMatchCount) return fail('DISPLAYED_COUNT_EXCEEDS_POPULATION');
   if (receipt.population.truncated !== (receipt.population.displayedCount < receipt.population.totalMatchCount)) return fail('TRUNCATION_FLAG_MISMATCH');
   if (receipt.projection === 'COUNT') {

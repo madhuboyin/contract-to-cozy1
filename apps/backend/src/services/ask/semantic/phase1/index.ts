@@ -147,32 +147,44 @@ export function verifyPhase1RuntimeWiring(backendRoot: string = DEFAULT_BACKEND_
       continue;
     }
 
-    let hasExecutableAgreedExample = false;
+    let allExamplesAgreed = family.representativeExamples.length > 0;
     for (const prompt of family.representativeExamples) {
       const plan = parseDeterministicSemanticRequest(prompt);
       if (plan.outcome !== 'MATCH' || !plan.facets[0]?.confidenceSignals.grammarComplete) {
         issues.push(`Phase 1 family ${family.familyId} prompt "${prompt}" failed deterministic grammar parse.`);
+        allExamplesAgreed = false;
         continue;
       }
       if (family.canonicalAdapterKey === 'saved-results.read') {
         const agreement = savedResultsGrammarAgreement(prompt, 'LIST');
-        if (agreement.outcome === 'AGREE' && agreement.facet) hasExecutableAgreedExample = true;
+        if (agreement.outcome !== 'AGREE' || !agreement.facet) {
+          issues.push(`Phase 1 family ${family.familyId} prompt "${prompt}" failed saved-results grammar agreement (${agreement.reasonCode}).`);
+          allExamplesAgreed = false;
+        }
         continue;
       }
       const shapePlan = planShape789(prompt);
       if (shapePlan && (shapePlan.shape === 'NO_WARRANTY' || shapePlan.shape === 'HAS_WARRANTY')) {
         const agreement = warrantyShapeGrammarAgreement(prompt, shapePlan);
-        if (agreement.outcome === 'AGREE' && agreement.facet) hasExecutableAgreedExample = true;
+        if (agreement.outcome !== 'AGREE' || !agreement.facet) {
+          issues.push(`Phase 1 family ${family.familyId} prompt "${prompt}" failed warranty shape agreement (${agreement.reasonCode}).`);
+          allExamplesAgreed = false;
+        }
         continue;
       }
       const queryOutcome = planDataPointQuery(prompt, new Date('2026-11-15T12:00:00Z'));
       if (queryOutcome.kind === 'PLAN') {
-        const projection = queryOutcome.plan.shape === 'AGGREGATE' && queryOutcome.plan.aggregate?.fn === 'COUNT' ? 'COUNT' : 'LIST';
+        const projection = queryOutcome.plan.shape === 'AGGREGATE' && queryOutcome.plan.aggregate?.fn === 'COUNT'
+          ? 'COUNT'
+          : /\bdetails?\b/i.test(prompt) ? 'DETAIL' : 'LIST';
         const agreement = dataPointReadGrammarAgreement(prompt, {
           prismaEntity: queryOutcome.plan.template.entity,
           projection,
         });
-        if (agreement?.outcome === 'AGREE' && agreement.facet) hasExecutableAgreedExample = true;
+        if (agreement?.outcome !== 'AGREE' || !agreement.facet) {
+          issues.push(`Phase 1 family ${family.familyId} prompt "${prompt}" failed query grammar agreement (${agreement?.reasonCode ?? 'UNMAPPED_ENTITY'}).`);
+          allExamplesAgreed = false;
+        }
         continue;
       }
       const point = resolveDataPoint(prompt);
@@ -181,13 +193,17 @@ export function verifyPhase1RuntimeWiring(backendRoot: string = DEFAULT_BACKEND_
           prismaEntity: point.entity,
           projection: 'DETAIL',
         });
-        if (agreement?.outcome === 'AGREE' && agreement.facet) hasExecutableAgreedExample = true;
+        if (agreement?.outcome !== 'AGREE' || !agreement.facet) {
+          issues.push(`Phase 1 family ${family.familyId} prompt "${prompt}" failed single-point grammar agreement (${agreement?.reasonCode ?? 'UNMAPPED_ENTITY'}).`);
+          allExamplesAgreed = false;
+        }
+        continue;
       }
+      issues.push(`Phase 1 family ${family.familyId} prompt "${prompt}" has no executable route through ${family.canonicalAdapterKey}.`);
+      allExamplesAgreed = false;
     }
 
-    if (!hasExecutableAgreedExample) {
-      issues.push(`Selected Phase 1 family ${family.familyId} has no executable agreed runtime path through ${family.canonicalAdapterKey}.`);
-    } else {
+    if (allExamplesAgreed) {
       verifiedFamilyIds.push(family.familyId);
     }
   }

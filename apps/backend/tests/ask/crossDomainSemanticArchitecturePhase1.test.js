@@ -545,6 +545,93 @@ test('savedResultsFromPage emits a CAPABILITY SemanticReadReceipt with real prop
   assert.equal(verdict.outcome, 'PASS');
 });
 
+test('paginated LIST receipts and aggregate COUNT receipts without synthetic IDs preserve totalMatchCount and pass entailment', () => {
+  const paginatedListReceipt = buildSemanticReadReceipt({
+    facetId: 'facet-list-1',
+    entityId: 'entity.maintenance_task',
+    projection: 'LIST',
+    predicateIds: ['predicate.maintenance_task.all'],
+    resolvedRecordIds: ['t-1', 't-2', 't-3', 't-4', 't-5', 't-6', 't-7', 't-8', 't-9', 't-10'],
+    confirmedCount: 25,
+    unknownCount: 0,
+    displayedCount: 10,
+    propertyId: 'prop-1',
+    role: 'OWNER',
+    sourceType: 'PropertyMaintenanceTask',
+    answerVariantId: 'data-point-query-summary',
+  });
+  assert.equal(paginatedListReceipt.population.totalMatchCount, 25);
+  assert.equal(paginatedListReceipt.population.displayedCount, 10);
+  assert.equal(paginatedListReceipt.population.truncated, true);
+  assert.equal(verifySemanticReadReceiptEntailment({
+    status: 'ANSWERED',
+    parameters: { semanticExecutionReceipt: paginatedListReceipt },
+    blocks: [{ type: 'SUMMARY', id: 'data-point-query-summary', title: '25 maintenance tasks', body: '25 maintenance tasks', tone: 'DEFAULT', actions: [] }],
+    suggestions: [],
+  }).outcome, 'PASS');
+
+  const countNoSyntheticIdsReceipt = buildSemanticReadReceipt({
+    facetId: 'facet-count-1',
+    entityId: 'entity.inventory_room',
+    projection: 'COUNT',
+    predicateIds: ['predicate.inventory_room.all'],
+    resolvedRecordIds: [],
+    confirmedCount: 12,
+    unknownCount: 0,
+    displayedCount: 0,
+    propertyId: 'prop-1',
+    role: 'OWNER',
+    sourceType: 'InventoryRoom',
+    answerVariantId: 'data-point-query-summary',
+  });
+  assert.deepEqual(countNoSyntheticIdsReceipt.resolvedRecordIds, []);
+  assert.equal(countNoSyntheticIdsReceipt.population.totalMatchCount, 12);
+  assert.equal(verifySemanticReadReceiptEntailment({
+    status: 'ANSWERED',
+    parameters: { semanticExecutionReceipt: countNoSyntheticIdsReceipt },
+    blocks: [{ type: 'SUMMARY', id: 'data-point-query-summary', title: '12 rooms', body: 'You have 12 rooms.', tone: 'DEFAULT', actions: [] }],
+    suggestions: [],
+  }).outcome, 'PASS');
+
+  const paginatedSaved = savedResultsFromPage({
+    page: {
+      rows: [
+        {
+          artifactKey: 'DOCUMENT:doc-1',
+          type: 'PROPERTY_BRIEF',
+          typeLabel: 'Property brief',
+          title: '2026 Roof Report',
+          summary: 'Roof inspection summary.',
+          freshness: { state: 'CURRENT', reason: null },
+          archived: { byOwner: false, byYou: false },
+          version: { label: 'Current' },
+          visibility: { sensitivity: 'NORMAL' },
+          sourceAsOf: '2026-10-01T00:00:00.000Z',
+          sortAt: '2026-10-01T00:00:00.000Z',
+          reopen: null,
+          reopenUnavailableReason: null,
+        },
+      ],
+      types: [{ id: 'PROPERTY_BRIEF', label: 'Property brief', state: 'AVAILABLE', reason: null }],
+      partial: false,
+      totalScope: 'COMPLETE',
+      total: 25,
+      counts: { active: 25, archived: 0 },
+      filterOptions: { types: [], freshness: [] },
+      nextCursor: 'cursor-2',
+    },
+    state: { archived: false, freshness: null, type: null, search: null, limit: 10 },
+    viewState: { domainScopePhrase: '', statusFilter: 'ACTIVE', roomScopePhrase: '', dateScopePhrase: '10' },
+    propertyId: 'prop-99',
+    role: 'OWNER',
+    facetId: 'facet-saved-paginated',
+  });
+  assert.equal(paginatedSaved.parameters.semanticExecutionReceipt.population.totalMatchCount, 25);
+  assert.equal(paginatedSaved.parameters.semanticExecutionReceipt.population.displayedCount, 1);
+  assert.equal(paginatedSaved.parameters.semanticExecutionReceipt.population.truncated, true);
+  assert.equal(verifySemanticReadReceiptEntailment(paginatedSaved).outcome, 'PASS');
+});
+
 test('dataPointReadResult fails closed when the typed grammar returns NONE_FITS', async () => {
   const propertyAccess = require('../../src/services/propertyAccess.service.ts');
   const { prisma } = require('../../src/lib/prisma.ts');
