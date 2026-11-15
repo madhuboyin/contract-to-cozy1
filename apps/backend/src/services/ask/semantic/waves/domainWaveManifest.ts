@@ -101,6 +101,7 @@ export interface DomainMeasurementInput {
   readonly domainId: SemanticDomainId;
   readonly answerableScenarioCount: number;
   readonly resolvedCount: number;
+  readonly providerIncrementalResolvedCount?: number;
   readonly inDomainNotUnderstoodCount: number;
   readonly unsupportedEvaluated: number;
   readonly unsupportedCount: number;
@@ -114,7 +115,7 @@ export interface DomainMeasurementInput {
   readonly replayQueryCount: number;
 }
 
-function wilson95Interval(successes: number, total: number): { readonly lower: number; readonly upper: number } {
+export function wilson95Interval(successes: number, total: number): { readonly lower: number; readonly upper: number } {
   if (total <= 0) return { lower: 0, upper: 0 };
   const z = 1.96;
   const p = successes / total;
@@ -334,7 +335,14 @@ export function buildMeasuredDomainCoverageProfiles(
       const meta = DOMAIN_SCOPE_METADATA[record.domainId];
       const answerableTotal = m?.answerableScenarioCount ?? 0;
       const resolved = m?.resolvedCount ?? 0;
+      const hasProviderMeasurement = typeof m?.providerIncrementalResolvedCount === 'number';
+      const providerIncremental = m?.providerIncrementalResolvedCount ?? 0;
+      const combinedResolved = Math.min(answerableTotal, resolved + providerIncremental);
       const resolvedRate = answerableTotal > 0 ? Number((resolved / answerableTotal).toFixed(4)) : 0;
+      const providerIncrementalRate = hasProviderMeasurement && answerableTotal > 0
+        ? Number((providerIncremental / answerableTotal).toFixed(4))
+        : null;
+      const combinedResolvedRate = answerableTotal > 0 ? Number((combinedResolved / answerableTotal).toFixed(4)) : 0;
       const notUnderstoodRate = answerableTotal > 0 ? Number(((m?.inDomainNotUnderstoodCount ?? 0) / answerableTotal).toFixed(4)) : 0;
       const unsupportedTotal = m?.unsupportedEvaluated ?? 0;
       const unsupportedRate = unsupportedTotal > 0 ? Number(((m?.unsupportedCount ?? 0) / unsupportedTotal).toFixed(4)) : 0;
@@ -366,12 +374,12 @@ export function buildMeasuredDomainCoverageProfiles(
         excludedFamilies: meta.excludedFamilies,
         independentlyAuthoredScenarioCount: answerableTotal,
         deterministicResolvedRate: resolvedRate,
-        providerIncrementalResolvedRate: null,
-        combinedResolvedRate: resolvedRate,
+        providerIncrementalResolvedRate: providerIncrementalRate,
+        combinedResolvedRate,
         inDomainNotUnderstoodRate: notUnderstoodRate,
         unsupportedRate,
         falseDeclineRate,
-        confidenceInterval95: wilson95Interval(resolved, answerableTotal),
+        confidenceInterval95: wilson95Interval(combinedResolved, answerableTotal),
         incorrectHighConfidenceCount: incorrectHigh,
         seededEvidencePassed: seededOk,
         metamorphicSuitePassed: metaOk,

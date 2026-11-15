@@ -6,7 +6,7 @@ import {
   verifySemanticReadReceiptEntailment,
   type SemanticReceiptEntailmentVerdict,
 } from '../semanticReceiptEntailment';
-import { type SemanticFacet, type SemanticRequestPlan, type SemanticWhereExpression } from '../semanticRequestPlan';
+import { ASK_SEMANTIC_PLAN_VERSION, type SemanticFacet, type SemanticRequestPlan, type SemanticWhereExpression } from '../semanticRequestPlan';
 import { type SemanticDomainId } from '../phase0/semanticOntologyBaseline';
 import {
   buildPhase2aRichPresentation,
@@ -721,10 +721,31 @@ function executeNewStackFacet(
     || job === 'job.inventory.replacement_guidance'
   ) {
     const rawQuery = job === 'job.inventory.replacement_guidance' ? 'should I repair or replace my furnace' : facet.sourceSpan.text;
+    const planOverrideForFacet: SemanticRequestPlan | undefined =
+      job !== 'job.inventory.replacement_guidance'
+      && !facet.confidenceSignals.grammarComplete
+      && facet.requiredSlots.every((s) => s.state === 'RESOLVED')
+        ? {
+            schemaVersion: ASK_SEMANTIC_PLAN_VERSION,
+            producer: { kind: 'PROVIDER', version: 'cross-domain-wave-forwarded' },
+            outcome: 'MATCH',
+            rawText: rawQuery,
+            normalizedText: rawQuery,
+            minimizedText: rawQuery,
+            unresolvedSpans: [],
+            facets: [{
+              ...facet,
+              sourceSpan: { start: 0, end: rawQuery.length, text: rawQuery },
+              dependsOn: [],
+              confidenceSignals: { grammarComplete: true, unresolvedSpanCount: 0 },
+            }],
+          }
+        : undefined;
     const sub = executePhase2aVerticalSlice({
       rawText: rawQuery,
       snapshot,
       auth: { propertyId: snapshot.propertyId, role, propertyAuthorized: true },
+      planOverride: planOverrideForFacet,
     });
     const summaryBlock = sub.operationResult.blocks.find((b) => b.type === 'SUMMARY');
     const summaryText = summaryBlock && summaryBlock.type === 'SUMMARY' ? summaryBlock.body : sub.status;

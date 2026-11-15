@@ -315,12 +315,15 @@ export function executePhase2aVerticalSlice(input: {
   readonly snapshot: Phase2aPropertySnapshot;
   readonly auth: Phase2aAuthorizationContext;
   readonly filterEntityIds?: readonly string[];
+  readonly planOverride?: SemanticRequestPlan;
 }): Phase2aSliceExecutionResult {
   const { rawText, snapshot, auth } = input;
   const dynamicEntities = buildDynamicPlaceholderCandidates(snapshot, auth);
   const envelope = buildSemanticTextEnvelope(rawText, { dynamicEntities });
   const spanRoundTripOk = verifyPlaceholderSpanMapRoundTrip(envelope).ok;
-  const plan = SemanticRequestPlanSchema.parse(parseDeterministicSemanticRequest(rawText, { dynamicEntities }));
+  const plan = SemanticRequestPlanSchema.parse(
+    input.planOverride ?? parseDeterministicSemanticRequest(rawText, { dynamicEntities }),
+  );
   return executeValidatedPhase2aPlan({
     rawText,
     envelope,
