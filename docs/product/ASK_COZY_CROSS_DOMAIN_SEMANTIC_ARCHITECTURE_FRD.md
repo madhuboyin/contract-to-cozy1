@@ -1048,17 +1048,7 @@ Implementation shall be incremental by architectural seam, not by adding prompt 
 
 **Exit:** all three target kinds execute through the same plan boundary in the slice; exact seeded results, adjacent negatives and the slice metamorphic suite for inflection, negation, coordination, typos and word order pass; provider absence does not break declared deterministic coverage; no slice-specific vocabulary bypasses the registry.
 
-### Phase 2P — Early provider expansion track
-
-After Phase 2A, provider integration shall proceed in parallel with domain waves once provider/homeowner-text approval and latency/cost budgets in §22 are recorded. It is not a prerequisite for deterministic correctness or provider-independent availability.
-
-- Connect the provider through the canonical plan schema, indexed-placeholder minimization boundary and span-mapping validator for the slice domains first.
-- Implement deterministic-first invocation, unresolved-span provider expansion, semantic reconciliation and conforming facet-aware or union two-stage retrieval.
-- Run both producers on every eligible slice scenario, including cases production would short-circuit, and measure deterministic coverage, provider incremental coverage and disagreement.
-- Feed observed long-tail misses and disagreements back into grammar, lexicon, plan and wave design before later domains are enabled.
-- Add each subsequent wave's eligible catalogue to both producers and repeat the same evidence report.
-
-**Exit:** the slice has measured provider-incremental coverage and disagreement outcomes, or the track records the specific unresolved owner decision that prevents provider use without blocking deterministic waves.
+After Phase 2A, the numbered domain-wave sequence and Provider Track P may proceed concurrently. Provider Track P is a parallel learning and coverage-expansion track, not a sequential phase between Phase 2A and Phase 2B, and it is not a prerequisite for deterministic correctness or provider-independent availability.
 
 ### Phases 2B–5 — End-to-end domain waves
 
@@ -1088,9 +1078,23 @@ Every record shall separately publish a coverage profile: registry/lexicon/parse
 
 **Wave exit:** at least one domain reaches `ENABLED_FOR_DECLARED_SCOPE`; all other domains retain their prior honest behavior or are explicitly `PARTIAL`/`NOT_ENABLED`; no cross-domain regression or low phrasing coverage is hidden by aggregate metrics. The phases repeat until every approved §5 domain reaches its intended state and the global completion definition can be evaluated.
 
+### Parallel Track P — Early provider expansion after Phase 2A
+
+Provider integration may begin after Phase 2A, in parallel with Phases 2B–5, once provider/homeowner-text approval and latency/cost budgets in §22 are recorded.
+
+- Connect the provider through the canonical plan schema, indexed-placeholder minimization boundary and span-mapping validator for the slice domains first.
+- Implement deterministic-first invocation, unresolved-span provider expansion, semantic reconciliation and conforming facet-aware or union two-stage retrieval.
+- Run both producers on every eligible slice scenario, including cases production would short-circuit, and measure deterministic coverage, provider incremental coverage and disagreement.
+- Feed observed long-tail misses and disagreements back into grammar, lexicon, plan and wave design before later domains are enabled.
+- Add each subsequent wave's eligible catalogue to both producers and repeat the same evidence report.
+
+**Track exit:** the slice has measured provider-incremental coverage and disagreement outcomes, or the track records the specific unresolved owner decision that prevents provider use without blocking deterministic waves.
+
 ### Phase 6 — Full calibration and end-to-end evaluation
 
-- Complete any provider catalogue expansion not already delivered by Phase 2P and the domain waves.
+Phase 6 begins after the required domain-wave scope is complete and either Provider Track P has completed or its unresolved approval or budget decision is formally recorded.
+
+- Complete any provider catalogue expansion not already delivered by Provider Track P and the domain waves.
 - Verify all detected facets receive bounded retrieval or an explicit `DOMAIN_NOT_SEARCHED` overflow result and preserve stable cross-domain dependencies.
 - Calibrate by semantic risk stratum.
 - Execute both producers over the sealed cross-domain suite, including production-short-circuited cases, and publish layer metrics.
