@@ -17,6 +17,7 @@ import { reconcileAskExecutionSideEffects, refreshAskSourceExecution } from '../
 import { maintenanceConflictDescription, maintenanceMoney, maintenanceTaskVersion, maintenanceUndoCandidates, maintenanceWorkflowVersion } from '../handlers/maintenance.handler';
 import { receiptFollowUpAction } from '../support/receiptFollowUps';
 import { maintenanceTemplateActionKey } from '../../maintenance/applicabilityPolicy';
+import { visibleInventoryItemWhere } from '../../riskAssetApplicability';
 
 async function confirmMaintenanceTaskComplete(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -165,6 +166,21 @@ async function confirmMaintenanceTaskCreate(ctx: ConfirmCapabilityContext): Prom
       where: { propertyId_actionKey: { propertyId: execution.propertyId, actionKey } },
     });
     if (!task) {
+      const rawInventoryItemId = parameters.inventoryItemId;
+      let inventoryItemId: string | undefined;
+      if (rawInventoryItemId !== undefined && rawInventoryItemId !== null) {
+        if (typeof rawInventoryItemId !== 'string' || !rawInventoryItemId.trim()) {
+          throw Object.assign(new Error('The selected inventory item is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+        }
+        const visibleItem = await prisma.inventoryItem.findFirst({
+          where: { id: rawInventoryItemId, propertyId: execution.propertyId, ...visibleInventoryItemWhere() },
+          select: { id: true },
+        });
+        if (!visibleItem) {
+          throw Object.assign(new Error('The selected inventory item is no longer available. Nothing was added.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+        }
+        inventoryItemId = visibleItem.id;
+      }
       try {
         task = await PropertyMaintenanceTaskService.createUserTask(userId, execution.propertyId, {
           title: candidate.data.title,
@@ -174,6 +190,7 @@ async function confirmMaintenanceTaskCreate(ctx: ConfirmCapabilityContext): Prom
           isRecurring: candidate.data.isRecurring,
           frequency: candidate.data.isRecurring ? candidate.data.frequency : undefined,
           nextDueDate: candidate.data.nextDueDate,
+          ...(inventoryItemId ? { inventoryItemId } : {}),
           ...(templateId ? { templateId, serviceCategory: template?.serviceCategory ?? undefined } : { actionKey }),
         });
       } catch (error) {

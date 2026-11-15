@@ -379,3 +379,121 @@ test('Phase 2A protects dynamic property entities, hides restricted items as mis
   assert.ok(ASK_OPERATION_DEFINITIONS.DATA_POINT_READ.allowedBlockTypes.includes('GROUPED_LIST'));
   assert.ok(ASK_OPERATION_DEFINITIONS.DATA_POINT_READ.allowedBlockTypes.includes('BOUNDARY'));
 });
+
+test('Phase 2A maintenance preview includes matching confirmationVersion and confirmationExpiresAt in parameters', () => {
+  const {
+    executePhase2aVerticalSlice,
+    PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+    PHASE2A_OWNER_AUTH,
+  } = require('../../src/services/ask/semantic/phase2a/index.ts');
+
+  const preview = executePhase2aVerticalSlice({
+    rawText: 'schedule maintenance for my furnace on 2026-12-01',
+    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+    auth: PHASE2A_OWNER_AUTH,
+  });
+
+  assert.equal(preview.status, 'NEEDS_CONFIRMATION');
+  assert.ok(preview.operationResult.confirmation);
+  assert.equal(
+    preview.operationResult.parameters.confirmationVersion,
+    preview.operationResult.confirmation.version
+  );
+  assert.equal(
+    preview.operationResult.parameters.confirmationExpiresAt,
+    preview.operationResult.confirmation.expiresAt
+  );
+  assert.ok(new Date(preview.operationResult.parameters.confirmationExpiresAt).getTime() > Date.now());
+});
+
+test('confirmMaintenanceTaskCreate reauthorizes inventoryItemId and persists it through PropertyMaintenanceTaskService.createUserTask', async () => {
+  const { prisma } = require('../../src/lib/prisma.ts');
+  const { PropertyMaintenanceTaskService } = require('../../src/services/PropertyMaintenanceTask.service.ts');
+  const { confirmCapabilityInvoke } = require('../../src/services/ask/confirmCapabilityHandlerRegistry.ts');
+  const { maintenanceWorkflowVersion } = require('../../src/services/ask/handlers/maintenance.handler.ts');
+  require('../../src/services/ask/handlers/maintenanceConfirm.handler.ts');
+
+  const origItemFindFirst = prisma.inventoryItem.findFirst;
+  const origTaskFindMany = prisma.propertyMaintenanceTask.findMany;
+  const origTaskFindUnique = prisma.propertyMaintenanceTask.findUnique;
+  const origTaskCreate = prisma.propertyMaintenanceTask.create;
+  const origAskExecFindMany = prisma.askExecution.findMany;
+  const origPropertyFindUnique = prisma.property.findUnique;
+  const origPropertyAccess = PropertyMaintenanceTaskService.verifyPropertyOwnership;
+  const origSyncTaskWorkItem = PropertyMaintenanceTaskService.syncTaskWorkItem;
+
+  try {
+    prisma.propertyMaintenanceTask.findMany = async () => [];
+    prisma.propertyMaintenanceTask.findUnique = async () => null;
+    prisma.askExecution.findMany = async () => [];
+    prisma.property.findUnique = async () => null;
+    PropertyMaintenanceTaskService.verifyPropertyOwnership = async () => {};
+    PropertyMaintenanceTaskService.syncTaskWorkItem = async () => {};
+    const workflowVersion = await maintenanceWorkflowVersion('prop-phase2a-1');
+
+    const baseCtx = {
+      execution: {
+        id: 'exec-maint-1',
+        propertyId: 'prop-phase2a-1',
+        operationId: 'MAINTENANCE_TASK_CREATE',
+        userId: 'user-1',
+      },
+      userId: 'user-1',
+      access: { role: 'OWNER' },
+      command: { roleFloor: 'CONTRIBUTOR' },
+      parameters: {
+        propertyId: 'prop-phase2a-1',
+        inventoryItemId: 'item-furnace',
+        maintenanceWorkflowVersion: workflowVersion,
+        maintenanceTitle: 'Service Basement Furnace',
+        maintenanceDescription: 'Scheduled via Ask for Basement Furnace',
+        maintenancePriority: 'MEDIUM',
+        maintenanceNextDueDate: '2026-12-01',
+        maintenanceIsRecurring: false,
+      },
+    };
+
+    // 1. Hidden or cross-property item is rejected with ASK_CONFIRMATION_NOT_ACTIVE
+    prisma.inventoryItem.findFirst = async () => null;
+    await assert.rejects(
+      () => confirmCapabilityInvoke('MAINTENANCE_TASK_CREATE', baseCtx),
+      (err) => err && err.code === 'ASK_CONFIRMATION_NOT_ACTIVE'
+    );
+
+    // 2. Visible item on the same property is reauthorized and persisted on the created task
+    let capturedCreateData = null;
+    prisma.inventoryItem.findFirst = async (args) => {
+      assert.equal(args.where.id, 'item-furnace');
+      assert.equal(args.where.propertyId, 'prop-phase2a-1');
+      return { id: 'item-furnace' };
+    };
+    prisma.propertyMaintenanceTask.create = async (args) => {
+      capturedCreateData = args.data;
+      return {
+        id: 'task-created-1',
+        propertyId: args.data.propertyId,
+        inventoryItemId: args.data.inventoryItemId,
+        title: args.data.title,
+        status: 'PENDING',
+        priority: 'MEDIUM',
+        nextDueDate: args.data.nextDueDate,
+        isRecurring: false,
+        frequency: null,
+        createdAt: new Date('2026-11-15T12:00:00.000Z'),
+      };
+    };
+
+    const confirmed = await confirmCapabilityInvoke('MAINTENANCE_TASK_CREATE', baseCtx);
+    assert.equal(confirmed.result.status, 'COMPLETED');
+    assert.equal(capturedCreateData.inventoryItemId, 'item-furnace');
+  } finally {
+    prisma.inventoryItem.findFirst = origItemFindFirst;
+    prisma.propertyMaintenanceTask.findMany = origTaskFindMany;
+    prisma.propertyMaintenanceTask.findUnique = origTaskFindUnique;
+    prisma.propertyMaintenanceTask.create = origTaskCreate;
+    prisma.askExecution.findMany = origAskExecFindMany;
+    prisma.property.findUnique = origPropertyFindUnique;
+    PropertyMaintenanceTaskService.verifyPropertyOwnership = origPropertyAccess;
+    PropertyMaintenanceTaskService.syncTaskWorkItem = origSyncTaskWorkItem;
+  }
+});

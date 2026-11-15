@@ -520,6 +520,8 @@ export function executePhase2aVerticalSlice(input: {
       : ({ missingSlots } as unknown as AskEntityResolutionResult);
 
     const previewTitle = targetItem ? `Service ${targetItem.name}` : 'Maintenance task';
+    const confirmationVersion = 1;
+    const confirmationExpiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
     const previewParams = targetItem && dueMatch
       ? {
           propertyId: snapshot.propertyId,
@@ -530,13 +532,15 @@ export function executePhase2aVerticalSlice(input: {
           maintenancePriority: 'MEDIUM',
           maintenanceNextDueDate: dueMatch[1],
           maintenanceIsRecurring: false,
+          confirmationVersion,
+          confirmationExpiresAt,
         }
       : {};
 
     const validConfirmation = targetItem && dueMatch
       ? AskConfirmationSchema.parse({
           confirmationId: 'phase2a-maint-preview-1',
-          version: 1,
+          version: confirmationVersion,
           title: `Create maintenance task: ${previewTitle}?`,
           description: 'This command creates a task in the canonical Maintenance record.',
           fields: [
@@ -548,7 +552,7 @@ export function executePhase2aVerticalSlice(input: {
           editableFields: [],
           confirmLabel: 'Create maintenance task',
           consentText: 'I authorize creating this maintenance task in the shared Maintenance record.',
-          expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+          expiresAt: confirmationExpiresAt,
         })
       : null;
 

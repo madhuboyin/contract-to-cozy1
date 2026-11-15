@@ -19,6 +19,7 @@ import { planDiyTaskReconciliation, withOccurrenceId, emitDiyTaskReconciliation 
 import { resolveSeasonalTaskDueDate } from '../utils/maintenanceDueDate';
 import { syncSeasonalChecklistStatus } from './seasonalChecklistStatus.service';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
+import { visibleInventoryItemWhere } from './riskAssetApplicability';
 import { getPropertyContext } from '../modules/propertyContext';
 import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
 import {
@@ -161,6 +162,7 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
         isRecurring?: boolean;
         frequency?: RecurrenceFrequency;
         nextDueDate?: string;
+        inventoryItemId?: string;
         templateId?: string;
         canonicalWorkItemId?: string;
         /** Stable caller-owned key used to make workflow creation idempotent. */
@@ -169,6 +171,16 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
     ): Promise<PropertyMaintenanceTask> {
       // Verify property access (CONTRIBUTOR+ required to create tasks)
       await this.verifyPropertyOwnership(userId, propertyId, 'CONTRIBUTOR');
+
+      if (data.inventoryItemId) {
+        const visibleItem = await prisma.inventoryItem.findFirst({
+          where: { id: data.inventoryItemId, propertyId, ...visibleInventoryItemWhere() },
+          select: { id: true },
+        });
+        if (!visibleItem) {
+          throw new Error('Inventory item not found.');
+        }
+      }
   
       // Validate serviceCategory if provided
       if (data.serviceCategory) {
@@ -231,6 +243,7 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
               isRecurring: data.isRecurring ?? true,
               frequency: data.frequency ?? template.defaultFrequency,
               nextDueDate: data.nextDueDate ? new Date(data.nextDueDate) : this.calculateNextDueDate(template.defaultFrequency),
+              ...(data.inventoryItemId ? { inventoryItemId: data.inventoryItemId } : {}),
             },
           });
           await this.syncTaskWorkItem(userId, reactivated, false, reactivated.status === 'COMPLETED');
@@ -241,6 +254,7 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
       const task = await prisma.propertyMaintenanceTask.create({
         data: {
           propertyId,
+          inventoryItemId: data.inventoryItemId ?? null,
           title: data.title,
           description: data.description ?? null,
           status: 'PENDING',
