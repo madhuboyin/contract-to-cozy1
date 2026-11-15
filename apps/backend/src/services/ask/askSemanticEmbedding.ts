@@ -72,6 +72,29 @@ export function askSemanticConcepts(normalized: string): string[] {
     .map(([concept]) => concept);
 }
 
+/**
+ * Phase 1 containment (§17.2 #3 / §18 Phase 1): separated protection semantic
+ * token families. Keeps warranty, insurance, policy, coverage, and claim
+ * strictly disjoint for semantic plan admission and protection token checks
+ * while preserving the frozen legacy feature-hash calibration vector.
+ */
+export const PROTECTION_SEMANTIC_TOKEN_GROUPS: Readonly<Record<'warranty' | 'insurance' | 'policy' | 'coverage' | 'claim', readonly string[]>> = Object.freeze({
+  warranty: Object.freeze(['warranty', 'warranties', 'home warranty', 'appliance warranty', 'extended warranty']),
+  insurance: Object.freeze(['insurance', 'insurer', 'homeowners insurance', 'insurance carrier']),
+  policy: Object.freeze(['policy', 'policies', 'policy number', 'deductible', 'premium']),
+  coverage: Object.freeze(['coverage', 'covered', 'uncovered', 'coverage gap', 'protection', 'protections']),
+  claim: Object.freeze(['claim', 'claims', 'claim number', 'adjuster', 'settlement']),
+});
+
+export function extractSeparatedProtectionConcepts(
+  normalized: string,
+): Array<'warranty' | 'insurance' | 'policy' | 'coverage' | 'claim'> {
+  const lowered = normalized.toLocaleLowerCase('en-US').replace(/[^a-z0-9]+/g, ' ').trim();
+  return (Object.entries(PROTECTION_SEMANTIC_TOKEN_GROUPS) as Array<['warranty' | 'insurance' | 'policy' | 'coverage' | 'claim', readonly string[]]>)
+    .filter(([, phrases]) => phrases.some((phrase) => containsPhrase(lowered, phrase)))
+    .map(([concept]) => concept);
+}
+
 export function askSemanticConceptSimilarity(left: string, right: string): number {
   return askSemanticConceptSetSimilarity(new Set(askSemanticConcepts(left)), new Set(askSemanticConcepts(right)));
 }

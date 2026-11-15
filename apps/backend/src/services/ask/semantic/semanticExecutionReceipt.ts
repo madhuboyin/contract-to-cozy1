@@ -26,3 +26,62 @@ export const SemanticReadReceiptSchema = z.object({
 }).strict();
 
 export type SemanticReadReceipt = z.infer<typeof SemanticReadReceiptSchema>;
+
+export interface BuildSemanticReadReceiptInput {
+  readonly facetId: string;
+  readonly entityId: string;
+  readonly operationAdapter?: string;
+  readonly projection: SemanticReadReceipt['projection'];
+  readonly predicateIds: readonly string[];
+  readonly resolvedRecordIds: readonly string[];
+  readonly confirmedCount?: number;
+  readonly conflictedCount?: number;
+  readonly unknownCount?: number;
+  readonly displayedCount: number;
+  readonly propertyId: string;
+  readonly role: string;
+  readonly sourceType: string;
+  readonly observedAt?: string;
+  readonly answerVariantId: string;
+}
+
+/**
+ * FR-ANS-1 / §18 Phase 1: Standardized minimal read receipt builder with
+ * schema validation at construction time.
+ */
+export function buildSemanticReadReceipt(input: BuildSemanticReadReceiptInput): SemanticReadReceipt {
+  const uniqueRecordIds = [...new Set(input.resolvedRecordIds.filter(Boolean))];
+  const confirmedCount = input.confirmedCount ?? uniqueRecordIds.length;
+  const displayedCount = Math.min(input.displayedCount, confirmedCount);
+  return SemanticReadReceiptSchema.parse({
+    schemaVersion: ASK_SEMANTIC_RECEIPT_VERSION,
+    planVersion: ASK_SEMANTIC_PLAN_VERSION,
+    facetId: input.facetId,
+    requestClass: 'DATA_QUERY',
+    target: {
+      entityId: input.entityId,
+      operationAdapter: input.operationAdapter ?? 'data-point-read.read',
+    },
+    projection: input.projection,
+    predicateIds: input.predicateIds.length > 0 ? [...input.predicateIds] : [`predicate.${input.entityId}.read`],
+    resolvedRecordIds: uniqueRecordIds,
+    population: {
+      confirmedCount,
+      conflictedCount: input.conflictedCount ?? 0,
+      unknownCount: input.unknownCount ?? 0,
+      totalMatchCount: confirmedCount,
+      displayedCount,
+      truncated: displayedCount < confirmedCount,
+    },
+    authorization: {
+      propertyId: input.propertyId,
+      role: input.role,
+      decision: 'ALLOWED',
+    },
+    provenance: {
+      sourceType: input.sourceType,
+      observedAt: input.observedAt ?? new Date().toISOString(),
+    },
+    answerVariantId: input.answerVariantId,
+  });
+}

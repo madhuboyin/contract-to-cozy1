@@ -16,7 +16,8 @@ import { runDataPointQuery } from '../dataPoint/dataPointQueryRunner';
 import { applyLaunchHints } from '../dataPoint/dataPointLaunchHints';
 import { planShape789, runShape789, shapePointIds, type Shape789Plan } from '../dataPoint/dataPointShapes789';
 import { warrantyShapeGrammarAgreement, type LegacyGrammarAgreement } from '../semantic/legacyGrammarAgreement';
-import { ASK_SEMANTIC_RECEIPT_VERSION, type SemanticReadReceipt } from '../semantic/semanticExecutionReceipt';
+import { ASK_SEMANTIC_RECEIPT_VERSION, buildSemanticReadReceipt, type SemanticReadReceipt } from '../semantic/semanticExecutionReceipt';
+import { humanizePresentationToken } from '../semantic/phase1/presentationHumanizer';
 
 const ENTITY_COPY: Record<string, { plural: string; singular: string; collection: string; record: string; none?: string }> = {
   InventoryItem: { plural: 'items', singular: 'inventory', collection: 'inventory', record: 'Home inventory record' },
@@ -40,7 +41,7 @@ const ENTITY_COPY: Record<string, { plural: string; singular: string; collection
   PropertyTaxBillRecord: { plural: 'property tax bills', singular: 'property tax bill', collection: 'property tax bills', record: 'Property tax bill record', none: 'No property tax bill is recorded yet' },
   PropertyTaxAssessmentRecord: { plural: 'property tax assessments', singular: 'property tax assessment', collection: 'property tax assessments', record: 'Property tax assessment record', none: 'No property tax assessment is recorded yet' },
 };
-const words = (v: unknown) => String(v).toLowerCase().replace(/_/g, ' ');
+const words = (v: unknown) => humanizePresentationToken(String(v)) || String(v).toLowerCase().replace(/_/g, ' ');
 /** "How old is it": the recorded install date (or year) read back as an approximate age. Only for the install-date points, only when the question asks for an age, and never for a date in the future. */
 export function ageSentence(point: DataPointDefinition, value: unknown, message: string, now: Date = new Date()): string {
   if (!/\bhow old\b|\bage\b/i.test(message)) return '';
@@ -130,14 +131,30 @@ async function dataPointQueryResult(propertyId: string, role: string, plan: Quer
     if (run.unrecorded > 0) { limited = true; lines.push(`${run.unrecorded} ${noun(run.unrecorded)} ${run.unrecorded === 1 ? 'has' : 'have'} no ${t.fields[plan.sort!.field].label} recorded, so ${run.unrecorded === 1 ? 'it is' : 'they are'} not ranked.`); }
   }
   const sources = plan.shape === 'AGGREGATE' || !run.rows.length ? [{ ...sourceRef('Property', propertyId), ...minRole }] : run.rows.slice(0, 10).map((r) => ({ ...sourceRef(t.entity as CompositeSourceType, r.id), ...minRole }));
+  const asOf = new Date().toISOString();
+  const queryReceipt = buildSemanticReadReceipt({
+    facetId: `query-${t.id}-${plan.shape.toLowerCase()}`,
+    entityId: `entity.${t.id}`,
+    projection: plan.shape === 'AGGREGATE' ? (plan.aggregate?.fn === 'COUNT' ? 'COUNT' : 'AGGREGATE') : 'LIST',
+    predicateIds: plan.predicates.length ? plan.predicates.map((p) => `predicate.${t.id}.${p.field}`) : [`predicate.${t.id}.all`],
+    resolvedRecordIds: plan.shape === 'AGGREGATE' ? Array.from({ length: run.total }, (_, idx) => `${t.id}-${idx + 1}`) : run.rows.map((r) => r.id),
+    confirmedCount: run.total,
+    unknownCount: run.unrecorded,
+    displayedCount: plan.shape === 'AGGREGATE' ? run.total : Math.min(run.rows.length, 10),
+    propertyId,
+    role,
+    sourceType: t.entity,
+    observedAt: asOf,
+    answerVariantId: 'data-point-query-summary',
+  });
   return {
     status: limited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: limited ? 'DATA_POINT_QUERY_PARTIAL' : undefined,
     // A count, total, ranking or filter changes when ANY record is added, removed, edited or stops matching, which per-row sources cannot detect. It is therefore a snapshot as of `asOf`, and is NOT composable: a composite
     // never reuses it (describeSources returns null for it); asking again re-runs the plan.
-    parameters: { sources, dataPointQuery: { snapshot: true, shape: plan.shape, template: t.id, asOf: new Date().toISOString() } },
+    parameters: { sources, dataPointQuery: { snapshot: true, shape: plan.shape, template: t.id, asOf }, semanticExecutionReceipt: queryReceipt },
     blocks: [
       { type: 'SUMMARY', id: 'data-point-query-summary', title, body: lines.join(' '), tone: limited ? 'CAUTION' : 'DEFAULT', actions: [] },
-      { type: 'EVIDENCE', id: 'data-point-evidence', title: 'Where this comes from', items: [{ label: `Your ${t.plural}`, source: where?.record ?? t.entity, observedAt: new Date().toISOString() }] },
+      { type: 'EVIDENCE', id: 'data-point-evidence', title: 'Where this comes from', items: [{ label: `Your ${t.plural}`, source: where?.record ?? t.entity, observedAt: asOf }] },
     ] as AskPresentationBlock[],
     suggestions: [],
   };
@@ -331,10 +348,24 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
   // Provenance/confidence limitation (FR-REC-2): a low-confidence or self-entered record is not stated plainly.
   const limits = [...new Set(present.map((r) => r.limitation).filter((x): x is string => Boolean(x)))];
   sentences.push(...limits);
+  const singlePointReceipt = buildSemanticReadReceipt({
+    facetId: `point-${readPoint.id}`,
+    entityId: `entity.${readPoint.entity}`,
+    projection: 'DETAIL',
+    predicateIds: [`predicate.${readPoint.id}.present`],
+    resolvedRecordIds: present.map((r) => r.id),
+    confirmedCount: present.length,
+    unknownCount: missing,
+    displayedCount: present.length,
+    propertyId,
+    role,
+    sourceType: readPoint.entity,
+    answerVariantId: 'data-point-summary',
+  });
   return {
     status: missing > 0 || limits.length ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: missing > 0 ? 'DATA_POINT_PARTIAL' : limits.length ? 'DATA_POINT_LIMITED_PROVENANCE' : undefined,
     // `dataPointRead` names the reviewed data point(s) whose VALUE this answer states, so the delivery gate can check the answer against the question without a text-similarity guess.
-    parameters: { dataPointRead: { pointIds: [readPoint.id] }, sources: present.map((r) => ({ ...sourceRef((r.sourceType ?? readPoint.entity) as CompositeSourceType, r.id), ...(readPoint.audience !== 'VIEWER' ? { minRole: readPoint.audience } : {}) })) },
+    parameters: { dataPointRead: { pointIds: [readPoint.id] }, semanticExecutionReceipt: singlePointReceipt, sources: present.map((r) => ({ ...sourceRef((r.sourceType ?? readPoint.entity) as CompositeSourceType, r.id), ...(readPoint.audience !== 'VIEWER' ? { minRole: readPoint.audience } : {}) })) },
     blocks: [
       { type: 'SUMMARY', id: 'data-point-summary', title: `${readPoint.label}: ${present.map((r) => formatDataPointValue(readPoint, r.value)).join('; ')}`, body: sentences.join(' '), tone: missing > 0 || limits.length ? 'CAUTION' : 'DEFAULT', actions: [] },
       { type: 'EVIDENCE', id: 'data-point-evidence', title: 'Where this comes from', items: present.map((r) => ({ label: r.name, source: `${where.record}${r.roomName ? ` (${r.roomName})` : ''}`, observedAt: null })) },

@@ -51,6 +51,7 @@ import { homeHasItem } from '../composition/homeItems';
 import { declinedCompositionNote, slotRevalidationQuestion } from '../composition/notices';
 import { resolvePropertyAccess } from '../../propertyAccess.service';
 import { resolveSuggestedActionSelection, type SuggestedActionResolution, type SuggestedActionRejectionReason } from '../suggestedActions/suggestedNextActionSelection';
+import { gateUncertifiedCommandPreview } from '../semantic/phase1/commandPreviewAdmission';
 
 function stableSkillRoutingReasonCode(outcome: SkillRoutingOutcome): string | null {
   if (outcome === 'UNSUPPORTED') return 'ASK_SKILL_UNSUPPORTED';
@@ -729,7 +730,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       ? { ...(input.launchContext ?? { surface: 'ASK_FOLLOW_UP' }), sourceExecutionId: followUp.sourceExecutionId }
       : input.launchContext;
   try {
-    const rawResult = await withAskTimeout(
+    const rawExecutedResult = await withAskTimeout(
       routingDecision.requiresClarification
         ? Promise.resolve(routingClarificationResult(
           routingDecision,
@@ -740,6 +741,17 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
         : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: executionPropertyId, operation, launchContext: effectiveLaunchContext, continuationCursor: followUp.continuationCursor, suppliedInput: followUp.suppliedInput, deferSemanticValidation: true }, skillTelemetryTrace),
       controls.executionTimeoutMs,
     );
+    const rawResult = routingDecision.requiresClarification
+      ? rawExecutedResult
+      : gateUncertifiedCommandPreview({
+        operationId: operation.operationId,
+        message: routingMessage,
+        routedDeterministically: routingDecision.stage === 'DETERMINISTIC' || Boolean(declaredItemActionOperationId),
+        operationConfirmedByUser: Boolean(declaredItemActionOperationId)
+          || (Boolean(launchCapabilityOperationId) && forcedOperationId === launchCapabilityOperationId && operation.operationId === launchCapabilityOperationId),
+        entityResolution: routedEntityResolution,
+        result: rawExecutedResult,
+      }).result;
     markStage('ROUTE_AND_EXECUTE', operation.operationId);
     const synthesizedResult = operationDefinition.executionMode === 'DETERMINISTIC' && !routingDecision.requiresClarification
       ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled, skillTelemetryTrace)

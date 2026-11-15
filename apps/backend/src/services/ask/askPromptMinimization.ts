@@ -19,11 +19,26 @@ const GENERIC_QUESTION_TOKENS = new Set([
   'current', 'recent', 'latest', 'anything', 'everything', 'something', 'thing', 'things', 'out', 'has', 'was', 'were', 'been', 'there',
 ]);
 
+// Phase 1 containment (§17.2 #3 / §18 Phase 1): warranty, insurance, policy,
+// coverage, and claim are distinct protection concepts and must NOT be merged
+// into a single equivalence bucket.
+export const PROTECTION_TOPIC_SEPARATION_FAMILIES: Readonly<Record<'warranty' | 'insurance' | 'policy' | 'coverage' | 'claim', readonly string[]>> = Object.freeze({
+  warranty: ['warranties', 'serviceplan'],
+  insurance: ['insurer', 'homeownersinsurance', 'carrier', 'underwriter'],
+  policy: ['policies', 'policyholder', 'endorsement', 'deductible'],
+  coverage: ['covered', 'uncovered', 'protection', 'protections'],
+  claim: ['claims', 'adjuster', 'settlement', 'incident'],
+});
+
 const DOMAIN_EQUIVALENTS: Record<string, string[]> = {
   appliance: ['inventory', 'equipment', 'refrigerator', 'fridge', 'dishwasher', 'washer', 'dryer'],
   hvac: ['furnace', 'heater', 'heating', 'conditioner', 'cooling', 'heatpump', 'boiler'],
   financing: ['mortgage', 'refinance', 'loan', 'interest', 'payment'],
-  insurance: ['coverage', 'policy', 'premium', 'claim', 'warranty'],
+  warranty: [...PROTECTION_TOPIC_SEPARATION_FAMILIES.warranty],
+  insurance: [...PROTECTION_TOPIC_SEPARATION_FAMILIES.insurance],
+  policy: [...PROTECTION_TOPIC_SEPARATION_FAMILIES.policy],
+  coverage: [...PROTECTION_TOPIC_SEPARATION_FAMILIES.coverage],
+  claim: [...PROTECTION_TOPIC_SEPARATION_FAMILIES.claim],
   maintenance: ['task', 'service', 'repair', 'inspection', 'due', 'completed'],
   renovation: ['remodel', 'project', 'permit', 'contractor'],
   tax: ['assessment', 'appeal', 'exemption', 'assessed'],

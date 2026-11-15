@@ -27,6 +27,179 @@ export interface TransitionalWarrantyRead {
   readonly reconciliationRequired: boolean;
 }
 
+export interface WarrantyRelationBusinessMeaning {
+  readonly relationKind: 'ITEM_SPECIFIC_WARRANTY' | 'PROPERTY_WHOLE_HOME_PLAN';
+  readonly semanticRelationId: string;
+  readonly cardinality: 'ONE_ITEM_TO_MANY_WARRANTIES' | 'ONE_PLAN_TO_MANY_ITEMS_BY_APPLICABILITY';
+  readonly canonicalStoragePath: string;
+  readonly legacyStoragePath: string;
+  readonly newWriteStatus: 'CANONICAL_ALLOWED' | 'PROHIBITED_LEGACY_AMBIGUOUS_LINK';
+  readonly businessMeaning: string;
+  readonly coverageProofRule: string;
+}
+
+/**
+ * Phase 1 deliverable (§18 Phase 1 / §22.1 / FR-QUERY-7):
+ * Defines business meanings and cardinalities of item-specific warranties vs
+ * property/whole-home coverage plans before selecting final storage migration,
+ * and governs transitional reads, writes, and reconciliation.
+ */
+export const WARRANTY_RELATION_MEANINGS: Readonly<Record<WarrantyRelationBusinessMeaning['relationKind'], WarrantyRelationBusinessMeaning>> = Object.freeze({
+  ITEM_SPECIFIC_WARRANTY: {
+    relationKind: 'ITEM_SPECIFIC_WARRANTY',
+    semanticRelationId: 'relation.inventory_item.warranty',
+    cardinality: 'ONE_ITEM_TO_MANY_WARRANTIES',
+    canonicalStoragePath: 'Warranty.inventoryItemId -> InventoryItem.id (InventoryItem.linkedWarranties)',
+    legacyStoragePath: 'Warranty.inventoryItemId',
+    newWriteStatus: 'CANONICAL_ALLOWED',
+    businessMeaning: 'A manufacturer, retailer, or extended warranty contract tied to a specific InventoryItem.',
+    coverageProofRule: 'A linked Warranty row establishes a recorded warranty link only; coverage of a failure depends on active dates and contract terms.',
+  },
+  PROPERTY_WHOLE_HOME_PLAN: {
+    relationKind: 'PROPERTY_WHOLE_HOME_PLAN',
+    semanticRelationId: 'relation.property.home_warranty_plan',
+    cardinality: 'ONE_PLAN_TO_MANY_ITEMS_BY_APPLICABILITY',
+    canonicalStoragePath: 'Pending §22.1 owner ruling (Warranty.propertyId + category/system applicability; InventoryItem.warrantyId is transitional)',
+    legacyStoragePath: 'InventoryItem.warrantyId',
+    newWriteStatus: 'PROHIBITED_LEGACY_AMBIGUOUS_LINK',
+    businessMeaning: 'A property-level or whole-home service plan linked to the Property that may apply to eligible systems or appliances.',
+    coverageProofRule: 'A legacy InventoryItem.warrantyId pointer is transitional link topology only and never proves item-level warranty coverage on its own.',
+  },
+});
+
+export type WarrantyReconciliationReason =
+  | 'CONFLICTED_LINKS'
+  | 'MULTIPLE_ITEM_WARRANTIES'
+  | 'LEGACY_PROPERTY_PLAN_POINTER_ONLY'
+  | 'UNKNOWN_COVERAGE_EVIDENCE';
+
+export interface WarrantyLinkReconciliationCase {
+  readonly inventoryItemId: string;
+  readonly label: string;
+  readonly state: TransitionalWarrantyState;
+  readonly warrantyIds: readonly string[];
+  readonly reason: WarrantyReconciliationReason;
+  readonly recommendedAction: string;
+}
+
+export interface TransitionalWarrantyLinkWriteCandidate {
+  readonly targetModel: 'Warranty' | 'InventoryItem';
+  readonly targetField: 'inventoryItemId' | 'warrantyId';
+  readonly inventoryItemId: string;
+  readonly warrantyId: string | null;
+  readonly existingPropertyPlanWarrantyId?: string | null;
+  readonly existingItemWarrantyIds?: readonly string[];
+  readonly coverageEvidenceStatus?: 'NONE' | 'NOT_SURE' | 'UNKNOWN' | string;
+}
+
+export interface TransitionalWarrantyWriteVerdict {
+  readonly allowed: boolean;
+  readonly reasonCode:
+    | 'CANONICAL_ITEM_WARRANTY_WRITE_ALLOWED'
+    | 'AMBIGUOUS_LEGACY_INVENTORY_WARRANTY_ID_WRITE_PROHIBITED'
+    | 'CONFLICTING_LEGACY_WARRANTY_LINK'
+    | 'CONTRADICTS_EXPLICIT_NO_COVERAGE';
+  readonly remediation: string;
+}
+
+/**
+ * FR-QUERY-7 write containment: prohibits new writes through ambiguous legacy
+ * InventoryItem.warrantyId links or writes that create un-reconciled link conflicts.
+ */
+export function validateTransitionalWarrantyLinkWrite(
+  candidate: TransitionalWarrantyLinkWriteCandidate,
+): TransitionalWarrantyWriteVerdict {
+  if (candidate.targetModel === 'InventoryItem' && candidate.targetField === 'warrantyId' && candidate.warrantyId !== null) {
+    return {
+      allowed: false,
+      reasonCode: 'AMBIGUOUS_LEGACY_INVENTORY_WARRANTY_ID_WRITE_PROHIBITED',
+      remediation: 'Write item-specific warranty links via Warranty.inventoryItemId instead of the ambiguous legacy InventoryItem.warrantyId pointer.',
+    };
+  }
+  if (candidate.coverageEvidenceStatus === 'NONE' && candidate.warrantyId !== null) {
+    return {
+      allowed: false,
+      reasonCode: 'CONTRADICTS_EXPLICIT_NO_COVERAGE',
+      remediation: 'Clear or update coverageEvidenceStatus=NONE before linking a warranty record to this inventory item.',
+    };
+  }
+  if (
+    candidate.warrantyId !== null
+    && candidate.existingPropertyPlanWarrantyId
+    && candidate.existingPropertyPlanWarrantyId !== candidate.warrantyId
+  ) {
+    return {
+      allowed: false,
+      reasonCode: 'CONFLICTING_LEGACY_WARRANTY_LINK',
+      remediation: 'Reconcile the existing legacy InventoryItem.warrantyId pointer before linking a different Warranty record.',
+    };
+  }
+  return {
+    allowed: true,
+    reasonCode: 'CANONICAL_ITEM_WARRANTY_WRITE_ALLOWED',
+    remediation: 'Canonical Warranty.inventoryItemId write is permitted.',
+  };
+}
+
+export function assertValidTransitionalWarrantyLinkWrite(candidate: TransitionalWarrantyLinkWriteCandidate): void {
+  const verdict = validateTransitionalWarrantyLinkWrite(candidate);
+  if (!verdict.allowed) {
+    const error = new Error(`Transitional warranty write rejected (${verdict.reasonCode}): ${verdict.remediation}`);
+    (error as Error & { code?: string }).code = verdict.reasonCode;
+    throw error;
+  }
+}
+
+/**
+ * Captures reconciliation cases across transitional warranty reads so conflicted,
+ * multi-warranty, and legacy-pointer-only rows are surfaced deterministically.
+ */
+export function extractWarrantyReconciliationCases(
+  reads: readonly TransitionalWarrantyRead[],
+): readonly WarrantyLinkReconciliationCase[] {
+  const cases: WarrantyLinkReconciliationCase[] = [];
+  for (const row of reads) {
+    if (row.state === 'CONFLICTED_LINKS') {
+      cases.push({
+        inventoryItemId: row.inventoryItemId,
+        label: row.label,
+        state: row.state,
+        warrantyIds: row.warrantyIds,
+        reason: 'CONFLICTED_LINKS',
+        recommendedAction: 'Reconcile conflicting InventoryItem.warrantyId and Warranty.inventoryItemId links or contradicting NONE coverage evidence.',
+      });
+    } else if (row.state === 'ITEM_WARRANTY_LINKED' && row.reconciliationRequired) {
+      cases.push({
+        inventoryItemId: row.inventoryItemId,
+        label: row.label,
+        state: row.state,
+        warrantyIds: row.warrantyIds,
+        reason: 'MULTIPLE_ITEM_WARRANTIES',
+        recommendedAction: 'Verify whether multiple Warranty.inventoryItemId rows represent distinct sequential/extended warranties or duplicate records.',
+      });
+    } else if (row.state === 'PROPERTY_PLAN_LINKED') {
+      cases.push({
+        inventoryItemId: row.inventoryItemId,
+        label: row.label,
+        state: row.state,
+        warrantyIds: row.warrantyIds,
+        reason: 'LEGACY_PROPERTY_PLAN_POINTER_ONLY',
+        recommendedAction: 'Migrate legacy InventoryItem.warrantyId pointer to canonical Warranty.inventoryItemId or property-plan applicability once §22.1 is finalized.',
+      });
+    } else if (row.state === 'UNKNOWN') {
+      cases.push({
+        inventoryItemId: row.inventoryItemId,
+        label: row.label,
+        state: row.state,
+        warrantyIds: row.warrantyIds,
+        reason: 'UNKNOWN_COVERAGE_EVIDENCE',
+        recommendedAction: 'Confirm whether the item has a warranty record or explicit no-coverage status.',
+      });
+    }
+  }
+  return cases;
+}
+
 /**
  * FR-QUERY-7 transitional classifier. It describes recorded link topology only;
  * it never claims that policy terms cover the item.

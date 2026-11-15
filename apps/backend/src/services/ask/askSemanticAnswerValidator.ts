@@ -23,7 +23,7 @@ import { matchesStatusBoardAnswerContract } from './askStatusBoardIntent';
 import { matchesPropertySummaryAnswerContract } from './askPropertySummaryIntent';
 import { matchesCoverageGapsAnswerContract } from './askCoverageIntent';
 import { matchesSavedResultsAnswerContract, matchesWorkOverviewAnswerContract } from './askWorkSavedIntent';
-import { matchesOperationAnswerContract } from './answerContract/operationAnswerContract';
+import { canAnswerContractBypassRelevance, matchesOperationAnswerContract } from './answerContract/operationAnswerContract';
 
 export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-3.8';
 
@@ -143,10 +143,11 @@ export function validateAskSemanticAnswerRelevance(input: {
     });
   }
   const bypass = canonicalBypassDecision({ question: input.question, entityResolution: input.entityResolution, segmentationCertified: input.segmentationCertified });
+  const contractAllowsBypass = canAnswerContractBypassRelevance(input.operationId);
   const canonicalShapeMatch = Boolean(TYPED_ANSWER_CONTRACTS[input.operationId]?.({ question: input.question, result: input.result }))
     || Boolean(AUTHORED_GUIDE_RESULT_CODES[input.operationId]?.includes(input.result.reasonCode ?? ''))
     || matchesCanonicalAnswerBlocks(input.operationId, input.result);
-  const canonicalMatch = canonicalShapeMatch && canonicalBypassAllowed(input.operationId, input);
+  const canonicalMatch = canonicalShapeMatch && contractAllowsBypass && canonicalBypassAllowed(input.operationId, input);
   if (canonicalMatch && bypass.permitted) {
     return finish({
       outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
@@ -154,7 +155,8 @@ export function validateAskSemanticAnswerRelevance(input: {
       reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
     });
   }
-  if (canonicalShapeMatch && !canonicalBypassAllowed(input.operationId, input)) bypassDenialCodes.push('CANONICAL_BYPASS_WITHHELD_ROUTE_NOT_TRUSTED');
+  if (canonicalShapeMatch && !contractAllowsBypass) bypassDenialCodes.push('CANONICAL_BYPASS_WITHHELD_SOURCE_SCAN_CONTRACT');
+  else if (canonicalShapeMatch && !canonicalBypassAllowed(input.operationId, input)) bypassDenialCodes.push('CANONICAL_BYPASS_WITHHELD_ROUTE_NOT_TRUSTED');
   else if (canonicalMatch && bypass.denial) bypassDenialCodes.push(`CANONICAL_BYPASS_WITHHELD_${bypass.denial}`);
   const definition = getAskOperationDefinition(input.operationId);
   const semantic = definition.semantic.languagePacks[language];

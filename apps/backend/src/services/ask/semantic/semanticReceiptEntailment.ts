@@ -24,5 +24,8 @@ export function verifySemanticReadReceiptEntailment(result: AskOperationResult):
     const summary = `${String((variant as { title?: unknown }).title ?? '')} ${String((variant as { body?: unknown }).body ?? '')}`;
     if (!new RegExp(`\\b${receipt.population.confirmedCount}\\b`).test(summary)) return fail('COUNT_NOT_RENDERED');
   }
+  if ((receipt.projection === 'LIST' || receipt.projection === 'DETAIL') && receipt.population.confirmedCount > 0 && receipt.population.displayedCount === 0) {
+    return fail('NON_EMPTY_POPULATION_NOT_DISPLAYED');
+  }
   return { outcome: 'PASS', reasonCodes: ['SEMANTIC_RECEIPT_ENTAILED'], receipt };
 }

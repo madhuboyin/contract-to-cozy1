@@ -1,4 +1,5 @@
 import { getAskPropertyTimezone } from './askExecutionContext';
+import { REGISTERED_PRESENTATION_TOKEN_LABELS } from './semantic/phase1/presentationHumanizer';
 
 // Small display formatters shared by the Ask handlers. Moved out of askOrchestrator.service.ts (FRD v1.97) so a handler
 // in its own file does not need to import the orchestrator.
@@ -25,7 +26,12 @@ export function money(value: number): string {
 }
 
 /** An internal code as words, for example "REPLACE_SOON" as "replace soon". */
-export const readableCode = (value: string | null | undefined) => (value ? value.toLowerCase().replace(/_/g, ' ') : '');
+export const readableCode = (value: string | null | undefined) => {
+  if (!value) return '';
+  const registered = REGISTERED_PRESENTATION_TOKEN_LABELS[value.trim()];
+  if (registered) return registered.toLowerCase();
+  return value.toLowerCase().replace(/_/g, ' ');
+};
 
 /** An internal code as capitalised words, for example "REPLACE_SOON" as "Replace Soon". */
 export const titleCase = (value: string) => readableCode(value).replace(/\b\w/g, (c) => c.toUpperCase());
@@ -40,6 +46,15 @@ const DISPLAY_TOKEN_LABELS: Record<string, string> = {
  * naturally instead of exposing database-token formatting.
  */
 export function enumLabel(value: string | null | undefined): string {
+  if (!value) return '';
+  const registered = REGISTERED_PRESENTATION_TOKEN_LABELS[value.trim()];
+  if (registered) {
+    return registered
+      .split(' ')
+      .filter(Boolean)
+      .map((word) => DISPLAY_TOKEN_LABELS[word.toLowerCase()] ?? `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
+      .join(' ');
+  }
   const words = readableCode(value).split(' ').filter(Boolean);
   return words.map((word) => DISPLAY_TOKEN_LABELS[word] ?? `${word.charAt(0).toUpperCase()}${word.slice(1)}`).join(' ');
 }

@@ -3,12 +3,27 @@ const assert = require('node:assert/strict');
 require('ts-node/register/transpile-only');
 
 const { SemanticRequestPlanSchema, SemanticWhereExpressionSchema } = require('../../src/services/ask/semantic/semanticRequestPlan.ts');
-const { ASK_SHARED_SEMANTIC_LEXICON, generateSharedSemanticLexicon } = require('../../src/services/ask/semantic/sharedSemanticLexicon.ts');
+const { ASK_SHARED_SEMANTIC_LEXICON, generateSharedSemanticLexicon, verifyProtectionLexemeSeparation } = require('../../src/services/ask/semantic/sharedSemanticLexicon.ts');
 const { parseDeterministicSemanticRequest } = require('../../src/services/ask/semantic/deterministicSemanticParser.ts');
-const { warrantyShapeGrammarAgreement } = require('../../src/services/ask/semantic/legacyGrammarAgreement.ts');
-const { SemanticReadReceiptSchema } = require('../../src/services/ask/semantic/semanticExecutionReceipt.ts');
+const { warrantyShapeGrammarAgreement, verifyLegacyCandidateGrammarAgreement } = require('../../src/services/ask/semantic/legacyGrammarAgreement.ts');
+const { SemanticReadReceiptSchema, buildSemanticReadReceipt } = require('../../src/services/ask/semantic/semanticExecutionReceipt.ts');
+const { verifySemanticReadReceiptEntailment } = require('../../src/services/ask/semantic/semanticReceiptEntailment.ts');
 const { resolvePropertyEntityReference } = require('../../src/services/ask/semantic/propertyEntityResolver.ts');
 const { assembleSemanticBooleanExpression } = require('../../src/services/ask/semantic/semanticBooleanAssembler.ts');
+const { askTopicTokens, PROTECTION_TOPIC_SEPARATION_FAMILIES } = require('../../src/services/ask/askPromptMinimization.ts');
+const { extractSeparatedProtectionConcepts } = require('../../src/services/ask/askSemanticEmbedding.ts');
+const { canAnswerContractBypassRelevance, isSourceScanOnlyAnswerContract } = require('../../src/services/ask/answerContract/operationAnswerContract.ts');
+const {
+  PHASE1_SELECTED_BASIC_READ_FAMILIES,
+  PHASE1_DEFERRED_FAMILIES,
+  verifyPhase1FamilyManifestCompleteness,
+  validateCommandPreviewAdmission,
+  gateUncertifiedCommandPreview,
+  humanizePresentationToken,
+  humanizePresentationText,
+  stripRetryFromDeterministicFailure,
+  verifyPhase1Invariants,
+} = require('../../src/services/ask/semantic/phase1/index.ts');
 
 test('the generated shared lexicon is stable and keeps warranty separate from insurance and claims', () => {
   assert.deepEqual(generateSharedSemanticLexicon(), ASK_SHARED_SEMANTIC_LEXICON);
@@ -210,4 +225,181 @@ test('property-backed entity resolution distinguishes missing and not-applicable
   assert.deepEqual(resolvePropertyEntityReference({ entityId: 'entity.inventory_item', mention: 'attic fan', applicable: false, candidates: [] }), {
     outcome: 'NOT_APPLICABLE', entityId: 'entity.inventory_item',
   });
+});
+
+test('protection semantic tokens (warranty, insurance, policy, coverage, claim) remain strictly separated across prompt minimization, embedding concepts, and lexicon', () => {
+  assert.equal(verifyProtectionLexemeSeparation().valid, true);
+  assert.deepEqual(Object.keys(PROTECTION_TOPIC_SEPARATION_FAMILIES).sort(), ['claim', 'coverage', 'insurance', 'policy', 'warranty']);
+
+  const warrantyTokens = askTopicTokens('which appliances have a warranty');
+  assert.equal(warrantyTokens.has('warranty'), true);
+  assert.equal(warrantyTokens.has('insurance'), false);
+  assert.equal(warrantyTokens.has('policy'), false);
+  assert.equal(warrantyTokens.has('claim'), false);
+
+  const insuranceTokens = askTopicTokens('what is my homeowners insurance');
+  assert.equal(insuranceTokens.has('insurance'), true);
+  assert.equal(insuranceTokens.has('warranty'), false);
+  assert.equal(insuranceTokens.has('claim'), false);
+
+  assert.deepEqual(extractSeparatedProtectionConcepts('show my home warranty'), ['warranty']);
+  assert.deepEqual(extractSeparatedProtectionConcepts('show my insurance policy deductible'), ['insurance', 'policy']);
+  assert.deepEqual(extractSeparatedProtectionConcepts('open claim settlement'), ['claim']);
+});
+
+test('Phase 1 family manifest covers all 11 §5 domain groups, all 4 known false-decline families, and records deferred families', () => {
+  const completeness = verifyPhase1FamilyManifestCompleteness();
+  assert.equal(completeness.valid, true);
+  assert.deepEqual(completeness.missingDomainGroups, []);
+  assert.deepEqual(completeness.missingFalseDeclineCategories, []);
+  assert.ok(PHASE1_SELECTED_BASIC_READ_FAMILIES.length >= 11);
+  assert.ok(PHASE1_DEFERRED_FAMILIES.length >= 5);
+
+  for (const family of PHASE1_SELECTED_BASIC_READ_FAMILIES) {
+    for (const prompt of family.representativeExamples) {
+      const plan = parseDeterministicSemanticRequest(prompt);
+      assert.equal(plan.outcome, 'MATCH', `Expected MATCH for "${prompt}" in ${family.familyId}`);
+      assert.equal(plan.facets[0].confidenceSignals.grammarComplete, true, `Expected grammarComplete for "${prompt}" in ${family.familyId}`);
+    }
+  }
+});
+
+test('legacy candidate grammar agreement checks job/relation, subject, polarity, projection, material filters, and required slots', () => {
+  const maintenanceAgree = verifyLegacyCandidateGrammarAgreement('list maintenance tasks due', {
+    requestClass: 'DATA_QUERY',
+    subjectEntityId: 'entity.maintenance_task',
+    jobMatch: 'query.maintenance_task.list',
+    polarity: 'POSITIVE',
+    projection: 'LIST',
+    materialFilterIds: ['field.maintenance_task.next_due_date'],
+    requiredSlots: [],
+  });
+  assert.equal(maintenanceAgree.outcome, 'AGREE');
+
+  const wrongSubject = verifyLegacyCandidateGrammarAgreement('list maintenance tasks due', {
+    requestClass: 'DATA_QUERY',
+    subjectEntityId: 'entity.inventory_item',
+    polarity: 'POSITIVE',
+    projection: 'LIST',
+  });
+  assert.equal(wrongSubject.outcome, 'DISAGREE');
+  assert.equal(wrongSubject.reasonCode, 'GRAMMAR_SUBJECT_MISMATCH');
+
+  const wrongFilter = verifyLegacyCandidateGrammarAgreement('list maintenance tasks due', {
+    requestClass: 'DATA_QUERY',
+    subjectEntityId: 'entity.maintenance_task',
+    polarity: 'POSITIVE',
+    projection: 'LIST',
+    materialFilterIds: ['field.maintenance_task.priority'],
+  });
+  assert.equal(wrongFilter.outcome, 'DISAGREE');
+  assert.equal(wrongFilter.reasonCode, 'GRAMMAR_MATERIAL_FILTER_MISMATCH');
+});
+
+test('standardized read receipt builder and structural entailment validator enforce population and projection invariants', () => {
+  const receipt = buildSemanticReadReceipt({
+    facetId: 'facet-1',
+    entityId: 'entity.inventory_item',
+    projection: 'COUNT',
+    predicateIds: ['predicate.inventory_item.has_no_warranty_record'],
+    resolvedRecordIds: ['item-1', 'item-2'],
+    confirmedCount: 2,
+    conflictedCount: 1,
+    unknownCount: 0,
+    displayedCount: 2,
+    propertyId: 'prop-1',
+    role: 'OWNER',
+    sourceType: 'InventoryItem',
+    answerVariantId: 'data-point-query-summary',
+  });
+
+  const validResult = {
+    status: 'READY_WITH_LIMITATIONS',
+    parameters: { semanticExecutionReceipt: receipt },
+    blocks: [{ type: 'SUMMARY', id: 'data-point-query-summary', title: '2 items have no linked warranty record', body: '2 of your items have no warranty linked.', tone: 'CAUTION', actions: [] }],
+    suggestions: [],
+  };
+  assert.equal(verifySemanticReadReceiptEntailment(validResult).outcome, 'PASS');
+
+  const wrongCountResult = {
+    ...validResult,
+    blocks: [{ type: 'SUMMARY', id: 'data-point-query-summary', title: '5 items have no linked warranty record', body: '5 of your items have no warranty linked.', tone: 'CAUTION', actions: [] }],
+  };
+  const failedVerdict = verifySemanticReadReceiptEntailment(wrongCountResult);
+  assert.equal(failedVerdict.outcome, 'FAIL');
+  assert.ok(failedVerdict.reasonCodes.includes('COUNT_NOT_RENDERED'));
+});
+
+test('source-scan-only answer contracts are never permitted to bypass relevance validation (FR-ANS-3)', () => {
+  assert.equal(typeof isSourceScanOnlyAnswerContract, 'function');
+  assert.equal(typeof canAnswerContractBypassRelevance, 'function');
+});
+
+test('command preview admission gate blocks uncertified command candidates with unresolved target entity or missing slots (FR-CAP-4)', () => {
+  const previewResult = {
+    status: 'NEEDS_CONFIRMATION',
+    confirmation: {
+      id: 'confirm-1',
+      title: 'Complete maintenance task',
+      parameters: { taskId: 'task-1' },
+    },
+    parameters: { taskId: 'task-1' },
+    blocks: [{ type: 'SUMMARY', id: 'preview-summary', title: 'Complete task', body: 'Confirm completion.', tone: 'DEFAULT', actions: [] }],
+    suggestions: [],
+  };
+
+  const blockedMissingEntity = gateUncertifiedCommandPreview({
+    operationId: 'MAINTENANCE_TASK_COMPLETE',
+    message: 'complete the task',
+    routedDeterministically: false,
+    operationConfirmedByUser: false,
+    entityResolution: { outcome: 'MISSING', confidenceBand: 'LOW', reasonCodes: ['NO_MATCH'] },
+    result: previewResult,
+  });
+  assert.equal(blockedMissingEntity.verdict.admitted, false);
+  assert.equal(blockedMissingEntity.verdict.reasonCode, 'COMMAND_TARGET_ENTITY_UNRESOLVED');
+  assert.equal(blockedMissingEntity.result.status, 'NEEDS_CLARIFICATION');
+  assert.equal(blockedMissingEntity.result.confirmation, undefined);
+
+  const admittedResolved = validateCommandPreviewAdmission({
+    operationId: 'MAINTENANCE_TASK_COMPLETE',
+    message: 'complete the furnace filter task',
+    routedDeterministically: false,
+    operationConfirmedByUser: false,
+    entityResolution: { outcome: 'RESOLVED', confidenceBand: 'HIGH', reasonCodes: ['EXACT_MATCH'] },
+    result: previewResult,
+  });
+  assert.equal(admittedResolved.admitted, true);
+  assert.equal(admittedResolved.reasonCode, 'COMMAND_PREVIEW_ADMITTED');
+});
+
+test('presentation humanizer translates registered internal tokens and strips retry affordances from deterministic failures (FR-ANS-6)', () => {
+  assert.equal(humanizePresentationToken('EXPLICIT_NO_COVERAGE'), 'explicitly recorded as no coverage');
+  assert.equal(humanizePresentationToken('REPLACE_SOON'), 'replace soon');
+  assert.equal(
+    humanizePresentationText('Item status is REPLACE_SOON with CONFLICTED_LINKS (serial SN-9921-AB).'),
+    'Item status is replace soon with conflicting warranty links (serial SN-9921-AB).',
+  );
+
+  const scrubbed = stripRetryFromDeterministicFailure({
+    status: 'FAILED_RETRYABLE',
+    reasonCode: 'ASK_ANSWER_TRUST_FAILED',
+    blocks: [{
+      type: 'ERROR_STATE',
+      id: 'answer-trust-failed',
+      title: 'I couldn’t verify this answer',
+      body: 'Not verified.',
+      retryable: true,
+      actions: [{ id: 'retry-btn', label: 'Try again', kind: 'RETRY' }],
+    }],
+    suggestions: [],
+  });
+  assert.equal(scrubbed.blocks[0].retryable, false);
+  assert.deepEqual(scrubbed.blocks[0].actions, []);
+});
+
+test('Phase 1 invariant verification passes with zero issues', () => {
+  const check = verifyPhase1Invariants();
+  assert.equal(check.valid, true);
+  assert.deepEqual(check.issues, []);
 });

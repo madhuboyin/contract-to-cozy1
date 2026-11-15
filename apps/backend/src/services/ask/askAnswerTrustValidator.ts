@@ -8,6 +8,7 @@ import type { HouseholdRole } from '@prisma/client';
 import { ASK_NAMING_HINT, ASK_UNVERIFIABLE_ANSWER_TEXT } from './askRemoteFallbackTypedClaims';
 import { clarificationLabelFor } from './support/clarificationLabels';
 import { applyAskAudiencePresentation } from './askAudiencePresentation';
+import { stripRetryFromDeterministicFailure } from './semantic/phase1/presentationHumanizer';
 import {
   actionsForAskBlock,
   attachAskAuthoritativeSourceEvidence,
@@ -322,11 +323,11 @@ export function validateAskAnswerTrust(input: {
       };
     }
     return {
-      result: {
+      result: stripRetryFromDeterministicFailure({
         status: 'FAILED_RETRYABLE', reasonCode: 'ASK_ANSWER_TRUST_FAILED',
-        blocks: [{ type: 'ERROR_STATE', id: 'answer-trust-failed', title: 'I couldn’t verify this answer', body: 'The response did not safely match your question and the selected home workflow. Nothing was changed. Please try again with one more detail.', retryable: true, actions: [] }],
+        blocks: [{ type: 'ERROR_STATE', id: 'answer-trust-failed', title: 'I couldn’t verify this answer', body: 'The response did not safely match your question and the selected home workflow. Nothing was changed.', retryable: false, actions: [] }],
         suggestions: [], parameters: { ...(input.result.parameters ?? {}), answerTrust: trust },
-      }, trust, repaired: true,
+      }), trust, repaired: true,
     };
   }
   return {
