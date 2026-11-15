@@ -1,6 +1,13 @@
 import { createHash } from 'crypto';
 import { ASK_SHARED_SEMANTIC_LEXICON, ASK_SHARED_LEXICON_VERSION, type GeneratedSemanticLexeme } from './sharedSemanticLexicon';
-import { ASK_SEMANTIC_PLAN_VERSION, SemanticRequestPlanSchema, type SemanticRequestPlan, type SemanticSourceSpan } from './semanticRequestPlan';
+import {
+  ASK_SEMANTIC_PLAN_VERSION,
+  SemanticRequestPlanSchema,
+  type SemanticRequestPlan,
+  type SemanticSourceSpan,
+  type SemanticTimeConstraint,
+  type SemanticWhereExpression,
+} from './semanticRequestPlan';
 import { assembleSemanticBooleanExpression } from './semanticBooleanAssembler';
 import { buildSemanticTextEnvelope, type DynamicPlaceholderEntityCandidate } from './phase2a/placeholderSpanMap';
 
@@ -8,6 +15,41 @@ interface SemanticPredicateAtom {
   kind: 'PREDICATE';
   predicateId: string;
   relationPathId: string;
+  targetRecordId?: string | null;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function findMatchedDynamicRooms(
+  rawText: string,
+  dynamicEntities?: readonly DynamicPlaceholderEntityCandidate[]
+): Array<{ recordId: string; name: string; start: number }> {
+  if (!dynamicEntities?.length) return [];
+  const matches: Array<{ recordId: string; name: string; start: number }> = [];
+  const seenIds = new Set<string>();
+  for (const candidate of dynamicEntities) {
+    if (candidate.kind !== 'ROOM' || !candidate.authorized || seenIds.has(candidate.recordId)) continue;
+    let earliest: number | null = null;
+    for (const name of candidate.names) {
+      const trimmed = name.trim();
+      if (!trimmed) continue;
+      const match = new RegExp(`\\b${escapeRegExp(trimmed)}\\b`, 'i').exec(rawText);
+      if (match && (earliest === null || match.index < earliest)) {
+        earliest = match.index;
+      }
+    }
+    if (earliest !== null) {
+      seenIds.add(candidate.recordId);
+      matches.push({
+        recordId: candidate.recordId,
+        name: candidate.safeDisplayLabel ?? candidate.names[0] ?? candidate.recordId,
+        start: earliest,
+      });
+    }
+  }
+  return matches.sort((a, b) => a.start - b.start);
 }
 
 export const ASK_DETERMINISTIC_SEMANTIC_PARSER_VERSION = 'typed-grammar-0.5.0' as const;
@@ -116,10 +158,16 @@ function annotate(raw: string, tokens: readonly SemanticSourceSpan[]): Annotatio
   return annotations;
 }
 
-function unresolved(tokens: readonly SemanticSourceSpan[], annotations: readonly Annotation[]): SemanticSourceSpan[] {
+function unresolved(
+  tokens: readonly SemanticSourceSpan[],
+  annotations: readonly Annotation[],
+  dynamicSpans: readonly SemanticSourceSpan[] = []
+): SemanticSourceSpan[] {
   return tokens.filter((token) => {
     const normalized = token.text.toLocaleLowerCase('en-US').replace('’', "'");
-    return !STOP_WORDS.has(normalized) && !annotations.some((annotation) => token.start >= annotation.start && token.end <= annotation.end);
+    return !STOP_WORDS.has(normalized)
+      && !annotations.some((annotation) => token.start >= annotation.start && token.end <= annotation.end)
+      && !dynamicSpans.some((span) => token.start >= span.start && token.end <= span.end);
   });
 }
 
@@ -188,12 +236,20 @@ export function parseDeterministicSemanticRequest(
   const maintenanceRelation = annotations.find((annotation) => annotation.lexeme.semanticId === 'relation.inventory_item.maintenance_task');
   const roomRelation = annotations.find((annotation) => annotation.lexeme.semanticId === 'relation.inventory_item.room');
   const projectionAnnotation = first(annotations, 'PROJECTION');
+  const timeAnnotation = first(annotations, 'TIME');
+  const coordinatorAnnotations = annotations.filter((annotation) => annotation.lexeme.role === 'COORDINATOR');
+  const matchedRooms = findMatchedDynamicRooms(rawText, options?.dynamicEntities);
   // Explicit negation governs the relation even when an affirmative auxiliary
   // is also present ("have no warranty", "does not have"). This is scope
   // resolution over semantic annotations, not lexicon insertion order.
   const polarityAnnotation = annotations.find((annotation) => annotation.lexeme.semanticId === 'polarity.negative')
     ?? annotations.find((annotation) => annotation.lexeme.semanticId === 'polarity.positive');
-  const unresolvedSpans = unresolved(tokens, annotations);
+  const dynamicSpans: SemanticSourceSpan[] = envelope.spanMap.map((entry) => ({
+    start: entry.rawStart,
+    end: entry.rawEnd,
+    text: rawText.slice(entry.rawStart, entry.rawEnd),
+  }));
+  const unresolvedSpans = unresolved(tokens, annotations, dynamicSpans);
   const facetId = `facet-${createHash('sha256').update(`${rawText}:0`).digest('hex').slice(0, 12)}`;
 
   // 0A. Phase 2A analysis capability: replacement guidance
@@ -232,6 +288,10 @@ export function parseDeterministicSemanticRequest(
   // 0B. Phase 2A command preview: create / schedule maintenance task
   const createMaintenanceJob = annotations.find((annotation) => annotation.lexeme.semanticId === 'job.maintenance.create');
   if (createMaintenanceJob) {
+    const dueDateMatch = rawText.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1] ?? null;
+    const commandTime: SemanticTimeConstraint | null = dueDateMatch
+      ? { kind: 'EXACT_DATE', isoDate: dueDateMatch }
+      : null;
     return SemanticRequestPlanSchema.parse({
       ...base,
       outcome: 'MATCH',
@@ -247,7 +307,7 @@ export function parseDeterministicSemanticRequest(
         projection: 'DETAIL',
         fields: [],
         where: null,
-        sort: [], limit: null, time: null, groupBy: [],
+        sort: [], limit: null, time: commandTime, groupBy: [],
         targetCandidates: [{ id: 'command.maintenance.create_preview', score: 1 }],
         requiredSlots: [], dependsOn: [],
         evidence: {
@@ -263,48 +323,104 @@ export function parseDeterministicSemanticRequest(
   }
 
   // 0C. Phase 2A multi-relation / Boolean coordination over inventory_item
-  const relationCount = [warrantyRelation, maintenanceRelation, roomRelation].filter(Boolean).length;
-  const hasBooleanCoordinator = /\b(?:and|or|either|neither|nor)\b/i.test(rawText);
-  if (inventorySubject && (relationCount >= 2 || (relationCount >= 1 && (maintenanceRelation || roomRelation || hasBooleanCoordinator)))) {
+  const hasEffectiveRoomRelation = Boolean(roomRelation) || matchedRooms.length > 0;
+  const relationCount = [warrantyRelation, maintenanceRelation, hasEffectiveRoomRelation].filter(Boolean).length;
+  const hasAnd = coordinatorAnnotations.some((annotation) => annotation.lexeme.semanticId === 'coordinator.and');
+  const hasOr = coordinatorAnnotations.some((annotation) => annotation.lexeme.semanticId === 'coordinator.or');
+  const hasNeitherNor = coordinatorAnnotations.some((annotation) => annotation.lexeme.semanticId === 'coordinator.neither')
+    && coordinatorAnnotations.some((annotation) => annotation.lexeme.semanticId === 'coordinator.nor');
+  const hasBooleanCoordinator = hasAnd || hasOr || hasNeitherNor;
+  if (inventorySubject && (relationCount >= 2 || (relationCount >= 1 && (maintenanceRelation || hasEffectiveRoomRelation || hasBooleanCoordinator)))) {
     const projection = projectionAnnotation?.lexeme.semanticId === 'projection.count' ? 'COUNT'
       : projectionAnnotation?.lexeme.semanticId === 'projection.detail' ? 'DETAIL'
       : projectionAnnotation?.lexeme.semanticId === 'projection.exists' ? 'EXISTS' : 'LIST';
     const polarity = polarityAnnotation?.lexeme.semanticId === 'polarity.negative' ? 'NEGATIVE'
       : polarityAnnotation?.lexeme.semanticId === 'polarity.positive' ? 'POSITIVE' : 'UNKNOWN';
 
-    const predicates: SemanticPredicateAtom[] = [];
+    let coordination = hasNeitherNor ? 'NEITHER_NOR' as const
+      : polarity === 'NEGATIVE' && hasOr ? 'AMBIGUOUS_NEGATIVE_OR' as const
+      : hasOr ? 'EITHER_OR' as const
+      : hasAnd ? 'AND' as const
+      : 'SINGLE' as const;
+
+    const expressions: SemanticWhereExpression[] = [];
     const relations: Array<{ semanticRelationId: string; predicateId: string; targetEntityId: string }> = [];
+    const isOverdue = timeAnnotation?.lexeme.semanticId === 'time.maintenance.overdue';
+    const queryTime: SemanticTimeConstraint | null = isOverdue
+      ? { kind: 'DUE_STATUS', status: 'OVERDUE' }
+      : timeAnnotation?.lexeme.semanticId === 'time.maintenance.due'
+        ? { kind: 'DUE_STATUS', status: 'DUE' }
+        : null;
 
     if (warrantyRelation) {
-      const predicateId = polarity === 'NEGATIVE' ? 'predicate.inventory_item.has_no_warranty_record'
+      const predicateId = coordination === 'NEITHER_NOR'
+        ? 'predicate.inventory_item.has_warranty_record'
+        : polarity === 'NEGATIVE' ? 'predicate.inventory_item.has_no_warranty_record'
         : polarity === 'POSITIVE' ? 'predicate.inventory_item.has_warranty_record'
         : 'predicate.inventory_item.warranty_state_unknown';
-      predicates.push({ kind: 'PREDICATE', predicateId, relationPathId: 'path.inventory_item.warranty' });
+      expressions.push({ kind: 'PREDICATE', predicateId, relationPathId: 'path.inventory_item.warranty' });
       relations.push({ semanticRelationId: 'relation.inventory_item.warranty', predicateId, targetEntityId: 'entity.warranty' });
     }
     if (maintenanceRelation) {
-      const isOverdue = /\boverdue\b/i.test(rawText);
-      const predicateId = isOverdue ? 'predicate.inventory_item.has_overdue_maintenance'
-        : polarity === 'NEGATIVE' ? 'predicate.inventory_item.has_no_due_maintenance'
-        : 'predicate.inventory_item.has_due_maintenance';
-      predicates.push({ kind: 'PREDICATE', predicateId, relationPathId: 'path.inventory_item.maintenance_task' });
+      const predicateId = isOverdue
+        ? 'predicate.inventory_item.has_overdue_maintenance'
+        : coordination === 'NEITHER_NOR'
+          ? 'predicate.inventory_item.has_due_maintenance'
+          : polarity === 'NEGATIVE' ? 'predicate.inventory_item.has_no_due_maintenance'
+          : 'predicate.inventory_item.has_due_maintenance';
+      const atom: SemanticPredicateAtom = { kind: 'PREDICATE', predicateId, relationPathId: 'path.inventory_item.maintenance_task' };
+      const shouldNegateAtom = isOverdue
+        && polarity === 'NEGATIVE'
+        && coordination !== 'NEITHER_NOR'
+        && coordination !== 'AMBIGUOUS_NEGATIVE_OR';
+      expressions.push(shouldNegateAtom ? { kind: 'NOT', operand: atom } : atom);
       relations.push({ semanticRelationId: 'relation.inventory_item.maintenance_task', predicateId, targetEntityId: 'entity.maintenance_task' });
     }
-    if (roomRelation) {
+    if (hasEffectiveRoomRelation) {
       const predicateId = 'predicate.inventory_item.in_room';
-      predicates.push({ kind: 'PREDICATE', predicateId, relationPathId: 'path.inventory_item.room' });
+      const roomAtoms: SemanticPredicateAtom[] = matchedRooms.length > 0
+        ? matchedRooms.map((room) => ({
+            kind: 'PREDICATE',
+            predicateId,
+            relationPathId: 'path.inventory_item.room',
+            targetRecordId: room.recordId,
+          }))
+        : [{ kind: 'PREDICATE', predicateId, relationPathId: 'path.inventory_item.room' }];
       relations.push({ semanticRelationId: 'relation.inventory_item.room', predicateId, targetEntityId: 'entity.room' });
+
+      if (roomAtoms.length >= 2 && (warrantyRelation || maintenanceRelation)) {
+        const roomCoordination = hasNeitherNor ? 'NEITHER_NOR' as const
+          : polarity === 'NEGATIVE' && hasOr ? 'AMBIGUOUS_NEGATIVE_OR' as const
+          : hasOr ? 'EITHER_OR' as const
+          : 'AND' as const;
+        const assembledRooms = assembleSemanticBooleanExpression({ coordination: roomCoordination, predicates: roomAtoms });
+        if (assembledRooms.outcome === 'CLARIFY') {
+          return SemanticRequestPlanSchema.parse({ ...base, outcome: 'BOUNDARY', facets: [], unresolvedSpans });
+        }
+        if (assembledRooms.outcome === 'ASSEMBLED') {
+          expressions.push(assembledRooms.expression);
+        }
+        coordination = hasAnd ? 'AND' : 'EITHER_OR';
+      } else if (roomAtoms.length === 1) {
+        const shouldNegateRoom = polarity === 'NEGATIVE'
+          && coordination !== 'NEITHER_NOR'
+          && coordination !== 'AMBIGUOUS_NEGATIVE_OR';
+        expressions.push(shouldNegateRoom ? { kind: 'NOT', operand: roomAtoms[0] } : roomAtoms[0]);
+      } else {
+        expressions.push(...roomAtoms);
+      }
     }
 
-    const coordination = /\bneither\b/i.test(rawText) && /\bnor\b/i.test(rawText) ? 'NEITHER_NOR'
-      : polarity === 'NEGATIVE' && /\bor\b/i.test(rawText) ? 'AMBIGUOUS_NEGATIVE_OR'
-      : /\bor\b/i.test(rawText) ? 'EITHER_OR'
-      : /\band\b/i.test(rawText) ? 'AND'
-      : 'SINGLE';
+    if (coordination === 'SINGLE' && expressions.length >= 2) {
+      coordination = 'AND';
+    }
 
-    const assembled = assembleSemanticBooleanExpression({ coordination, predicates });
+    const assembled = assembleSemanticBooleanExpression({ coordination, predicates: expressions });
     if (assembled.outcome === 'CLARIFY') {
       return SemanticRequestPlanSchema.parse({ ...base, outcome: 'BOUNDARY', facets: [], unresolvedSpans });
+    }
+    if (unresolvedSpans.length > 0) {
+      return SemanticRequestPlanSchema.parse({ ...base, outcome: 'NONE_FITS', facets: [], unresolvedSpans });
     }
     if (assembled.outcome === 'ASSEMBLED') {
       return SemanticRequestPlanSchema.parse({
@@ -322,7 +438,7 @@ export function parseDeterministicSemanticRequest(
           projection,
           fields: [],
           where: assembled.expression,
-          sort: [], limit: null, time: null, groupBy: [], targetCandidates: [{ id: 'data-point-read.read', score: 1 }],
+          sort: [], limit: null, time: queryTime, groupBy: [], targetCandidates: [{ id: 'data-point-read.read', score: 1 }],
           requiredSlots: [], dependsOn: [],
           evidence: {
             jobMatch: 'query.inventory_item.relation_boolean',
@@ -466,6 +582,12 @@ export function parseDeterministicSemanticRequest(
     : fields.length > 0 && meta.defaultProjection === 'DETAIL' ? 'DETAIL' : meta.defaultProjection;
   const polarity = polarityAnnotation?.lexeme.semanticId === 'polarity.negative' ? 'NEGATIVE' : 'POSITIVE';
   const grammarComplete = unresolvedSpans.length === 0;
+  const maintenanceTime: SemanticTimeConstraint | null = inferredEntityId === 'entity.maintenance_task' && timeAnnotation
+    ? {
+        kind: 'DUE_STATUS',
+        status: timeAnnotation.lexeme.semanticId === 'time.maintenance.overdue' ? 'OVERDUE' : 'DUE',
+      }
+    : null;
 
   return SemanticRequestPlanSchema.parse({
     ...base,
@@ -482,7 +604,7 @@ export function parseDeterministicSemanticRequest(
       projection,
       fields,
       where: null,
-      sort: [], limit: null, time: null, groupBy: [],
+      sort: [], limit: null, time: maintenanceTime, groupBy: [],
       targetCandidates: [{ id: 'data-point-read.read', score: 1 }],
       requiredSlots: [], dependsOn: [],
       evidence: {
@@ -495,4 +617,103 @@ export function parseDeterministicSemanticRequest(
       confidenceSignals: { grammarComplete, unresolvedSpanCount: unresolvedSpans.length },
     }],
   });
+}
+
+export interface SemanticFollowUpDelta {
+  readonly projection: 'EXISTS' | 'COUNT' | 'LIST' | 'DETAIL' | null;
+  readonly polarity: 'POSITIVE' | 'NEGATIVE' | null;
+  readonly time: SemanticTimeConstraint | null;
+  readonly relations: ReadonlyArray<{ semanticRelationId: string; predicateId: string; targetEntityId: string }>;
+  readonly where: SemanticWhereExpression | null;
+}
+
+/**
+ * Extracts typed semantic refinement deltas from a follow-up utterance using
+ * the shared lexicon and dynamic property entities so callers refine the prior
+ * validated SemanticRequestPlan directly without rewriting raw text.
+ */
+export function extractSemanticFollowUpDelta(
+  followUpText: string,
+  options?: { readonly dynamicEntities?: readonly DynamicPlaceholderEntityCandidate[] }
+): SemanticFollowUpDelta {
+  const { tokens } = normalizedWithOffsets(followUpText);
+  const annotations = annotate(followUpText, tokens);
+  const projectionAnnotation = first(annotations, 'PROJECTION');
+  const timeAnnotation = first(annotations, 'TIME');
+  const polarityAnnotation = annotations.find((annotation) => annotation.lexeme.semanticId === 'polarity.negative')
+    ?? annotations.find((annotation) => annotation.lexeme.semanticId === 'polarity.positive');
+
+  const projection = projectionAnnotation?.lexeme.semanticId === 'projection.count' ? 'COUNT'
+    : projectionAnnotation?.lexeme.semanticId === 'projection.detail' ? 'DETAIL'
+    : projectionAnnotation?.lexeme.semanticId === 'projection.exists' ? 'EXISTS'
+    : projectionAnnotation?.lexeme.semanticId === 'projection.list' ? 'LIST'
+    : null;
+  const polarity = polarityAnnotation?.lexeme.semanticId === 'polarity.negative' ? 'NEGATIVE'
+    : polarityAnnotation?.lexeme.semanticId === 'polarity.positive' ? 'POSITIVE'
+    : null;
+  const time: SemanticTimeConstraint | null = timeAnnotation?.lexeme.semanticId === 'time.maintenance.overdue'
+    ? { kind: 'DUE_STATUS', status: 'OVERDUE' }
+    : timeAnnotation?.lexeme.semanticId === 'time.maintenance.due'
+      ? { kind: 'DUE_STATUS', status: 'DUE' }
+      : null;
+
+  const warrantyRelation = annotations.find((annotation) => annotation.lexeme.semanticId === 'relation.inventory_item.warranty');
+  const maintenanceRelation = annotations.find((annotation) => annotation.lexeme.semanticId === 'relation.inventory_item.maintenance_task');
+  const roomRelation = annotations.find((annotation) => annotation.lexeme.semanticId === 'relation.inventory_item.room');
+  const matchedRooms = findMatchedDynamicRooms(followUpText, options?.dynamicEntities);
+  const coordinatorAnnotations = annotations.filter((annotation) => annotation.lexeme.role === 'COORDINATOR');
+  const hasOr = coordinatorAnnotations.some((annotation) => annotation.lexeme.semanticId === 'coordinator.or');
+  const hasNeitherNor = coordinatorAnnotations.some((annotation) => annotation.lexeme.semanticId === 'coordinator.neither')
+    && coordinatorAnnotations.some((annotation) => annotation.lexeme.semanticId === 'coordinator.nor');
+
+  const relations: Array<{ semanticRelationId: string; predicateId: string; targetEntityId: string }> = [];
+  const expressions: SemanticWhereExpression[] = [];
+
+  if (warrantyRelation) {
+    const predicateId = polarity === 'NEGATIVE'
+      ? 'predicate.inventory_item.has_no_warranty_record'
+      : 'predicate.inventory_item.has_warranty_record';
+    relations.push({ semanticRelationId: 'relation.inventory_item.warranty', predicateId, targetEntityId: 'entity.warranty' });
+    expressions.push({ kind: 'PREDICATE', predicateId, relationPathId: 'path.inventory_item.warranty' });
+  }
+  if (maintenanceRelation) {
+    const isOverdue = time?.kind === 'DUE_STATUS' && time.status === 'OVERDUE';
+    const predicateId = isOverdue
+      ? 'predicate.inventory_item.has_overdue_maintenance'
+      : polarity === 'NEGATIVE'
+        ? 'predicate.inventory_item.has_no_due_maintenance'
+        : 'predicate.inventory_item.has_due_maintenance';
+    relations.push({ semanticRelationId: 'relation.inventory_item.maintenance_task', predicateId, targetEntityId: 'entity.maintenance_task' });
+    const atom: SemanticPredicateAtom = { kind: 'PREDICATE', predicateId, relationPathId: 'path.inventory_item.maintenance_task' };
+    expressions.push(isOverdue && polarity === 'NEGATIVE' ? { kind: 'NOT', operand: atom } : atom);
+  }
+  if (roomRelation || matchedRooms.length > 0) {
+    const predicateId = 'predicate.inventory_item.in_room';
+    relations.push({ semanticRelationId: 'relation.inventory_item.room', predicateId, targetEntityId: 'entity.room' });
+    const roomAtoms: SemanticPredicateAtom[] = matchedRooms.length > 0
+      ? matchedRooms.map((room) => ({ kind: 'PREDICATE', predicateId, relationPathId: 'path.inventory_item.room', targetRecordId: room.recordId }))
+      : [{ kind: 'PREDICATE', predicateId, relationPathId: 'path.inventory_item.room' }];
+    if (roomAtoms.length === 1) {
+      expressions.push(polarity === 'NEGATIVE' ? { kind: 'NOT', operand: roomAtoms[0] } : roomAtoms[0]);
+    } else {
+      const roomCoord = hasNeitherNor ? 'NEITHER_NOR' : hasOr ? 'EITHER_OR' : 'AND';
+      const assembledRooms = assembleSemanticBooleanExpression({ coordination: roomCoord, predicates: roomAtoms });
+      if (assembledRooms.outcome === 'ASSEMBLED') {
+        expressions.push(assembledRooms.expression);
+      }
+    }
+  }
+
+  let where: SemanticWhereExpression | null = null;
+  if (expressions.length === 1) {
+    where = expressions[0];
+  } else if (expressions.length >= 2) {
+    const coord = hasNeitherNor ? 'NEITHER_NOR' : hasOr ? 'EITHER_OR' : 'AND';
+    const assembled = assembleSemanticBooleanExpression({ coordination: coord, predicates: expressions });
+    if (assembled.outcome === 'ASSEMBLED') {
+      where = assembled.expression;
+    }
+  }
+
+  return { projection, polarity, time, relations, where };
 }

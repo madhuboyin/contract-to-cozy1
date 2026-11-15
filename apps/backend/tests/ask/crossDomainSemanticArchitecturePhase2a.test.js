@@ -378,6 +378,23 @@ test('Phase 2A protects dynamic property entities, hides restricted items as mis
   const { ASK_OPERATION_DEFINITIONS } = require('../../src/services/ask/askOperationRegistry.ts');
   assert.ok(ASK_OPERATION_DEFINITIONS.DATA_POINT_READ.allowedBlockTypes.includes('GROUPED_LIST'));
   assert.ok(ASK_OPERATION_DEFINITIONS.DATA_POINT_READ.allowedBlockTypes.includes('BOUNDARY'));
+
+  // 8. Apostrophe-less negative contraction resolves negatively, and unresolved tokens fail closed
+  const arentResult = executePhase2aVerticalSlice({
+    rawText: 'items that arent in the basement',
+    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+    auth: PHASE2A_OWNER_AUTH,
+  });
+  assert.equal(arentResult.status, 'ANSWERED');
+  assert.deepEqual(arentResult.activeEntityIds, ['item-fridge', 'item-dishwasher']);
+
+  const unresolvedNegResult = executePhase2aVerticalSlice({
+    rawText: 'items that florb in the basement',
+    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+    auth: PHASE2A_OWNER_AUTH,
+  });
+  assert.equal(unresolvedNegResult.status, 'OUT_OF_SCOPE');
+  assert.deepEqual(unresolvedNegResult.activeEntityIds, []);
 });
 
 test('Phase 2A maintenance preview includes matching confirmationVersion and confirmationExpiresAt in parameters', () => {

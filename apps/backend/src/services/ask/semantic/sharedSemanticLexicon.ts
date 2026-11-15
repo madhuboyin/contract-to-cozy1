@@ -13,7 +13,9 @@ export type SemanticLexemeRole =
   | 'RELATION'
   | 'JOB'
   | 'PROJECTION'
-  | 'POLARITY';
+  | 'POLARITY'
+  | 'TIME'
+  | 'COORDINATOR';
 
 interface RegistryLexeme {
   role: SemanticLexemeRole;
@@ -89,8 +91,27 @@ const PHASE1_REGISTRY_LEXEMES: readonly RegistryLexeme[] = [
   { role: 'PROJECTION', semanticId: 'projection.detail', canonicalLabel: 'details', reviewedAliases: ['detail', 'provide details', 'show details', 'tell me'] },
   { role: 'PROJECTION', semanticId: 'projection.count', canonicalLabel: 'count', reviewedAliases: ['how many', 'number of'] },
   { role: 'PROJECTION', semanticId: 'projection.exists', canonicalLabel: 'exists', reviewedAliases: ['are there', 'do any'] },
-  { role: 'POLARITY', semanticId: 'polarity.negative', canonicalLabel: 'without', reviewedAliases: ["don't have", 'do not have', 'does not have', 'not having', 'no', 'missing'] },
+  {
+    role: 'POLARITY',
+    semanticId: 'polarity.negative',
+    canonicalLabel: 'without',
+    reviewedAliases: [
+      "don't have", 'dont have', 'do not have', 'does not have', 'not having',
+      'is not', "isn't", 'isnt', 'are not', "aren't", 'arent',
+      "don't", 'dont', "doesn't", 'doesnt', "didn't", 'didnt',
+      "haven't", 'havent', "hasn't", 'hasnt',
+      'not in', 'not', 'no', 'missing',
+    ],
+  },
   { role: 'POLARITY', semanticId: 'polarity.positive', canonicalLabel: 'with', reviewedAliases: ['have', 'has', 'having'] },
+
+  // Time / Due-status qualifiers & Boolean coordinators
+  { role: 'TIME', semanticId: 'time.maintenance.overdue', canonicalLabel: 'overdue', reviewedAliases: ['past due'] },
+  { role: 'TIME', semanticId: 'time.maintenance.due', canonicalLabel: 'due', reviewedAliases: ['pending', 'upcoming'] },
+  { role: 'COORDINATOR', semanticId: 'coordinator.and', canonicalLabel: 'and', reviewedAliases: [] },
+  { role: 'COORDINATOR', semanticId: 'coordinator.or', canonicalLabel: 'or', reviewedAliases: ['either'] },
+  { role: 'COORDINATOR', semanticId: 'coordinator.neither', canonicalLabel: 'neither', reviewedAliases: [] },
+  { role: 'COORDINATOR', semanticId: 'coordinator.nor', canonicalLabel: 'nor', reviewedAliases: [] },
 ] as const;
 
 export interface GeneratedSemanticLexeme {

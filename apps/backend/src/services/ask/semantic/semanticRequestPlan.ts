@@ -15,14 +15,24 @@ const RankedCandidateSchema = z.object({
 }).strict();
 
 export type SemanticWhereExpression =
-  | { kind: 'PREDICATE'; predicateId: string; relationPathId: string }
+  | { kind: 'PREDICATE'; predicateId: string; relationPathId: string; targetRecordId?: string | null }
   | { kind: 'AND' | 'OR'; operands: SemanticWhereExpression[] }
   | { kind: 'NOT'; operand: SemanticWhereExpression };
+
+export type SemanticTimeConstraint =
+  | { kind: 'DUE_STATUS'; status: 'DUE' | 'OVERDUE' }
+  | { kind: 'EXACT_DATE'; isoDate: string };
+
+export const SemanticTimeConstraintSchema: z.ZodType<SemanticTimeConstraint> = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('DUE_STATUS'), status: z.enum(['DUE', 'OVERDUE']) }).strict(),
+  z.object({ kind: z.literal('EXACT_DATE'), isoDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).strict(),
+]);
 
 const RegisteredPredicateExpressionSchema = z.object({
   kind: z.literal('PREDICATE'),
   predicateId: z.string().min(1),
   relationPathId: z.string().min(1),
+  targetRecordId: z.string().min(1).nullable().optional(),
 }).strict().superRefine((predicate, context) => {
   if (!findSemanticPredicateRegistration(predicate.predicateId, predicate.relationPathId)) {
     context.addIssue({ code: z.ZodIssueCode.custom, message: 'predicate and relation path must be registered together' });
@@ -72,7 +82,7 @@ export const SemanticFacetSchema = z.object({
   where: SemanticWhereExpressionSchema.nullable(),
   sort: z.array(z.object({ fieldId: z.string().min(1), direction: z.enum(['ASC', 'DESC']) }).strict()),
   limit: z.number().int().positive().nullable(),
-  time: z.unknown().nullable(),
+  time: SemanticTimeConstraintSchema.nullable(),
   groupBy: z.array(z.object({ fieldId: z.string().min(1) }).strict()),
   targetCandidates: z.array(RankedCandidateSchema),
   requiredSlots: z.array(z.object({ slotId: z.string().min(1), state: z.enum(['RESOLVED', 'UNRESOLVED']) }).strict()),

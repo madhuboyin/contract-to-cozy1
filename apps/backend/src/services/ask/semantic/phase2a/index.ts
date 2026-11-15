@@ -205,10 +205,52 @@ export const PHASE2A_METAMORPHIC_CASES: readonly Phase2aMetamorphicCase[] = Obje
     expectedMatchedIds: ['item-dishwasher'],
   },
   {
+    family: 'NEGATION',
+    leftPrompt: 'which appliances do not have overdue maintenance',
+    rightPrompt: 'which appliances have no overdue maintenance',
+    expectedMatchedIds: ['item-fridge', 'item-dishwasher', 'item-water-heater', 'item-sump-pump'],
+  },
+  {
+    family: 'NEGATION',
+    leftPrompt: 'which maintenance tasks are not overdue',
+    rightPrompt: 'list maintenance that is not overdue',
+    expectedMatchedIds: ['maint-water-heater-flush', 'maint-fridge-coils'],
+  },
+  {
+    family: 'NEGATION',
+    leftPrompt: 'which appliances are not in kitchen',
+    rightPrompt: 'list appliances not in the kitchen',
+    expectedMatchedIds: ['item-furnace', 'item-water-heater', 'item-sump-pump'],
+  },
+  {
+    family: 'NEGATION',
+    leftPrompt: 'items that arent in the basement',
+    rightPrompt: 'items that are not in the basement',
+    expectedMatchedIds: ['item-fridge', 'item-dishwasher'],
+  },
+  {
     family: 'COORDINATION',
     leftPrompt: 'which appliances have either warranty or due maintenance',
     rightPrompt: 'which appliances have warranty or due maintenance',
     expectedMatchedIds: ['item-fridge', 'item-furnace', 'item-water-heater'],
+  },
+  {
+    family: 'COORDINATION',
+    leftPrompt: 'which appliances are in kitchen or basement',
+    rightPrompt: 'which appliances are in either kitchen or basement',
+    expectedMatchedIds: ['item-fridge', 'item-dishwasher', 'item-furnace', 'item-water-heater', 'item-sump-pump'],
+  },
+  {
+    family: 'COORDINATION',
+    leftPrompt: 'which appliances are in neither kitchen nor basement',
+    rightPrompt: 'list appliances in neither kitchen nor basement',
+    expectedMatchedIds: [],
+  },
+  {
+    family: 'COORDINATION',
+    leftPrompt: 'which appliances have warranty and are in kitchen or basement',
+    rightPrompt: 'which appliances are in kitchen or basement and have warranty',
+    expectedMatchedIds: ['item-fridge', 'item-water-heater'],
   },
   {
     family: 'TYPO',

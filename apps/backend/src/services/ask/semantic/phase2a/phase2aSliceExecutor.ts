@@ -3,7 +3,7 @@ import { AskConfirmationSchema } from '../../../../productFramework/ask/ask.cont
 import { visibleInventoryItemWhere } from '../../../riskAssetApplicability';
 import type { AskOperationResult } from '../../askOperationRegistry';
 import type { AskEntityResolutionResult } from '../../askEntityResolution';
-import { parseDeterministicSemanticRequest } from '../deterministicSemanticParser';
+import { extractSemanticFollowUpDelta, parseDeterministicSemanticRequest } from '../deterministicSemanticParser';
 import { ASK_SEMANTIC_RELATION_REGISTRY } from '../semanticRelationRegistry';
 import { SemanticRequestPlanSchema, type SemanticRequestPlan, type SemanticWhereExpression } from '../semanticRequestPlan';
 import { resolvePropertyEntityReference, type PropertyEntityCandidate, type PropertyEntityResolution } from '../propertyEntityResolver';
@@ -114,11 +114,6 @@ function detectMentionedItem(rawText: string, snapshot: Phase2aPropertySnapshot)
   return '';
 }
 
-function detectMentionedRoom(rawText: string, snapshot: Phase2aPropertySnapshot): Phase2aRoomRecord | null {
-  const lower = rawText.toLocaleLowerCase('en-US');
-  return snapshot.rooms.find((room) => lower.includes(room.name.toLocaleLowerCase('en-US'))) ?? null;
-}
-
 function evaluateWarrantyState(item: Phase2aInventoryItemRecord): TransitionalWarrantyRead {
   return classifyTransitionalWarrantyLinks({
     inventoryItemId: item.id,
@@ -210,11 +205,10 @@ function buildDynamicPlaceholderCandidates(
 }
 
 function evaluateWherePredicate(
-  predicateId: string,
+  expr: Extract<SemanticWhereExpression, { kind: 'PREDICATE' }>,
   item: Phase2aInventoryItemRecord,
   warranty: TransitionalWarrantyRead,
-  snapshot: Phase2aPropertySnapshot,
-  mentionedRoom: Phase2aRoomRecord | null
+  snapshot: Phase2aPropertySnapshot
 ): boolean {
   const linkedTasks = snapshot.maintenanceTasks.filter((task) => task.inventoryItemId === item.id);
   const dueTasks = linkedTasks.filter((task) => task.status !== 'COMPLETED');
@@ -222,7 +216,7 @@ function evaluateWherePredicate(
     (task) => task.status === 'PAST_DUE' || (task.status !== 'COMPLETED' && Boolean(task.nextDueDate) && task.nextDueDate < snapshot.asOfDate)
   );
 
-  switch (predicateId) {
+  switch (expr.predicateId) {
     case 'predicate.inventory_item.has_warranty_record':
       return warranty.state === 'ITEM_WARRANTY_LINKED'
         || warranty.state === 'PROPERTY_PLAN_LINKED'
@@ -238,7 +232,7 @@ function evaluateWherePredicate(
     case 'predicate.inventory_item.has_no_due_maintenance':
       return dueTasks.length === 0;
     case 'predicate.inventory_item.in_room':
-      return mentionedRoom ? item.roomId === mentionedRoom.id : Boolean(item.roomId);
+      return expr.targetRecordId ? item.roomId === expr.targetRecordId : Boolean(item.roomId);
     default:
       return false;
   }
@@ -248,18 +242,17 @@ function evaluateWhereExpression(
   expr: SemanticWhereExpression,
   item: Phase2aInventoryItemRecord,
   warranty: TransitionalWarrantyRead,
-  snapshot: Phase2aPropertySnapshot,
-  mentionedRoom: Phase2aRoomRecord | null
+  snapshot: Phase2aPropertySnapshot
 ): boolean {
   switch (expr.kind) {
     case 'PREDICATE':
-      return evaluateWherePredicate(expr.predicateId, item, warranty, snapshot, mentionedRoom);
+      return evaluateWherePredicate(expr, item, warranty, snapshot);
     case 'NOT':
-      return !evaluateWhereExpression(expr.operand, item, warranty, snapshot, mentionedRoom);
+      return !evaluateWhereExpression(expr.operand, item, warranty, snapshot);
     case 'AND':
-      return expr.operands.every((operand) => evaluateWhereExpression(operand, item, warranty, snapshot, mentionedRoom));
+      return expr.operands.every((operand) => evaluateWhereExpression(operand, item, warranty, snapshot));
     case 'OR':
-      return expr.operands.some((operand) => evaluateWhereExpression(operand, item, warranty, snapshot, mentionedRoom));
+      return expr.operands.some((operand) => evaluateWhereExpression(operand, item, warranty, snapshot));
   }
 }
 
@@ -328,6 +321,27 @@ export function executePhase2aVerticalSlice(input: {
   const envelope = buildSemanticTextEnvelope(rawText, { dynamicEntities });
   const spanRoundTripOk = verifyPlaceholderSpanMapRoundTrip(envelope).ok;
   const plan = SemanticRequestPlanSchema.parse(parseDeterministicSemanticRequest(rawText, { dynamicEntities }));
+  return executeValidatedPhase2aPlan({
+    rawText,
+    envelope,
+    spanRoundTripOk,
+    plan,
+    snapshot,
+    auth,
+    filterEntityIds: input.filterEntityIds,
+  });
+}
+
+function executeValidatedPhase2aPlan(input: {
+  readonly rawText: string;
+  readonly envelope: SemanticTextEnvelope;
+  readonly spanRoundTripOk: boolean;
+  readonly plan: SemanticRequestPlan;
+  readonly snapshot: Phase2aPropertySnapshot;
+  readonly auth: Phase2aAuthorizationContext;
+  readonly filterEntityIds?: readonly string[];
+}): Phase2aSliceExecutionResult {
+  const { rawText, envelope, spanRoundTripOk, plan, snapshot, auth } = input;
 
   if (!auth.propertyAuthorized || auth.propertyId !== snapshot.propertyId) {
     return buildBlockedResult(
@@ -507,10 +521,10 @@ export function executePhase2aVerticalSlice(input: {
     const targetItem = entityResolution?.outcome === 'RESOLVED'
       ? snapshot.items.find((item) => item.id === entityResolution.recordId)
       : undefined;
-    const dueMatch = rawText.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+    const dueDate = facet.time?.kind === 'EXACT_DATE' ? facet.time.isoDate : null;
     const missingSlots: string[] = [];
     if (!targetItem) missingSlots.push('inventoryItemId');
-    if (!dueMatch) missingSlots.push('dueDate');
+    if (!dueDate) missingSlots.push('dueDate');
 
     const candidateEntityResolution: AskEntityResolutionResult | null = targetItem
       ? ({
@@ -522,7 +536,7 @@ export function executePhase2aVerticalSlice(input: {
     const previewTitle = targetItem ? `Service ${targetItem.name}` : 'Maintenance task';
     const confirmationVersion = 1;
     const confirmationExpiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-    const previewParams = targetItem && dueMatch
+    const previewParams = targetItem && dueDate
       ? {
           propertyId: snapshot.propertyId,
           inventoryItemId: targetItem.id,
@@ -530,14 +544,14 @@ export function executePhase2aVerticalSlice(input: {
           maintenanceTitle: previewTitle,
           maintenanceDescription: `Scheduled via Ask for ${targetItem.name}`,
           maintenancePriority: 'MEDIUM',
-          maintenanceNextDueDate: dueMatch[1],
+          maintenanceNextDueDate: dueDate,
           maintenanceIsRecurring: false,
           confirmationVersion,
           confirmationExpiresAt,
         }
       : {};
 
-    const validConfirmation = targetItem && dueMatch
+    const validConfirmation = targetItem && dueDate
       ? AskConfirmationSchema.parse({
           confirmationId: 'phase2a-maint-preview-1',
           version: confirmationVersion,
@@ -546,7 +560,7 @@ export function executePhase2aVerticalSlice(input: {
           fields: [
             { label: 'Task', value: previewTitle },
             { label: 'Item', value: targetItem.name },
-            { label: 'Due date', value: dueMatch[1] },
+            { label: 'Due date', value: dueDate },
             { label: 'Priority', value: 'Medium' },
           ],
           editableFields: [],
@@ -595,14 +609,19 @@ export function executePhase2aVerticalSlice(input: {
     const accessibleItemsById = new Map(
       snapshot.items.filter((item) => !restricted.has(item.id)).map((item) => [item.id, item])
     );
+    const isNegative = facet.polarity === 'NEGATIVE';
+    const dueStatus = facet.time?.kind === 'DUE_STATUS' ? facet.time.status : null;
     const matchingTasks = snapshot.maintenanceTasks.filter((task) => {
       if (task.inventoryItemId && restricted.has(task.inventoryItemId)) return false;
       if (entityResolution?.outcome === 'RESOLVED' && task.inventoryItemId !== entityResolution.recordId) return false;
-      if (/\boverdue\b/i.test(rawText)) {
-        return task.status === 'PAST_DUE' || (task.status !== 'COMPLETED' && Boolean(task.nextDueDate) && task.nextDueDate < snapshot.asOfDate);
+      if (dueStatus === 'OVERDUE') {
+        const isOverdue = task.status === 'PAST_DUE'
+          || (task.status !== 'COMPLETED' && Boolean(task.nextDueDate) && task.nextDueDate < snapshot.asOfDate);
+        return isNegative ? !isOverdue : isOverdue;
       }
-      if (/\bdue\b/i.test(rawText)) {
-        return task.status !== 'COMPLETED';
+      if (dueStatus === 'DUE') {
+        const isDue = task.status !== 'COMPLETED';
+        return isNegative ? !isDue : isDue;
       }
       return true;
     });
@@ -675,11 +694,7 @@ export function executePhase2aVerticalSlice(input: {
         ? 'path.inventory_item.maintenance_task'
         : 'path.inventory_item.room'
   );
-  const mentionedRoom = detectMentionedRoom(rawText, snapshot);
-  const effectiveRelationPathIds = mentionedRoom && !relationPathIds.includes('path.inventory_item.room')
-    ? [...relationPathIds, 'path.inventory_item.room']
-    : relationPathIds;
-  const effectiveTraversalCheck = validateSiblingDepthOnePredicates(effectiveRelationPathIds);
+  const effectiveTraversalCheck = validateSiblingDepthOnePredicates(relationPathIds);
   if (!effectiveTraversalCheck.ok) {
     return buildBlockedResult(
       rawText,
@@ -696,7 +711,6 @@ export function executePhase2aVerticalSlice(input: {
   const authorisedItems = snapshot.items.filter((item) => {
     if (restricted.has(item.id)) return false;
     if (filterSet && !filterSet.has(item.id)) return false;
-    if (mentionedRoom && item.roomId !== mentionedRoom.id) return false;
     if (entityResolution?.outcome === 'RESOLVED' && item.id !== entityResolution.recordId) return false;
     return true;
   });
@@ -707,7 +721,7 @@ export function executePhase2aVerticalSlice(input: {
   }));
 
   const matched = facet.where
-    ? evaluated.filter(({ item, warranty }) => evaluateWhereExpression(facet.where!, item, warranty, snapshot, mentionedRoom))
+    ? evaluated.filter(({ item, warranty }) => evaluateWhereExpression(facet.where!, item, warranty, snapshot))
     : evaluated;
 
   const conflictedCount = facet.relations.some((r) => r.semanticRelationId === 'relation.inventory_item.warranty')
@@ -831,25 +845,50 @@ export function applyPhase2aFollowUpRefinement(input: {
   readonly auth: Phase2aAuthorizationContext;
 }): Phase2aSliceExecutionResult {
   const { priorResult, followUpText, snapshot, auth } = input;
-  const trimmed = followUpText.trim();
   const baseIds = priorResult.activeEntityIds;
-
-  if (/^how many\b/i.test(trimmed)) {
-    const countQuery = priorResult.plan.rawText.replace(/^(?:list|show|which)\b/i, 'how many');
+  const dynamicEntities = buildDynamicPlaceholderCandidates(snapshot, auth);
+  const delta = extractSemanticFollowUpDelta(followUpText, { dynamicEntities });
+  const priorFacet = priorResult.plan.facets[0];
+  if (!priorFacet) {
     return executePhase2aVerticalSlice({
-      rawText: countQuery === priorResult.plan.rawText ? `how many ${priorResult.plan.rawText}` : countQuery,
+      rawText: followUpText,
       snapshot,
       auth,
       filterEntityIds: baseIds.length > 0 ? baseIds : undefined,
     });
   }
 
-  const normalizedFollowUp = /\bappliances?\b|\bitems?\b/i.test(trimmed)
-    ? trimmed
-    : `which appliances ${trimmed}`;
+  const mergedRelations = [...priorFacet.relations];
+  for (const rel of delta.relations) {
+    if (!mergedRelations.some((existing) => existing.semanticRelationId === rel.semanticRelationId && existing.predicateId === rel.predicateId)) {
+      mergedRelations.push(rel);
+    }
+  }
+  const mergedWhere: SemanticWhereExpression | null = delta.where
+    ? priorFacet.where
+      ? { kind: 'AND', operands: [priorFacet.where, delta.where] }
+      : delta.where
+    : priorFacet.where;
 
-  return executePhase2aVerticalSlice({
-    rawText: normalizedFollowUp,
+  const refinedPlan = SemanticRequestPlanSchema.parse({
+    ...priorResult.plan,
+    facets: [
+      {
+        ...priorFacet,
+        projection: delta.projection ?? priorFacet.projection,
+        polarity: delta.polarity ?? priorFacet.polarity,
+        time: delta.time ?? priorFacet.time,
+        relations: mergedRelations,
+        where: mergedWhere,
+      },
+    ],
+  });
+
+  return executeValidatedPhase2aPlan({
+    rawText: priorResult.plan.rawText,
+    envelope: priorResult.envelope,
+    spanRoundTripOk: priorResult.spanRoundTripOk,
+    plan: refinedPlan,
     snapshot,
     auth,
     filterEntityIds: baseIds.length > 0 ? baseIds : undefined,
