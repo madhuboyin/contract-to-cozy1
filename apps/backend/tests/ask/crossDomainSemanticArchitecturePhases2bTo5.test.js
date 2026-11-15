@@ -441,7 +441,7 @@ test('production dataPointReadResult loads live manual/receipt links, canonical 
     ['inspectionFinding', () => []],
     ['projectRecord', () => []],
     ['quoteComparisonQuote', () => []],
-    ['toolOverride', () => [{ key: 'monthlyRentNow', value: 2000 }]],
+    ['toolOverride', () => [{ key: 'MONTHLY_RENT_NOW', value: 2000 }]],
     ['homeRiskReplayEventMatch', () => []],
     ['claim', () => []],
     ['askSavedArtifactPreference', () => []],
@@ -586,6 +586,14 @@ test('production dataPointReadResult loads live manual/receipt links, canonical 
     assert.equal(typeof ownRentFacet.metrics.breaksEvenWithinHorizon, 'boolean');
     assert.ok('crossoverYear' in ownRentFacet.metrics);
     assert.deepEqual(ownRentFacet.receipt.predicateIds, ['predicate.property.evaluates_break_even']);
+
+    // Contract enforcement: camel-case key 'monthlyRentNow' is rejected by parseSellHoldRentOverrides (must be 'MONTHLY_RENT_NOW')
+    const prevToolOverrideFindMany = prisma.toolOverride.findMany;
+    prisma.toolOverride.findMany = async () => [{ key: 'monthlyRentNow', value: 2000 }];
+    const unsupportedOverrideOwnVsRent = await dataPointReadResult('user-1', 'prop-ny-1', 'how long until owning beats renting?');
+    assert.equal(unsupportedOverrideOwnVsRent.status, 'READY_WITH_LIMITATIONS');
+    assert.ok(unsupportedOverrideOwnVsRent.parameters.crossDomainExecution.facetResults[0].missingSlots.includes('monthlyRentCents'));
+    prisma.toolOverride.findMany = prevToolOverrideFindMany;
 
     const refi = await dataPointReadResult('user-1', 'prop-ny-1', 'would refinancing break even within three years?');
     assert.equal(refi.status, 'ANSWERED');

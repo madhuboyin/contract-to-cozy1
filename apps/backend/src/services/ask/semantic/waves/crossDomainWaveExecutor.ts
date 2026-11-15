@@ -19,6 +19,7 @@ import { type AskOperationResult } from '../../askOperationRegistry';
 import { getAskSavedPage } from '../../askSaved.service';
 import { safeTimezone } from '../../support/propertyContext';
 import { computeMonthlyPayment } from '../../../tools/mortgageMath';
+import { parseSellHoldRentOverrides } from '../../../toolOverrideContract';
 import {
   executePhase2aVerticalSlice,
   loadPhase2aPropertySnapshot,
@@ -2377,15 +2378,12 @@ export async function loadCrossDomainPropertySnapshot(
   const oppMeta = refinanceOppRow?.metadataJson;
 
   const horizonYears = sellHoldRentRow?.years ?? extractFinanceNumber(scenMeta, ['horizonYears']);
-  const monthlyRentOverrideRow = Array.isArray(toolOverrideRows)
-    ? (toolOverrideRows as Array<{ key?: string; value?: unknown }>).find((row) => row.key === 'monthlyRentNow')
-    : undefined;
+  const parsedSellHoldRentOverrides = parseSellHoldRentOverrides(
+    Array.isArray(toolOverrideRows) ? toolOverrideRows : [],
+  );
   const overrideMonthlyRentDollars =
-    monthlyRentOverrideRow
-    && typeof monthlyRentOverrideRow.value === 'number'
-    && Number.isFinite(monthlyRentOverrideRow.value)
-    && monthlyRentOverrideRow.value > 0
-      ? monthlyRentOverrideRow.value
+    typeof parsedSellHoldRentOverrides.values.monthlyRentNow === 'number'
+      ? parsedSellHoldRentOverrides.values.monthlyRentNow
       : null;
   const shrDriversObj = shrDrivers && typeof shrDrivers === 'object' && !Array.isArray(shrDrivers)
     ? shrDrivers
