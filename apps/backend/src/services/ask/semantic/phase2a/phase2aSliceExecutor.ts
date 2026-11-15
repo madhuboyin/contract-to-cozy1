@@ -215,7 +215,9 @@ function evaluateWherePredicate(
 ): boolean {
   const linkedTasks = snapshot.maintenanceTasks.filter((task) => task.inventoryItemId === item.id);
   const dueTasks = linkedTasks.filter((task) => task.status !== 'COMPLETED');
-  const overdueTasks = linkedTasks.filter((task) => task.status === 'PAST_DUE' || (task.status !== 'COMPLETED' && task.nextDueDate < snapshot.asOfDate));
+  const overdueTasks = linkedTasks.filter(
+    (task) => task.status === 'PAST_DUE' || (task.status !== 'COMPLETED' && Boolean(task.nextDueDate) && task.nextDueDate < snapshot.asOfDate)
+  );
 
   switch (predicateId) {
     case 'predicate.inventory_item.has_warranty_record':
@@ -319,11 +321,10 @@ export function executePhase2aVerticalSlice(input: {
   readonly filterEntityIds?: readonly string[];
 }): Phase2aSliceExecutionResult {
   const { rawText, snapshot, auth } = input;
-  const envelope = buildSemanticTextEnvelope(rawText, {
-    dynamicEntities: buildDynamicPlaceholderCandidates(snapshot, auth),
-  });
+  const dynamicEntities = buildDynamicPlaceholderCandidates(snapshot, auth);
+  const envelope = buildSemanticTextEnvelope(rawText, { dynamicEntities });
   const spanRoundTripOk = verifyPlaceholderSpanMapRoundTrip(envelope).ok;
-  const plan = SemanticRequestPlanSchema.parse(parseDeterministicSemanticRequest(rawText));
+  const plan = SemanticRequestPlanSchema.parse(parseDeterministicSemanticRequest(rawText, { dynamicEntities }));
 
   if (!auth.propertyAuthorized || auth.propertyId !== snapshot.propertyId) {
     return buildBlockedResult(
@@ -571,7 +572,7 @@ export function executePhase2aVerticalSlice(input: {
       if (task.inventoryItemId && restricted.has(task.inventoryItemId)) return false;
       if (entityResolution?.outcome === 'RESOLVED' && task.inventoryItemId !== entityResolution.recordId) return false;
       if (/\boverdue\b/i.test(rawText)) {
-        return task.status === 'PAST_DUE' || (task.status !== 'COMPLETED' && task.nextDueDate < snapshot.asOfDate);
+        return task.status === 'PAST_DUE' || (task.status !== 'COMPLETED' && Boolean(task.nextDueDate) && task.nextDueDate < snapshot.asOfDate);
       }
       if (/\bdue\b/i.test(rawText)) {
         return task.status !== 'COMPLETED';

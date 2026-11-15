@@ -304,15 +304,6 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
   const timeZone = await propertyTimeZone(propertyId);
   const queryOutcome = forcedPoint ? ({ kind: 'NONE' } as const) : planDataPointQuery(message, new Date(), timeZone);
   if (!forcedPoint) {
-    const shapePlan = planShape789(message);
-    if (shapePlan) {
-      if (shapePlan.shape === 'NO_WARRANTY' || shapePlan.shape === 'HAS_WARRANTY') {
-        const agreement = warrantyShapeGrammarAgreement(message, shapePlan);
-        if (agreement.outcome !== 'AGREE') return notice('DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED', 'data-point-semantic-agreement-required', 'I need a clearer warranty-record question', 'I could not verify the item, warranty relationship, polarity and answer shape independently, so I did not run this read.');
-        return shape789Result(propertyId, role, shapePlan, agreement);
-      }
-      return shape789Result(propertyId, role, shapePlan);
-    }
     const phase2aPlan = parseDeterministicSemanticRequest(message);
     const phase2aJob = phase2aPlan.outcome === 'MATCH' ? phase2aPlan.facets[0]?.evidence.jobMatch : null;
     if (
@@ -328,6 +319,15 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
         rawText: message,
       });
       return phase2aExecution.operationResult;
+    }
+    const shapePlan = planShape789(message);
+    if (shapePlan) {
+      if (shapePlan.shape === 'NO_WARRANTY' || shapePlan.shape === 'HAS_WARRANTY') {
+        const agreement = warrantyShapeGrammarAgreement(message, shapePlan);
+        if (agreement.outcome !== 'AGREE') return notice('DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED', 'data-point-semantic-agreement-required', 'I need a clearer warranty-record question', 'I could not verify the item, warranty relationship, polarity and answer shape independently, so I did not run this read.');
+        return shape789Result(propertyId, role, shapePlan, agreement);
+      }
+      return shape789Result(propertyId, role, shapePlan);
     }
   }
   // A multi-part question ("what is my deductible and when does my insurance policy expire") has several facets: each is read through the ordinary single-point path and all are answered in one summary.

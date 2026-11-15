@@ -16,6 +16,8 @@ import {
   type AskOperationResult,
 } from './askOperationRegistry';
 import { AskCapabilityHandlerMissingError, type CapabilityInvocationEnvelope } from './capabilityInvocation.contract';
+import { parseDeterministicSemanticRequest } from './semantic/deterministicSemanticParser';
+import { executePhase2aOnProperty } from './semantic/phase2a/phase2aSliceExecutor';
 
 // Ask Cozy Stage 3, Phase 1 (implementation plan §7; FRD §16-17). Replaces
 // askOrchestrator.service.ts's former domain-branching dispatch switch
@@ -221,10 +223,44 @@ async function invokeGuarded(
   const skill = getSkillForOperation(operationId);
   const effectivePolicy = skill ? resolveEffectiveSkillOperationPolicy(skill.id, operationId, 'ASK') : null;
   const authorizationFloor = effectivePolicy?.authorizationFloor ?? definition.propertyRoleFloor;
+  let resolvedRole: HouseholdRole = 'VIEWER';
   if (envelope.propertyId && authorizationFloor) {
     const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId);
+    resolvedRole = access.role;
     if (HOUSEHOLD_ROLE_RANK[access.role] < HOUSEHOLD_ROLE_RANK[authorizationFloor]) {
       return permissionRequiredResult(authorizationFloor);
+    }
+  }
+
+  // Phase 2A unified semantic plan boundary across QUERY, CAPABILITY, and COMMAND
+  if (
+    envelope.propertyId
+    && envelope.message
+    && (
+      operationId === 'DATA_POINT_READ'
+      || operationId === 'REPLACEMENT_GUIDANCE'
+      || operationId === 'HVAC_DECISION_START'
+      || operationId === 'MAINTENANCE_TASK_CREATE'
+    )
+  ) {
+    const phase2aPlan = parseDeterministicSemanticRequest(envelope.message);
+    const phase2aJob = phase2aPlan.outcome === 'MATCH' ? phase2aPlan.facets[0]?.evidence.jobMatch : null;
+    const isPhase2aDispatch =
+      phase2aPlan.outcome === 'BOUNDARY'
+      || (operationId === 'DATA_POINT_READ' && phase2aJob === 'query.inventory_item.relation_boolean')
+      || ((operationId === 'REPLACEMENT_GUIDANCE' || operationId === 'HVAC_DECISION_START' || operationId === 'DATA_POINT_READ')
+        && phase2aJob === 'job.inventory.replacement_guidance')
+      || ((operationId === 'MAINTENANCE_TASK_CREATE' || operationId === 'DATA_POINT_READ')
+        && phase2aJob === 'job.maintenance.create');
+
+    if (isPhase2aDispatch) {
+      const phase2aExecution = await executePhase2aOnProperty({
+        propertyId: envelope.propertyId,
+        role: resolvedRole,
+        propertyAuthorized: true,
+        rawText: envelope.message,
+      });
+      return withDerivedCollectionDescriptors(phase2aExecution.operationResult);
     }
   }
 

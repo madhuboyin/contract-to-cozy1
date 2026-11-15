@@ -264,10 +264,72 @@ test('Phase 2A protects dynamic property entities, hides restricted items as mis
   assert.equal(cycleDetected.ok, false);
   assert.equal(cycleDetected.reason, 'TRAVERSAL_CYCLE_DETECTED');
 
-  // 4. Production Ask handler wiring
+  // 4. Production Ask handler & capability registry wiring (before planShape789 + across QUERY/CAPABILITY/COMMAND)
   const handlerSource = fs.readFileSync(
     path.join(__dirname, '../../src/services/ask/handlers/dataPointRead.handler.ts'),
     'utf8'
   );
   assert.ok(handlerSource.includes('executePhase2aOnProperty'));
+  assert.ok(handlerSource.indexOf('executePhase2aOnProperty') < handlerSource.indexOf('planShape789(message)'));
+
+  const capabilityRegistrySource = fs.readFileSync(
+    path.join(__dirname, '../../src/services/ask/capabilityHandlerRegistry.ts'),
+    'utf8'
+  );
+  assert.ok(capabilityRegistrySource.includes('executePhase2aOnProperty'));
+  assert.ok(capabilityRegistrySource.includes('HVAC_DECISION_START'));
+  assert.ok(capabilityRegistrySource.includes('MAINTENANCE_TASK_CREATE'));
+  assert.ok(capabilityRegistrySource.includes('REPLACEMENT_GUIDANCE'));
+
+  // 5. Canonical plan.minimizedText masks dynamic custom property entities
+  const customSnapshot = {
+    ...PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+    items: [
+      ...PHASE2A_SEEDED_PROPERTY_SNAPSHOT.items,
+      {
+        id: 'item-custom-cooler',
+        propertyId: 'prop-phase2a-1',
+        name: 'Upstairs beverage cooler',
+        category: 'APPLIANCE',
+        replacementCostCents: 89900,
+        condition: 'GOOD_CONDITION',
+        roomId: 'room-kitchen',
+        propertyPlanWarrantyId: null,
+        itemWarrantyIds: [],
+        coverageEvidenceStatus: 'NONE',
+      },
+    ],
+    maintenanceTasks: [
+      ...PHASE2A_SEEDED_PROPERTY_SNAPSHOT.maintenanceTasks,
+      {
+        id: 'maint-no-due-date',
+        propertyId: 'prop-phase2a-1',
+        title: 'Inspect beverage cooler gasket',
+        status: 'PENDING',
+        priority: 'LOW_PRIORITY',
+        nextDueDate: '',
+        inventoryItemId: 'item-custom-cooler',
+      },
+    ],
+  };
+  const customPlanResult = executePhase2aVerticalSlice({
+    rawText: 'show replacement cost for Upstairs beverage cooler',
+    snapshot: customSnapshot,
+    auth: PHASE2A_OWNER_AUTH,
+  });
+  assert.ok(!customPlanResult.plan.minimizedText.includes('Upstairs beverage cooler'));
+  assert.ok(customPlanResult.plan.minimizedText.includes('[ITEM_1]'));
+
+  // 6. Tasks with empty nextDueDate are NOT treated as overdue
+  const overdueResult = executePhase2aVerticalSlice({
+    rawText: 'which appliances have overdue maintenance',
+    snapshot: customSnapshot,
+    auth: PHASE2A_OWNER_AUTH,
+  });
+  assert.deepEqual(overdueResult.activeEntityIds, ['item-furnace']);
+
+  // 7. DATA_POINT_READ operation contract allows GROUPED_LIST and BOUNDARY
+  const { ASK_OPERATION_DEFINITIONS } = require('../../src/services/ask/askOperationRegistry.ts');
+  assert.ok(ASK_OPERATION_DEFINITIONS.DATA_POINT_READ.allowedBlockTypes.includes('GROUPED_LIST'));
+  assert.ok(ASK_OPERATION_DEFINITIONS.DATA_POINT_READ.allowedBlockTypes.includes('BOUNDARY'));
 });

@@ -1105,7 +1105,7 @@ export const ASK_RELATIONSHIP_STORAGE_ACCESS_SITES: readonly RelationshipStorage
     relativeFilePath: 'src/services/ask/semantic/phase2a/phase2aSliceExecutor.ts',
     usage: 'READ',
     storageColumnsAccessed: ['InventoryItem.warrantyId', 'Warranty.inventoryItemId'],
-    classification: 'CANONICAL_OR_GOVERNED_READ',
+    classification: 'CANONICAL_ADAPTER',
     contradictionOrDriftNote: 'Phase 2A Prisma snapshot loader reads both transitional warranty link columns for classifyTransitionalWarrantyLinks.',
   },
   {

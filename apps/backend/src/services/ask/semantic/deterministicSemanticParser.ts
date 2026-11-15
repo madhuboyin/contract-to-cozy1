@@ -2,7 +2,7 @@ import { createHash } from 'crypto';
 import { ASK_SHARED_SEMANTIC_LEXICON, ASK_SHARED_LEXICON_VERSION, type GeneratedSemanticLexeme } from './sharedSemanticLexicon';
 import { ASK_SEMANTIC_PLAN_VERSION, SemanticRequestPlanSchema, type SemanticRequestPlan, type SemanticSourceSpan } from './semanticRequestPlan';
 import { assembleSemanticBooleanExpression } from './semanticBooleanAssembler';
-import { buildSemanticTextEnvelope } from './phase2a/placeholderSpanMap';
+import { buildSemanticTextEnvelope, type DynamicPlaceholderEntityCandidate } from './phase2a/placeholderSpanMap';
 
 interface SemanticPredicateAtom {
   kind: 'PREDICATE';
@@ -164,9 +164,15 @@ const FIELD_OWNER_ENTITY: Readonly<Record<string, string>> = Object.freeze({
   'field.buyer_task.due_date': 'entity.buyer_task',
 });
 
-export function parseDeterministicSemanticRequest(rawText: string): SemanticRequestPlan {
+export function parseDeterministicSemanticRequest(
+  rawText: string,
+  options?: { readonly dynamicEntities?: readonly DynamicPlaceholderEntityCandidate[] }
+): SemanticRequestPlan {
   const { normalized, tokens } = normalizedWithOffsets(rawText);
-  const envelope = buildSemanticTextEnvelope(rawText, normalized);
+  const envelope = buildSemanticTextEnvelope(rawText, {
+    normalizedText: normalized,
+    dynamicEntities: options?.dynamicEntities,
+  });
   const base = {
     schemaVersion: ASK_SEMANTIC_PLAN_VERSION,
     producer: { kind: 'DETERMINISTIC' as const, version: `${ASK_DETERMINISTIC_SEMANTIC_PARSER_VERSION}+${ASK_SHARED_LEXICON_VERSION}` },
