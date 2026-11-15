@@ -47,6 +47,23 @@ test('the semantic plan accepts only bounded Boolean predicate trees', () => {
   assert.equal(SemanticRequestPlanSchema.safeParse(unsafe).success, false);
 });
 
+test('facet validation keeps subject, relation, target and where predicate registry-consistent', () => {
+  const plan = parseDeterministicSemanticRequest('which appliances have warranties');
+  assert.equal(SemanticRequestPlanSchema.safeParse(plan).success, true);
+
+  const wrongTarget = structuredClone(plan);
+  wrongTarget.facets[0].relations[0].targetEntityId = 'entity.insurance_policy';
+  assert.equal(SemanticRequestPlanSchema.safeParse(wrongTarget).success, false);
+
+  const wrongSubject = structuredClone(plan);
+  wrongSubject.facets[0].subject.entityId = 'entity.property';
+  assert.equal(SemanticRequestPlanSchema.safeParse(wrongSubject).success, false);
+
+  const mismatchedWhere = structuredClone(plan);
+  mismatchedWhere.facets[0].where.predicateId = 'predicate.inventory_item.has_no_warranty_record';
+  assert.equal(SemanticRequestPlanSchema.safeParse(mismatchedWhere).success, false);
+});
+
 test('the Boolean assembler preserves explicit coordination and clarifies ambiguous negative OR', () => {
   const warranty = { kind: 'PREDICATE', predicateId: 'predicate.inventory_item.has_warranty_record', relationPathId: 'path.inventory_item.warranty' };
   const noWarranty = { kind: 'PREDICATE', predicateId: 'predicate.inventory_item.has_no_warranty_record', relationPathId: 'path.inventory_item.warranty' };

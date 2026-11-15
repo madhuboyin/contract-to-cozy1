@@ -38,3 +38,8 @@ export function findSemanticPredicateRegistration(predicateId: string, relationP
   return ASK_SEMANTIC_RELATION_REGISTRY.find((relation) => relation.relationPathId === relationPathId
     && relation.predicateIds.includes(predicateId)) ?? null;
 }
+
+export function findSemanticRelationConstraintRegistration(semanticRelationId: string, predicateId: string): SemanticRelationRegistration | null {
+  return ASK_SEMANTIC_RELATION_REGISTRY.find((relation) => relation.semanticRelationId === semanticRelationId
+    && relation.predicateIds.includes(predicateId)) ?? null;
+}

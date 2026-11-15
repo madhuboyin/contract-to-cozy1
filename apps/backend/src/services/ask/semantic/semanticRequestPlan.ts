@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { findSemanticPredicateRegistration } from './semanticRelationRegistry';
+import { findSemanticPredicateRegistration, findSemanticRelationConstraintRegistration } from './semanticRelationRegistry';
 
-export const ASK_SEMANTIC_PLAN_VERSION = '1.1.0' as const;
+export const ASK_SEMANTIC_PLAN_VERSION = '1.2.0' as const;
 
 const SpanSchema = z.object({
   start: z.number().int().nonnegative(),
@@ -45,6 +45,13 @@ export const SemanticWhereExpressionSchema: z.ZodType<SemanticWhereExpression> =
   }).strict(),
 ]));
 
+function collectPredicateExpressions(expression: SemanticWhereExpression | null): Extract<SemanticWhereExpression, { kind: 'PREDICATE' }>[] {
+  if (!expression) return [];
+  if (expression.kind === 'PREDICATE') return [expression];
+  if (expression.kind === 'NOT') return collectPredicateExpressions(expression.operand);
+  return expression.operands.flatMap(collectPredicateExpressions);
+}
+
 export const SemanticFacetSchema = z.object({
   id: z.string().min(1),
   sourceSpan: SpanSchema,
@@ -81,7 +88,37 @@ export const SemanticFacetSchema = z.object({
     grammarComplete: z.boolean(),
     unresolvedSpanCount: z.number().int().nonnegative(),
   }).strict(),
-}).strict();
+}).strict().superRefine((facet, context) => {
+  const registeredRelations = facet.relations.map((relation, index) => {
+    const registration = findSemanticRelationConstraintRegistration(relation.semanticRelationId, relation.predicateId);
+    if (!registration) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['relations', index], message: 'relation and predicate must be registered together' });
+      return null;
+    }
+    if (facet.subject?.entityId !== registration.sourceEntityId) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['subject', 'entityId'], message: 'relation source must match the facet subject' });
+    }
+    if (relation.targetEntityId !== registration.targetEntityId) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['relations', index, 'targetEntityId'], message: 'relation target must match the registry' });
+    }
+    return registration;
+  });
+
+  if (facet.requestClass !== 'DATA_QUERY') return;
+  const wherePredicates = collectPredicateExpressions(facet.where);
+  for (const [index, predicate] of wherePredicates.entries()) {
+    const registration = findSemanticPredicateRegistration(predicate.predicateId, predicate.relationPathId);
+    const declared = registration && facet.relations.some((relation) => relation.semanticRelationId === registration.semanticRelationId
+      && relation.predicateId === predicate.predicateId);
+    if (!declared) context.addIssue({ code: z.ZodIssueCode.custom, path: ['where', index], message: 'where predicate must have a matching declared relation' });
+  }
+  for (const [index, relation] of facet.relations.entries()) {
+    const registration = registeredRelations[index];
+    const constrained = registration && wherePredicates.some((predicate) => predicate.predicateId === relation.predicateId
+      && predicate.relationPathId === registration.relationPathId);
+    if (!constrained) context.addIssue({ code: z.ZodIssueCode.custom, path: ['relations', index], message: 'data-query relation must have a matching where predicate' });
+  }
+});
 
 const PlanBaseSchema = z.object({
   schemaVersion: z.literal(ASK_SEMANTIC_PLAN_VERSION),
