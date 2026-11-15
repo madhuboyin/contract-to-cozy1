@@ -1714,6 +1714,24 @@ export const ASK_RELATIONSHIP_STORAGE_ACCESS_SITES: readonly RelationshipStorage
     classification: 'DIRECT_STORAGE_OUTSIDE_CANONICAL_ADAPTER',
     contradictionOrDriftNote: 'Repository WRITE access to [warrantyId] for relation.inventory_item.warranty outside canonical adapter (FR-ONT-7).',
   },
+  {
+    siteId: 'rel_site.ask_cross_domain_wave_executor__claim_checklist_item',
+    semanticRelationId: 'relation.claim.checklist_item',
+    relativeFilePath: 'src/services/ask/semantic/waves/crossDomainWaveExecutor.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['Claim.checklistItems'],
+    classification: 'CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Cross-domain Wave executor snapshot loader reading property-scoped Claim.checklistItems requiredDocTypes.',
+  },
+  {
+    siteId: 'rel_site.ask_cross_domain_wave_executor__sale_case_readiness_item',
+    semanticRelationId: 'relation.sale_case.readiness_item',
+    relativeFilePath: 'src/services/ask/semantic/waves/crossDomainWaveExecutor.ts',
+    usage: 'READ',
+    storageColumnsAccessed: ['PropertySaleCase.readinessItems'],
+    classification: 'CANONICAL_ADAPTER',
+    contradictionOrDriftNote: 'Cross-domain Wave executor snapshot loader reading property-scoped PropertySaleCase.readinessItems.',
+  },
 ] as const);
 
 export type RelationPathAuditFlag =

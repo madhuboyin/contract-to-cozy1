@@ -13,8 +13,12 @@ import {
   verifyRichPresentationPopulationEquivalence,
   type Phase2aRichPresentationEquivalenceReport,
 } from '../phase2a/phase2aRichPresentationAdapter';
+import { prisma } from '../../../../lib/prisma';
+import { type AskPresentationBlock } from '../../../../productFramework/ask/ask.contract';
+import { type AskOperationResult } from '../../askOperationRegistry';
 import {
   executePhase2aVerticalSlice,
+  loadPhase2aPropertySnapshot,
   type Phase2aAuthorizationContext,
   type Phase2aPropertySnapshot,
 } from '../phase2a/phase2aSliceExecutor';
@@ -449,7 +453,11 @@ function executeNewStackFacet(
   }
 
   // Phase 2A single-slice vertical reads & replacement guidance
-  if (job === 'query.inventory_item.relation_boolean' || job === 'job.inventory.replacement_guidance') {
+  if (
+    job === 'query.inventory_item.relation_boolean'
+    || job === 'query.inventory_item.warranty_relation'
+    || job === 'job.inventory.replacement_guidance'
+  ) {
     const rawQuery = job === 'job.inventory.replacement_guidance' ? 'should I repair or replace my furnace' : facet.sourceSpan.text;
     const sub = executePhase2aVerticalSlice({
       rawText: rawQuery,
@@ -1329,4 +1337,575 @@ export function executeCrossDomainFollowUp(input: {
     authorized: true,
   }));
   return applyCrossDomainFollowUpRefinement(prior.plan, input.followUpText, dynamicEntities);
+}
+
+function normalizeWaveRole(role: string): AskUserRole {
+  const upper = role.toUpperCase();
+  if (upper === 'OWNER' || upper === 'ADMIN') return 'OWNER';
+  if (upper === 'EDITOR' || upper === 'MEMBER') return 'EDITOR';
+  return 'VIEWER';
+}
+
+function toCents(decimalOrNumber: unknown): number {
+  if (decimalOrNumber === null || decimalOrNumber === undefined) return 0;
+  const num = Number(decimalOrNumber);
+  return Number.isFinite(num) ? Math.round(num * 100) : 0;
+}
+
+function mapClaimStatus(status: string): WaveClaimRecord['status'] {
+  const upper = status.toUpperCase();
+  if (upper === 'CLOSED' || upper === 'SETTLED' || upper === 'DENIED') return 'CLOSED';
+  if (upper === 'UNDER_REVIEW' || upper === 'SUBMITTED' || upper === 'IN_REVIEW') return 'UNDER_REVIEW';
+  return 'OPEN';
+}
+
+function mapTaxStatus(status: string): WaveTaxBillRecord['status'] {
+  const upper = status.toUpperCase();
+  if (upper === 'PAID') return 'PAID';
+  if (upper === 'OVERDUE' || upper === 'DELINQUENT') return 'OVERDUE';
+  return 'UNPAID';
+}
+
+function mapInspectionStatus(status: string): WaveInspectionFindingRecord['status'] {
+  const upper = status.toUpperCase();
+  if (upper === 'RESOLVED' || upper === 'WAIVED') return 'RESOLVED';
+  if (upper === 'MONITORING' || upper === 'DEFERRED') return 'MONITORING';
+  return 'ACTION_REQUIRED';
+}
+
+function mapProjectStatus(status: string): WaveProjectRecord['status'] {
+  const upper = status.toUpperCase();
+  if (upper === 'COMPLETED') return 'COMPLETED';
+  if (upper === 'CANCELLED' || upper === 'ARCHIVED') return 'CANCELLED';
+  return 'ACTIVE';
+}
+
+function mapPermitStatus(applicability: string): WaveProjectRecord['permitStatus'] {
+  const upper = applicability.toUpperCase();
+  if (upper === 'CONFIRMED_NOT_REQUIRED' || upper === 'NOT_REQUIRED') return 'CONFIRMED_NOT_REQUIRED';
+  if (upper === 'REQUIRED' || upper === 'NEEDS_PERMIT') return 'NEEDS_PERMIT';
+  if (upper === 'APPROVED' || upper === 'OBTAINED') return 'APPROVED';
+  return 'UNKNOWN';
+}
+
+/**
+ * Loads a unified cross-domain snapshot for a property from Prisma models + Phase 2A inventory/maintenance snapshot.
+ */
+export async function loadCrossDomainPropertySnapshot(
+  propertyId: string,
+  _userId?: string,
+): Promise<CrossDomainPropertySnapshot> {
+  const phase2aSnapshot = await loadPhase2aPropertySnapshot(propertyId);
+  const prismaAny = prisma as unknown as Record<string, { findUnique?: Function; findMany?: Function } | undefined>;
+
+  const [
+    propertyRow,
+    warrantyRows,
+    documentRows,
+    policyRows,
+    claimRows,
+    homeEventRows,
+    taxBillRows,
+    recallRows,
+    inspectionRows,
+    buyerChecklistRow,
+    saleCaseRow,
+    projectRows,
+    quoteRows,
+    riskMatchRows,
+  ] = await Promise.all([
+    typeof prismaAny.property?.findUnique === 'function'
+      ? prisma.property.findUnique({
+          where: { id: propertyId },
+          select: { id: true, state: true },
+        })
+      : Promise.resolve(null),
+    typeof prismaAny.warranty?.findMany === 'function'
+      ? prisma.warranty.findMany({
+          where: { propertyId },
+          select: { id: true, propertyId: true, providerName: true, category: true, expiryDate: true },
+        })
+      : Promise.resolve([]),
+    typeof prismaAny.document?.findMany === 'function'
+      ? prisma.document.findMany({
+          where: { propertyId },
+          select: { id: true, propertyId: true, name: true, type: true },
+        })
+      : Promise.resolve([]),
+    typeof prismaAny.insurancePolicy?.findMany === 'function'
+      ? prisma.insurancePolicy.findMany({
+          where: { propertyId },
+          select: {
+            id: true,
+            propertyId: true,
+            carrierName: true,
+            policyNumber: true,
+            deductibleCents: true,
+            deductibleAmount: true,
+            premiumAmount: true,
+            expiryDate: true,
+          },
+        })
+      : Promise.resolve([]),
+    typeof prismaAny.claim?.findMany === 'function'
+      ? prisma.claim.findMany({
+          where: { propertyId },
+          select: {
+            id: true,
+            propertyId: true,
+            title: true,
+            status: true,
+            documents: {
+              select: { id: true, claimId: true, documentId: true, type: true },
+            },
+            checklistItems: {
+              select: { requiredDocTypes: true, required: true },
+            },
+          },
+        })
+      : Promise.resolve([]),
+    typeof prismaAny.homeEvent?.findMany === 'function'
+      ? prisma.homeEvent.findMany({
+          where: { propertyId, deletedAt: null },
+          select: { id: true, propertyId: true, title: true, type: true, occurredAt: true, amount: true },
+        })
+      : Promise.resolve([]),
+    typeof prismaAny.propertyTaxBillRecord?.findMany === 'function'
+      ? prisma.propertyTaxBillRecord.findMany({
+          where: { propertyId },
+          select: { id: true, propertyId: true, taxYear: true, billAmount: true, status: true, supersededById: true },
+        })
+      : Promise.resolve([]),
+    typeof prismaAny.recallMatch?.findMany === 'function'
+      ? prisma.recallMatch.findMany({
+          where: { propertyId },
+          select: {
+            id: true,
+            propertyId: true,
+            inventoryItemId: true,
+            status: true,
+            recall: { select: { title: true, severity: true } },
+          },
+        })
+      : Promise.resolve([]),
+    typeof prismaAny.inspectionFinding?.findMany === 'function'
+      ? prisma.inspectionFinding.findMany({
+          where: { propertyId },
+          select: {
+            id: true,
+            propertyId: true,
+            reportId: true,
+            inspectorDescription: true,
+            status: true,
+            report: { select: { reportType: true, inspectionDate: true } },
+          },
+        })
+      : Promise.resolve([]),
+    typeof prismaAny.homeBuyerChecklist?.findUnique === 'function'
+      ? prisma.homeBuyerChecklist.findUnique({
+          where: { propertyId },
+          select: {
+            targetCloseDate: true,
+            tasks: {
+              select: { id: true, title: true, taskType: true, status: true, dueAt: true },
+            },
+          },
+        })
+      : Promise.resolve(null),
+    typeof prismaAny.propertySaleCase?.findUnique === 'function'
+      ? prisma.propertySaleCase.findUnique({
+          where: { propertyId },
+          select: {
+            targetCloseDate: true,
+            readinessItems: {
+              select: { id: true, title: true, status: true },
+            },
+          },
+        })
+      : Promise.resolve(null),
+    typeof prismaAny.projectRecord?.findMany === 'function'
+      ? prisma.projectRecord.findMany({
+          where: { propertyId },
+          select: { id: true, propertyId: true, name: true, status: true, permitApplicability: true },
+        })
+      : Promise.resolve([]),
+    typeof prismaAny.quoteComparisonQuote?.findMany === 'function'
+      ? prisma.quoteComparisonQuote.findMany({
+          where: { workspace: { propertyId } },
+          select: { id: true, vendorName: true, quoteAmount: true, serviceLocation: true, workspace: { select: { propertyId: true } } },
+        })
+      : Promise.resolve([]),
+    typeof prismaAny.homeRiskReplayEventMatch?.findMany === 'function'
+      ? prisma.homeRiskReplayEventMatch.findMany({
+          where: { propertyId },
+          select: {
+            id: true,
+            propertyId: true,
+            impactLevel: true,
+            homeRiskEvent: { select: { eventType: true, severity: true, startAt: true, endAt: true, updatedAt: true } },
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const manualDocByItem = new Map<string, string>();
+  const receiptDocByItem = new Map<string, string>();
+  const propertyDocuments: WaveDocumentRecord[] = (documentRows as Array<any>).map((doc) => {
+    const typeUpper = String(doc.type ?? 'OTHER').toUpperCase();
+    return {
+      id: doc.id,
+      propertyId: doc.propertyId ?? propertyId,
+      title: String(doc.name ?? 'Document'),
+      documentType: typeUpper,
+      lifecycleStatus: 'ACTIVE',
+      visibleToRoles: ['OWNER', 'EDITOR', 'VIEWER'],
+    };
+  });
+
+  const extendedItems: WaveExtendedItemRecord[] = phase2aSnapshot.items.map((item) => {
+    const cond = (item.condition ?? '').toUpperCase();
+    return {
+      id: item.id,
+      propertyId: item.propertyId,
+      name: item.name,
+      category: (['APPLIANCE', 'HVAC', 'PLUMBING', 'ELECTRICAL'].includes(item.category.toUpperCase())
+        ? item.category.toUpperCase()
+        : 'OTHER') as WaveExtendedItemRecord['category'],
+      purchaseCostCents: item.purchaseCostCents ?? null,
+      replacementCostCents: item.replacementCostCents ?? null,
+      installedOn: item.installedOn ?? null,
+      condition: cond.includes('POOR')
+        ? 'POOR'
+        : cond.includes('FAIR')
+          ? 'FAIR'
+          : 'GOOD',
+      manualDocumentId: manualDocByItem.get(item.id) ?? null,
+      receiptDocumentId: receiptDocByItem.get(item.id) ?? null,
+      roomId: item.roomId ?? null,
+      isHidden: false,
+    };
+  });
+
+  const claimDocLinks: WaveClaimDocLink[] = [];
+  const claims: WaveClaimRecord[] = (claimRows as Array<any>).map((claim) => {
+    const docs = Array.isArray(claim.documents) ? claim.documents : [];
+    for (const d of docs) {
+      claimDocLinks.push({ id: d.id, claimId: claim.id, documentId: d.documentId });
+    }
+    const checklistItems = Array.isArray(claim.checklistItems) ? claim.checklistItems : [];
+    const reqTypes = Array.from(
+      new Set<string>(
+        checklistItems.flatMap((ci: any) =>
+          Array.isArray(ci.requiredDocTypes) ? ci.requiredDocTypes.map((t: unknown) => String(t)) : [],
+        ),
+      ),
+    );
+    return {
+      id: claim.id,
+      propertyId: claim.propertyId,
+      title: claim.title,
+      slug: claim.title.toLowerCase().replace(/[^a-z0-9]+/g, '_'),
+      status: mapClaimStatus(String(claim.status)),
+      requiredDocumentTypes: reqTypes,
+    };
+  });
+
+  const closingDateIso = buyerChecklistRow?.targetCloseDate
+    ? new Date(buyerChecklistRow.targetCloseDate).toISOString().slice(0, 10)
+    : saleCaseRow?.targetCloseDate
+      ? new Date(saleCaseRow.targetCloseDate).toISOString().slice(0, 10)
+      : null;
+
+  return {
+    ...phase2aSnapshot,
+    timezone: 'UTC',
+    closingDateIso,
+    extendedItems,
+    warranties: (warrantyRows as Array<any>).map((w) => ({
+      id: w.id,
+      propertyId: w.propertyId ?? propertyId,
+      providerName: w.providerName,
+      category: String(w.category),
+      expiryDate: w.expiryDate ? new Date(w.expiryDate).toISOString().slice(0, 10) : '',
+    })),
+    maintenanceTaskMeta: phase2aSnapshot.maintenanceTasks.map((t) => ({
+      taskId: t.id,
+      category: /plumb|leak|water heater|pipe|drain/i.test(t.title)
+        ? 'PLUMBING'
+        : /electr|panel|breaker|outlet/i.test(t.title)
+          ? 'ELECTRICAL'
+          : /hvac|furnace|ac|filter|heat/i.test(t.title)
+            ? 'HVAC'
+            : 'GENERAL',
+    })),
+    insurancePolicies: (policyRows as Array<any>).map((p) => ({
+      id: p.id,
+      propertyId: p.propertyId ?? propertyId,
+      carrierName: p.carrierName,
+      policyNumber: p.policyNumber,
+      deductibleCents: typeof p.deductibleCents === 'number' ? p.deductibleCents : toCents(p.deductibleAmount),
+      annualPremiumCents: toCents(p.premiumAmount),
+      expiryDate: p.expiryDate ? new Date(p.expiryDate).toISOString().slice(0, 10) : '',
+    })),
+    claims,
+    documents: propertyDocuments,
+    claimDocLinks,
+    homeEvents: (homeEventRows as Array<any>).map((e) => ({
+      id: e.id,
+      propertyId: e.propertyId,
+      title: e.title,
+      eventCategory: String(e.type).toUpperCase().includes('REPAIR')
+        ? 'REPAIR'
+        : String(e.type).toUpperCase().includes('UPGRADE')
+          ? 'UPGRADE'
+          : String(e.type).toUpperCase().includes('INSPECT')
+            ? 'INSPECTION'
+            : 'OTHER',
+      occurredAt: e.occurredAt ? new Date(e.occurredAt).toISOString() : '',
+      actualCostCents: e.amount !== null && e.amount !== undefined ? toCents(e.amount) : null,
+    })),
+    taxBills: (taxBillRows as Array<any>).map((b) => ({
+      id: b.id,
+      propertyId: b.propertyId,
+      taxYear: b.taxYear,
+      amountCents: toCents(b.billAmount),
+      status: mapTaxStatus(String(b.status)),
+      lifecycleStatus: b.supersededById ? 'SUPERSEDED' : 'ACTIVE',
+    })),
+    financeSlots: null,
+    recalls: (recallRows as Array<any>)
+      .filter((r) => !['DISMISSED', 'RESOLVED'].includes(String(r.status ?? 'OPEN').toUpperCase()))
+      .map((r) => ({
+      id: r.id,
+      propertyId: r.propertyId,
+      title: r.recall?.title ?? 'Safety recall match',
+      severity: String(r.recall?.severity ?? 'MEDIUM').toUpperCase() === 'HIGH'
+        ? 'HIGH'
+        : String(r.recall?.severity ?? '').toUpperCase() === 'LOW'
+          ? 'LOW'
+          : 'MEDIUM',
+      affectedInventoryItemId: r.inventoryItemId ?? '',
+    })),
+    environmentalRisks: (riskMatchRows as Array<any>).map((m) => ({
+      id: m.id,
+      propertyId: m.propertyId,
+      hazardType: String(m.homeRiskEvent?.eventType ?? 'WEATHER_RISK'),
+      severity: String(m.impactLevel ?? m.homeRiskEvent?.severity ?? 'MODERATE').toUpperCase() === 'HIGH'
+        ? 'HIGH'
+        : String(m.impactLevel ?? '').toUpperCase() === 'LOW'
+          ? 'LOW'
+          : 'MODERATE',
+      windowStartIso: m.homeRiskEvent?.startAt ? new Date(m.homeRiskEvent.startAt).toISOString() : '',
+      windowEndIso: m.homeRiskEvent?.endAt ? new Date(m.homeRiskEvent.endAt).toISOString() : '',
+      sourceAvailable: Boolean(propertyRow?.state ?? true),
+      lastUpdatedIso: m.homeRiskEvent?.updatedAt ? new Date(m.homeRiskEvent.updatedAt).toISOString() : '',
+    })),
+    inspectionFindings: (inspectionRows as Array<any>).map((f) => ({
+      id: f.id,
+      propertyId: f.propertyId,
+      inspectionReportId: f.reportId,
+      inspectionReportTitle: f.report?.reportType ? `${String(f.report.reportType)} (${new Date(f.report.inspectionDate).toISOString().slice(0, 10)})` : 'Inspection Report',
+      title: f.inspectorDescription,
+      status: mapInspectionStatus(String(f.status)),
+    })),
+    buyerTasks: (Array.isArray(buyerChecklistRow?.tasks) ? buyerChecklistRow.tasks : []).map((t: any) => ({
+      id: t.id,
+      propertyId,
+      title: t.title,
+      isContingency: String(t.taskType ?? '').toUpperCase().includes('CONTINGENCY') || /contingenc/i.test(String(t.title)),
+      status: String(t.status).toUpperCase() === 'COMPLETED' ? 'COMPLETED' : 'OPEN',
+      dueAt: t.dueAt ? new Date(t.dueAt).toISOString() : '',
+    })),
+    sellerReadinessItems: (Array.isArray(saleCaseRow?.readinessItems) ? saleCaseRow.readinessItems : []).map((s: any) => ({
+      id: s.id,
+      propertyId,
+      title: s.title,
+      status: String(s.status).toUpperCase() === 'RESOLVED' ? 'COMPLETED' : 'PENDING',
+    })),
+    projects: (projectRows as Array<any>).map((p) => ({
+      id: p.id,
+      propertyId: p.propertyId,
+      title: p.name,
+      status: mapProjectStatus(String(p.status)),
+      permitStatus: mapPermitStatus(String(p.permitApplicability)),
+    })),
+    contractorQuotes: (quoteRows as Array<any>).map((q) => ({
+      id: q.id,
+      propertyId: q.workspace?.propertyId ?? propertyId,
+      roomTag: q.serviceLocation ?? 'GENERAL',
+      vendorName: q.vendorName,
+      amountCents: toCents(q.quoteAmount),
+      timelineDays: 0,
+      warrantyMonths: 0,
+    })),
+    savedResults: [],
+  };
+}
+
+export function buildOperationResultFromCrossDomainExecution(execution: CrossDomainExecutionResult): AskOperationResult {
+  if (execution.status === 'FORBIDDEN') {
+    return {
+      status: 'NOT_APPLICABLE',
+      reasonCode: 'CROSS_DOMAIN_FORBIDDEN',
+      blocks: [
+        {
+          type: 'SUMMARY',
+          id: 'cross-domain-forbidden',
+          title: 'Access denied',
+          body: execution.answer,
+          tone: 'CRITICAL',
+          actions: [],
+        },
+      ],
+      suggestions: [],
+      parameters: { crossDomainExecution: execution },
+    };
+  }
+
+  if (execution.status === 'CLARIFY' && execution.clarification) {
+    return {
+      status: 'NEEDS_CLARIFICATION',
+      reasonCode: execution.clarification.reasonCode,
+      blocks: [
+        {
+          type: 'SUMMARY',
+          id: 'cross-domain-clarification-required',
+          title: 'Please clarify what you mean',
+          body: `${execution.clarification.question} (${execution.clarification.options.join(' vs ')})`,
+          tone: 'CAUTION',
+          actions: [],
+        },
+      ],
+      suggestions: [],
+      parameters: {
+        crossDomainExecution: execution,
+        clarification: execution.clarification,
+      },
+    };
+  }
+
+  if (execution.status === 'BOUNDARY') {
+    return {
+      status: 'NOT_APPLICABLE',
+      reasonCode: 'SAFETY_BOUNDARY_TRIGGERED',
+      blocks: [
+        {
+          type: 'SUMMARY',
+          id: 'cross-domain-safety-boundary',
+          title: 'Safety warning triggered',
+          body: execution.answer,
+          tone: 'CRITICAL',
+          actions: [],
+        },
+      ],
+      suggestions: [],
+      parameters: { crossDomainExecution: execution },
+    };
+  }
+
+  if (execution.status === 'NONE_FITS') {
+    return {
+      status: 'NOT_APPLICABLE',
+      reasonCode: 'DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED',
+      blocks: [
+        {
+          type: 'SUMMARY',
+          id: 'cross-domain-none-fits',
+          title: 'Question could not be safely interpreted',
+          body: execution.answer,
+          tone: 'CAUTION',
+          actions: [],
+        },
+      ],
+      suggestions: [],
+      parameters: { crossDomainExecution: execution },
+    };
+  }
+
+  const primaryReceipt = execution.facetResults.find((f) => f.receipt !== null)?.receipt ?? null;
+  const blocks: AskPresentationBlock[] = [
+    {
+      type: 'SUMMARY',
+      id: 'cross-domain-summary',
+      title: execution.facetResults.length > 1 ? 'Cross-domain answer' : 'Property answer',
+      body: execution.answer,
+      tone: execution.status === 'PARTIAL' ? 'CAUTION' : 'DEFAULT',
+      actions: [],
+    },
+  ];
+
+  const listSections = execution.facetResults
+    .filter((f) => f.recordIds.length > 0 && f.receipt && f.receipt.projection !== 'COUNT')
+    .map((facetResult) => ({
+      id: `section-${facetResult.facetId}`,
+      title: facetResult.owner.domainId,
+      count: facetResult.recordIds.length,
+      items: facetResult.recordIds.map((id) => ({
+        id,
+        title: id,
+        meta: [facetResult.owner.adapterId],
+      })),
+    }));
+
+  if (listSections.length > 0) {
+    blocks.push({
+      type: 'GROUPED_LIST',
+      id: 'cross-domain-grouped-list',
+      title: 'Matched records',
+      sections: listSections,
+      actions: [],
+      filters: [],
+    });
+  }
+
+  blocks.push({
+    type: 'EVIDENCE',
+    id: 'cross-domain-evidence',
+    title: 'Semantic execution provenance',
+    items: execution.facetResults.map((facetResult) => ({
+      label: facetResult.owner.adapterId,
+      source: facetResult.owner.domainId,
+      observedAt: facetResult.receipt?.provenance.observedAt ?? new Date().toISOString(),
+    })),
+  });
+
+  return {
+    status: execution.status === 'PARTIAL' ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: execution.status === 'PARTIAL' ? 'CROSS_DOMAIN_PARTIAL' : undefined,
+    blocks,
+    suggestions: [],
+    parameters: {
+      crossDomainExecution: execution,
+      ...(primaryReceipt ? { semanticExecutionReceipt: primaryReceipt } : {}),
+    },
+  };
+}
+
+/**
+ * Production entry point connecting Cross-Domain Wave 1-5 execution to live Prisma property records.
+ */
+export async function executeCrossDomainOnProperty(input: {
+  readonly propertyId: string;
+  readonly userId?: string;
+  readonly role: string;
+  readonly propertyAuthorized: boolean;
+  readonly rawText: string;
+  readonly snapshotOverride?: CrossDomainPropertySnapshot;
+}): Promise<{
+  readonly execution: CrossDomainExecutionResult;
+  readonly operationResult: AskOperationResult;
+  readonly snapshot: CrossDomainPropertySnapshot;
+}> {
+  const snapshot = input.snapshotOverride ?? await loadCrossDomainPropertySnapshot(input.propertyId, input.userId);
+  const execution = await executeCrossDomainWaves({
+    rawText: input.rawText,
+    snapshot,
+    role: normalizeWaveRole(input.role),
+    propertyAuthorized: input.propertyAuthorized,
+  });
+  return {
+    execution,
+    operationResult: buildOperationResultFromCrossDomainExecution(execution),
+    snapshot,
+  };
 }
