@@ -17,12 +17,12 @@ import {
 } from './askOperationRegistry';
 import { AskCapabilityHandlerMissingError, type CapabilityInvocationEnvelope } from './capabilityInvocation.contract';
 import { parseDeterministicSemanticRequest } from './semantic/deterministicSemanticParser';
-import { executePhase2aOnProperty } from './semantic/phase2a/phase2aSliceExecutor';
+import { executePhase2aOnProperty } from './semantic/slice/phase2aSliceExecutor';
 import { resolveAskSemanticEntryDecision } from './semantic/semanticEntryDispatcher';
 import {
   type SemanticProviderPolicy,
   type SemanticUnderstandingProvider,
-} from './semantic/phase6/semanticProviderOrchestrator';
+} from './semantic/evaluation/semanticProviderOrchestrator';
 
 // Ask Cozy Stage 3, Phase 1 (implementation plan §7; FRD §16-17). Replaces
 // askOrchestrator.service.ts's former domain-branching dispatch switch

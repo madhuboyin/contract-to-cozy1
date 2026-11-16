@@ -2,8 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 require('ts-node/register/transpile-only');
 
-const { ASK_SEMANTIC_DOMAINS } = require('../../src/services/ask/semantic/phase0/semanticOntologyBaseline.ts');
-const { executeCrossDomainWaves, buildSeededCrossDomainSnapshot } = require('../../src/services/ask/semantic/waves/index.ts');
+const { ASK_SEMANTIC_DOMAINS } = require('../../src/services/ask/semantic/governance/semanticOntologyBaseline.ts');
+const { executeCrossDomainWaves, buildSeededCrossDomainSnapshot } = require('../../src/services/ask/semantic/crossDomain/index.ts');
 const { dataPointReadResult } = require('../../src/services/ask/handlers/dataPointRead.handler.ts');
 const {
   ASK_PHASE6_CALIBRATION_VERSION,
@@ -25,8 +25,8 @@ const {
   resolveDefaultSemanticProviderPolicy,
   runPhase6EndToEndEvaluation,
   validateAndMapMinimizedSpanToRaw,
-} = require('../../src/services/ask/semantic/phase6/index.ts');
-const { buildSemanticTextEnvelope } = require('../../src/services/ask/semantic/phase2a/placeholderSpanMap.ts');
+} = require('../../src/services/ask/semantic/evaluation/index.ts');
+const { buildSemanticTextEnvelope } = require('../../src/services/ask/semantic/slice/placeholderSpanMap.ts');
 
 test('Track P two-stage provider orchestration preserves stable facet IDs, dependencies, bounded concurrency, and 6-facet overflow', async () => {
   const provider = new SealedOfflineStructuredProvider('NOMINAL');

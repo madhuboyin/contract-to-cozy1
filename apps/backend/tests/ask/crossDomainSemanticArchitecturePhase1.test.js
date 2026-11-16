@@ -37,7 +37,7 @@ const {
   verifyNoUnguardedLegacyWarrantyWrites,
   verifyPhase1RuntimeWiring,
   verifyPhase1Invariants,
-} = require('../../src/services/ask/semantic/phase1/index.ts');
+} = require('../../src/services/ask/semantic/containment/index.ts');
 
 test('the generated shared lexicon is stable and keeps warranty separate from insurance and claims', () => {
   assert.deepEqual(generateSharedSemanticLexicon(), ASK_SHARED_SEMANTIC_LEXICON);

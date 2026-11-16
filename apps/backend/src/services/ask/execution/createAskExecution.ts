@@ -41,7 +41,7 @@ import { recoverComposedTurn, resumeClarifiedComposedTurn, runComposedTurn } fro
 import { findPendingComposedParent } from '../composition/resumeClarification';
 import { GeminiUnderstandingProvider } from '../modelRouting/understandingProvider';
 import { resolveAskSemanticEntryDecision } from '../semantic/semanticEntryDispatcher';
-import { resolveDefaultSemanticProviderPolicy } from '../semantic/phase6/semanticProviderOrchestrator';
+import { resolveDefaultSemanticProviderPolicy } from '../semantic/evaluation/semanticProviderOrchestrator';
 import { planRuntimeUnderstanding } from '../modelRouting/runtimeUnderstanding';
 import { loadKnownNames } from '../privacy/knownNames';
 import { MODEL_PATH_RECOVERIES, RECOVERY_OUTCOMES, recoveryBlock, recoveryCodeForReason } from '../recovery/recoveryOutcomes';
@@ -53,7 +53,7 @@ import { homeHasItem } from '../composition/homeItems';
 import { declinedCompositionNote, slotRevalidationQuestion } from '../composition/notices';
 import { resolvePropertyAccess } from '../../propertyAccess.service';
 import { resolveSuggestedActionSelection, type SuggestedActionResolution, type SuggestedActionRejectionReason } from '../suggestedActions/suggestedNextActionSelection';
-import { gateUncertifiedCommandPreview } from '../semantic/phase1/commandPreviewAdmission';
+import { gateUncertifiedCommandPreview } from '../semantic/containment/commandPreviewAdmission';
 
 function stableSkillRoutingReasonCode(outcome: SkillRoutingOutcome): string | null {
   if (outcome === 'UNSUPPORTED') return 'ASK_SKILL_UNSUPPORTED';

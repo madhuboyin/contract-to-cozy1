@@ -1,4 +1,4 @@
-import { ASK_SEMANTIC_DOMAINS, type SemanticDomainId } from '../phase0/semanticOntologyBaseline';
+import { ASK_SEMANTIC_DOMAINS, type SemanticDomainId } from '../governance/semanticOntologyBaseline';
 import { ASK_SEMANTIC_RELATION_REGISTRY_VERSION } from '../semanticRelationRegistry';
 import { ASK_SHARED_SEMANTIC_LEXICON } from '../sharedSemanticLexicon';
 import type { SemanticFacet } from '../semanticRequestPlan';

@@ -8,7 +8,7 @@ import type { HouseholdRole } from '@prisma/client';
 import { ASK_NAMING_HINT, ASK_UNVERIFIABLE_ANSWER_TEXT } from './askRemoteFallbackTypedClaims';
 import { clarificationLabelFor } from './support/clarificationLabels';
 import { applyAskAudiencePresentation } from './askAudiencePresentation';
-import { stripRetryFromDeterministicFailure } from './semantic/phase1/presentationHumanizer';
+import { stripRetryFromDeterministicFailure } from './semantic/containment/presentationHumanizer';
 import {
   actionsForAskBlock,
   attachAskAuthoritativeSourceEvidence,

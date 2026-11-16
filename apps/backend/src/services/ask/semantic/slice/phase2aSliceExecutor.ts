@@ -10,7 +10,7 @@ import { resolvePropertyEntityReference, type PropertyEntityCandidate, type Prop
 import { classifyTransitionalWarrantyLinks, type TransitionalWarrantyRead } from '../transitionalWarrantyRead';
 import { buildSemanticReadReceipt, type SemanticReadReceipt } from '../semanticExecutionReceipt';
 import { verifySemanticReadReceiptEntailment, type SemanticReceiptEntailmentVerdict } from '../semanticReceiptEntailment';
-import { gateUncertifiedCommandPreview } from '../phase1/commandPreviewAdmission';
+import { gateUncertifiedCommandPreview } from '../containment/commandPreviewAdmission';
 import {
   buildSemanticTextEnvelope,
   verifyPlaceholderSpanMapRoundTrip,

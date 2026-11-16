@@ -8,7 +8,7 @@ const {
   IN_DOMAIN_RECOVERY_MAX_CANDIDATES,
 } = require('../../src/services/ask/recovery/inDomainNotUnderstood.ts');
 const { RECOVERY_OUTCOMES, recoveryCodeForReason } = require('../../src/services/ask/recovery/recoveryOutcomes.ts');
-const { parseCrossDomainSemanticRequest } = require('../../src/services/ask/semantic/waves/crossDomainPlanBuilder.ts');
+const { parseCrossDomainSemanticRequest } = require('../../src/services/ask/semantic/crossDomain/crossDomainPlanBuilder.ts');
 const { validateAskAnswerTrust } = require('../../src/services/ask/askAnswerTrustValidator.ts');
 const { attachAskAuthoritativeSourceEvidence, completedAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
 

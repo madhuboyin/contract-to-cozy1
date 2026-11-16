@@ -2,13 +2,13 @@ import { performance } from 'node:perf_hooks';
 import { GoogleGenAI } from '@google/genai';
 import { z } from 'zod';
 import { executeGovernedAIRequest, resolveGovernedAIModel } from '../../../ai/aiRequestGovernance.service';
-import { ASK_SEMANTIC_DOMAINS, type SemanticDomainId } from '../phase0/semanticOntologyBaseline';
+import { ASK_SEMANTIC_DOMAINS, type SemanticDomainId } from '../governance/semanticOntologyBaseline';
 import {
   buildSemanticTextEnvelope,
   verifyPlaceholderSpanMapRoundTrip,
   type DynamicPlaceholderEntityCandidate,
   type SemanticTextEnvelope,
-} from '../phase2a/placeholderSpanMap';
+} from '../slice/placeholderSpanMap';
 import {
   ASK_SEMANTIC_PLAN_VERSION,
   SemanticRequestPlanSchema,
@@ -24,11 +24,11 @@ import {
   type CrossDomainParseResult,
   type DynamicQuoteCandidate,
   type PlanOverflowFacet,
-} from '../waves/crossDomainPlanBuilder';
+} from '../crossDomain/crossDomainPlanBuilder';
 import {
   DOMAIN_WAVE_MANIFEST,
   tryNormalizeToCanonicalSection5Domain,
-} from '../waves/domainWaveManifest';
+} from '../crossDomain/domainWaveManifest';
 
 export const ASK_PHASE6_PROVIDER_VERSION = 'phase6-provider-orchestrator-1.0.0' as const;
 export const ASK_SEMANTIC_PROVIDER_BUDGET_POLICY_VERSION = 'semantic-provider-budget-1.0.0' as const;

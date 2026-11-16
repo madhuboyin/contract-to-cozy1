@@ -9,7 +9,7 @@ import {
   type SemanticWhereExpression,
 } from './semanticRequestPlan';
 import { assembleSemanticBooleanExpression } from './semanticBooleanAssembler';
-import { buildSemanticTextEnvelope, type DynamicPlaceholderEntityCandidate } from './phase2a/placeholderSpanMap';
+import { buildSemanticTextEnvelope, type DynamicPlaceholderEntityCandidate } from './slice/placeholderSpanMap';
 
 interface SemanticPredicateAtom {
   kind: 'PREDICATE';

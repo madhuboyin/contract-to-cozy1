@@ -12,32 +12,32 @@ import { ASK_ARTIFACT_TYPE_REGISTRY } from '../../governance/askArtifactTypeRegi
 import { ASK_SAVED_TYPE_READERS } from '../../saved/savedTypeReaders';
 import { composeAskSavedPage } from '../../askSaved.service';
 import { resolveHierarchicalSkillRouting } from '../../../skills/skillRouter';
-import { buildAskSemanticPhase0BaselineSummary } from '../phase0/index';
-import { ASK_SEMANTIC_DOMAINS, type SemanticDomainId } from '../phase0/semanticOntologyBaseline';
-import { verifyPhase1Invariants } from '../phase1/index';
-import { buildSemanticTextEnvelope, verifyPlaceholderSpanMapRoundTrip } from '../phase2a/placeholderSpanMap';
+import { buildAskSemanticPhase0BaselineSummary } from '../governance/index';
+import { ASK_SEMANTIC_DOMAINS, type SemanticDomainId } from '../governance/semanticOntologyBaseline';
+import { verifyPhase1Invariants } from '../containment/index';
+import { buildSemanticTextEnvelope, verifyPlaceholderSpanMapRoundTrip } from '../slice/placeholderSpanMap';
 import {
   executePhase2aVerticalSlice,
   type Phase2aPropertySnapshot,
-} from '../phase2a/phase2aSliceExecutor';
+} from '../slice/phase2aSliceExecutor';
 import {
   PHASE2A_OWNER_AUTH,
   PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-} from '../phase2a/index';
+} from '../slice/index';
 import { parseDeterministicSemanticRequest } from '../deterministicSemanticParser';
 import { evaluateLegacyVsSemanticGrammarAgreement } from '../legacyGrammarAgreement';
 import { resolveAskSemanticEntryDecision } from '../semanticEntryDispatcher';
 import {
   parseCrossDomainSemanticRequest,
   verifyCrossDomainProtectionLexemeSeparation,
-} from '../waves/crossDomainPlanBuilder';
+} from '../crossDomain/crossDomainPlanBuilder';
 import {
   buildOperationResultFromCrossDomainExecution,
   executeCrossDomainWaves,
   replaySavedCrossDomainResult,
   type CrossDomainPropertySnapshot,
   type WaveSavedResultRecord,
-} from '../waves/crossDomainWaveExecutor';
+} from '../crossDomain/crossDomainWaveExecutor';
 import {
   buildMeasuredDomainCoverageProfiles,
   DOMAIN_ENABLEMENT_RECORDS,
@@ -46,12 +46,12 @@ import {
   wilson95Interval,
   type DomainLanguageCoverageProfile,
   type DomainMeasurementInput,
-} from '../waves/domainWaveManifest';
+} from '../crossDomain/domainWaveManifest';
 import {
   buildSeededCrossDomainSnapshot,
   runCrossDomainAcceptanceBenchmarks,
   runCrossDomainMetamorphicSuite,
-} from '../waves/index';
+} from '../crossDomain/index';
 import {
   classifySemanticRiskStratum,
   evaluateRiskStratifiedCalibration,
@@ -2177,14 +2177,14 @@ export async function runPhase6EndToEndEvaluation(options: {
 
   const requirementToEvidenceMatrix: RequirementEvidenceEntry[] = [
     { requirementId: 'FR-PLAN-1..7', description: 'Canonical Semantic Request Plan & deterministic grammar', artifactRef: 'src/services/ask/semantic/semanticRequestPlan.ts', status: 'IMPLEMENTED_VERIFIED' },
-    { requirementId: 'FR-ONT-1..8', description: 'Cross-domain ontology, coalescence, relation tags, recognizer retirement', artifactRef: 'src/services/ask/semantic/phase0/index.ts', status: 'IMPLEMENTED_VERIFIED' },
+    { requirementId: 'FR-ONT-1..8', description: 'Cross-domain ontology, coalescence, relation tags, recognizer retirement', artifactRef: 'src/services/ask/semantic/governance/index.ts', status: 'IMPLEMENTED_VERIFIED' },
     { requirementId: 'FR-ENT-1..4', description: 'Property-backed entity & quote pair resolution + auth inheritance', artifactRef: 'src/services/ask/semantic/propertyEntityResolver.ts', status: 'IMPLEMENTED_VERIFIED' },
     { requirementId: 'FR-QUERY-1..7', description: 'Typed Boolean query algebra, conflict-aware transitional warranty read', artifactRef: 'src/services/ask/semantic/semanticBooleanAssembler.ts', status: 'IMPLEMENTED_VERIFIED' },
-    { requirementId: 'FR-CAP-1..6', description: 'Semantic-job capability planner, preview admission, presentation separation', artifactRef: 'src/services/ask/semantic/phase1/commandPreviewAdmission.ts', status: 'IMPLEMENTED_VERIFIED' },
-    { requirementId: 'FR-UND-1..8', description: 'Two-stage provider retrieval, reconciliation, 6-stratum risk calibration', artifactRef: 'src/services/ask/semantic/phase6/semanticProviderOrchestrator.ts', status: 'IMPLEMENTED_VERIFIED' },
+    { requirementId: 'FR-CAP-1..6', description: 'Semantic-job capability planner, preview admission, presentation separation', artifactRef: 'src/services/ask/semantic/containment/commandPreviewAdmission.ts', status: 'IMPLEMENTED_VERIFIED' },
+    { requirementId: 'FR-UND-1..8', description: 'Two-stage provider retrieval, reconciliation, 6-stratum risk calibration', artifactRef: 'src/services/ask/semantic/evaluation/semanticProviderOrchestrator.ts', status: 'IMPLEMENTED_VERIFIED' },
     { requirementId: 'FR-ANS-1..6', description: 'Typed execution receipts, structural entailment & population equivalence', artifactRef: 'src/services/ask/semantic/semanticExecutionReceipt.ts', status: 'IMPLEMENTED_VERIFIED' },
-    { requirementId: 'FR-SEC-1..5', description: 'Protected placeholder bijection, property/role bounds, replay redaction', artifactRef: 'src/services/ask/semantic/phase2a/placeholderSpanMap.ts', status: 'IMPLEMENTED_VERIFIED' },
-    { requirementId: 'FR-EVAL-1..6', description: 'Developer-proxy 32-metric harness, entry-path telemetry, LOO-CV calibration, separate metamorphic runner', artifactRef: 'src/services/ask/semantic/phase6/endToEndEvaluationHarness.ts', status: 'DEVELOPER_PROXY_UNHELD' },
+    { requirementId: 'FR-SEC-1..5', description: 'Protected placeholder bijection, property/role bounds, replay redaction', artifactRef: 'src/services/ask/semantic/slice/placeholderSpanMap.ts', status: 'IMPLEMENTED_VERIFIED' },
+    { requirementId: 'FR-EVAL-1..6', description: 'Developer-proxy 32-metric harness, entry-path telemetry, LOO-CV calibration, separate metamorphic runner', artifactRef: 'src/services/ask/semantic/evaluation/endToEndEvaluationHarness.ts', status: 'DEVELOPER_PROXY_UNHELD' },
     { requirementId: '§22.1..7', description: 'Owner policy rulings (canonical warranty storage, external LLM traffic approval/budgets)', artifactRef: 'docs/product/ASK_COZY_CROSS_DOMAIN_SEMANTIC_ARCHITECTURE_FRD.md#22', status: 'OWNER_DECISION_OPEN' },
   ];
 

@@ -1,6 +1,6 @@
 import type { AskPresentationBlock } from '../../../../productFramework/ask/ask.contract';
 import type { SemanticReadReceipt } from '../semanticExecutionReceipt';
-import { humanizePresentationText, humanizePresentationToken } from '../phase1/presentationHumanizer';
+import { humanizePresentationText, humanizePresentationToken } from '../containment/presentationHumanizer';
 
 export interface Phase2aPresentationRow {
   readonly id: string;

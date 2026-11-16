@@ -3,7 +3,7 @@ export * from './crossDomainPlanBuilder';
 export * from './crossDomainWaveExecutor';
 
 import { verifyProtectionLexemeSeparation } from '../sharedSemanticLexicon';
-import { type SemanticDomainId } from '../phase0/semanticOntologyBaseline';
+import { type SemanticDomainId } from '../governance/semanticOntologyBaseline';
 import {
   buildMeasuredDomainCoverageProfiles,
   DOMAIN_ENABLEMENT_RECORDS,

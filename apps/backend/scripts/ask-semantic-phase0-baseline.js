@@ -9,7 +9,7 @@
  */
 require('ts-node/register/transpile-only');
 
-const { buildAskSemanticPhase0BaselineSummary } = require('../src/services/ask/semantic/phase0/index.ts');
+const { buildAskSemanticPhase0BaselineSummary } = require('../src/services/ask/semantic/governance/index.ts');
 
 const args = process.argv.slice(2);
 const summary = buildAskSemanticPhase0BaselineSummary();

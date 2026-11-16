@@ -20,7 +20,7 @@ const {
   replayPhase2aExecutionWithAuthorization,
   runPhase2aMetamorphicSuite,
   verifyPhase2aInvariants,
-} = require('../../src/services/ask/semantic/phase2a/index.ts');
+} = require('../../src/services/ask/semantic/slice/index.ts');
 
 test('Phase 2A registry subset covers inventory, warranty, maintenance, and rooms with valid traversal bounds', () => {
   const report = verifyPhase2aSliceRegistryCompleteness();
@@ -299,7 +299,7 @@ test('Phase 2A protects dynamic property entities, hides restricted items as mis
 
   // 4c. Prisma snapshot loader applies visibleInventoryItemWhere()
   const executorSource = fs.readFileSync(
-    path.join(__dirname, '../../src/services/ask/semantic/phase2a/phase2aSliceExecutor.ts'),
+    path.join(__dirname, '../../src/services/ask/semantic/slice/phase2aSliceExecutor.ts'),
     'utf8'
   );
   assert.ok(executorSource.includes('visibleInventoryItemWhere()'));
@@ -432,7 +432,7 @@ test('Phase 2A maintenance preview includes matching confirmationVersion and con
     executePhase2aVerticalSlice,
     PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
     PHASE2A_OWNER_AUTH,
-  } = require('../../src/services/ask/semantic/phase2a/index.ts');
+  } = require('../../src/services/ask/semantic/slice/index.ts');
 
   const preview = executePhase2aVerticalSlice({
     rawText: 'schedule maintenance for my furnace on 2026-12-01',

@@ -2,7 +2,7 @@
 
 This is the maintained evidence index for `ASK_COZY_CROSS_DOMAIN_SEMANTIC_ARCHITECTURE_FRD.md` §18 Phase 1.
 
-- Selected and deferred basic-read families, selection reasons, representative prompts and target waves: `apps/backend/src/services/ask/semantic/phase1/phase1FamilyManifest.ts`.
+- Selected and deferred basic-read families, selection reasons, representative prompts and target waves: `apps/backend/src/services/ask/semantic/containment/phase1FamilyManifest.ts`.
 - Shared generated runtime vocabulary: `sharedSemanticLexicon.ts`.
 - Typed grammar and complete-example verification: `deterministicSemanticParser.ts` and `verifyPhase1RuntimeWiring()`.
 - Provisional-family disposition and evidence lineage: `PROVISIONAL_READ_FAMILY_DISPOSITIONS` in `support/provisionalRead.ts`.

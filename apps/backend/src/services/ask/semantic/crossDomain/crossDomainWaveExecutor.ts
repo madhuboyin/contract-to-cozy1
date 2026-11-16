@@ -7,15 +7,15 @@ import {
   type SemanticReceiptEntailmentVerdict,
 } from '../semanticReceiptEntailment';
 import { ASK_SEMANTIC_PLAN_VERSION, type SemanticFacet, type SemanticRequestPlan, type SemanticWhereExpression } from '../semanticRequestPlan';
-import { type SemanticDomainId } from '../phase0/semanticOntologyBaseline';
+import { type SemanticDomainId } from '../governance/semanticOntologyBaseline';
 import {
   buildPhase2aRichPresentation,
   verifyRichPresentationPopulationEquivalence,
   type Phase2aRichPresentationEquivalenceReport,
-} from '../phase2a/phase2aRichPresentationAdapter';
+} from '../slice/phase2aRichPresentationAdapter';
 import { prisma } from '../../../../lib/prisma';
 import { visibleInventoryItemWhere } from '../../../riskAssetApplicability';
-import { type DynamicPlaceholderEntityCandidate } from '../phase2a/placeholderSpanMap';
+import { type DynamicPlaceholderEntityCandidate } from '../slice/placeholderSpanMap';
 import { type AskPresentationBlock } from '../../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../../askOperationRegistry';
 import { getAskSavedPage } from '../../askSaved.service';
@@ -27,7 +27,7 @@ import {
   loadPhase2aPropertySnapshot,
   type Phase2aAuthorizationContext,
   type Phase2aPropertySnapshot,
-} from '../phase2a/phase2aSliceExecutor';
+} from '../slice/phase2aSliceExecutor';
 import {
   assignMixedStackFacetOwnership,
   tryNormalizeToCanonicalSection5Domain,

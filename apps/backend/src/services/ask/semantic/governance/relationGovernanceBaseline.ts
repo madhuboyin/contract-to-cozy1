@@ -1260,18 +1260,18 @@ export const ASK_RELATIONSHIP_STORAGE_ACCESS_SITES: readonly RelationshipStorage
     contradictionOrDriftNote: 'Repository contract/route/type/validator referencing [warrantyId].',
   },
   {
-    siteId: 'rel_site.services_ask_semantic_phase2a_slice_executor__inventory_item_warranty',
+    siteId: 'rel_site.services_ask_semantic_slice_slice_executor__inventory_item_warranty',
     semanticRelationId: 'relation.inventory_item.warranty',
-    relativeFilePath: 'src/services/ask/semantic/phase2a/phase2aSliceExecutor.ts',
+    relativeFilePath: 'src/services/ask/semantic/slice/phase2aSliceExecutor.ts',
     usage: 'READ',
     storageColumnsAccessed: ['WarrantyApplicability.warrantyId', 'Warranty.inventoryItemId'],
     classification: 'CANONICAL_ADAPTER',
     contradictionOrDriftNote: 'Phase 2A Prisma snapshot loader reads item warranties (Warranty.inventoryItemId) and evidence-backed property-plan applicability (WarrantyApplicability, status COVERED) for classifyTransitionalWarrantyLinks.',
   },
   {
-    siteId: 'rel_site.services_ask_semantic_phase6_evaluation_harness__inventory_item_warranty',
+    siteId: 'rel_site.services_ask_semantic_evaluation_evaluation_harness__inventory_item_warranty',
     semanticRelationId: 'relation.inventory_item.warranty',
-    relativeFilePath: 'src/services/ask/semantic/phase6/endToEndEvaluationHarness.ts',
+    relativeFilePath: 'src/services/ask/semantic/evaluation/endToEndEvaluationHarness.ts',
     usage: 'READ',
     storageColumnsAccessed: ['WarrantyApplicability.warrantyId', 'Warranty.inventoryItemId'],
     classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
@@ -1548,18 +1548,18 @@ export const ASK_RELATIONSHIP_STORAGE_ACCESS_SITES: readonly RelationshipStorage
     contradictionOrDriftNote: 'Uses warranty record identity in confirmation parameters; it does not write an InventoryItem foreign key.',
   },
   {
-    siteId: 'rel_site.services_ask_semantic_phase1_index__inventory_item_warranty',
+    siteId: 'rel_site.services_ask_semantic_containment_index__inventory_item_warranty',
     semanticRelationId: 'relation.inventory_item.warranty',
-    relativeFilePath: 'src/services/ask/semantic/phase1/index.ts',
+    relativeFilePath: 'src/services/ask/semantic/containment/index.ts',
     usage: 'READ',
     storageColumnsAccessed: ['InventoryItem.warrantyId'],
     classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
     contradictionOrDriftNote: 'Governed catalogue/semantic/authorization contract referencing [warrantyId] for relation.inventory_item.warranty.',
   },
   {
-    siteId: 'rel_site.services_ask_semantic_phase1_phase1familymanifest__buyer_checklist_buyer_task',
+    siteId: 'rel_site.services_ask_semantic_containment_phase1familymanifest__buyer_checklist_buyer_task',
     semanticRelationId: 'relation.buyer_checklist.buyer_task',
-    relativeFilePath: 'src/services/ask/semantic/phase1/phase1FamilyManifest.ts',
+    relativeFilePath: 'src/services/ask/semantic/containment/phase1FamilyManifest.ts',
     usage: 'READ',
     storageColumnsAccessed: ['HomeBuyerTask.HomeBuyerTask'],
     classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
@@ -1593,18 +1593,18 @@ export const ASK_RELATIONSHIP_STORAGE_ACCESS_SITES: readonly RelationshipStorage
     contradictionOrDriftNote: 'Governed catalogue/semantic/authorization contract referencing [SaleReadinessItem] for relation.sale_case.readiness_item.',
   },
   {
-    siteId: 'rel_site.services_ask_semantic_phase1_phase1familymanifest__property_record_record_version',
+    siteId: 'rel_site.services_ask_semantic_containment_phase1familymanifest__property_record_record_version',
     semanticRelationId: 'relation.property_record.record_version',
-    relativeFilePath: 'src/services/ask/semantic/phase1/phase1FamilyManifest.ts',
+    relativeFilePath: 'src/services/ask/semantic/containment/phase1FamilyManifest.ts',
     usage: 'READ',
     storageColumnsAccessed: ['PropertyRecordVersion.PropertyRecordVersion'],
     classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
     contradictionOrDriftNote: 'Governed catalogue/semantic/authorization contract referencing [PropertyRecordVersion] for relation.property_record.record_version.',
   },
   {
-    siteId: 'rel_site.services_ask_semantic_phase1_phase1familymanifest__sale_case_readiness_item',
+    siteId: 'rel_site.services_ask_semantic_containment_phase1familymanifest__sale_case_readiness_item',
     semanticRelationId: 'relation.sale_case.readiness_item',
-    relativeFilePath: 'src/services/ask/semantic/phase1/phase1FamilyManifest.ts',
+    relativeFilePath: 'src/services/ask/semantic/containment/phase1FamilyManifest.ts',
     usage: 'READ',
     storageColumnsAccessed: ['SaleReadinessItem.SaleReadinessItem'],
     classification: 'GOVERNED_CATALOGUE_OR_AUTH_CONTRACT',
@@ -1766,7 +1766,7 @@ export const ASK_RELATIONSHIP_STORAGE_ACCESS_SITES: readonly RelationshipStorage
   {
     siteId: 'rel_site.ask_cross_domain_wave_executor__claim_checklist_item',
     semanticRelationId: 'relation.claim.checklist_item',
-    relativeFilePath: 'src/services/ask/semantic/waves/crossDomainWaveExecutor.ts',
+    relativeFilePath: 'src/services/ask/semantic/crossDomain/crossDomainWaveExecutor.ts',
     usage: 'READ',
     storageColumnsAccessed: ['Claim.checklistItems'],
     classification: 'CANONICAL_ADAPTER',
@@ -1775,7 +1775,7 @@ export const ASK_RELATIONSHIP_STORAGE_ACCESS_SITES: readonly RelationshipStorage
   {
     siteId: 'rel_site.ask_cross_domain_wave_executor__sale_case_readiness_item',
     semanticRelationId: 'relation.sale_case.readiness_item',
-    relativeFilePath: 'src/services/ask/semantic/waves/crossDomainWaveExecutor.ts',
+    relativeFilePath: 'src/services/ask/semantic/crossDomain/crossDomainWaveExecutor.ts',
     usage: 'READ',
     storageColumnsAccessed: ['PropertySaleCase.readinessItems'],
     classification: 'CANONICAL_ADAPTER',
@@ -2079,7 +2079,7 @@ export function discoverRepositoryRelationStorageAccessFiles(
           continue;
         }
         // Only exclude the Phase 0 self-manifest directory so runtime semantic/ directories are scanned.
-        if (fullPath.replace(/\\/g, '/').endsWith('/src/services/ask/semantic/phase0')) {
+        if (fullPath.replace(/\\/g, '/').endsWith('/src/services/ask/semantic/governance')) {
           continue;
         }
         walk(fullPath);

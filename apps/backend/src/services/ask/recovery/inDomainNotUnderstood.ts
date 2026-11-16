@@ -6,7 +6,7 @@
 // Pure: the caller decides where it runs (only after every deterministic and provider path has produced nothing).
 import type { AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import type { AskOperationResult } from '../askOperationRegistry';
-import { collectCrossDomainRecoveryEvidence } from '../semantic/waves/crossDomainPlanBuilder';
+import { collectCrossDomainRecoveryEvidence } from '../semantic/crossDomain/crossDomainPlanBuilder';
 import { RECOVERY_OUTCOMES } from './recoveryOutcomes';
 
 /** FRD §15: no more than three materially distinct candidate jobs. */

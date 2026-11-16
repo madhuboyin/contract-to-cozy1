@@ -8,7 +8,7 @@ require('ts-node').register({
 });
 
 const { initializeAskRuntime } = require('../src/services/ask/askRuntimeBootstrap');
-const { buildPhase6CalibrationAndEvaluationSummary } = require('../src/services/ask/semantic/phase6/index');
+const { buildPhase6CalibrationAndEvaluationSummary } = require('../src/services/ask/semantic/evaluation/index');
 
 async function main() {
   initializeAskRuntime();

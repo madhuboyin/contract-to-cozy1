@@ -13,7 +13,7 @@ import {
   extractSemanticFollowUpDelta,
   parseDeterministicSemanticRequest,
 } from '../deterministicSemanticParser';
-import type { DynamicPlaceholderEntityCandidate } from '../phase2a/placeholderSpanMap';
+import type { DynamicPlaceholderEntityCandidate } from '../slice/placeholderSpanMap';
 
 export const ASK_CROSS_DOMAIN_PARSER_VERSION = 'cross-domain-grammar-2.0.0' as const;
 export const ASK_CROSS_DOMAIN_LEXICON_VERSION = `${ASK_SHARED_LEXICON_VERSION}+waves-2.0.0` as const;

@@ -2,13 +2,13 @@ import type { AskOperationId } from '../askOperationRegistry';
 import type { AskRoutingStage } from '../askRoutingCascade';
 import { parseDeterministicSemanticRequest } from './deterministicSemanticParser';
 import { evaluateLegacyVsSemanticGrammarAgreement } from './legacyGrammarAgreement';
-import type { DynamicPlaceholderEntityCandidate } from './phase2a/placeholderSpanMap';
+import type { DynamicPlaceholderEntityCandidate } from './slice/placeholderSpanMap';
 import {
   mayNeedDynamicQuoteResolution,
   parseCrossDomainSemanticRequest,
   type DynamicQuoteCandidate,
-} from './waves/crossDomainPlanBuilder';
-import { normalizeToCanonicalSection5Domain } from './waves/domainWaveManifest';
+} from './crossDomain/crossDomainPlanBuilder';
+import { normalizeToCanonicalSection5Domain } from './crossDomain/domainWaveManifest';
 
 export interface SemanticEntryRoutingInput {
   readonly rawMessage: string;

@@ -1,5 +1,5 @@
 import { getAskPropertyTimezone } from './askExecutionContext';
-import { REGISTERED_PRESENTATION_TOKEN_LABELS } from './semantic/phase1/presentationHumanizer';
+import { REGISTERED_PRESENTATION_TOKEN_LABELS } from './semantic/containment/presentationHumanizer';
 
 // Small display formatters shared by the Ask handlers. Moved out of askOrchestrator.service.ts (FRD v1.97) so a handler
 // in its own file does not need to import the orchestrator.

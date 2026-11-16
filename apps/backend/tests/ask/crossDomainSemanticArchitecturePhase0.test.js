@@ -32,7 +32,7 @@ const {
   validateSeededScenarioCatalogue,
   validateSemanticOntologyBaseline,
   verifySeededFamilyFixtureReadiness,
-} = require('../../src/services/ask/semantic/phase0/index.ts');
+} = require('../../src/services/ask/semantic/governance/index.ts');
 const { parseDeterministicSemanticRequest } = require('../../src/services/ask/semantic/deterministicSemanticParser.ts');
 const { classifyTransitionalWarrantyLinks } = require('../../src/services/ask/semantic/transitionalWarrantyRead.ts');
 const { selectAndRenderAskRemoteFallbackClaims } = require('../../src/services/ask/askRemoteFallbackTypedClaims.ts');
@@ -189,7 +189,7 @@ test('Phase 0 Bullet 4 & 5: relationship meaning tags, repository-scanned access
     'discovers relation consumers outside src/services/ask/',
   );
   assert.ok(
-    discoveredRelationFiles.some((f) => f.relativeFilePath.startsWith('src/services/ask/semantic/phase1/')),
+    discoveredRelationFiles.some((f) => f.relativeFilePath.startsWith('src/services/ask/semantic/containment/')),
     'scans runtime semantic/ directories instead of skipping all semantic directories',
   );
 

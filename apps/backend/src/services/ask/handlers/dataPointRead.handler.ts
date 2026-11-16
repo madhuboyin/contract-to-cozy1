@@ -19,23 +19,23 @@ import { planShape789, runShape789, shapePointIds, type Shape789Plan } from '../
 import { dataPointReadGrammarAgreement, warrantyShapeGrammarAgreement, type LegacyGrammarAgreement } from '../semantic/legacyGrammarAgreement';
 import { ASK_SEMANTIC_RECEIPT_VERSION, buildSemanticReadReceipt, type SemanticReadReceipt } from '../semantic/semanticExecutionReceipt';
 import { verifySemanticReadReceiptEntailment } from '../semantic/semanticReceiptEntailment';
-import { humanizePresentationToken } from '../semantic/phase1/presentationHumanizer';
+import { humanizePresentationToken } from '../semantic/containment/presentationHumanizer';
 import { parseDeterministicSemanticRequest } from '../semantic/deterministicSemanticParser';
-import { executePhase2aOnProperty } from '../semantic/phase2a/phase2aSliceExecutor';
-import { type DynamicPlaceholderEntityCandidate } from '../semantic/phase2a/placeholderSpanMap';
-import { mayNeedDynamicQuoteResolution, parseCrossDomainSemanticRequest, type DynamicQuoteCandidate } from '../semantic/waves/crossDomainPlanBuilder';
+import { executePhase2aOnProperty } from '../semantic/slice/phase2aSliceExecutor';
+import { type DynamicPlaceholderEntityCandidate } from '../semantic/slice/placeholderSpanMap';
+import { mayNeedDynamicQuoteResolution, parseCrossDomainSemanticRequest, type DynamicQuoteCandidate } from '../semantic/crossDomain/crossDomainPlanBuilder';
 import {
   executeCrossDomainOnProperty,
   loadAuthorizedProviderContext,
   type AuthorizedProviderContext,
-} from '../semantic/waves/crossDomainWaveExecutor';
+} from '../semantic/crossDomain/crossDomainWaveExecutor';
 import {
   GeminiSemanticUnderstandingProvider,
   interpretWithSemanticProducers,
   resolveDefaultSemanticProviderPolicy,
   type SemanticProviderPolicy,
   type SemanticUnderstandingProvider,
-} from '../semantic/phase6/semanticProviderOrchestrator';
+} from '../semantic/evaluation/semanticProviderOrchestrator';
 
 const ENTITY_COPY: Record<string, { plural: string; singular: string; collection: string; record: string; none?: string }> = {
   InventoryItem: { plural: 'items', singular: 'inventory', collection: 'inventory', record: 'Home inventory record' },

@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 require('ts-node/register/transpile-only');
 
-const { ASK_SEMANTIC_DOMAINS } = require('../../src/services/ask/semantic/phase0/semanticOntologyBaseline.ts');
+const { ASK_SEMANTIC_DOMAINS } = require('../../src/services/ask/semantic/governance/semanticOntologyBaseline.ts');
 const { dataPointReadResult } = require('../../src/services/ask/handlers/dataPointRead.handler.ts');
 const {
   ASK_CROSS_DOMAIN_LEXICON_VERSION,
@@ -25,7 +25,7 @@ const {
   runCrossDomainMetamorphicSuite,
   verifyCrossDomainProtectionLexemeSeparation,
   verifyDomainWaveManifestIntegrity,
-} = require('../../src/services/ask/semantic/waves/index.ts');
+} = require('../../src/services/ask/semantic/crossDomain/index.ts');
 
 test('Waves 1-5 cover all 14 Section 5 homeowner domains and safety boundary with measured §18 enablement profiles', async () => {
   assert.equal(DOMAIN_WAVE_MANIFEST.length, 5);
@@ -97,7 +97,7 @@ test('cross-domain planner compiles from generated semantic lexicon without manu
   assert.equal(typoParsed.plan.outcome, 'MATCH');
   assert.equal(typoParsed.plan.facets[0].evidence.jobMatch, 'query.property_tax_bill.unpaid');
 
-  const sourcePath = path.join(__dirname, '../../src/services/ask/semantic/waves/crossDomainPlanBuilder.ts');
+  const sourcePath = path.join(__dirname, '../../src/services/ask/semantic/crossDomain/crossDomainPlanBuilder.ts');
   const sourceText = fs.readFileSync(sourcePath, 'utf8');
   assert.equal(sourceText.includes('KNOWN_CROSS_DOMAIN_MEANINGFUL_TOKENS'), false);
   assert.equal(sourceText.includes('matchSingleClauseSpec'), false);
