@@ -1210,5 +1210,6 @@ export async function evaluateCrossDomainGovernanceReport(): Promise<{
 export const ROLLOUT_DELIVERY_SUMMARY = {
   rolloutCount: DOMAIN_ROLLOUT_MANIFEST.length,
   enabledDomainCount: DOMAIN_ENABLEMENT_RECORDS.filter((d) => d.correctnessState === 'ENABLED_FOR_DECLARED_SCOPE').length,
+  partialDomainCount: DOMAIN_ENABLEMENT_RECORDS.filter((d) => d.correctnessState === 'PARTIAL').length,
   applyCrossDomainFollowUpRefinement,
 } as const;

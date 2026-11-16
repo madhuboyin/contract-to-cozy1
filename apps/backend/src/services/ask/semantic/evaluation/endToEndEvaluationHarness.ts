@@ -714,7 +714,7 @@ export interface EndToEndEvaluationReport {
     readonly perDomainCoverageProfiles: readonly DomainLanguageCoverageProfile[];
     readonly perDomainTelemetry: readonly {
       readonly domainId: SemanticDomainId;
-      readonly correctnessState: 'ENABLED_FOR_DECLARED_SCOPE';
+      readonly correctnessState: 'ENABLED_FOR_DECLARED_SCOPE' | 'PARTIAL' | 'NOT_ENABLED';
       readonly inDomainNotUnderstoodRate: number;
       readonly unsupportedRate: number;
       readonly falseDeclineRate: number;
@@ -2309,7 +2309,7 @@ export async function runEndToEndEvaluation(options: {
         const enablement = DOMAIN_ENABLEMENT_RECORDS.find((d) => d.domainId === p.domainId);
         return {
           domainId: p.domainId,
-          correctnessState: (enablement?.correctnessState ?? 'ENABLED_FOR_DECLARED_SCOPE') as 'ENABLED_FOR_DECLARED_SCOPE',
+          correctnessState: enablement?.correctnessState ?? 'NOT_ENABLED',
           inDomainNotUnderstoodRate: p.inDomainNotUnderstoodRate,
           unsupportedRate: p.unsupportedRate,
           falseDeclineRate: p.falseDeclineRate,

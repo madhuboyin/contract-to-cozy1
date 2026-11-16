@@ -31,8 +31,14 @@ test('Waves 1-5 cover all 14 Section 5 homeowner domains and safety boundary wit
   assert.equal(DOMAIN_ROLLOUT_MANIFEST.length, 5);
   assert.deepEqual(DOMAIN_ROLLOUT_MANIFEST.map((w) => w.order), [1, 2, 3, 4, 5]);
   assert.equal(ASK_SEMANTIC_DOMAINS.length, 15);
-  assert.ok(ASK_SEMANTIC_DOMAINS.every((d) => d.correctnessState === 'ENABLED_FOR_DECLARED_SCOPE'));
+  // v1.11: the independently adjudicated corpus, per-domain sample sizes and live provider evaluation do not exist, so no domain
+  // may claim ENABLED_FOR_DECLARED_SCOPE; each is PARTIAL and names what is missing.
+  assert.ok(ASK_SEMANTIC_DOMAINS.every((d) => d.correctnessState === 'PARTIAL'));
   assert.equal(DOMAIN_ENABLEMENT_RECORDS.length, 15);
+  assert.ok(DOMAIN_ENABLEMENT_RECORDS.every((r) => r.correctnessState === 'PARTIAL'));
+  assert.ok(DOMAIN_ENABLEMENT_RECORDS.every((r) => r.missingDependencies.includes('INDEPENDENT_ADJUDICATED_CORPUS')
+    && r.missingDependencies.includes('PER_DOMAIN_SAMPLE_SIZE_FOR_CONFIDENCE_BOUND')
+    && r.missingDependencies.includes('LIVE_PROVIDER_EVALUATION')));
 
   const report = await evaluateCrossDomainGovernanceReport();
   assert.equal(report.passed, true, `Governance report failures: ${[...report.benchmarks.failures, ...report.metamorphic.failures, ...report.manifestIntegrity.issues].join(' | ')}`);
@@ -976,4 +982,22 @@ test('Semantic receipts use domain-appropriate predicates, quote comparison resp
   assert.ok(renderedTitles.includes('200A Electrical Panel Upgrade'), `Missing project title in ${JSON.stringify(renderedTitles)}`);
   assert.ok(!renderedTitles.includes('claim-water-damage'), 'Raw claim ID must not be rendered as title');
   assert.ok(!renderedTitles.includes('proj-panel-upgrade'), 'Raw project ID must not be rendered as title');
+});
+
+test('a PARTIAL domain executes only explicitly enabled families; any other facet is reported unresolved, never dropped', () => {
+  const { isFacetFamilyEnabled } = require('../../src/services/ask/semantic/crossDomain/domainRolloutManifest.ts');
+  const record = DOMAIN_ENABLEMENT_RECORDS.find((r) => r.domainId === 'domain.warranties_coverage');
+  const facet = (jobMatch, relationIds = []) => ({
+    id: 'f1', domainCandidates: [{ id: record.domainId }], evidence: { jobMatch },
+    relations: relationIds.map((semanticRelationId) => ({ semanticRelationId })),
+  });
+  assert.equal(isFacetFamilyEnabled(record, facet('query.warranty.filter')), true);
+  assert.equal(isFacetFamilyEnabled(record, facet(null, ['relation.inventory_item.warranty'])), true);
+  assert.equal(isFacetFamilyEnabled(record, facet('job.unregistered.analysis')), false);
+  assert.equal(isFacetFamilyEnabled(record, facet(null)), false);
+
+  const [owned, unowned] = assignMixedStackFacetOwnership([facet('query.warranty.filter'), { ...facet('job.unregistered.analysis'), id: 'f2' }]);
+  assert.equal(owned.owner, 'NEW_STACK');
+  assert.equal(unowned.owner, 'UNRESOLVED');
+  assert.equal(unowned.reasonCode, 'NO_ENABLED_OWNER');
 });

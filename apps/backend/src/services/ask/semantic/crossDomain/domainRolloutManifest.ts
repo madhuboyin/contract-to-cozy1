@@ -77,7 +77,14 @@ export interface DomainEnablementRecord {
   readonly legacyRecognizerDisposition: LegacyRecognizerDisposition;
   readonly languageCoverageProfileId: string;
   readonly acceptanceCriteriaIds: readonly string[];
+  /** What must exist before this domain may claim `ENABLED_FOR_DECLARED_SCOPE` (empty only for an enabled domain). */
+  readonly missingDependencies: readonly DomainEnablementDependency[];
 }
+
+export type DomainEnablementDependency =
+  | 'INDEPENDENT_ADJUDICATED_CORPUS'
+  | 'PER_DOMAIN_SAMPLE_SIZE_FOR_CONFIDENCE_BOUND'
+  | 'LIVE_PROVIDER_EVALUATION';
 
 export interface OfflineLexiconEnrichmentProposal {
   readonly proposalId: string;
@@ -306,23 +313,61 @@ export const DOMAIN_ROLLOUT_MANIFEST: readonly DomainRolloutDefinition[] = Objec
   },
 ]);
 
-export const DOMAIN_ENABLEMENT_RECORDS: readonly DomainEnablementRecord[] = Object.freeze([
-  { domainId: 'domain.property_profile', rolloutId: 'ROLLOUT_3_FINANCE_TAX_AND_PROPERTY_CORE', correctnessState: 'ENABLED_FOR_DECLARED_SCOPE', legacyAdapterId: 'dataPoint.property_profile.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.property_profile', acceptanceCriteriaIds: ['ROW_19', 'ROW_25'] },
-  { domainId: 'domain.inventory', rolloutId: 'ROLLOUT_1_INVENTORY_AND_MAINTENANCE', correctnessState: 'ENABLED_FOR_DECLARED_SCOPE', legacyAdapterId: 'dataPoint.inventory.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.inventory', acceptanceCriteriaIds: ['ROW_01', 'ROW_02', 'ROW_03', 'ROW_04', 'ROW_05', 'ROW_09', 'ROW_15', 'ROW_18', 'ROW_30'] },
-  { domainId: 'domain.maintenance', rolloutId: 'ROLLOUT_1_INVENTORY_AND_MAINTENANCE', correctnessState: 'ENABLED_FOR_DECLARED_SCOPE', legacyAdapterId: 'dataPoint.maintenance.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.maintenance', acceptanceCriteriaIds: ['ROW_06', 'ROW_07', 'ROW_08', 'ROW_14'] },
-  { domainId: 'domain.warranties_coverage', rolloutId: 'ROLLOUT_2_PROTECTION_AND_CLAIMS', correctnessState: 'ENABLED_FOR_DECLARED_SCOPE', legacyAdapterId: 'dataPoint.warranty.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.warranties_coverage', acceptanceCriteriaIds: ['ROW_01', 'ROW_04', 'ROW_13', 'ROW_14', 'ROW_15'] },
-  { domainId: 'domain.insurance_policies', rolloutId: 'ROLLOUT_2_PROTECTION_AND_CLAIMS', correctnessState: 'ENABLED_FOR_DECLARED_SCOPE', legacyAdapterId: 'legacy.insurance_policy.deductible_and_terms', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.insurance_policies', acceptanceCriteriaIds: ['ROW_13'] },
-  { domainId: 'domain.claims', rolloutId: 'ROLLOUT_2_PROTECTION_AND_CLAIMS', correctnessState: 'ENABLED_FOR_DECLARED_SCOPE', legacyAdapterId: 'dataPoint.claim.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.claims', acceptanceCriteriaIds: ['ROW_12', 'ROW_14', 'ROW_16'] },
-  { domainId: 'domain.documents_records', rolloutId: 'ROLLOUT_4_TRANSACTIONS_PROJECTS_AND_RECORDS', correctnessState: 'ENABLED_FOR_DECLARED_SCOPE', legacyAdapterId: 'dataPoint.documents.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.documents_records', acceptanceCriteriaIds: ['ROW_09', 'ROW_16'] },
-  { domainId: 'domain.ownership_costs_finance', rolloutId: 'ROLLOUT_3_FINANCE_TAX_AND_PROPERTY_CORE', correctnessState: 'ENABLED_FOR_DECLARED_SCOPE', legacyAdapterId: 'dataPoint.finance_tax.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.ownership_costs_finance', acceptanceCriteriaIds: ['ROW_10', 'ROW_11', 'ROW_14', 'ROW_19', 'ROW_25'] },
-  { domainId: 'domain.projects_quotes_vendors', rolloutId: 'ROLLOUT_4_TRANSACTIONS_PROJECTS_AND_RECORDS', correctnessState: 'ENABLED_FOR_DECLARED_SCOPE', legacyAdapterId: 'dataPoint.projects_quotes.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.projects_quotes_vendors', acceptanceCriteriaIds: ['ROW_14', 'ROW_26', 'ROW_27'] },
-  { domainId: 'domain.risks_recalls_inspections', rolloutId: 'ROLLOUT_3_FINANCE_TAX_AND_PROPERTY_CORE', correctnessState: 'ENABLED_FOR_DECLARED_SCOPE', legacyAdapterId: 'dataPoint.risks_recalls_inspections.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.risks_recalls_inspections', acceptanceCriteriaIds: ['ROW_17', 'ROW_28', 'ROW_29'] },
-  { domainId: 'domain.timeline_home_events', rolloutId: 'ROLLOUT_3_FINANCE_TAX_AND_PROPERTY_CORE', correctnessState: 'ENABLED_FOR_DECLARED_SCOPE', legacyAdapterId: 'dataPoint.timeline_events.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.timeline_home_events', acceptanceCriteriaIds: ['ROW_10'] },
-  { domainId: 'domain.buyer_journey', rolloutId: 'ROLLOUT_4_TRANSACTIONS_PROJECTS_AND_RECORDS', correctnessState: 'ENABLED_FOR_DECLARED_SCOPE', legacyAdapterId: 'dataPoint.buyer.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.buyer_journey', acceptanceCriteriaIds: ['ROW_20', 'ROW_23'] },
-  { domainId: 'domain.seller_preparation', rolloutId: 'ROLLOUT_4_TRANSACTIONS_PROJECTS_AND_RECORDS', correctnessState: 'ENABLED_FOR_DECLARED_SCOPE', legacyAdapterId: 'dataPoint.seller.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.seller_preparation', acceptanceCriteriaIds: ['ROW_24'] },
-  { domainId: 'domain.account_household_preferences', rolloutId: 'ROLLOUT_5_OPERATIONS_SAVED_WORK_AND_COMPOSITION', correctnessState: 'ENABLED_FOR_DECLARED_SCOPE', legacyAdapterId: 'dataPoint.saved_results.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.account_household_preferences', acceptanceCriteriaIds: ['ROW_22'] },
-  { domainId: 'domain.safety_boundary', rolloutId: 'ROLLOUT_5_OPERATIONS_SAVED_WORK_AND_COMPOSITION', correctnessState: 'ENABLED_FOR_DECLARED_SCOPE', legacyAdapterId: 'safety.boundary.prefilter', legacyRecognizerDisposition: 'RETAINED_SAFETY_BOUNDARY', languageCoverageProfileId: 'lang-profile.en-us.domain.safety_boundary', acceptanceCriteriaIds: ['ROW_21'] },
+type DomainEnablementBase = Omit<DomainEnablementRecord, 'missingDependencies'>;
+
+const DOMAIN_ENABLEMENT_BASE: readonly DomainEnablementBase[] = Object.freeze([
+  { domainId: 'domain.property_profile', rolloutId: 'ROLLOUT_3_FINANCE_TAX_AND_PROPERTY_CORE', correctnessState: 'PARTIAL', legacyAdapterId: 'dataPoint.property_profile.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.property_profile', acceptanceCriteriaIds: ['ROW_19', 'ROW_25'] },
+  { domainId: 'domain.inventory', rolloutId: 'ROLLOUT_1_INVENTORY_AND_MAINTENANCE', correctnessState: 'PARTIAL', legacyAdapterId: 'dataPoint.inventory.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.inventory', acceptanceCriteriaIds: ['ROW_01', 'ROW_02', 'ROW_03', 'ROW_04', 'ROW_05', 'ROW_09', 'ROW_15', 'ROW_18', 'ROW_30'] },
+  { domainId: 'domain.maintenance', rolloutId: 'ROLLOUT_1_INVENTORY_AND_MAINTENANCE', correctnessState: 'PARTIAL', legacyAdapterId: 'dataPoint.maintenance.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.maintenance', acceptanceCriteriaIds: ['ROW_06', 'ROW_07', 'ROW_08', 'ROW_14'] },
+  { domainId: 'domain.warranties_coverage', rolloutId: 'ROLLOUT_2_PROTECTION_AND_CLAIMS', correctnessState: 'PARTIAL', legacyAdapterId: 'dataPoint.warranty.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.warranties_coverage', acceptanceCriteriaIds: ['ROW_01', 'ROW_04', 'ROW_13', 'ROW_14', 'ROW_15'] },
+  { domainId: 'domain.insurance_policies', rolloutId: 'ROLLOUT_2_PROTECTION_AND_CLAIMS', correctnessState: 'PARTIAL', legacyAdapterId: 'legacy.insurance_policy.deductible_and_terms', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.insurance_policies', acceptanceCriteriaIds: ['ROW_13'] },
+  { domainId: 'domain.claims', rolloutId: 'ROLLOUT_2_PROTECTION_AND_CLAIMS', correctnessState: 'PARTIAL', legacyAdapterId: 'dataPoint.claim.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.claims', acceptanceCriteriaIds: ['ROW_12', 'ROW_14', 'ROW_16'] },
+  { domainId: 'domain.documents_records', rolloutId: 'ROLLOUT_4_TRANSACTIONS_PROJECTS_AND_RECORDS', correctnessState: 'PARTIAL', legacyAdapterId: 'dataPoint.documents.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.documents_records', acceptanceCriteriaIds: ['ROW_09', 'ROW_16'] },
+  { domainId: 'domain.ownership_costs_finance', rolloutId: 'ROLLOUT_3_FINANCE_TAX_AND_PROPERTY_CORE', correctnessState: 'PARTIAL', legacyAdapterId: 'dataPoint.finance_tax.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.ownership_costs_finance', acceptanceCriteriaIds: ['ROW_10', 'ROW_11', 'ROW_14', 'ROW_19', 'ROW_25'] },
+  { domainId: 'domain.projects_quotes_vendors', rolloutId: 'ROLLOUT_4_TRANSACTIONS_PROJECTS_AND_RECORDS', correctnessState: 'PARTIAL', legacyAdapterId: 'dataPoint.projects_quotes.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.projects_quotes_vendors', acceptanceCriteriaIds: ['ROW_14', 'ROW_26', 'ROW_27'] },
+  { domainId: 'domain.risks_recalls_inspections', rolloutId: 'ROLLOUT_3_FINANCE_TAX_AND_PROPERTY_CORE', correctnessState: 'PARTIAL', legacyAdapterId: 'dataPoint.risks_recalls_inspections.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.risks_recalls_inspections', acceptanceCriteriaIds: ['ROW_17', 'ROW_28', 'ROW_29'] },
+  { domainId: 'domain.timeline_home_events', rolloutId: 'ROLLOUT_3_FINANCE_TAX_AND_PROPERTY_CORE', correctnessState: 'PARTIAL', legacyAdapterId: 'dataPoint.timeline_events.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.timeline_home_events', acceptanceCriteriaIds: ['ROW_10'] },
+  { domainId: 'domain.buyer_journey', rolloutId: 'ROLLOUT_4_TRANSACTIONS_PROJECTS_AND_RECORDS', correctnessState: 'PARTIAL', legacyAdapterId: 'dataPoint.buyer.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.buyer_journey', acceptanceCriteriaIds: ['ROW_20', 'ROW_23'] },
+  { domainId: 'domain.seller_preparation', rolloutId: 'ROLLOUT_4_TRANSACTIONS_PROJECTS_AND_RECORDS', correctnessState: 'PARTIAL', legacyAdapterId: 'dataPoint.seller.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.seller_preparation', acceptanceCriteriaIds: ['ROW_24'] },
+  { domainId: 'domain.account_household_preferences', rolloutId: 'ROLLOUT_5_OPERATIONS_SAVED_WORK_AND_COMPOSITION', correctnessState: 'PARTIAL', legacyAdapterId: 'dataPoint.saved_results.read', legacyRecognizerDisposition: 'RETIRED_INTO_SEMANTIC_STACK', languageCoverageProfileId: 'lang-profile.en-us.domain.account_household_preferences', acceptanceCriteriaIds: ['ROW_22'] },
+  { domainId: 'domain.safety_boundary', rolloutId: 'ROLLOUT_5_OPERATIONS_SAVED_WORK_AND_COMPOSITION', correctnessState: 'PARTIAL', legacyAdapterId: 'safety.boundary.prefilter', legacyRecognizerDisposition: 'RETAINED_SAFETY_BOUNDARY', languageCoverageProfileId: 'lang-profile.en-us.domain.safety_boundary', acceptanceCriteriaIds: ['ROW_21'] },
 ]);
+
+/**
+ * Honest correctness state (v1.11): every domain is `PARTIAL`. Exact-result, authorization, replay and metamorphic evidence
+ * exist for the declared families, but the independently adjudicated corpus, per-domain sample sizes and live provider
+ * evaluation required for a defensible `ENABLED_FOR_DECLARED_SCOPE` claim do not (owner-deferred, FRD v1.11).
+ */
+const OUTSTANDING_ENABLEMENT_DEPENDENCIES: readonly DomainEnablementDependency[] = Object.freeze([
+  'INDEPENDENT_ADJUDICATED_CORPUS',
+  'PER_DOMAIN_SAMPLE_SIZE_FOR_CONFIDENCE_BOUND',
+  'LIVE_PROVIDER_EVALUATION',
+]);
+
+export const DOMAIN_ENABLEMENT_RECORDS: readonly DomainEnablementRecord[] = Object.freeze(
+  DOMAIN_ENABLEMENT_BASE.map((base) => Object.freeze({
+    ...base,
+    missingDependencies: base.correctnessState === 'ENABLED_FOR_DECLARED_SCOPE' ? [] : OUTSTANDING_ENABLEMENT_DEPENDENCIES,
+  })),
+);
+
+/**
+ * The semantic families the new stack is explicitly enabled for: every job and relation a rollout registers. Families are
+ * registry entities shared across domains (a warranty relation is registered with inventory but read for warranties), so
+ * the set is global; a facet of any other job/relation is reported unresolved rather than executed (§18 `PARTIAL`).
+ */
+export const ENABLED_SEMANTIC_FAMILY_JOB_IDS: ReadonlySet<string> = new Set(DOMAIN_ROLLOUT_MANIFEST.flatMap((rollout) => rollout.registeredJobIds));
+export const ENABLED_SEMANTIC_FAMILY_RELATION_IDS: ReadonlySet<string> = new Set(DOMAIN_ROLLOUT_MANIFEST.flatMap((rollout) => rollout.registeredRelationIds));
+
+/** §18 `PARTIAL`: a facet is owned by the new stack only when its semantic job or relation is an explicitly enabled family. */
+export function isFacetFamilyEnabled(record: DomainEnablementRecord, facet: SemanticFacet): boolean {
+  if (record.correctnessState === 'ENABLED_FOR_DECLARED_SCOPE') return true;
+  if (record.correctnessState === 'NOT_ENABLED') return false;
+  const job = facet.evidence.jobMatch;
+  if (job && ENABLED_SEMANTIC_FAMILY_JOB_IDS.has(job)) return true;
+  return facet.relations.some((relation) => ENABLED_SEMANTIC_FAMILY_RELATION_IDS.has(relation.semanticRelationId));
+}
+
 
 /** Builds evidence-backed §18 coverage profiles from executed benchmark, metamorphic, and replay measurements. */
 export function buildMeasuredDomainCoverageProfiles(
@@ -434,11 +479,9 @@ export function assignMixedStackFacetOwnership(
     readonly allowLegacyFallback?: boolean;
   } = {},
 ): readonly MixedStackFacetOwnershipAssignment[] {
-  const enabledSet = options.enabledDomains ?? new Set(
-    DOMAIN_ENABLEMENT_RECORDS
-      .filter((record) => record.correctnessState === 'ENABLED_FOR_DECLARED_SCOPE')
-      .map((record) => record.domainId),
-  );
+  // An explicit override (tests, per-domain kill switch) names whole domains; otherwise ownership follows the §18 state:
+  // ENABLED domains own every facet, PARTIAL domains own only their explicitly enabled families.
+  const explicitEnabledDomains = options.enabledDomains ?? null;
   const allowLegacy = options.allowLegacyFallback ?? true;
 
   return facets.map((facet) => {
@@ -446,7 +489,10 @@ export function assignMixedStackFacetOwnership(
     const domainId = normalizeToCanonicalSection5Domain(rawDomainId);
     const enablement = DOMAIN_ENABLEMENT_RECORDS.find((entry) => entry.domainId === domainId);
 
-    if (enabledSet.has(domainId)) {
+    const ownedByNewStack = explicitEnabledDomains
+      ? explicitEnabledDomains.has(domainId)
+      : Boolean(enablement && isFacetFamilyEnabled(enablement, facet));
+    if (ownedByNewStack) {
       return { facetId: facet.id, domainId, owner: 'NEW_STACK' as const, adapterId: 'cross-domain-wave-executor', reasonCode: 'DOMAIN_ENABLED_NEW_STACK' as const };
     }
 
@@ -487,12 +533,13 @@ export function verifyDomainRolloutManifestIntegrity(
     const enablement = DOMAIN_ENABLEMENT_RECORDS.find((record) => record.domainId === domainId);
     if (!enablement) {
       issues.push(`Domain ${domainId} is missing an enablement record`);
-    } else if (enablement.correctnessState === 'ENABLED_FOR_DECLARED_SCOPE' && measuredProfiles) {
+    } else if (enablement.correctnessState !== 'NOT_ENABLED' && measuredProfiles) {
       const profile = measuredProfiles.find((p) => p.domainId === domainId);
       if (!profile) {
         issues.push(`Domain ${domainId} lacks a measured §18 coverage profile`);
       } else {
-        if (!profile.declaredEnablementGatePassed) issues.push(`Domain ${domainId} failed §18 declared enablement gate`);
+        if (enablement.correctnessState === 'ENABLED_FOR_DECLARED_SCOPE' && !profile.declaredEnablementGatePassed) issues.push(`Domain ${domainId} failed §18 declared enablement gate`);
+        if (enablement.correctnessState === 'PARTIAL' && enablement.missingDependencies.length === 0) issues.push(`Domain ${domainId} is PARTIAL but lists no missing dependency`);
         if (profile.unresolvedP0Count > 0 || profile.unresolvedP1Count > 0) issues.push(`Domain ${domainId} has unresolved P0/P1 findings`);
         if (profile.incorrectHighConfidenceCount > 0) issues.push(`Domain ${domainId} has incorrect high-confidence outputs`);
         if (!profile.metamorphicSuitePassed || profile.metamorphicPairCount === 0) issues.push(`Domain ${domainId} lacks passing metamorphic evidence`);

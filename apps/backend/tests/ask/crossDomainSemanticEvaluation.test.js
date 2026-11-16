@@ -332,7 +332,7 @@ test('Phase 6 end-to-end evaluation harness passes all sealed-proxy invariants a
 
   // Verify FR-EVAL-1 separation of domain correctness vs language coverage
   for (const domainTelemetry of report.frEval3Metrics.perDomainTelemetry) {
-    assert.equal(domainTelemetry.correctnessState, 'ENABLED_FOR_DECLARED_SCOPE');
+    assert.equal(domainTelemetry.correctnessState, 'PARTIAL');
     assert.ok(domainTelemetry.combinedResolvedRate >= domainTelemetry.deterministicResolvedRate);
   }
 
