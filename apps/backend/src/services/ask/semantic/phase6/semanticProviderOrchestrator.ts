@@ -31,7 +31,17 @@ import {
 } from '../waves/domainWaveManifest';
 
 export const ASK_PHASE6_PROVIDER_VERSION = 'phase6-provider-orchestrator-1.0.0' as const;
+export const ASK_SEMANTIC_PROVIDER_BUDGET_POLICY_VERSION = 'semantic-provider-budget-1.0.0' as const;
+export const ASK_SEMANTIC_PROVIDER_BUDGET_APPROVED_AT = '2026-11-16' as const;
 const MAX_ADMITTED_FACETS = 6;
+
+export const APPROVED_SEMANTIC_PROVIDER_BUDGETS: SemanticProviderBudgets = Object.freeze({
+  maxStage1LatencyMs: 600,
+  maxStage2LatencyMs: 1200,
+  maxEstimatedCostUsdPerTurn: 0.015,
+  maxConcurrentStage2Calls: 3,
+  maxAdmittedFacets: MAX_ADMITTED_FACETS,
+});
 
 export type SemanticProviderApprovalStatus =
   | 'APPROVED_FOR_STRUCTURED_PLANNING'
@@ -68,13 +78,7 @@ export function resolveDefaultSemanticProviderPolicy(
     recordedDecisionNote: approved
       ? 'Structured planning is active with separate homeowner-text, provider-terms, and semantic-provider approvals plus configured Phase 6 budgets.'
       : `External structured planning is disabled; missing ${missingApprovals.join(', ')} approval. Deterministic waves execute standalone.`,
-    budgets: {
-      maxStage1LatencyMs: 600,
-      maxStage2LatencyMs: 1200,
-      maxEstimatedCostUsdPerTurn: 0.015,
-      maxConcurrentStage2Calls: 3,
-      maxAdmittedFacets: MAX_ADMITTED_FACETS,
-    },
+    budgets: { ...APPROVED_SEMANTIC_PROVIDER_BUDGETS },
   };
 }
 

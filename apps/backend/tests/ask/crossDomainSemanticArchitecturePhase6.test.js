@@ -9,6 +9,9 @@ const {
   ASK_PHASE6_CALIBRATION_VERSION,
   ASK_PHASE6_EVALUATION_VERSION,
   ASK_PHASE6_PROVIDER_VERSION,
+  ASK_SEMANTIC_PROVIDER_BUDGET_APPROVED_AT,
+  ASK_SEMANTIC_PROVIDER_BUDGET_POLICY_VERSION,
+  APPROVED_SEMANTIC_PROVIDER_BUDGETS,
   GeminiSemanticUnderstandingProvider,
   PHASE6_SEALED_EVALUATION_CASES,
   SEMANTIC_RISK_STRATUM_POLICIES,
@@ -410,16 +413,19 @@ test('Phase 6 review fixes: repeated span mapping, strict calibration bound, bud
   }
 
   // 3. P2 #4: Enforce maxStage1LatencyMs, maxStage2LatencyMs, and maxEstimatedCostUsdPerTurn budgets
+  assert.equal(ASK_SEMANTIC_PROVIDER_BUDGET_POLICY_VERSION, 'semantic-provider-budget-1.0.0');
+  assert.equal(ASK_SEMANTIC_PROVIDER_BUDGET_APPROVED_AT, '2026-11-16');
+  assert.deepEqual(APPROVED_SEMANTIC_PROVIDER_BUDGETS, {
+    maxStage1LatencyMs: 600,
+    maxStage2LatencyMs: 1200,
+    maxEstimatedCostUsdPerTurn: 0.015,
+    maxConcurrentStage2Calls: 3,
+    maxAdmittedFacets: 6,
+  });
   const approvedPolicy = {
     approvalStatus: 'APPROVED_FOR_STRUCTURED_PLANNING',
     recordedDecisionNote: 'test approved',
-    budgets: {
-      maxStage1LatencyMs: 600,
-      maxStage2LatencyMs: 1200,
-      maxEstimatedCostUsdPerTurn: 0.015,
-      maxConcurrentStage2Calls: 3,
-      maxAdmittedFacets: 6,
-    },
+    budgets: { ...APPROVED_SEMANTIC_PROVIDER_BUDGETS },
   };
   const stage1LatencyBreach = await executeTwoStageProviderRetrieval({
     rawText: 'which claims are still open?',
