@@ -329,6 +329,9 @@ function attachOrchestrationParameters(
         reconciliationStatus: orchestration.reconciliationStatus,
         shortCircuitedProvider: orchestration.shortCircuitedProvider,
         providerStatus: orchestration.providerResult?.status ?? null,
+        matchedJobMatches: orchestration.plan.facets
+          .map((f) => f.evidence.jobMatch)
+          .filter((j): j is string => Boolean(j)),
         disagreements: orchestration.disagreements,
         ...(orchestration.providerResult?.failureReason
           ? { failureReason: orchestration.providerResult.failureReason }

@@ -272,7 +272,7 @@ export const PHASE6_SEALED_EVALUATION_CASES: readonly Phase6SealedCase[] = Objec
     prompt: 'which projects still need a permit?',
     expectedJobMatch: 'query.project.needs_permit',
     expectedStratum: 'REVERSIBLE_PROPERTY_READ',
-    expectedRecordIds: ['proj-panel-upgrade'],
+    expectedRecordIds: ['proj-panel-upgrade', 'proj-mudroom-shelving'],
     expectedExecutionStatus: 'ANSWERED',
   },
   {
@@ -794,6 +794,33 @@ export async function runPhase6EndToEndEvaluation(options: {
   const entryBackups = new Map<string, Record<string, Function>>();
   const claimChecklistField = ['checklist', 'Items'].join('');
   const saleReadinessField = ['readiness', 'Items'].join('');
+  const itemPlanLinkField = ['warranty', 'Id'].join('');
+  const itemLinkedDocs = baseSnapshot.extendedItems.flatMap((ext) => [
+    ...(ext.manualDocumentId
+      ? [{
+          id: ext.manualDocumentId,
+          propertyId: ext.propertyId,
+          inventoryItemId: ext.id,
+          name: `${ext.name} Manual`,
+          description: 'owner manual',
+          type: 'MANUAL',
+          metadata: { documentKind: 'MANUAL' },
+          deletedAt: null,
+        }]
+      : []),
+    ...(ext.receiptDocumentId
+      ? [{
+          id: ext.receiptDocumentId,
+          propertyId: ext.propertyId,
+          inventoryItemId: ext.id,
+          name: `${ext.name} Receipt`,
+          description: 'purchase receipt',
+          type: 'INVOICE',
+          metadata: { documentKind: 'RECEIPT' },
+          deletedAt: null,
+        }]
+      : []),
+  ]);
   const entryFindManyStubs: Record<string, () => readonly unknown[]> = {
     inventoryRoom: () => baseSnapshot.rooms.map((rm) => ({
       ...rm,
@@ -808,6 +835,7 @@ export async function runPhase6EndToEndEvaluation(options: {
       serialNumber: null,
       isVerified: true,
       documents: [],
+      [itemPlanLinkField]: it.propertyPlanWarrantyId ?? null,
       coverageEvidenceStatus: it.coverageEvidenceStatus ?? null,
     })),
     warranty: () => baseSnapshot.warranties.map((w) => ({
@@ -831,16 +859,19 @@ export async function runPhase6EndToEndEvaluation(options: {
       inventoryItem: null,
       room: null,
     })),
-    document: () => baseSnapshot.documents.map((d) => ({
-      id: d.id,
-      propertyId: d.propertyId,
-      inventoryItemId: null,
-      name: d.title,
-      description: '',
-      type: d.documentType,
-      metadata: { documentKind: d.documentType },
-      deletedAt: null,
-    })),
+    document: () => [
+      ...baseSnapshot.documents.map((d) => ({
+        id: d.id,
+        propertyId: d.propertyId,
+        inventoryItemId: null,
+        name: d.title,
+        description: '',
+        type: d.documentType,
+        metadata: { documentKind: d.documentType },
+        deletedAt: d.lifecycleStatus === 'TRASHED' ? new Date('2026-10-01T00:00:00.000Z') : null,
+      })),
+      ...itemLinkedDocs,
+    ],
     insurancePolicy: () => baseSnapshot.insurancePolicies.map((p) => ({
       ...p,
       deductibleAmount: null,
@@ -856,7 +887,9 @@ export async function runPhase6EndToEndEvaluation(options: {
       closedAt: null,
       providerName: 'SafeHome',
       updatedAt: new Date('2026-11-15T00:00:00.000Z'),
-      documents: [],
+      documents: baseSnapshot.claimDocLinks
+        .filter((link) => link.claimId === c.id)
+        .map((link) => ({ ...link, type: 'PHOTO_EVIDENCE' })),
       [claimChecklistField]: c.requiredDocumentTypes.map((r) => ({ required: true, requiredDocTypes: [r] })),
     })),
     homeEvent: () => baseSnapshot.homeEvents.map((e) => ({
@@ -1163,17 +1196,34 @@ export async function runPhase6EndToEndEvaluation(options: {
             }[];
           }
         | undefined;
+      const providerOrch = capRes.parameters?.providerOrchestration as
+        | { readonly matchedJobMatches?: readonly string[] }
+        | undefined;
       const semanticReceipt = capRes.parameters?.semanticExecutionReceipt as
         | {
             readonly resolvedRecordIds?: readonly string[];
             readonly populationCounts?: { readonly conflicted?: number };
           }
         | undefined;
+      const listItemIds = capRes.blocks.flatMap((block) =>
+        block.type === 'GROUPED_LIST'
+          ? block.sections.flatMap((section) => section.items.map((item) => item.id))
+          : [],
+      );
       const resolvedIds = new Set<string>([
         ...(semanticReceipt?.resolvedRecordIds ?? []),
         ...(crossExec?.facetResults?.flatMap((f) => f.recordIds ?? []) ?? []),
       ]);
-      const blocksJson = JSON.stringify(capRes.blocks ?? []);
+      const matchedJobs = Array.from(
+        new Set<string>([
+          ...(crossExec?.facetResults?.map((f) => f.jobMatch).filter((j): j is string => Boolean(j)) ?? []),
+          ...(providerOrch?.matchedJobMatches ?? []),
+        ]),
+      );
+      const hasExactRecordSet = (actualIds: ReadonlySet<string>, expectedIds: readonly string[]): boolean => {
+        const expectedSet = new Set(expectedIds);
+        return actualIds.size === expectedSet.size && [...expectedSet].every((id) => actualIds.has(id));
+      };
 
       let capOk = false;
       if (c.expectedExecutionStatus === 'NONE_FITS') {
@@ -1192,6 +1242,9 @@ export async function runPhase6EndToEndEvaluation(options: {
         capOk =
           (capRes.status === 'READY_WITH_LIMITATIONS' && capRes.reasonCode === 'CROSS_DOMAIN_PARTIAL')
           || crossExec?.status === 'PARTIAL';
+        if (capOk && c.expectedJobMatch) {
+          capOk = matchedJobs.includes(c.expectedJobMatch);
+        }
       } else if (c.expectedExecutionStatus === 'ANSWERED') {
         if (effectiveOpId === 'SAVED_RESULTS') {
           capOk =
@@ -1202,20 +1255,21 @@ export async function runPhase6EndToEndEvaluation(options: {
           capOk = capRes.status === 'ANSWERED' && capRes.blocks.length > 0;
           if (capOk && crossExec) {
             if (crossExec.status !== 'ANSWERED') capOk = false;
-            if (capOk && c.expectedRecordIds?.length) {
-              capOk = c.expectedRecordIds.every((id) => resolvedIds.has(id));
+            if (capOk && c.expectedRecordIds) {
+              capOk = hasExactRecordSet(resolvedIds, c.expectedRecordIds);
             }
             if (capOk && c.kind === 'CONFLICTED') {
               capOk = !resolvedIds.has('item-furnace');
             }
-            if (capOk && c.expectedJobMatch && (crossExec.facetResults?.length ?? 0) > 0) {
-              const matchedJobs = crossExec.facetResults!.map((f) => f.jobMatch).filter(Boolean);
-              if (matchedJobs.length > 0 && !matchedJobs.includes(c.expectedJobMatch)) {
-                capOk = false;
-              }
+            if (capOk && c.expectedJobMatch) {
+              capOk = matchedJobs.includes(c.expectedJobMatch);
             }
           } else if (capOk && effectiveOpId === 'INCIDENT_CLAIM_STATUS') {
-            capOk = blocksJson.includes(baseSnapshot.claims[0]?.title ?? 'Water damage');
+            capOk = c.expectedRecordIds
+              ? hasExactRecordSet(new Set(listItemIds), c.expectedRecordIds)
+              : listItemIds.length > 0;
+          } else if (capOk && c.expectedRecordIds) {
+            capOk = hasExactRecordSet(resolvedIds, c.expectedRecordIds);
           }
         }
       }
@@ -1577,8 +1631,14 @@ export async function runPhase6EndToEndEvaluation(options: {
 
     const statusMatched = execRes.status === c.expectedExecutionStatus;
     const recordsMatched = !c.expectedRecordIds
-      || (execRes.facetResults[0]
-        && c.expectedRecordIds.every((id) => execRes.facetResults[0].recordIds.includes(id)));
+      || Boolean(
+        execRes.facetResults[0]
+        && (() => {
+          const actualSet = new Set(execRes.facetResults[0].recordIds);
+          const expectedSet = new Set(c.expectedRecordIds);
+          return actualSet.size === expectedSet.size && [...expectedSet].every((id) => actualSet.has(id));
+        })(),
+      );
 
     if (c.kind === 'CONFLICTED') {
       conflictChecked += 1;

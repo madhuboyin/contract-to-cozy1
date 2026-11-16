@@ -243,6 +243,7 @@ export interface CrossDomainPropertySnapshot extends Phase2aPropertySnapshot {
 
 export interface WaveFacetExecutionResult {
   readonly facetId: string;
+  readonly jobMatch?: string | null;
   readonly owner: MixedStackFacetOwnershipAssignment;
   readonly status: 'EXECUTED' | 'PARTIAL_MISSING_SLOTS' | 'UNRESOLVED' | 'BLOCKED';
   readonly summary: string;
@@ -1816,8 +1817,12 @@ export async function executeCrossDomainWaves(input: {
       };
     }
 
-    resultsById.set(facet.id, facetResult);
-    orderedResults.push(facetResult);
+    const enrichedFacetResult: WaveFacetExecutionResult = {
+      ...facetResult,
+      jobMatch: facet.evidence.jobMatch ?? null,
+    };
+    resultsById.set(facet.id, enrichedFacetResult);
+    orderedResults.push(enrichedFacetResult);
   }
 
   const allRedacted = Array.from(new Set(orderedResults.flatMap((r) => r.redactedFieldIds)));
