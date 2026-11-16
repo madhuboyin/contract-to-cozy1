@@ -72,6 +72,20 @@ test('an incompatible answered read exposes and authorizes the same compatibilit
   assert.equal(hasRetryableCompatibilityFallback(source, property), true);
 });
 
+test('an incompatible legacy read without stored operation identity can be recomputed through current routing', () => {
+  const source = incompatibleExecution({
+    operationId: null,
+    operationVersion: null,
+    intentFamily: null,
+    message: 'provide details of all items without warranty',
+  });
+  const mapped = mapPersistedExecution(source, property);
+  assert.equal(mapped.blocks[0].id, 'ask-schema-fallback');
+  assert.equal(mapped.correctionCapabilities.retryResponse, true);
+  assert.equal(hasRetryableCompatibilityFallback(source, property), true);
+  assert.equal(buildAskRetryRequest(source, { clientRequestId: 'legacy-read-retry' }).launchContext.operationId, undefined);
+});
+
 test('an incompatible command receipt never gains authority to replay the command', () => {
   const source = incompatibleExecution({ status: 'COMPLETED', operationId: 'MAINTENANCE_TASK_CREATE', intentFamily: 'COMMAND' });
   const mapped = mapPersistedExecution(source, property);

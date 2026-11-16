@@ -42,24 +42,31 @@ export function groundedReadVerdict(question: string, result: AskOperationResult
     if (!Array.isArray(parameters.sources) || parameters.sources.length === 0) return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'NO_SOURCE_RECORD'] };
     return { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] };
   }
+  // Unified semantic warranty-relation reads do not carry the legacy
+  // dataPointQuery.template marker. Their typed receipt is the grounding
+  // evidence, so validate it directly before falling back to the legacy
+  // computed-query marker. Without this branch, a correct COUNT/DETAIL
+  // answer was withheld as NO_GROUNDING_EVIDENCE after semantic promotion.
+  const shape = planShape789(question);
+  const receipt = SemanticReadReceiptSchema.safeParse((result.parameters as { semanticExecutionReceipt?: unknown } | undefined)?.semanticExecutionReceipt);
+  if (shape?.shape === 'NO_WARRANTY' || shape?.shape === 'HAS_WARRANTY') {
+    const agreement = warrantyShapeGrammarAgreement(question, shape);
+    if (agreement.outcome !== 'AGREE') return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'TYPED_GRAMMAR_DISAGREES'] };
+    if (!receipt.success) return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'SEMANTIC_RECEIPT_INVALID'] };
+    if (receipt.data.facetId !== agreement.facet?.id
+      || receipt.data.projection !== agreement.facet.projection
+      || !receipt.data.predicateIds.includes(agreement.facet.relations[0].predicateId)) {
+      return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'SEMANTIC_RECEIPT_PLAN_MISMATCH'] };
+    }
+    const entailment = verifySemanticReadReceiptEntailment(result);
+    return entailment.outcome === 'PASS'
+      ? { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] }
+      : { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', ...entailment.reasonCodes] };
+  }
   // 2. a computed answer (list, count, total, ranking, absence, change over time): the question must itself plan to the same template
   if (parameters.dataPointQuery?.template) {
     const template = parameters.dataPointQuery.template;
-    const shape = planShape789(question);
     const plan = planDataPointQuery(question);
-    const receipt = SemanticReadReceiptSchema.safeParse((result.parameters as { semanticExecutionReceipt?: unknown } | undefined)?.semanticExecutionReceipt);
-    if (shape?.shape === 'NO_WARRANTY' || shape?.shape === 'HAS_WARRANTY') {
-      const agreement = warrantyShapeGrammarAgreement(question, shape);
-      if (agreement.outcome !== 'AGREE') return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'TYPED_GRAMMAR_DISAGREES'] };
-      if (!receipt.success) return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'SEMANTIC_RECEIPT_INVALID'] };
-      if (receipt.data.facetId !== agreement.facet?.id
-        || receipt.data.projection !== agreement.facet.projection
-        || !receipt.data.predicateIds.includes(agreement.facet.relations[0].predicateId)) {
-        return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'SEMANTIC_RECEIPT_PLAN_MISMATCH'] };
-      }
-      const entailment = verifySemanticReadReceiptEntailment(result);
-      if (entailment.outcome !== 'PASS') return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', ...entailment.reasonCodes] };
-    }
     const planned = template === 'shape789' ? shape !== null : plan.kind === 'PLAN' && plan.plan.template.id === template;
     return planned ? { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] } : { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'QUESTION_DOES_NOT_PLAN_TO_THIS_QUERY'] };
   }

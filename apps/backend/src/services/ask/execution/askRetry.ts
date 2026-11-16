@@ -49,7 +49,7 @@ export function hasRetryableCompatibilityFallback(
   const operationId = source.operationId && source.operationId in ASK_OPERATION_DEFINITIONS
     ? source.operationId as AskOperationId
     : null;
-  if (!compatibilityPresentationCanRetry(source.status, operationId)) return false;
+  if (!compatibilityPresentationCanRetry(source.status, operationId, source.message)) return false;
   return isCompatibilityPresentationFallback(mapPersistedExecution(source, property));
 }
 

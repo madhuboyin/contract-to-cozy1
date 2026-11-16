@@ -16,7 +16,12 @@ const TELL_ME_LEAD = /^\s*tell\s+me\s+(?=(?:how|what|which|who|where|why|if|whet
 const POLITE_TAIL = /[\s,.!?;:]*(?:(?:please|pls|thanks|thank\s+you|thx)\b[\s,.!?;:]*)*$/i;
 
 /** Words that are real vocabulary for homes but sit one edit from a registry word; never "corrected" (FR-NRM-10 domain allowlist). */
-const DOMAIN_ALLOWLIST = new Set(['boiler', 'heater', 'dryer', 'washer', 'sealer', 'filter', 'gutter', 'gutters', 'shutter', 'shutters', 'planter', 'faucet', 'sewer', 'siding', 'stove', 'oven', 'range', 'roofer', 'plumber', 'painter', 'cooler', 'router', 'heated', 'heats', 'cools', 'costs', 'owner', 'owners', 'fence', 'fences', 'paint', 'tiles', 'floor', 'floors', 'ceiling', 'attic', 'garage']);
+const DOMAIN_ALLOWLIST = new Set(['boiler', 'heater', 'dryer', 'washer', 'sealer', 'filter', 'gutter', 'gutters', 'shutter', 'shutters', 'planter', 'faucet', 'sewer', 'siding', 'stove', 'oven', 'range', 'roofer', 'plumber', 'painter', 'cooler', 'router', 'heated', 'heats', 'cools', 'costs', 'owner', 'owners', 'fence', 'fences', 'paint', 'tiles', 'floor', 'floors', 'ceiling', 'attic', 'garage',
+  // Ordinary request verbs can sit one deletion away from a registry noun.
+  // "provide" was being rewritten to "provider", which changed a precise
+  // DATA_POINT_READ ("provide details ... without warranty") into the
+  // broader COVERAGE_GAPS route before semantic entry could run.
+  'provide']);
 
 export function stripFraming(message: string): string {
   // A question mark is kept: the local classifier was calibrated on questions and scores them lower without it (fixture ask-routing-independent-v2-011).

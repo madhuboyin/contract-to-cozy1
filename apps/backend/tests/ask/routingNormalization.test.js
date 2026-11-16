@@ -22,6 +22,15 @@ test('typo correction fixes long words and leaves protected / allowlisted words'
   assert.equal(normalizeForRouting('is my Hendersen property ok').includes('Hendersen'), true);
   assert.equal(normalizeForRouting('email bob@example.com about warrnaty').includes('bob@example.com'), true);
   assert.equal(normalizeForRouting('my account 12345-abcde'), 'my account 12345-abcde');
+  assert.equal(normalizeForRouting('provide details of all items without warranty'), 'provide details of all items without warranty');
+});
+test('ordinary provide wording keeps the typed warranty-relation route', () => {
+  const detail = resolveAskRoutingCascade('provide details of all items without warranty', { propertyId: 'p1' });
+  const count = resolveAskRoutingCascade('how many appliances are not having warranty', { propertyId: 'p1' });
+  assert.equal(detail.operation.operationId, 'DATA_POINT_READ');
+  assert.equal(detail.stage, 'PROVISIONAL');
+  assert.equal(count.operation.operationId, 'DATA_POINT_READ');
+  assert.equal(count.stage, 'PROVISIONAL');
 });
 test('typo retention: transposed letters route like the clean prompt', () => {
   const clean = resolveAskRoutingCascade('is my water heater under warranty', { localRoutingEnabled: false }).operation.operationId;

@@ -2,7 +2,7 @@
 import { staleMarkerFor } from './askReconciliation';
 import { ASK_RESPONSE_SCHEMA_VERSION, AskExecutionResponseSchema, AskPresentationBlockSchema, SuggestedNextActionsStatusSchema, type AskExecutionResponse, type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { AskExecution, AskExecutionStatus, Prisma } from '@prisma/client';
-import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
+import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, resolveAskOperation, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
 import { prisma } from '../../../lib/prisma';
 import { getSkillForOperation } from '../../skills/skillRegistry';
 import { validateSkillExecutionBinding } from '../../skills/skillExecutionBinding';
@@ -16,11 +16,17 @@ import { readStoredSuggestedNextActions } from '../suggestedActions/suggestedNex
 const inConversationOrNull = (href: string | null): string | null => (href && isAskInConversationHref(href) ? href : null);
 export const ASK_SCHEMA_FALLBACK_BLOCK_ID = 'ask-schema-fallback';
 
-export function compatibilityPresentationCanRetry(status: AskExecutionStatus, operationId: AskOperationId | null): boolean {
-  if (!operationId || !['ANSWERED', 'READY_WITH_LIMITATIONS'].includes(status)) return false;
+export function compatibilityPresentationCanRetry(status: AskExecutionStatus, operationId: AskOperationId | null, message?: string): boolean {
+  if (!['ANSWERED', 'READY_WITH_LIMITATIONS'].includes(status)) return false;
+  // Some executions persisted before operation identity became mandatory.
+  // Infer only for deciding whether a fresh retry may be offered; the retry
+  // still goes through createAskExecution and every current routing,
+  // authorization and trust check. Never infer authority to replay a command.
+  const retryOperationId = operationId ?? (message ? resolveAskOperation(message).operationId : null);
+  if (!retryOperationId) return false;
   // Recompute read/guidance answers only. A historical command receipt must never
   // become authority to replay a consequential action merely because its UI is old.
-  return ASK_OPERATION_DEFINITIONS[operationId].family !== 'COMMAND';
+  return ASK_OPERATION_DEFINITIONS[retryOperationId].family !== 'COMMAND';
 }
 
 export function isCompatibilityPresentationFallback(response: AskExecutionResponse): boolean {
@@ -234,7 +240,7 @@ export function mapPersistedExecution(execution: {
   if (parsed.success) return parsed.data;
   // The fallback hides WHY a saved answer no longer parses; record the failing paths (never the content) so it can be diagnosed.
   logger.warn({ executionId: execution.id, operationId: execution.operationId, storedSchemaVersion, issues: parsed.error.issues.slice(0, 10).map((issue) => ({ path: issue.path.join('.'), code: issue.code })) }, 'Saved Ask response failed schema validation; showing the refresh fallback');
-  const compatibilityRetry = compatibilityPresentationCanRetry(execution.status, operationId);
+  const compatibilityRetry = compatibilityPresentationCanRetry(execution.status, operationId, execution.message);
   const retryResponse = correctionCapabilities.retryResponse || compatibilityRetry;
   return AskExecutionResponseSchema.parse({
     schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,

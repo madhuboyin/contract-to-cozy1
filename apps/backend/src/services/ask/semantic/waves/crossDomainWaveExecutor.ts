@@ -2762,7 +2762,11 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
   const blocks: AskPresentationBlock[] = [
     {
       type: 'SUMMARY',
-      id: 'cross-domain-summary',
+      // Preserve the receipt's declared answer variant at the final Ask
+      // boundary. The provisional delivery gate verifies this identity;
+      // replacing it with a generic cross-domain id made otherwise valid
+      // warranty COUNT/DETAIL answers fail entailment and get withheld.
+      id: primaryReceipt?.answerVariantId ?? 'cross-domain-summary',
       title: execution.facetResults.length > 1 ? 'Cross-domain answer' : 'Property answer',
       body: execution.answer,
       tone: execution.status === 'PARTIAL' ? 'CAUTION' : 'DEFAULT',
