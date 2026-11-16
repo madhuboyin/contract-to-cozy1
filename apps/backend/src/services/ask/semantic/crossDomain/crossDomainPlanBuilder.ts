@@ -64,6 +64,18 @@ const CROSS_DOMAIN_LEXEME_SPECS: readonly CrossDomainLexemeSpec[] = Object.freez
   { role: 'FIELD', semanticId: 'field.inventory_item.replacement_cost', canonicalLabel: 'replacement cost', reviewedAliases: ['replace cost'] },
   { role: 'FIELD', semanticId: 'field.home_event.actual_cost', canonicalLabel: 'spend', reviewedAliases: ['spent', 'expense', 'expenses', 'amount'] },
   { role: 'FIELD', semanticId: 'field.warranty.expiry_date', canonicalLabel: 'warranty ends', reviewedAliases: [] },
+  // Field-absence vocabulary ("which appliances have no serial number recorded"), reviewed against the absence registry and the
+  // data-point catalogue aliases (ABSENCE_REQUIREMENT_REGISTRY). The retired Shape 8 recognizer owned these words; they live here now.
+  { role: 'ENTITY', semanticId: 'entity.inventory_item', canonicalLabel: 'inventory item', reviewedAliases: ['household items', 'household item', 'hvac items', 'hvac systems', 'hvac equipment'] },
+  { role: 'FIELD', semanticId: 'field.inventory_item.serial_number', canonicalLabel: 'serial number', reviewedAliases: ['serial no', 'serial numbers'] },
+  { role: 'FIELD', semanticId: 'field.inventory_item.model_number', canonicalLabel: 'model number', reviewedAliases: ['model no', 'model numbers'] },
+  { role: 'FIELD', semanticId: 'field.inventory_item.purchased_on', canonicalLabel: 'purchase date', reviewedAliases: ['date of purchase', 'purchased on', 'purchased', 'bought'] },
+  { role: 'FIELD', semanticId: 'field.inventory_item.purchase_cost', canonicalLabel: 'purchase cost', reviewedAliases: ['purchase price', 'price paid', 'paid for', 'bought for'] },
+  { role: 'FIELD', semanticId: 'field.inventory_item.replacement_cost', canonicalLabel: 'replacement cost', reviewedAliases: ['replacement price', 'replacement value', 'recorded replacement cost'] },
+  { role: 'FIELD', semanticId: 'field.inventory_item.installed_on', canonicalLabel: 'installation date', reviewedAliases: ['install date', 'installation'] },
+  { role: 'FIELD', semanticId: 'field.inventory_item.last_serviced_on', canonicalLabel: 'last service date', reviewedAliases: ['last serviced', 'last service', 'serviced last', 'last serviced on', 'last maintained', 'last tuned up', 'last inspected'] },
+  { role: 'POLARITY', semanticId: 'polarity.negative', canonicalLabel: 'lacking', reviewedAliases: ['lack', 'lacks', 'unrecorded', 'not recorded', 'not on file', 'not entered', 'not listed', 'not filled in'] },
+  { role: 'STATUS', semanticId: 'status.recorded', canonicalLabel: 'recorded', reviewedAliases: ['on file', 'entered', 'listed', 'filled in'] },
 
   // Categories & Statuses
   { role: 'CATEGORY', semanticId: 'category.maintenance.plumbing', canonicalLabel: 'plumbing', reviewedAliases: [] },
@@ -89,7 +101,7 @@ const CROSS_DOMAIN_LEXEME_SPECS: readonly CrossDomainLexemeSpec[] = Object.freez
   // Projections
   { role: 'PROJECTION', semanticId: 'projection.aggregate', canonicalLabel: 'total', reviewedAliases: ['how much'] },
   { role: 'PROJECTION', semanticId: 'projection.compare', canonicalLabel: 'compare', reviewedAliases: ['comparison', 'versus', 'vs'] },
-  { role: 'PROJECTION', semanticId: 'projection.list', canonicalLabel: 'find', reviewedAliases: ['get', 'all'] },
+  { role: 'PROJECTION', semanticId: 'projection.list', canonicalLabel: 'find', reviewedAliases: ['get', 'all', 'give me'] },
 
   // Time windows
   { role: 'TIME', semanticId: 'time.period.next_month', canonicalLabel: 'next month', reviewedAliases: ['next calendar month'] },
@@ -104,6 +116,17 @@ const CROSS_DOMAIN_LEXEME_SPECS: readonly CrossDomainLexemeSpec[] = Object.freez
   { role: 'JOB', semanticId: 'job.inventory.replacement_guidance', canonicalLabel: 'repair or replace', reviewedAliases: ['repair', 'replace', 'replacement'] },
   { role: 'JOB', semanticId: 'job.finance.own_rent_break_even', canonicalLabel: 'owning beats renting', reviewedAliases: ['owning', 'renting', 'own or rent'] },
   { role: 'JOB', semanticId: 'job.finance.refinance_break_even', canonicalLabel: 'refinancing break even', reviewedAliases: ['refinance break even', 'refinancing', 'refinance', 'break even'] },
+]);
+
+/** Registered absence-eligible inventory fields (the executor maps each to its catalogued data point). */
+const INVENTORY_ABSENCE_FIELD_SEMANTIC_IDS: readonly string[] = Object.freeze([
+  'field.inventory_item.serial_number',
+  'field.inventory_item.model_number',
+  'field.inventory_item.installed_on',
+  'field.inventory_item.purchased_on',
+  'field.inventory_item.purchase_cost',
+  'field.inventory_item.replacement_cost',
+  'field.inventory_item.last_serviced_on',
 ]);
 
 function normalizePhrase(value: string): string {
@@ -556,6 +579,31 @@ function compileClauseSpecFromAnnotations(
           : has('projection.exists')
             ? 'EXISTS'
             : 'LIST';
+
+  // Field absence: "which appliances have no serial number recorded". One inventory field, negative polarity, no relation target
+  // or time window. The specific field wins over a generic one it contains ("replacement cost" over "cost"); two distinct absence
+  // fields in one clause are ambiguous and are left unresolved rather than answering for one of them.
+  if (has('entity.inventory_item') && has('polarity.negative') && !has('entity.warranty') && !has('entity.maintenance_task') && !sig.firstId('time.')) {
+    const present = INVENTORY_ABSENCE_FIELD_SEMANTIC_IDS.filter((fieldId) => has(fieldId));
+    const specific = present.includes('field.inventory_item.replacement_cost')
+      ? present.filter((fieldId) => fieldId !== 'field.inventory_item.purchase_cost')
+      : present;
+    if (specific.length === 1) {
+      return {
+        domainId: 'domain.inventory',
+        entityId: 'entity.inventory_item',
+        requestClass: 'DATA_QUERY',
+        jobMatch: 'query.inventory_item.field_absence',
+        projection: projection === 'COUNT' || projection === 'DETAIL' ? projection : 'LIST',
+        polarity: 'NEGATIVE',
+        relations: [],
+        where: null,
+        time: null,
+        fields: [{ fieldId: specific[0] }],
+        requiredSlots: [],
+      };
+    }
+  }
 
   // Maintenance next month
   if (has('entity.maintenance_task') && has('time.period.next_month')) {

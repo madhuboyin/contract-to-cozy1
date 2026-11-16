@@ -1,6 +1,6 @@
 // FR-DATA-10 shapes 7-9 (time series / comparison, absence, cross-entity) for the OWNER path. Every plan here is built from a DECLARATION in queryShapeRegistries.ts (a catalogued point, a named history column, a declared
 // relation); no message text reaches a query except a validated number of years or months. The planner is pure; `runShape789` is the only place that touches the database and it is read-only and property-scoped.
-// Shape 7: change over the tax years on record (tax bill, assessed value). Shape 8: inventory items with a field NOT RECORDED, or not serviced since a cutoff. Shape 9 (inventory items with / without a warranty record) was retired: the typed grammar plus the cross-domain executor is the sole producer for the warranty relation (FR-ONT-8).
+// Shape 7: change over the tax years on record (tax bill, assessed value). Shape 8: inventory items not serviced since a cutoff (the "field NOT RECORDED" absence branch was retired: the typed grammar's query.inventory_item.field_absence job is its sole producer, FR-ONT-8). Shape 9 (inventory items with / without a warranty record) was retired: the typed grammar plus the cross-domain executor is the sole producer for the warranty relation (FR-ONT-8).
 import { DATA_POINT_BY_ID, type DataPointDefinition } from './dataPointCatalogue';
 import { ABSENCE_REQUIREMENT_REGISTRY, TIME_SERIES_REGISTRY, queryShapesEnabled } from './queryShapeRegistries';
 import { prisma } from '../../../lib/prisma';
@@ -9,26 +9,12 @@ const norm = (m: string) => ` ${m.toLowerCase().replace(/[^a-z0-9$.%' -]+/g, ' '
 const ITEM_NOUN = /\b(?:appliances?|items?|inventory items?|household items?|items in my inventory|everything in my (?:home|house)|hvac (?:items|systems|equipment)|systems)\b/;
 const COUNT = /\bhow many\b/;
 const LEAD = /^\s*(?:what|which|how many|how much|list|show|provide|tell me|do any|do i have|are there|are any|have i|has my|have my|how has|how have|is my|are my|did my|compare|give me|find)\b/i;
-const NO_VALUE = /\b(?:no|without|missing|lacking|lacks|unrecorded|not having)\b|\b(?:don'?t|do not|doesn'?t|does not) have\b|\bnot (?:been )?(?:recorded|listed|entered|filled in|on file)\b/;
 
 export type Shape789Plan =
   | { readonly shape: 'TIME_SERIES'; readonly pointId: string; readonly entity: 'PropertyTaxBillRecord' | 'PropertyTaxAssessmentRecord'; readonly column: string; readonly maxPeriods: number; readonly label: string }
-  | { readonly shape: 'ABSENCE'; readonly pointId: string; readonly column: string; readonly label: string; readonly count: boolean }
   | { readonly shape: 'STALE_SERVICE'; readonly pointId: string; readonly column: string; readonly cutoff: Date | null; readonly windowText: string; readonly count: boolean };
 
 const point = (id: string): DataPointDefinition | undefined => DATA_POINT_BY_ID.get(id);
-
-function absenceTarget(text: string): { pointId: string; column: string; label: string } | 'AMBIGUOUS' | null {
-  const hits: Array<{ id: string; column: string; label: string; len: number }> = [];
-  for (const e of ABSENCE_REQUIREMENT_REGISTRY) {
-    const p = e.dataPointId ? point(e.dataPointId) : undefined; if (!p || p.entity !== 'InventoryItem') continue;
-    for (const a of [...p.aliases, ...(e.words ?? [])]) if (a.length > 3 && text.includes(` ${a.toLowerCase()} `)) hits.push({ id: p.id, column: p.field, label: p.label.replace(/^The /, '').replace(/^When it was /, '').toLowerCase(), len: a.length });
-  }
-  if (!hits.length) return null;
-  const best = Math.max(...hits.map((h) => h.len)); const top = [...new Set(hits.filter((h) => h.len === best).map((h) => h.id))];
-  if (top.length !== 1) return 'AMBIGUOUS';
-  const h = hits.find((x) => x.id === top[0])!; return { pointId: h.id, column: h.column, label: h.label };
-}
 
 export function planShape789(message: string, now: Date = new Date()): Shape789Plan | null {
   if (!LEAD.test(message)) return null;
@@ -51,12 +37,6 @@ export function planShape789(message: string, now: Date = new Date()): Shape789P
       }
       return { shape: 'STALE_SERVICE', pointId: p.id, column: p.field, cutoff, windowText, count };
     }
-  }
-  // Shape 8 (absence): "which appliances have no serial number recorded", "items missing a purchase date".
-  if (enabled.absence && ITEM_NOUN.test(text) && NO_VALUE.test(text)) {
-    const target = absenceTarget(text);
-    if (target && target !== 'AMBIGUOUS') return { shape: 'ABSENCE', pointId: target.pointId, column: target.column, label: target.label, count };
-    return null;
   }
   // Shape 7: change over the tax years on record.
   if (enabled.timeSeries && /\b(?:chang(?:e|ed|es|ing)|trend|over time|over the years|year over year|year-over-year|going up|going down|gone up|gone down|risen|increas(?:e|ed|ing)|decreas(?:e|ed|ing)|dropped|history of|compared? (?:to|with) (?:last|previous)|compar\w* .*\b(?:last|previous) year|vs|versus)\b/.test(text)) {
@@ -84,7 +64,6 @@ const LIMIT = 100;
 
 /** The where for the inventory-based shapes. Exported so a test can assert exactly what would be sent. Always property-scoped. */
 export function shapeWhere(propertyId: string, plan: Shape789Plan, now: Date = new Date()): Record<string, unknown> {
-  if (plan.shape === 'ABSENCE') return { propertyId, ...(point(plan.pointId)?.family === 'text' ? { OR: [{ [plan.column]: null }, { [plan.column]: '' }] } : { [plan.column]: null }) };
   if (plan.shape === 'STALE_SERVICE') return { propertyId, ...(plan.cutoff ? { OR: [{ [plan.column]: null }, { [plan.column]: { lt: plan.cutoff } }] } : { [plan.column]: null }) };
   throw new Error('not an inventory shape');
 }

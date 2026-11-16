@@ -8,6 +8,7 @@ import { ALTERNATE_POINT, isSingleWarrantyFact, resolveDataPoint, resolveDataPoi
 import { planDataPointQuery } from '../dataPoint/dataPointQueryPlan';
 import { planShape789 } from '../dataPoint/dataPointShapes789';
 import { parseDeterministicSemanticRequest } from '../semantic/deterministicSemanticParser';
+import { parseCrossDomainSemanticRequest } from '../semantic/crossDomain/crossDomainPlanBuilder';
 import { SemanticReadReceiptSchema } from '../semantic/semanticExecutionReceipt';
 import { verifySemanticReadReceiptEntailment } from '../semantic/semanticReceiptEntailment';
 
@@ -47,20 +48,27 @@ export function groundedReadVerdict(question: string, result: AskOperationResult
   // relation predicate) and its structural entailment passes. No legacy recognizer participates (FR-ONT-8).
   const receipt = SemanticReadReceiptSchema.safeParse((result.parameters as { semanticExecutionReceipt?: unknown } | undefined)?.semanticExecutionReceipt);
   if (receipt.success && !parameters.dataPointQuery?.template) {
-    const plan = parseDeterministicSemanticRequest(question);
-    const facet = plan.outcome === 'MATCH' && plan.facets.length === 1 ? plan.facets[0] : null;
-    if (!facet) return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'TYPED_GRAMMAR_DISAGREES'] };
-    if (!facet.confidenceSignals.grammarComplete) return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'TYPED_GRAMMAR_DISAGREES'] };
-    const expectedPredicate = facet.relations[0]?.predicateId;
-    if (receipt.data.facetId !== facet.id
-      || receipt.data.projection !== facet.projection
-      || (expectedPredicate !== undefined && !receipt.data.predicateIds.includes(expectedPredicate))) {
-      return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'SEMANTIC_RECEIPT_PLAN_MISMATCH'] };
+    // Either typed-grammar producer may have built the plan the executor ran (the single-facet Phase 1 parser for relation reads,
+    // the cross-domain grammar for jobs such as field absence). The receipt is grounded when an independently parsed single-facet
+    // plan of either kind agrees with it; both failing is a disagreement.
+    const candidates = [parseDeterministicSemanticRequest(question), parseCrossDomainSemanticRequest(question).plan];
+    let sawCompleteFacet = false;
+    let planMismatch = false;
+    for (const plan of candidates) {
+      const facet = plan.outcome === 'MATCH' && plan.facets.length === 1 ? plan.facets[0] : null;
+      if (!facet || !facet.confidenceSignals.grammarComplete) continue;
+      sawCompleteFacet = true;
+      const expectedPredicate = facet.relations[0]?.predicateId;
+      const agrees = receipt.data.facetId === facet.id
+        && receipt.data.projection === facet.projection
+        && (expectedPredicate === undefined || receipt.data.predicateIds.includes(expectedPredicate));
+      if (!agrees) { planMismatch = true; continue; }
+      const entailment = verifySemanticReadReceiptEntailment(result);
+      return entailment.outcome === 'PASS'
+        ? { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] }
+        : { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', ...entailment.reasonCodes] };
     }
-    const entailment = verifySemanticReadReceiptEntailment(result);
-    return entailment.outcome === 'PASS'
-      ? { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] }
-      : { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', ...entailment.reasonCodes] };
+    return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', sawCompleteFacet && planMismatch ? 'SEMANTIC_RECEIPT_PLAN_MISMATCH' : 'TYPED_GRAMMAR_DISAGREES'] };
   }
   // 2. a computed answer (list, count, total, ranking, absence, change over time): the question must itself plan to the same template
   if (parameters.dataPointQuery?.template) {

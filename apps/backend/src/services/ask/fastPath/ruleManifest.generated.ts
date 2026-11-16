@@ -141,7 +141,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "BUYER_DOCUMENT_READINESS",
   "confidence": 0.96,
   "order": 10,
-  "hash": "b078d14fc537def1",
+  "hash": "0b5cd5cee48f99f6",
   "condition": "buyerDocumentReadinessPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:buyerDocumentReadinessPattern"
@@ -163,7 +163,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "BUYER_PLAN_STATUS",
   "confidence": 0.95,
   "order": 12,
-  "hash": "2c71a47c8d2bae09",
+  "hash": "181e82fa4744ee69",
   "condition": "buyerPlanStatusPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:buyerPlanStatusPattern"
@@ -990,7 +990,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "MAJOR_EVENT_ENTRY",
   "confidence": 0.96,
   "order": 73,
-  "hash": "882ee4ee9fc22fe5",
+  "hash": "5ab77aec4d44a305",
   "condition": "majorEventPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:majorEventPattern"
@@ -1063,7 +1063,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "DATA_POINT_READ",
   "confidence": 0.93,
   "order": 79,
-  "hash": "2bd3aaba73540f7a",
+  "hash": "90a4e70a9087e436",
   "condition": "isDataPointComputedQuery(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "../homeRecordsAccess.ts:visibleRecordWhere",
@@ -1097,14 +1097,11 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
    "dataPoint/dataPointShapes789.ts:COUNT",
    "dataPoint/dataPointShapes789.ts:ITEM_NOUN",
    "dataPoint/dataPointShapes789.ts:LEAD",
-   "dataPoint/dataPointShapes789.ts:NO_VALUE",
-   "dataPoint/dataPointShapes789.ts:absenceTarget",
    "dataPoint/dataPointShapes789.ts:norm",
    "dataPoint/dataPointShapes789.ts:planShape789",
    "dataPoint/dataPointShapes789.ts:point",
    "dataPoint/queryShapeRegistries.ts:ABSENCE_REQUIREMENT_REGISTRY",
    "dataPoint/queryShapeRegistries.ts:ABSENCE_REQUIREMENT_REGISTRY",
-   "dataPoint/queryShapeRegistries.ts:CROSS_ENTITY_RELATION_REGISTRY",
    "dataPoint/queryShapeRegistries.ts:CROSS_ENTITY_RELATION_REGISTRY",
    "dataPoint/queryShapeRegistries.ts:TIME_SERIES_REGISTRY",
    "dataPoint/queryShapeRegistries.ts:TIME_SERIES_REGISTRY",
@@ -1984,7 +1981,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "DATA_POINT_READ",
   "confidence": 0.9,
   "order": 148,
-  "hash": "899bda6c0cc338db",
+  "hash": "a479d5fe7e1ef441",
   "condition": "(dataPointQuestionPattern.test(message) && (resolveDataPoint(message) || resolveDataPointsMulti(message).length >= 2)) || isDataPointQuer...",
   "references": [
    "../homeRecordsAccess.ts:visibleRecordWhere",
@@ -2038,14 +2035,11 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
    "dataPoint/dataPointShapes789.ts:COUNT",
    "dataPoint/dataPointShapes789.ts:ITEM_NOUN",
    "dataPoint/dataPointShapes789.ts:LEAD",
-   "dataPoint/dataPointShapes789.ts:NO_VALUE",
-   "dataPoint/dataPointShapes789.ts:absenceTarget",
    "dataPoint/dataPointShapes789.ts:norm",
    "dataPoint/dataPointShapes789.ts:planShape789",
    "dataPoint/dataPointShapes789.ts:point",
    "dataPoint/queryShapeRegistries.ts:ABSENCE_REQUIREMENT_REGISTRY",
    "dataPoint/queryShapeRegistries.ts:ABSENCE_REQUIREMENT_REGISTRY",
-   "dataPoint/queryShapeRegistries.ts:CROSS_ENTITY_RELATION_REGISTRY",
    "dataPoint/queryShapeRegistries.ts:CROSS_ENTITY_RELATION_REGISTRY",
    "dataPoint/queryShapeRegistries.ts:TIME_SERIES_REGISTRY",
    "dataPoint/queryShapeRegistries.ts:TIME_SERIES_REGISTRY",

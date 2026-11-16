@@ -582,7 +582,7 @@ export const ASK_RECOGNIZER_RETIREMENT_MANIFEST: readonly RecognizerInventoryEnt
       'DATA_POINT_DEFINITIONS',
       'QUERY_SHAPE_REGISTRIES',
     ],
-    liveItemCount: 233,
+    liveItemCount: 228,
     affectedDomains: [
       'domain.property_profile',
       'domain.inventory',
@@ -1044,6 +1044,16 @@ export const ASK_RETIRED_RECOGNIZER_FAMILIES: readonly RetiredRecognizerFamily[]
     successor: 'deterministicSemanticParser + cross-domain executor, job query.inventory_item.warranty_relation, relation relation.inventory_item.warranty (canonical adapter readTransitionalWarrantyLinks)',
     parityEvidence: 'Over 13,446 generated phrasings (14 leads x 8 nouns x 20 warranty phrases x 3 politeness x 2 punctuation, plus 10 fixed rows), every prompt the legacy recognizer would have executed (792 with grammar agreement) is also parsed by the typed grammar; 0 legacy-only answers. All 792 reach the semantic entry (CROSS_DOMAIN_PLAN_MATCH) identically before and after deletion. The 2,016 legacy-only matches were already refused by the agreement gate (DISAGREE).',
     forbiddenTokens: ['NO_WARRANTY\'', 'HAS_WARRANTY\'', 'warrantyShapeGrammarAgreement'],
+  },
+  {
+    familyId: 'recognizer.retired.inventory_item_field_absence_shape8',
+    retiredOn: '2026-11-16',
+    formerSources: [
+      'src/services/ask/dataPoint/dataPointShapes789.ts (Shape 8 absence: ABSENCE planner, absenceTarget alias matcher, where-clause, renderer)',
+    ],
+    successor: 'deterministicSemanticParser/cross-domain grammar rule + executor job query.inventory_item.field_absence over the registered absence fields (INVENTORY_ABSENCE_FIELD_POINT_IDS), vocabulary in the generated cross-domain lexicon (reviewed against ABSENCE_REQUIREMENT_REGISTRY aliases)',
+    parityEvidence: 'Over 17,220 generated phrasings (4 leads x 5 nouns x 7 negations x 41 registry aliases/words x 3 tails), the legacy recognizer answered 14,880; the typed grammar answers 13,800 of them with the same field (0 field mismatches). The 1,080 it does not answer are all three value-question wordings ("did we install", "did i install", "cost when i bought") that only mean something as a value read; there are 0 legacy-only natural wordings. The grammar additionally answers 2,160 the legacy planner refused. Known differences: item columns are read through the visible-item filter (hidden items are no longer counted) and whitespace-only text counts as not recorded.',
+    forbiddenTokens: ['shape: \'ABSENCE\'', 'absenceTarget'],
   },
 ]);
 

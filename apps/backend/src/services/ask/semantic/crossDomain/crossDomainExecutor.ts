@@ -14,6 +14,7 @@ import {
   type SliceRichPresentationEquivalenceReport,
 } from '../slice/richPresentationAdapter';
 import { prisma } from '../../../../lib/prisma';
+import { DATA_POINT_BY_ID } from '../../dataPoint/dataPointCatalogue';
 import { visibleInventoryItemWhere } from '../../../riskAssetApplicability';
 import { type DynamicPlaceholderEntityCandidate } from '../slice/placeholderSpanMap';
 import { type AskPresentationBlock } from '../../../../productFramework/ask/ask.contract';
@@ -204,6 +205,25 @@ export interface CrossDomainContractorQuoteRecord {
   readonly warrantyMonths: number;
 }
 
+/** Raw item columns for field-absence reads. Loaded only for that job; absent means "not loaded", never "all recorded". */
+export interface CrossDomainInventoryFieldRecord {
+  readonly id: string;
+  readonly propertyId: string;
+  readonly name: string;
+  readonly values: Readonly<Record<string, string | number | Date | null | undefined>>;
+}
+
+/** Registered absence-eligible item fields: semantic field id -> catalogued data point (the catalogue owns column, family and audience floor). */
+export const INVENTORY_ABSENCE_FIELD_POINT_IDS: Readonly<Record<string, string>> = Object.freeze({
+  'field.inventory_item.serial_number': 'item.serial',
+  'field.inventory_item.model_number': 'item.model',
+  'field.inventory_item.installed_on': 'item.installedOn',
+  'field.inventory_item.purchased_on': 'item.purchasedOn',
+  'field.inventory_item.purchase_cost': 'item.purchaseCost',
+  'field.inventory_item.replacement_cost': 'item.replacementCost',
+  'field.inventory_item.last_serviced_on': 'item.lastServicedOn',
+});
+
 export interface CrossDomainSavedResultRecord {
   readonly id: string;
   readonly propertyId: string;
@@ -217,6 +237,8 @@ export interface CrossDomainPropertySnapshot extends SlicePropertySnapshot {
   readonly timezone: string;
   readonly closingDateIso: string | null;
   readonly extendedItems: readonly CrossDomainExtendedItemRecord[];
+  /** Present only when the plan needs field-absence reads (`query.inventory_item.field_absence`). */
+  readonly inventoryFieldRecords?: readonly CrossDomainInventoryFieldRecord[];
   readonly warranties: readonly CrossDomainWarrantyRecord[];
   readonly maintenanceTaskMeta: readonly CrossDomainExtendedMaintenanceTaskMeta[];
   readonly insurancePolicies: readonly CrossDomainInsurancePolicyRecord[];
@@ -775,6 +797,67 @@ function executeNewStackFacet(
       receipt: sub.receipt,
       entailment: sub.entailment,
       presentationEquivalence: sub.presentationEquivalence,
+    };
+  }
+
+  // Field absence ("which appliances have no serial number recorded"): items whose registered column holds nothing. "Not recorded" is
+  // reported as exactly that; it never claims the real-world value does not exist (FR-QUERY-4).
+  if (job === 'query.inventory_item.field_absence') {
+    const fieldId = facet.fields[0]?.fieldId ?? '';
+    const point = DATA_POINT_BY_ID.get(INVENTORY_ABSENCE_FIELD_POINT_IDS[fieldId] ?? '');
+    const blocked = (summary: string, extraRedacted: readonly string[] = []): CrossDomainFacetExecutionResult => ({
+      facetId: facet.id, owner, status: 'BLOCKED', summary, recordIds: [], missingSlots: [],
+      redactedFieldIds: [...redactedFieldIds, ...extraRedacted], receipt: null, entailment: null, presentationEquivalence: null,
+    });
+    if (!point) return blocked('That item detail is not one I can check for missing records yet.');
+    // Audience floors come from the data-point catalogue (CONTRIBUTOR maps to the executor's EDITOR rank). The same floor gates the
+    // existence of a gap, not only its value: a viewer is never told which items lack a restricted field.
+    const requiredRole: AskUserRole = point.audience === 'OWNER' ? 'OWNER' : point.audience === 'CONTRIBUTOR' ? 'EDITOR' : 'VIEWER';
+    if (!canSeeRole(role, requiredRole)) return blocked(`The ${point.label.replace(/^The /, '').toLowerCase()} is only shown to the home’s ${requiredRole === 'OWNER' ? 'owner' : 'owner and contributors'}, so I can't check which items lack it.`, [fieldId]);
+    if (!snapshot.inventoryFieldRecords) return blocked('I could not load your inventory details right now, so I will not say which items are missing a value.');
+
+    const label = point.label.replace(/^The /, '').replace(/^When it was /, '').toLowerCase();
+    const isMissing = (value: unknown): boolean => value === null || value === undefined || (point.family === 'text' && String(value).trim() === '');
+    const missing = snapshot.inventoryFieldRecords
+      .filter((record) => record.propertyId === snapshot.propertyId)
+      .filter((record) => isMissing(record.values[point.field]))
+      .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+    const rows = missing.map((record) => ({ id: record.id, label: record.name }));
+    const projection: SemanticReadReceipt['projection'] = facet.projection === 'COUNT' ? 'COUNT' : facet.projection === 'DETAIL' ? 'DETAIL' : 'LIST';
+    const names = `${missing.slice(0, 10).map((record) => record.name).join('; ')}${missing.length > 10 ? `; and ${missing.length - 10} more` : ''}`;
+    const summary = [
+      missing.length === 0
+        ? `None of your inventory items is missing a ${label}.`
+        : projection === 'COUNT'
+          ? `${missing.length} of your items ${missing.length === 1 ? 'has' : 'have'} no ${label} recorded.`
+          : `${names} ${missing.length === 1 ? 'has' : 'have'} no ${label} recorded.`,
+      ...(missing.length > 0 ? ['“Not recorded” means nothing is saved for it yet, not that it does not exist.'] : []),
+    ].join(' ');
+    const finalized = finalizeReceiptAndPresentation({
+      facet,
+      snapshot,
+      role,
+      projection,
+      operationAdapter: adapterId,
+      sourceType: 'InventoryItem',
+      predicateIds: ['predicate.inventory_item.field_not_recorded'],
+      rows,
+      title: missing.length === 0 ? `Every item has its ${label} recorded` : `${missing.length} ${missing.length === 1 ? 'item has' : 'items have'} no ${label} recorded`,
+      summaryBody: summary,
+      variantId: 'variant.inventory_field_absence',
+    });
+    return {
+      facetId: facet.id,
+      owner,
+      status: 'EXECUTED',
+      summary,
+      recordIds: rows.map((r) => r.id),
+      rows: finalized.rows,
+      missingSlots: [],
+      redactedFieldIds,
+      receipt: finalized.receipt,
+      entailment: finalized.entailment,
+      presentationEquivalence: finalized.equivalence,
     };
   }
 
@@ -2055,11 +2138,13 @@ export async function loadCrossDomainPropertySnapshot(
       'query.inventory_item.warranty_relation',
       'job.inventory.replacement_guidance',
       'query.inventory_item.field_read',
+      'query.inventory_item.field_absence',
       'query.warranty.filter',
       'job.risk.recall_review',
     )
   );
   const needWarranties = hasDomain('domain.warranties_coverage') || hasJob('query.warranty.filter');
+  const needInventoryFields = hasJob('query.inventory_item.field_absence');
   const needDocuments = (
     hasDomain('domain.inventory')
     || hasDomain('domain.documents_records')
@@ -2115,6 +2200,7 @@ export async function loadCrossDomainPropertySnapshot(
     toolOverrideRows,
     refinanceScenarioRow,
     refinanceOppRow,
+    inventoryFieldRows,
   ] = await Promise.all([
     slicePromise,
     typeof prismaAny.property?.findUnique === 'function'
@@ -2292,6 +2378,17 @@ export async function loadCrossDomainPropertySnapshot(
             closingCostAssumption: true,
             remainingTermMonths: true,
             metadataJson: true,
+          },
+        })
+      : Promise.resolve(null),
+    needInventoryFields && typeof prismaAny.inventoryItem?.findMany === 'function'
+      ? prisma.inventoryItem.findMany({
+          where: { propertyId, ...visibleInventoryItemWhere() },
+          select: {
+            id: true,
+            propertyId: true,
+            name: true,
+            ...Object.fromEntries(Object.values(INVENTORY_ABSENCE_FIELD_POINT_IDS).map((pointId) => [DATA_POINT_BY_ID.get(pointId)!.field, true])),
           },
         })
       : Promise.resolve(null),
@@ -2522,6 +2619,17 @@ export async function loadCrossDomainPropertySnapshot(
     timezone: propertyTimezone,
     closingDateIso,
     extendedItems,
+    ...(inventoryFieldRows ? {
+      inventoryFieldRecords: (inventoryFieldRows as Array<any>).map((row) => ({
+        id: String(row.id),
+        propertyId: String(row.propertyId ?? propertyId),
+        name: String(row.name ?? 'inventory item'),
+        values: Object.fromEntries(Object.values(INVENTORY_ABSENCE_FIELD_POINT_IDS).map((pointId) => {
+          const column = DATA_POINT_BY_ID.get(pointId)!.field;
+          return [column, row[column] ?? null];
+        })),
+      })),
+    } : {}),
     warranties: (warrantyRows as Array<any>).map((w) => ({
       id: w.id,
       propertyId: w.propertyId ?? propertyId,

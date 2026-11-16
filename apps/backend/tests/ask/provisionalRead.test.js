@@ -16,7 +16,7 @@ const propertyAccessService = require('../../src/services/propertyAccess.service
 const route = (message, options = {}) => resolveAskRoutingCascade(message, { localRoutingEnabled: true, ...options });
 
 test('an uncertified rule that matches a reviewed data-point read starts it provisionally, with the rule named in lineage and still demoted', () => {
-  for (const message of ['How much did I pay for my furnace?', 'what is the serial number of my fridge', 'what year was my house built', 'how many bedrooms does my house have', 'which appliances have no serial number recorded']) {
+  for (const message of ['How much did I pay for my furnace?', 'what is the serial number of my fridge', 'what year was my house built', 'how many bedrooms does my house have']) {
     const decision = route(message);
     assert.equal(decision.stage, 'PROVISIONAL', message); assert.equal(decision.operation.operationId, 'DATA_POINT_READ', message);
     assert.equal(decision.requiresClarification, false); assert.match(decision.fastPathLineage.ruleId, /^DET_DATA_POINT_READ_\d+$/); assert.equal(decision.fastPathLineage.status, 'DEMOTED');
@@ -41,7 +41,7 @@ test('the grounded verdict: a value must be the value of a point the question na
   for (const reasonCode of ['DATA_POINT_NOT_RECORDED', 'DATA_POINT_AMBIGUOUS', 'DATA_POINT_ITEM_NOT_FOUND', 'DATA_POINT_RESTRICTED']) assert.equal(groundedReadVerdict(ask, result({ status: 'READY_WITH_LIMITATIONS', reasonCode, parameters: { sources: [] } })).outcome, 'PASS', reasonCode);
   assert.equal(groundedReadVerdict(ask, result({ parameters: {} })).outcome, 'FAIL'); assert.equal(groundedReadVerdict(ask, result({ reasonCode: 'SOMETHING_ELSE', parameters: {} })).outcome, 'FAIL');
   // a computed answer must be the plan the question itself produces
-  assert.equal(groundedReadVerdict('which appliances have no serial number recorded', result({ parameters: { dataPointQuery: { template: 'shape789' }, sources: [] } })).outcome, 'PASS');
+  assert.equal(groundedReadVerdict('which appliances have I not serviced in over a year', result({ parameters: { dataPointQuery: { template: 'shape789' }, sources: [] } })).outcome, 'PASS');
   assert.equal(groundedReadVerdict('what is the weather', result({ parameters: { dataPointQuery: { template: 'shape789' }, sources: [] } })).outcome, 'FAIL');
 });
 

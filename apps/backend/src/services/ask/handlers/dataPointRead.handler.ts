@@ -214,11 +214,7 @@ async function shape789Result(propertyId: string, role: string, plan: Shape789Pl
     const sources = series.length ? series.map((x) => sourceRef((plan.entity) as CompositeSourceType, x.id)) : [sourceRef('Property', propertyId)];
     return snapshotResult(sources, 'TIME_SERIES', title, lines, limited, evidenceLabel);
   }
-  if (plan.shape === 'ABSENCE') {
-    title = run.total === 0 ? `Every item has its ${plan.label} recorded` : `${run.total} ${plural(run.total, 'item has', 'items have')} no ${plan.label} recorded`;
-    lines.push(run.total === 0 ? `None of your inventory items is missing a ${plan.label}.` : `${plan.count ? `${run.total} of your items` : names(run.total)} ${plan.count ? plural(run.total, 'has', 'have') + ` no ${plan.label} recorded.` : `${plural(run.total, 'has', 'have')} no ${plan.label} recorded.`}`);
-    if (run.total > 0) lines.push('“Not recorded” means nothing is saved for it yet, not that it does not exist.');
-  } else if (plan.shape === 'STALE_SERVICE') {
+  if (plan.shape === 'STALE_SERVICE') {
     const never = run.neverServiced ?? 0;
     title = run.total === 0 ? 'Nothing is overdue for service' : `${run.total} ${plural(run.total, 'item', 'items')} not serviced ${plan.cutoff ? `in over ${plan.windowText}` : 'ever'}`;
     lines.push(run.total === 0 ? `Every item with a service date was serviced ${plan.cutoff ? `within ${plan.windowText}` : 'at some point'}.` : `${plan.count ? `${run.total} of your items` : names(run.total)} ${plan.cutoff ? `${plural(run.total, 'was', 'were')} last serviced more than ${plan.windowText} ago or ${plural(run.total, 'has', 'have')} no service recorded` : `${plural(run.total, 'has', 'have')} no service recorded`}.`);
