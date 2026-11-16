@@ -1,0 +1,2055 @@
+{
+  "snapshotVersion": "registry-drift-1.0.0",
+  "domains": [
+    "domain.account_household_preferences",
+    "domain.buyer_journey",
+    "domain.claims",
+    "domain.documents_records",
+    "domain.insurance_policies",
+    "domain.inventory",
+    "domain.maintenance",
+    "domain.ownership_costs_finance",
+    "domain.projects_quotes_vendors",
+    "domain.property_profile",
+    "domain.risks_recalls_inspections",
+    "domain.safety_boundary",
+    "domain.seller_preparation",
+    "domain.timeline_home_events",
+    "domain.warranties_coverage"
+  ],
+  "entities": {
+    "entity.property": {
+      "prismaModel": "Property",
+      "domainId": "domain.property_profile",
+      "supportedFieldIds": [
+        "field.home.address",
+        "field.home.bathrooms",
+        "field.home.bedrooms",
+        "field.home.coolingType",
+        "field.home.county",
+        "field.home.heatingType",
+        "field.home.livingArea",
+        "field.home.roofReplacementYear",
+        "field.home.roofType",
+        "field.home.type",
+        "field.home.yearBuilt",
+        "field.home.zipCode"
+      ],
+      "supportedRelationIds": [],
+      "schemaColumns": [
+        "activatedAt:DateTime?",
+        "activationStatus:PropertyActivationStatus",
+        "address:String",
+        "addressIdentityVersion:Int",
+        "baseHealthScore:Int",
+        "basementConfiguration:BasementConfiguration",
+        "bathrooms:Float?",
+        "bedrooms:Int?",
+        "bonusMultiplier:Float",
+        "city:String",
+        "coolingType:CoolingType?",
+        "county:String?",
+        "countyFips:String?",
+        "coverPhotoDocumentId:String?",
+        "createdAt:DateTime",
+        "currentStreak:Int",
+        "dwellingType:DwellingType",
+        "electricalPanelAge:Int?",
+        "estimatedMaintenancePremiumCents:Int",
+        "foundationType:FoundationType?",
+        "gasProvider:String?",
+        "geocodedAt:DateTime?",
+        "geocodedZipCode:String?",
+        "geocodingProvider:String?",
+        "geocodingStatus:PropertyGeocodingStatus",
+        "geocodingVersion:String?",
+        "geographyVersion:Int",
+        "hasCoDetectors:Boolean?",
+        "hasDrainageIssues:Boolean?",
+        "hasFireExtinguisher:Boolean?",
+        "hasFireplace:Boolean?",
+        "hasIrrigation:Boolean?",
+        "hasSecondaryHeat:Boolean?",
+        "hasSecuritySystem:Boolean?",
+        "hasSmokeDetectors:Boolean?",
+        "hasSolar:Boolean?",
+        "hasSumpPump:Boolean?",
+        "hasSumpPumpBackup:Boolean?",
+        "heatingType:HeatingType?",
+        "historicRegistryStatus:String?",
+        "homeownerProfileId:String",
+        "hvacInstallYear:Int?",
+        "id:String",
+        "inFloodZone:Boolean?",
+        "inHistoricDistrict:Boolean?",
+        "inHurricaneZone:Boolean?",
+        "inWildfireZone:Boolean?",
+        "isCoastal:Boolean?",
+        "isEquityVerified:Boolean",
+        "isPrimary:Boolean",
+        "isResilienceVerified:Boolean",
+        "isUtilityVerified:Boolean",
+        "lastActivityDate:DateTime?",
+        "lastAppraisalDate:DateTime?",
+        "lastAppraisedValue:Int?",
+        "latitude:Float?",
+        "longestStreak:Int",
+        "longitude:Float?",
+        "lotSize:Float?",
+        "name:String?",
+        "normalizedZipCode:String?",
+        "occupancyStatus:OccupancyStatus",
+        "occupantsCount:Int?",
+        "ownershipForm:OwnershipForm",
+        "primaryHeatingFuel:String?",
+        "propertySize:Int?",
+        "propertyUse:PropertyUse",
+        "roofReplacementYear:Int?",
+        "roofType:RoofType?",
+        "sewerSystem:SewerSystemType",
+        "sidingType:String?",
+        "state:String",
+        "timezone:String?",
+        "unit:String?",
+        "unlockedBadges:String",
+        "updatedAt:DateTime",
+        "utilityProvider:String?",
+        "vaultPasswordHash:String?",
+        "waterHeaterInstallYear:Int?",
+        "waterHeaterType:WaterHeaterType?",
+        "waterSource:WaterSourceType",
+        "yearBuilt:Int?",
+        "zipCode:String"
+      ]
+    },
+    "entity.inventory_item": {
+      "prismaModel": "InventoryItem",
+      "domainId": "domain.inventory",
+      "supportedFieldIds": [
+        "field.item.brand",
+        "field.item.category",
+        "field.item.condition",
+        "field.item.efficiencyRating",
+        "field.item.expectedExpiryDate",
+        "field.item.installedOn",
+        "field.item.lastServicedOn",
+        "field.item.manufacturer",
+        "field.item.model",
+        "field.item.purchaseCost",
+        "field.item.purchasedOn",
+        "field.item.replacementCost",
+        "field.item.serial",
+        "field.item.tags"
+      ],
+      "supportedRelationIds": [
+        "relation.inventory_item.maintenance_task",
+        "relation.inventory_item.room",
+        "relation.inventory_item.warranty"
+      ],
+      "schemaColumns": [
+        "assetType:String?",
+        "brand:String?",
+        "category:InventoryItemCategory",
+        "condition:InventoryItemCondition",
+        "coverageEvidenceStatus:InventoryCoverageEvidenceStatus",
+        "coverageNotRequired:Boolean",
+        "createdAt:DateTime",
+        "currency:String",
+        "efficiencyRating:String?",
+        "expectedExpiryDate:DateTime?",
+        "id:String",
+        "importedAt:DateTime?",
+        "installedOn:DateTime?",
+        "installedOnPrecision:HomeEventDatePrecision?",
+        "installedOnRangeEnd:DateTime?",
+        "insurancePolicyId:String?",
+        "isVerified:Boolean",
+        "lastServicedOn:DateTime?",
+        "manufacturer:String?",
+        "manufacturerNorm:String?",
+        "model:String?",
+        "modelNumber:String?",
+        "modelNumberNorm:String?",
+        "name:String",
+        "notes:String?",
+        "propertyId:String",
+        "purchaseCostCents:Int?",
+        "purchasedOn:DateTime?",
+        "purchasedOnPrecision:HomeEventDatePrecision?",
+        "purchasedOnRangeEnd:DateTime?",
+        "replacementCostCents:Int?",
+        "roomId:String?",
+        "serialNo:String?",
+        "serialNumber:String?",
+        "sku:String?",
+        "sourceBatchId:String?",
+        "sourceFileName:String?",
+        "sourceHash:String?",
+        "sourceOcrSessionId:String?",
+        "sourceRowNumber:Int?",
+        "sourceType:InventoryItemSource",
+        "tags:String",
+        "technicalSpecs:Json?",
+        "upc:String?",
+        "updatedAt:DateTime",
+        "verificationSource:String?"
+      ]
+    },
+    "entity.warranty": {
+      "prismaModel": "Warranty",
+      "domainId": "domain.warranties_coverage",
+      "supportedFieldIds": [
+        "field.warranty.cost",
+        "field.warranty.coverage",
+        "field.warranty.expiryDate",
+        "field.warranty.provider",
+        "field.warranty.startDate"
+      ],
+      "supportedRelationIds": [
+        "relation.inventory_item.warranty"
+      ],
+      "schemaColumns": [
+        "category:WarrantyCategory",
+        "cost:Decimal?",
+        "coverageDetails:String?",
+        "createdAt:DateTime",
+        "expiryDate:DateTime",
+        "homeownerProfileId:String",
+        "id:String",
+        "inventoryItemId:String?",
+        "policyNumber:String?",
+        "projectId:String?",
+        "propertyId:String?",
+        "providerName:String",
+        "scopeKind:WarrantyScopeKind",
+        "sourceExecutionId:String?",
+        "startDate:DateTime",
+        "updatedAt:DateTime"
+      ]
+    },
+    "entity.insurance_policy": {
+      "prismaModel": "InsurancePolicy",
+      "domainId": "domain.insurance_policies",
+      "supportedFieldIds": [
+        "field.policy.carrier",
+        "field.policy.coverageType",
+        "field.policy.deductible",
+        "field.policy.expiryDate",
+        "field.policy.personalPropertyLimit",
+        "field.policy.premium",
+        "field.policy.startDate"
+      ],
+      "supportedRelationIds": [],
+      "schemaColumns": [
+        "carrierName:String",
+        "coverageJson:Json?",
+        "coverageType:String?",
+        "createdAt:DateTime",
+        "deductibleAmount:Decimal?",
+        "deductibleCents:Int?",
+        "expiryDate:DateTime?",
+        "homeownerProfileId:String",
+        "id:String",
+        "isVerified:Boolean",
+        "lastVerifiedAt:DateTime?",
+        "personalPropertyLimitCents:Int?",
+        "policyNumber:String",
+        "premiumAmount:Decimal?",
+        "propertyId:String?",
+        "startDate:DateTime?",
+        "updatedAt:DateTime"
+      ]
+    },
+    "entity.maintenance_task": {
+      "prismaModel": "PropertyMaintenanceTask",
+      "domainId": "domain.maintenance",
+      "supportedFieldIds": [
+        "field.task.actualCost",
+        "field.task.estimatedCost",
+        "field.task.frequency",
+        "field.task.lastCompletedDate",
+        "field.task.nextDueDate",
+        "field.task.priority",
+        "field.task.status"
+      ],
+      "supportedRelationIds": [
+        "relation.inventory_item.maintenance_task"
+      ],
+      "schemaColumns": [
+        "actionKey:String?",
+        "actualCost:Decimal?",
+        "assetType:String?",
+        "assignedToUserId:String?",
+        "bookingId:String?",
+        "category:String?",
+        "completionMetadata:Json?",
+        "createdAt:DateTime",
+        "description:String?",
+        "estimatedCost:Decimal?",
+        "frequency:RecurrenceFrequency?",
+        "id:String",
+        "inventoryItemId:String?",
+        "isRecurring:Boolean",
+        "isSeasonal:Boolean",
+        "lastCompletedDate:DateTime?",
+        "lastUpdateIdempotencyKey:String?",
+        "nextDueDate:DateTime?",
+        "priority:MaintenanceTaskPriority",
+        "propertyId:String",
+        "recallMatchId:String?",
+        "remindedForDueDate:DateTime?",
+        "riskLevel:RiskLevel?",
+        "roomId:String?",
+        "season:Season?",
+        "seasonalChecklistItemId:String?",
+        "serviceCategory:ServiceCategory?",
+        "snoozedUntil:DateTime?",
+        "source:MaintenanceTaskSource",
+        "status:MaintenanceTaskStatus",
+        "title:String",
+        "updatedAt:DateTime",
+        "warrantyId:String?"
+      ]
+    },
+    "entity.home_reserve_fund": {
+      "prismaModel": "HomeReserveFund",
+      "domainId": "domain.ownership_costs_finance",
+      "supportedFieldIds": [
+        "field.reserve.balance",
+        "field.reserve.horizonYears",
+        "field.reserve.lastRecalculated",
+        "field.reserve.monthlyContribution",
+        "field.reserve.posture",
+        "field.reserve.shortfall"
+      ],
+      "supportedRelationIds": [],
+      "schemaColumns": [
+        "createdAt:DateTime",
+        "currentBalanceCents:Int",
+        "currentShortfallCents:Int",
+        "homeownerProfileId:String",
+        "horizonYears:Int",
+        "id:String",
+        "isActive:Boolean",
+        "lastRecalculatedAt:DateTime?",
+        "posture:HomeReserveFundPosture",
+        "propertyContextVersion:String?",
+        "propertyId:String",
+        "recommendedMonthlyContributionCents:Int",
+        "reconciliationNotifiedAt:DateTime?",
+        "reconciliationNotifiedFingerprint:String?",
+        "sourceAnalysisId:String?",
+        "updatedAt:DateTime"
+      ]
+    },
+    "entity.property_tax_bill": {
+      "prismaModel": "PropertyTaxBillRecord",
+      "domainId": "domain.ownership_costs_finance",
+      "supportedFieldIds": [
+        "field.taxBill.amount",
+        "field.taxBill.effectiveRate",
+        "field.taxBill.issueDate"
+      ],
+      "supportedRelationIds": [],
+      "schemaColumns": [
+        "assessmentRecordId:String?",
+        "billAmount:Decimal?",
+        "billNumber:String?",
+        "confidence:PropertyTaxFieldConfidence",
+        "createdAt:DateTime",
+        "currency:String",
+        "dataSourceId:String?",
+        "dueDatesJson:Json?",
+        "effectiveTaxRate:Decimal?",
+        "id:String",
+        "installmentsJson:Json?",
+        "issueDate:DateTime?",
+        "jurisdictionId:String",
+        "observedAt:DateTime",
+        "parcelMatchId:String?",
+        "periodEndDate:DateTime?",
+        "periodStartDate:DateTime?",
+        "propertyId:String",
+        "rateComponentsJson:Json?",
+        "rawDataJson:Json?",
+        "sourceExternalId:String?",
+        "sourceRemovedAt:DateTime?",
+        "sourceType:PropertyTaxRecordSourceType",
+        "sourceUrl:String?",
+        "status:PropertyTaxRecordStatus",
+        "supersededById:String?",
+        "taxYear:Int",
+        "updatedAt:DateTime"
+      ]
+    },
+    "entity.property_tax_assessment": {
+      "prismaModel": "PropertyTaxAssessmentRecord",
+      "domainId": "domain.ownership_costs_finance",
+      "supportedFieldIds": [
+        "field.taxAssessment.assessmentDate",
+        "field.taxAssessment.improvementValue",
+        "field.taxAssessment.landValue",
+        "field.taxAssessment.taxableValue",
+        "field.taxAssessment.totalAssessedValue"
+      ],
+      "supportedRelationIds": [],
+      "schemaColumns": [
+        "assessmentDate:DateTime?",
+        "assessmentRatio:Decimal?",
+        "capsJson:Json?",
+        "classification:String?",
+        "confidence:PropertyTaxFieldConfidence",
+        "createdAt:DateTime",
+        "dataSourceId:String?",
+        "effectiveDate:DateTime?",
+        "equalizationRatio:Decimal?",
+        "equalizedValue:Decimal?",
+        "exemptionsJson:Json?",
+        "id:String",
+        "improvementValue:Decimal?",
+        "ingestKey:String?",
+        "jurisdictionId:String",
+        "landValue:Decimal?",
+        "observedAt:DateTime",
+        "parcelMatchId:String?",
+        "propertyId:String",
+        "radarProviderEventId:String?",
+        "rawDataJson:Json?",
+        "sourceExternalId:String?",
+        "sourceRemovedAt:DateTime?",
+        "sourceType:PropertyTaxRecordSourceType",
+        "sourceUrl:String?",
+        "stage:PropertyTaxAssessmentStage",
+        "status:PropertyTaxRecordStatus",
+        "supersededById:String?",
+        "taxYear:Int",
+        "taxableValue:Decimal?",
+        "totalAssessedValue:Decimal?",
+        "updatedAt:DateTime",
+        "valuationDate:DateTime?"
+      ]
+    },
+    "entity.sale_prep_profile": {
+      "prismaModel": "PropertySalePrepProfile",
+      "domainId": "domain.seller_preparation",
+      "supportedFieldIds": [
+        "field.salePrep.bathroom",
+        "field.salePrep.curbAppeal",
+        "field.salePrep.flooring",
+        "field.salePrep.kitchen",
+        "field.salePrep.paint",
+        "field.salePrep.staging"
+      ],
+      "supportedRelationIds": [],
+      "schemaColumns": [
+        "bathroomStatus:PropertyRoomUpdateStatus?",
+        "confirmedUpgradeKeys:String",
+        "curbAppealCondition:PropertyCosmeticCondition?",
+        "flooringCondition:PropertyCosmeticCondition?",
+        "id:String",
+        "kitchenStatus:PropertyRoomUpdateStatus?",
+        "paintCondition:PropertyCosmeticCondition?",
+        "propertyId:String",
+        "stagingReadiness:PropertyStagingReadiness?",
+        "updatedAt:DateTime"
+      ]
+    },
+    "entity.sale_case": {
+      "prismaModel": "PropertySaleCase",
+      "domainId": "domain.seller_preparation",
+      "supportedFieldIds": [
+        "field.saleCase.status",
+        "field.saleCase.targetCloseDate",
+        "field.saleCase.targetListDate"
+      ],
+      "supportedRelationIds": [
+        "relation.sale_case.readiness_item"
+      ],
+      "schemaColumns": [
+        "budgetRange:SalePrepBudgetRange?",
+        "closedAt:DateTime?",
+        "createdAt:DateTime",
+        "createdByUserId:String",
+        "id:String",
+        "listedAt:DateTime?",
+        "propertyId:String",
+        "sourceActionId:String?",
+        "status:SaleCaseStatus",
+        "targetCloseDate:DateTime?",
+        "targetListDate:DateTime?",
+        "underContractAt:DateTime?",
+        "updatedAt:DateTime"
+      ]
+    },
+    "entity.sale_readiness_item": {
+      "prismaModel": "SaleReadinessItem",
+      "domainId": "domain.seller_preparation",
+      "supportedFieldIds": [
+        "field.saleItem.category",
+        "field.saleItem.dueDate",
+        "field.saleItem.requirementClass",
+        "field.saleItem.status"
+      ],
+      "supportedRelationIds": [
+        "relation.sale_case.readiness_item"
+      ],
+      "schemaColumns": [
+        "canonicalWorkItemId:String?",
+        "category:SaleReadinessCategory",
+        "createdAt:DateTime",
+        "detail:String?",
+        "dueAt:DateTime?",
+        "estimatedCostMaxCents:Int?",
+        "estimatedCostMinCents:Int?",
+        "estimatedValueAddMaxCents:Int?",
+        "estimatedValueAddMinCents:Int?",
+        "id:String",
+        "pursuedAt:DateTime?",
+        "pursuedByUserId:String?",
+        "requirementClass:SaleReadinessRequirementClass",
+        "resolvedAt:DateTime?",
+        "saleCaseId:String",
+        "sourceEntityId:String",
+        "sourceEntityType:SaleReadinessSourceType",
+        "status:SaleReadinessItemStatus",
+        "title:String",
+        "updatedAt:DateTime",
+        "waivedAt:DateTime?",
+        "waivedByUserId:String?",
+        "waivedReason:String?"
+      ]
+    },
+    "entity.buyer_checklist": {
+      "prismaModel": "HomeBuyerChecklist",
+      "domainId": "domain.buyer_journey",
+      "supportedFieldIds": [
+        "field.buyer.moveInDate",
+        "field.buyer.stage",
+        "field.buyer.targetCloseDate"
+      ],
+      "supportedRelationIds": [
+        "relation.buyer_checklist.buyer_milestone",
+        "relation.buyer_checklist.buyer_task"
+      ],
+      "schemaColumns": [
+        "cancellationReason:String?",
+        "cancelledAt:DateTime?",
+        "completedAt:DateTime?",
+        "createdAt:DateTime",
+        "generationVersion:String?",
+        "handoffCompletedAt:DateTime?",
+        "id:String",
+        "lastStageChangedAt:DateTime?",
+        "moveInDate:DateTime?",
+        "movingPreferencesJson:Json?",
+        "ownershipStartedAt:DateTime?",
+        "pausedAt:DateTime?",
+        "planStartDate:DateTime",
+        "propertyId:String",
+        "stage:BuyerJourneyStage",
+        "status:BuyerJourneyStatus",
+        "targetCloseDate:DateTime?",
+        "transitionedToRecurringAt:DateTime?",
+        "updatedAt:DateTime"
+      ]
+    },
+    "entity.buyer_task": {
+      "prismaModel": "HomeBuyerTask",
+      "domainId": "domain.buyer_journey",
+      "supportedFieldIds": [
+        "field.buyerTask.completedDate",
+        "field.buyerTask.dueDate",
+        "field.buyerTask.priority",
+        "field.buyerTask.status"
+      ],
+      "supportedRelationIds": [
+        "relation.buyer_checklist.buyer_task"
+      ],
+      "schemaColumns": [
+        "actionKey:String",
+        "anchorOffsetDays:Int?",
+        "applicability:BuyerTaskApplicability",
+        "applicabilityBasisHash:String?",
+        "applicabilityConflictedFactKeys:String",
+        "applicabilityEvaluatedAt:DateTime?",
+        "applicabilityMissingFactKeys:String",
+        "applicabilityReasonCodes:String",
+        "applicabilityRuleKey:String?",
+        "applicabilityUsedFactKeys:String",
+        "assignedContactId:String?",
+        "assignedToUserId:String?",
+        "blockedGuidance:String?",
+        "blocking:Boolean",
+        "bookingId:String?",
+        "canonicalWorkItemId:String?",
+        "checklistId:String",
+        "checklistSection:BuyerChecklistSection?",
+        "completedAt:DateTime?",
+        "completedByUserId:String?",
+        "completionCriteria:String?",
+        "completionDocumentId:String?",
+        "completionEvidenceJson:Json?",
+        "completionMethod:BuyerCompletionMethod?",
+        "completionVerifiedAt:DateTime?",
+        "completionVerifiedById:String?",
+        "createdAt:DateTime",
+        "description:String?",
+        "dueAt:DateTime?",
+        "estimatedCostCents:Int?",
+        "evidenceRequirement:BuyerEvidenceRequirement",
+        "frequency:RecurrenceFrequency?",
+        "generatedBy:String?",
+        "generationVersion:String?",
+        "guidanceJourneyId:String?",
+        "handedOffMaintenanceTaskId:String?",
+        "homeActionKey:String?",
+        "id:String",
+        "notes:String?",
+        "phase:BuyerPlanPhase",
+        "priority:BuyerPlanPriority",
+        "required:Boolean",
+        "serviceCategory:ServiceCategory?",
+        "sortOrder:Int",
+        "sourceEntityId:String?",
+        "sourceEntityType:String?",
+        "sourceType:BuyerTaskSourceType",
+        "status:HomeBuyerTaskStatus",
+        "statusReason:String?",
+        "taskType:BuyerTaskType",
+        "templateKey:String?",
+        "templateVersion:String?",
+        "title:String",
+        "updatedAt:DateTime",
+        "userEditedAt:DateTime?",
+        "whyMatters:String?"
+      ]
+    },
+    "entity.buyer_milestone": {
+      "prismaModel": "BuyerJourneyMilestone",
+      "domainId": "domain.buyer_journey",
+      "supportedFieldIds": [
+        "field.buyerMilestone.completedDate",
+        "field.buyerMilestone.dueDate",
+        "field.buyerMilestone.status",
+        "field.buyerMilestone.type"
+      ],
+      "supportedRelationIds": [
+        "relation.buyer_checklist.buyer_milestone"
+      ],
+      "schemaColumns": [
+        "checklistId:String",
+        "completedAt:DateTime?",
+        "confidence:Float?",
+        "createdAt:DateTime",
+        "customLabel:String?",
+        "dueAt:DateTime?",
+        "id:String",
+        "milestoneKey:String",
+        "notes:String?",
+        "responsibleUserId:String?",
+        "sourceDocumentId:String?",
+        "sourceEntityId:String?",
+        "sourceType:String?",
+        "status:BuyerMilestoneStatus",
+        "type:BuyerMilestoneType",
+        "updatedAt:DateTime"
+      ]
+    },
+    "entity.property_record": {
+      "prismaModel": "PropertyRecord",
+      "domainId": "domain.documents_records",
+      "supportedFieldIds": [
+        "field.record.effectiveTo",
+        "field.record.retainUntil",
+        "field.record.type",
+        "field.record.verification"
+      ],
+      "supportedRelationIds": [
+        "relation.property_record.record_version"
+      ],
+      "schemaColumns": [
+        "archivedAt:DateTime?",
+        "createdAt:DateTime",
+        "createdByUserId:String",
+        "currentVersionId:String?",
+        "description:String?",
+        "effectiveFrom:DateTime?",
+        "effectiveTo:DateTime?",
+        "id:String",
+        "legalHoldReason:String?",
+        "lifecycleStatus:PropertyRecordLifecycleStatus",
+        "propertyId:String",
+        "recordType:PropertyRecordType",
+        "retainUntil:DateTime?",
+        "sensitivity:PropertyRecordSensitivity",
+        "title:String",
+        "trashedAt:DateTime?",
+        "trashedByUserId:String?",
+        "updatedAt:DateTime",
+        "verificationNotes:String?",
+        "verificationStatus:DocumentVerificationStatus",
+        "verifiedAt:DateTime?",
+        "verifiedByUserId:String?",
+        "visibility:PropertyRecordVisibility"
+      ]
+    },
+    "entity.property_record_version": {
+      "prismaModel": "PropertyRecordVersion",
+      "domainId": "domain.documents_records",
+      "supportedFieldIds": [
+        "field.recordVersion.integrityStatus",
+        "field.recordVersion.number",
+        "field.recordVersion.scanStatus",
+        "field.recordVersion.uploadedDate"
+      ],
+      "supportedRelationIds": [
+        "relation.property_record.record_version"
+      ],
+      "schemaColumns": [
+        "createdAt:DateTime",
+        "extractedText:String?",
+        "fileSizeBytes:Int",
+        "id:String",
+        "integrityStatus:PropertyRecordIntegrityStatus",
+        "mimeType:String",
+        "ocrQualityScore:Float?",
+        "originalFileName:String",
+        "recordId:String",
+        "scanStatus:PropertyRecordScanStatus",
+        "sha256:String",
+        "storageEtag:String?",
+        "storageKey:String",
+        "supersedesVersionId:String?",
+        "textExtractedAt:DateTime?",
+        "uploadedByUserId:String",
+        "versionNumber:Int"
+      ]
+    },
+    "entity.claim": {
+      "prismaModel": "Claim",
+      "domainId": "domain.claims",
+      "supportedFieldIds": [
+        "field.claim.claimNumber",
+        "field.claim.closedDate",
+        "field.claim.deductible",
+        "field.claim.estimatedLoss",
+        "field.claim.incidentDate",
+        "field.claim.nextFollowUp",
+        "field.claim.openedDate",
+        "field.claim.settlement",
+        "field.claim.status",
+        "field.claim.submittedDate",
+        "field.claim.type"
+      ],
+      "supportedRelationIds": [
+        "relation.claim.checklist_item",
+        "relation.claim.claim_document",
+        "relation.claim.timeline_event"
+      ],
+      "schemaColumns": [
+        "checklistCompletionPct:Int?",
+        "claimNumber:String?",
+        "closedAt:DateTime?",
+        "createdAt:DateTime",
+        "createdBy:String",
+        "deductibleAmount:Decimal?",
+        "description:String?",
+        "estimatedLossAmount:Decimal?",
+        "externalUrl:String?",
+        "id:String",
+        "incidentAt:DateTime?",
+        "insurancePolicyId:String?",
+        "lastActivityAt:DateTime",
+        "nextFollowUpAt:DateTime?",
+        "openedAt:DateTime?",
+        "propertyId:String",
+        "providerName:String?",
+        "settlementAmount:Decimal?",
+        "sourceType:ClaimSourceType",
+        "status:ClaimStatus",
+        "submittedAt:DateTime?",
+        "title:String",
+        "type:ClaimType",
+        "updatedAt:DateTime",
+        "warrantyId:String?"
+      ]
+    },
+    "entity.claim_checklist_item": {
+      "prismaModel": "ClaimChecklistItem",
+      "domainId": "domain.claims",
+      "supportedFieldIds": [
+        "field.claimChecklist.completedDate",
+        "field.claimChecklist.required",
+        "field.claimChecklist.status"
+      ],
+      "supportedRelationIds": [
+        "relation.claim.checklist_item"
+      ],
+      "schemaColumns": [
+        "claimId:String",
+        "completedAt:DateTime?",
+        "completedBy:String?",
+        "createdAt:DateTime",
+        "description:String?",
+        "id:String",
+        "orderIndex:Int",
+        "primaryClaimDocumentId:String?",
+        "required:Boolean",
+        "requiredDocMinCount:Int",
+        "requiredDocTypes:ClaimDocumentType",
+        "status:ClaimChecklistStatus",
+        "title:String",
+        "updatedAt:DateTime"
+      ]
+    },
+    "entity.claim_timeline_event": {
+      "prismaModel": "ClaimTimelineEvent",
+      "domainId": "domain.claims",
+      "supportedFieldIds": [
+        "field.claimEvent.occurredDate"
+      ],
+      "supportedRelationIds": [
+        "relation.claim.timeline_event"
+      ],
+      "schemaColumns": [
+        "claimDocumentId:String?",
+        "claimId:String",
+        "createdAt:DateTime",
+        "createdBy:String",
+        "description:String?",
+        "id:String",
+        "meta:Json?",
+        "occurredAt:DateTime",
+        "propertyId:String",
+        "title:String?",
+        "type:ClaimTimelineEventType",
+        "updatedAt:DateTime"
+      ]
+    },
+    "entity.claim_document": {
+      "prismaModel": "ClaimDocument",
+      "domainId": "domain.claims",
+      "supportedFieldIds": [
+        "field.claimDocument.attachedDate"
+      ],
+      "supportedRelationIds": [
+        "relation.claim.claim_document"
+      ],
+      "schemaColumns": [
+        "claimId:String",
+        "createdAt:DateTime",
+        "documentId:String",
+        "id:String",
+        "notes:String?",
+        "title:String?",
+        "type:ClaimDocumentType",
+        "updatedAt:DateTime"
+      ]
+    }
+  },
+  "fields": {
+    "field.item.brand": {
+      "prismaModel": "InventoryItem",
+      "storageColumn": "brand",
+      "prismaType": "String",
+      "nullableInSchema": true,
+      "valueFamily": "text",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.item.manufacturer": {
+      "prismaModel": "InventoryItem",
+      "storageColumn": "manufacturer",
+      "prismaType": "String",
+      "nullableInSchema": true,
+      "valueFamily": "text",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.item.model": {
+      "prismaModel": "InventoryItem",
+      "storageColumn": "modelNumber",
+      "prismaType": "String",
+      "nullableInSchema": true,
+      "valueFamily": "text",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.item.serial": {
+      "prismaModel": "InventoryItem",
+      "storageColumn": "serialNumber",
+      "prismaType": "String",
+      "nullableInSchema": true,
+      "valueFamily": "text",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.item.installedOn": {
+      "prismaModel": "InventoryItem",
+      "storageColumn": "installedOn",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.item.purchasedOn": {
+      "prismaModel": "InventoryItem",
+      "storageColumn": "purchasedOn",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.item.lastServicedOn": {
+      "prismaModel": "InventoryItem",
+      "storageColumn": "lastServicedOn",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.item.expectedExpiryDate": {
+      "prismaModel": "InventoryItem",
+      "storageColumn": "expectedExpiryDate",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.item.condition": {
+      "prismaModel": "InventoryItem",
+      "storageColumn": "condition",
+      "prismaType": "InventoryItemCondition",
+      "nullableInSchema": false,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "FAIR",
+        "GOOD",
+        "NEW",
+        "POOR",
+        "UNKNOWN"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.item.category": {
+      "prismaModel": "InventoryItem",
+      "storageColumn": "category",
+      "prismaType": "InventoryItemCategory",
+      "nullableInSchema": false,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "APPLIANCE",
+        "ELECTRICAL",
+        "ELECTRONICS",
+        "EXTERIOR",
+        "FURNITURE",
+        "HVAC",
+        "INTERIOR",
+        "OTHER",
+        "PLUMBING",
+        "ROOF_EXTERIOR",
+        "SAFETY",
+        "SITE",
+        "SMART_HOME",
+        "STRUCTURAL"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.item.efficiencyRating": {
+      "prismaModel": "InventoryItem",
+      "storageColumn": "efficiencyRating",
+      "prismaType": "String",
+      "nullableInSchema": true,
+      "valueFamily": "text",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.item.purchaseCost": {
+      "prismaModel": "InventoryItem",
+      "storageColumn": "purchaseCostCents",
+      "prismaType": "Int",
+      "nullableInSchema": true,
+      "valueFamily": "money",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.item.replacementCost": {
+      "prismaModel": "InventoryItem",
+      "storageColumn": "replacementCostCents",
+      "prismaType": "Int",
+      "nullableInSchema": true,
+      "valueFamily": "money",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.item.tags": {
+      "prismaModel": "InventoryItem",
+      "storageColumn": "tags",
+      "prismaType": "String",
+      "nullableInSchema": false,
+      "valueFamily": "tags",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.warranty.expiryDate": {
+      "prismaModel": "Warranty",
+      "storageColumn": "expiryDate",
+      "prismaType": "DateTime",
+      "nullableInSchema": false,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.warranty.startDate": {
+      "prismaModel": "Warranty",
+      "storageColumn": "startDate",
+      "prismaType": "DateTime",
+      "nullableInSchema": false,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.warranty.provider": {
+      "prismaModel": "Warranty",
+      "storageColumn": "providerName",
+      "prismaType": "String",
+      "nullableInSchema": false,
+      "valueFamily": "text",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.warranty.coverage": {
+      "prismaModel": "Warranty",
+      "storageColumn": "coverageDetails",
+      "prismaType": "String",
+      "nullableInSchema": true,
+      "valueFamily": "text",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.warranty.cost": {
+      "prismaModel": "Warranty",
+      "storageColumn": "cost",
+      "prismaType": "Decimal",
+      "nullableInSchema": true,
+      "valueFamily": "dollars",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.policy.carrier": {
+      "prismaModel": "InsurancePolicy",
+      "storageColumn": "carrierName",
+      "prismaType": "String",
+      "nullableInSchema": false,
+      "valueFamily": "text",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.policy.expiryDate": {
+      "prismaModel": "InsurancePolicy",
+      "storageColumn": "expiryDate",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.policy.startDate": {
+      "prismaModel": "InsurancePolicy",
+      "storageColumn": "startDate",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.policy.deductible": {
+      "prismaModel": "InsurancePolicy",
+      "storageColumn": "deductibleCents",
+      "prismaType": "Int",
+      "nullableInSchema": true,
+      "valueFamily": "money",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.policy.premium": {
+      "prismaModel": "InsurancePolicy",
+      "storageColumn": "premiumAmount",
+      "prismaType": "Decimal",
+      "nullableInSchema": true,
+      "valueFamily": "dollars",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.policy.coverageType": {
+      "prismaModel": "InsurancePolicy",
+      "storageColumn": "coverageType",
+      "prismaType": "String",
+      "nullableInSchema": true,
+      "valueFamily": "text",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.policy.personalPropertyLimit": {
+      "prismaModel": "InsurancePolicy",
+      "storageColumn": "personalPropertyLimitCents",
+      "prismaType": "Int",
+      "nullableInSchema": true,
+      "valueFamily": "money",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.task.nextDueDate": {
+      "prismaModel": "PropertyMaintenanceTask",
+      "storageColumn": "nextDueDate",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.task.lastCompletedDate": {
+      "prismaModel": "PropertyMaintenanceTask",
+      "storageColumn": "lastCompletedDate",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.task.status": {
+      "prismaModel": "PropertyMaintenanceTask",
+      "storageColumn": "status",
+      "prismaType": "MaintenanceTaskStatus",
+      "nullableInSchema": false,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "CANCELLED",
+        "COMPLETED",
+        "IN_PROGRESS",
+        "NEEDS_REVIEW",
+        "PENDING"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.task.priority": {
+      "prismaModel": "PropertyMaintenanceTask",
+      "storageColumn": "priority",
+      "prismaType": "MaintenanceTaskPriority",
+      "nullableInSchema": false,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "HIGH",
+        "LOW",
+        "MEDIUM",
+        "URGENT"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.task.frequency": {
+      "prismaModel": "PropertyMaintenanceTask",
+      "storageColumn": "frequency",
+      "prismaType": "RecurrenceFrequency",
+      "nullableInSchema": true,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "ANNUALLY",
+        "DAILY",
+        "MONTHLY",
+        "QUARTERLY",
+        "SEMI_ANNUALLY",
+        "WEEKLY"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.task.estimatedCost": {
+      "prismaModel": "PropertyMaintenanceTask",
+      "storageColumn": "estimatedCost",
+      "prismaType": "Decimal",
+      "nullableInSchema": true,
+      "valueFamily": "dollars",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.task.actualCost": {
+      "prismaModel": "PropertyMaintenanceTask",
+      "storageColumn": "actualCost",
+      "prismaType": "Decimal",
+      "nullableInSchema": true,
+      "valueFamily": "dollars",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.reserve.balance": {
+      "prismaModel": "HomeReserveFund",
+      "storageColumn": "currentBalanceCents",
+      "prismaType": "Int",
+      "nullableInSchema": false,
+      "valueFamily": "money",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.reserve.monthlyContribution": {
+      "prismaModel": "HomeReserveFund",
+      "storageColumn": "recommendedMonthlyContributionCents",
+      "prismaType": "Int",
+      "nullableInSchema": false,
+      "valueFamily": "money",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.reserve.shortfall": {
+      "prismaModel": "HomeReserveFund",
+      "storageColumn": "currentShortfallCents",
+      "prismaType": "Int",
+      "nullableInSchema": false,
+      "valueFamily": "money",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.reserve.posture": {
+      "prismaModel": "HomeReserveFund",
+      "storageColumn": "posture",
+      "prismaType": "HomeReserveFundPosture",
+      "nullableInSchema": false,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "AGGRESSIVE",
+        "CONSERVATIVE",
+        "MODERATE"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.reserve.horizonYears": {
+      "prismaModel": "HomeReserveFund",
+      "storageColumn": "horizonYears",
+      "prismaType": "Int",
+      "nullableInSchema": false,
+      "valueFamily": "number",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.reserve.lastRecalculated": {
+      "prismaModel": "HomeReserveFund",
+      "storageColumn": "lastRecalculatedAt",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.taxBill.amount": {
+      "prismaModel": "PropertyTaxBillRecord",
+      "storageColumn": "billAmount",
+      "prismaType": "Decimal",
+      "nullableInSchema": true,
+      "valueFamily": "dollars",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.taxBill.effectiveRate": {
+      "prismaModel": "PropertyTaxBillRecord",
+      "storageColumn": "effectiveTaxRate",
+      "prismaType": "Decimal",
+      "nullableInSchema": true,
+      "valueFamily": "percent",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.taxBill.issueDate": {
+      "prismaModel": "PropertyTaxBillRecord",
+      "storageColumn": "issueDate",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.taxAssessment.totalAssessedValue": {
+      "prismaModel": "PropertyTaxAssessmentRecord",
+      "storageColumn": "totalAssessedValue",
+      "prismaType": "Decimal",
+      "nullableInSchema": true,
+      "valueFamily": "dollars",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.taxAssessment.taxableValue": {
+      "prismaModel": "PropertyTaxAssessmentRecord",
+      "storageColumn": "taxableValue",
+      "prismaType": "Decimal",
+      "nullableInSchema": true,
+      "valueFamily": "dollars",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.taxAssessment.landValue": {
+      "prismaModel": "PropertyTaxAssessmentRecord",
+      "storageColumn": "landValue",
+      "prismaType": "Decimal",
+      "nullableInSchema": true,
+      "valueFamily": "dollars",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.taxAssessment.improvementValue": {
+      "prismaModel": "PropertyTaxAssessmentRecord",
+      "storageColumn": "improvementValue",
+      "prismaType": "Decimal",
+      "nullableInSchema": true,
+      "valueFamily": "dollars",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.taxAssessment.assessmentDate": {
+      "prismaModel": "PropertyTaxAssessmentRecord",
+      "storageColumn": "assessmentDate",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.salePrep.paint": {
+      "prismaModel": "PropertySalePrepProfile",
+      "storageColumn": "paintCondition",
+      "prismaType": "PropertyCosmeticCondition",
+      "nullableInSchema": true,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "FRESH",
+        "NEEDS_REFRESH",
+        "SOME_WEAR"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.salePrep.curbAppeal": {
+      "prismaModel": "PropertySalePrepProfile",
+      "storageColumn": "curbAppealCondition",
+      "prismaType": "PropertyCosmeticCondition",
+      "nullableInSchema": true,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "FRESH",
+        "NEEDS_REFRESH",
+        "SOME_WEAR"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.salePrep.flooring": {
+      "prismaModel": "PropertySalePrepProfile",
+      "storageColumn": "flooringCondition",
+      "prismaType": "PropertyCosmeticCondition",
+      "nullableInSchema": true,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "FRESH",
+        "NEEDS_REFRESH",
+        "SOME_WEAR"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.salePrep.kitchen": {
+      "prismaModel": "PropertySalePrepProfile",
+      "storageColumn": "kitchenStatus",
+      "prismaType": "PropertyRoomUpdateStatus",
+      "nullableInSchema": true,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "DATED_BUT_FUNCTIONAL",
+        "NEEDS_WORK",
+        "RECENTLY_UPDATED"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.salePrep.bathroom": {
+      "prismaModel": "PropertySalePrepProfile",
+      "storageColumn": "bathroomStatus",
+      "prismaType": "PropertyRoomUpdateStatus",
+      "nullableInSchema": true,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "DATED_BUT_FUNCTIONAL",
+        "NEEDS_WORK",
+        "RECENTLY_UPDATED"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.salePrep.staging": {
+      "prismaModel": "PropertySalePrepProfile",
+      "storageColumn": "stagingReadiness",
+      "prismaType": "PropertyStagingReadiness",
+      "nullableInSchema": true,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "NEEDS_SIGNIFICANT_WORK",
+        "NEEDS_SOME_WORK",
+        "READY_TO_SHOW"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.saleCase.status": {
+      "prismaModel": "PropertySaleCase",
+      "storageColumn": "status",
+      "prismaType": "SaleCaseStatus",
+      "nullableInSchema": false,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "CANCELLED",
+        "CLOSED",
+        "LISTED",
+        "PREPARING",
+        "UNDER_CONTRACT"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.saleCase.targetListDate": {
+      "prismaModel": "PropertySaleCase",
+      "storageColumn": "targetListDate",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.saleCase.targetCloseDate": {
+      "prismaModel": "PropertySaleCase",
+      "storageColumn": "targetCloseDate",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.buyer.stage": {
+      "prismaModel": "HomeBuyerChecklist",
+      "storageColumn": "stage",
+      "prismaType": "BuyerJourneyStage",
+      "nullableInSchema": false,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "CLOSED",
+        "CLOSING_PREP",
+        "DAYS_31_TO_90",
+        "DUE_DILIGENCE",
+        "EXPLORING",
+        "FIRST_30_DAYS",
+        "HANDED_OFF",
+        "MOVE_IN",
+        "OFFER_CONTRACT"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.buyer.targetCloseDate": {
+      "prismaModel": "HomeBuyerChecklist",
+      "storageColumn": "targetCloseDate",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.buyer.moveInDate": {
+      "prismaModel": "HomeBuyerChecklist",
+      "storageColumn": "moveInDate",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.record.type": {
+      "prismaModel": "PropertyRecord",
+      "storageColumn": "recordType",
+      "prismaType": "PropertyRecordType",
+      "nullableInSchema": false,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "CLAIM",
+        "CLOSING_DOCUMENT",
+        "CONTRACT",
+        "DEED",
+        "DISCLOSURE",
+        "INSPECTION_REPORT",
+        "INSURANCE_POLICY",
+        "INVOICE",
+        "MANUAL",
+        "OTHER",
+        "PERMIT",
+        "PHOTO",
+        "PROJECT_DISPUTE_PACKAGE",
+        "QUOTE",
+        "RECEIPT",
+        "SURVEY",
+        "TAX_DOCUMENT",
+        "UTILITY",
+        "WARRANTY"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.record.verification": {
+      "prismaModel": "PropertyRecord",
+      "storageColumn": "verificationStatus",
+      "prismaType": "DocumentVerificationStatus",
+      "nullableInSchema": false,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "PENDING",
+        "REJECTED",
+        "UNVERIFIED",
+        "VERIFIED"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.record.effectiveTo": {
+      "prismaModel": "PropertyRecord",
+      "storageColumn": "effectiveTo",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.record.retainUntil": {
+      "prismaModel": "PropertyRecord",
+      "storageColumn": "retainUntil",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "OWNER"
+    },
+    "field.buyerTask.status": {
+      "prismaModel": "HomeBuyerTask",
+      "storageColumn": "status",
+      "prismaType": "HomeBuyerTaskStatus",
+      "nullableInSchema": false,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "BLOCKED",
+        "CANCELLED",
+        "COMPLETED",
+        "IN_PROGRESS",
+        "NOT_NEEDED",
+        "PENDING"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.buyerTask.dueDate": {
+      "prismaModel": "HomeBuyerTask",
+      "storageColumn": "dueAt",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.buyerTask.completedDate": {
+      "prismaModel": "HomeBuyerTask",
+      "storageColumn": "completedAt",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.buyerTask.priority": {
+      "prismaModel": "HomeBuyerTask",
+      "storageColumn": "priority",
+      "prismaType": "BuyerPlanPriority",
+      "nullableInSchema": false,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "CONSIDER",
+        "NOW",
+        "PLAN",
+        "SOON"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.buyerMilestone.status": {
+      "prismaModel": "BuyerJourneyMilestone",
+      "storageColumn": "status",
+      "prismaType": "BuyerMilestoneStatus",
+      "nullableInSchema": false,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "CANCELLED",
+        "COMPLETED",
+        "IN_PROGRESS",
+        "MISSED",
+        "NOT_STARTED",
+        "WAIVED"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.buyerMilestone.dueDate": {
+      "prismaModel": "BuyerJourneyMilestone",
+      "storageColumn": "dueAt",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.buyerMilestone.completedDate": {
+      "prismaModel": "BuyerJourneyMilestone",
+      "storageColumn": "completedAt",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.buyerMilestone.type": {
+      "prismaModel": "BuyerJourneyMilestone",
+      "storageColumn": "type",
+      "prismaType": "BuyerMilestoneType",
+      "nullableInSchema": false,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "APPRAISAL",
+        "ATTORNEY_REVIEW",
+        "CLOSING",
+        "CLOSING_DISCLOSURE",
+        "CONTRACT_ACCEPTED",
+        "CUSTOM",
+        "DAY_30",
+        "DAY_60",
+        "DAY_90",
+        "EARNEST_MONEY_DUE",
+        "FINAL_WALKTHROUGH",
+        "FINANCING_CONTINGENCY",
+        "INSPECTION",
+        "INSPECTION_CONTINGENCY",
+        "INSURANCE_EFFECTIVE",
+        "MOVE_IN",
+        "OFFER_SUBMITTED",
+        "TITLE_SURVEY"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.saleItem.status": {
+      "prismaModel": "SaleReadinessItem",
+      "storageColumn": "status",
+      "prismaType": "SaleReadinessItemStatus",
+      "nullableInSchema": false,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "OPEN",
+        "PURSUING",
+        "RESOLVED",
+        "WAIVED"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.saleItem.category": {
+      "prismaModel": "SaleReadinessItem",
+      "storageColumn": "category",
+      "prismaType": "SaleReadinessCategory",
+      "nullableInSchema": false,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "DOCUMENTATION_RECORDS",
+        "FINANCIAL_DECISION",
+        "PERMITS_DISCLOSURE",
+        "PRESENTATION",
+        "SAFETY_STRUCTURAL",
+        "SYSTEMS_MAINTENANCE"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.saleItem.requirementClass": {
+      "prismaModel": "SaleReadinessItem",
+      "storageColumn": "requirementClass",
+      "prismaType": "SaleReadinessRequirementClass",
+      "nullableInSchema": false,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "MATERIAL_BLOCKER",
+        "OPTIONAL_IMPROVEMENT",
+        "PRESENTATION",
+        "PROFESSIONAL_DECISION",
+        "VERIFICATION_NEEDED"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.saleItem.dueDate": {
+      "prismaModel": "SaleReadinessItem",
+      "storageColumn": "dueAt",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.recordVersion.number": {
+      "prismaModel": "PropertyRecordVersion",
+      "storageColumn": "versionNumber",
+      "prismaType": "Int",
+      "nullableInSchema": false,
+      "valueFamily": "number",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.recordVersion.uploadedDate": {
+      "prismaModel": "PropertyRecordVersion",
+      "storageColumn": "createdAt",
+      "prismaType": "DateTime",
+      "nullableInSchema": false,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.recordVersion.scanStatus": {
+      "prismaModel": "PropertyRecordVersion",
+      "storageColumn": "scanStatus",
+      "prismaType": "PropertyRecordScanStatus",
+      "nullableInSchema": false,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "CLEAN",
+        "FAILED",
+        "PENDING",
+        "QUARANTINED"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.recordVersion.integrityStatus": {
+      "prismaModel": "PropertyRecordVersion",
+      "storageColumn": "integrityStatus",
+      "prismaType": "PropertyRecordIntegrityStatus",
+      "nullableInSchema": false,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "MISMATCH",
+        "PENDING",
+        "VERIFIED"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.claim.status": {
+      "prismaModel": "Claim",
+      "storageColumn": "status",
+      "prismaType": "ClaimStatus",
+      "nullableInSchema": false,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "APPROVED",
+        "CLOSED",
+        "DENIED",
+        "DRAFT",
+        "IN_PROGRESS",
+        "SUBMITTED",
+        "UNDER_REVIEW"
+      ],
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.claim.type": {
+      "prismaModel": "Claim",
+      "storageColumn": "type",
+      "prismaType": "ClaimType",
+      "nullableInSchema": false,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "APPLIANCE",
+        "ELECTRICAL",
+        "FIRE_SMOKE",
+        "HVAC",
+        "LIABILITY",
+        "OTHER",
+        "PLUMBING",
+        "STORM_WIND_HAIL",
+        "THEFT_VANDALISM",
+        "WATER_DAMAGE"
+      ],
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.claim.incidentDate": {
+      "prismaModel": "Claim",
+      "storageColumn": "incidentAt",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.claim.openedDate": {
+      "prismaModel": "Claim",
+      "storageColumn": "openedAt",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.claim.submittedDate": {
+      "prismaModel": "Claim",
+      "storageColumn": "submittedAt",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.claim.closedDate": {
+      "prismaModel": "Claim",
+      "storageColumn": "closedAt",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.claim.nextFollowUp": {
+      "prismaModel": "Claim",
+      "storageColumn": "nextFollowUpAt",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.claim.deductible": {
+      "prismaModel": "Claim",
+      "storageColumn": "deductibleAmount",
+      "prismaType": "Decimal",
+      "nullableInSchema": true,
+      "valueFamily": "dollars",
+      "enumVocabulary": null,
+      "audienceFloor": "OWNER"
+    },
+    "field.claim.estimatedLoss": {
+      "prismaModel": "Claim",
+      "storageColumn": "estimatedLossAmount",
+      "prismaType": "Decimal",
+      "nullableInSchema": true,
+      "valueFamily": "dollars",
+      "enumVocabulary": null,
+      "audienceFloor": "OWNER"
+    },
+    "field.claim.settlement": {
+      "prismaModel": "Claim",
+      "storageColumn": "settlementAmount",
+      "prismaType": "Decimal",
+      "nullableInSchema": true,
+      "valueFamily": "dollars",
+      "enumVocabulary": null,
+      "audienceFloor": "OWNER"
+    },
+    "field.claim.claimNumber": {
+      "prismaModel": "Claim",
+      "storageColumn": "claimNumber",
+      "prismaType": "String",
+      "nullableInSchema": true,
+      "valueFamily": "text",
+      "enumVocabulary": null,
+      "audienceFloor": "OWNER"
+    },
+    "field.claimChecklist.status": {
+      "prismaModel": "ClaimChecklistItem",
+      "storageColumn": "status",
+      "prismaType": "ClaimChecklistStatus",
+      "nullableInSchema": false,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "DONE",
+        "NOT_APPLICABLE",
+        "OPEN"
+      ],
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.claimChecklist.required": {
+      "prismaModel": "ClaimChecklistItem",
+      "storageColumn": "required",
+      "prismaType": "Boolean",
+      "nullableInSchema": false,
+      "valueFamily": "flag",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.claimChecklist.completedDate": {
+      "prismaModel": "ClaimChecklistItem",
+      "storageColumn": "completedAt",
+      "prismaType": "DateTime",
+      "nullableInSchema": true,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.claimEvent.occurredDate": {
+      "prismaModel": "ClaimTimelineEvent",
+      "storageColumn": "occurredAt",
+      "prismaType": "DateTime",
+      "nullableInSchema": false,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.claimDocument.attachedDate": {
+      "prismaModel": "ClaimDocument",
+      "storageColumn": "createdAt",
+      "prismaType": "DateTime",
+      "nullableInSchema": false,
+      "valueFamily": "date",
+      "enumVocabulary": null,
+      "audienceFloor": "CONTRIBUTOR"
+    },
+    "field.home.yearBuilt": {
+      "prismaModel": "Property",
+      "storageColumn": "yearBuilt",
+      "prismaType": "Int",
+      "nullableInSchema": true,
+      "valueFamily": "number",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.home.livingArea": {
+      "prismaModel": "Property",
+      "storageColumn": "propertySize",
+      "prismaType": "Int",
+      "nullableInSchema": true,
+      "valueFamily": "number",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.home.bedrooms": {
+      "prismaModel": "Property",
+      "storageColumn": "bedrooms",
+      "prismaType": "Int",
+      "nullableInSchema": true,
+      "valueFamily": "number",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.home.bathrooms": {
+      "prismaModel": "Property",
+      "storageColumn": "bathrooms",
+      "prismaType": "Float",
+      "nullableInSchema": true,
+      "valueFamily": "number",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.home.address": {
+      "prismaModel": "Property",
+      "storageColumn": "address",
+      "prismaType": "String",
+      "nullableInSchema": false,
+      "valueFamily": "text",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.home.zipCode": {
+      "prismaModel": "Property",
+      "storageColumn": "zipCode",
+      "prismaType": "String",
+      "nullableInSchema": false,
+      "valueFamily": "text",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.home.county": {
+      "prismaModel": "Property",
+      "storageColumn": "county",
+      "prismaType": "String",
+      "nullableInSchema": true,
+      "valueFamily": "text",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.home.type": {
+      "prismaModel": "Property",
+      "storageColumn": "dwellingType",
+      "prismaType": "DwellingType",
+      "nullableInSchema": false,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "APARTMENT_UNIT",
+        "ATTACHED_SINGLE_FAMILY",
+        "CONDO_UNIT",
+        "DETACHED_SINGLE_FAMILY",
+        "DUPLEX",
+        "MANUFACTURED_HOME",
+        "MULTI_FAMILY",
+        "OTHER",
+        "TOWNHOUSE",
+        "UNKNOWN"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.home.roofReplacementYear": {
+      "prismaModel": "Property",
+      "storageColumn": "roofReplacementYear",
+      "prismaType": "Int",
+      "nullableInSchema": true,
+      "valueFamily": "number",
+      "enumVocabulary": null,
+      "audienceFloor": "VIEWER"
+    },
+    "field.home.roofType": {
+      "prismaModel": "Property",
+      "storageColumn": "roofType",
+      "prismaType": "RoofType",
+      "nullableInSchema": true,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "FLAT",
+        "METAL",
+        "SHINGLE",
+        "TILE",
+        "UNKNOWN"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.home.heatingType": {
+      "prismaModel": "Property",
+      "storageColumn": "heatingType",
+      "prismaType": "HeatingType",
+      "nullableInSchema": true,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "FURNACE",
+        "HEAT_PUMP",
+        "HVAC",
+        "RADIATORS",
+        "UNKNOWN"
+      ],
+      "audienceFloor": "VIEWER"
+    },
+    "field.home.coolingType": {
+      "prismaModel": "Property",
+      "storageColumn": "coolingType",
+      "prismaType": "CoolingType",
+      "nullableInSchema": true,
+      "valueFamily": "enum",
+      "enumVocabulary": [
+        "CENTRAL_AC",
+        "UNKNOWN",
+        "WINDOW_AC"
+      ],
+      "audienceFloor": "VIEWER"
+    }
+  },
+  "relationPaths": [
+    "path.buyer_checklist.buyer_milestone",
+    "path.buyer_checklist.buyer_task",
+    "path.claim.checklist_item",
+    "path.claim.claim_document",
+    "path.claim.timeline_event",
+    "path.inventory_item.maintenance_task",
+    "path.inventory_item.room",
+    "path.inventory_item.warranty",
+    "path.property_record.record_version",
+    "path.sale_case.readiness_item"
+  ],
+  "lexicon": {
+    "lexemeCount": 396,
+    "digest": "a48c185200517ed70095e659862033e9ae01159d0e03d2c8c17f8ae58000f86a"
+  },
+  "digest": "acc6ccf5574629321ffc19f37d89d9b3ff49dd5922806c505235c5a58b0d9730"
+}
