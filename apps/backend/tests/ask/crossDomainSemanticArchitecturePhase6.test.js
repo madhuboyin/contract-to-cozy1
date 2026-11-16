@@ -570,8 +570,8 @@ test('Phase 6 review fixes: repeated span mapping, strict calibration bound, bud
       { id: 'room-sunroom', propertyId: 'prop-p6-1', name: 'Sunroom Annex' },
     ]],
     ['inventoryItem', () => [
-      { id: 'item-wh', propertyId: 'prop-p6-1', name: 'Water Heater', brand: null, modelNumber: null, category: 'PLUMBING', roomId: 'room-sunroom', warrantyId: null, purchaseCostCents: 180000, replacementCostCents: 220000, purchasedOn: null, installedOn: null },
-      { id: 'item-thermador', propertyId: 'prop-p6-1', name: 'Thermador Column', brand: 'Thermador', modelNumber: 'T30IR905', category: 'APPLIANCE', roomId: 'room-sunroom', warrantyId: 'war-1', purchaseCostCents: 450000, replacementCostCents: 520000, purchasedOn: null, installedOn: null },
+      { id: 'item-wh', propertyId: 'prop-p6-1', name: 'Water Heater', brand: null, modelNumber: null, category: 'PLUMBING', roomId: 'room-sunroom', warrantyApplicabilities: [], purchaseCostCents: 180000, replacementCostCents: 220000, purchasedOn: null, installedOn: null },
+      { id: 'item-thermador', propertyId: 'prop-p6-1', name: 'Thermador Column', brand: 'Thermador', modelNumber: 'T30IR905', category: 'APPLIANCE', roomId: 'room-sunroom', warrantyApplicabilities: [{ warrantyId: 'war-1' }], purchaseCostCents: 450000, replacementCostCents: 520000, purchasedOn: null, installedOn: null },
     ]],
     ['warranty', () => [
       { id: 'war-1', propertyId: 'prop-p6-1', inventoryItemId: 'item-thermador', providerName: 'Sub-Zero Assure', category: 'APPLIANCE', expiryDate: new Date('2028-01-01T00:00:00Z') },

@@ -365,6 +365,7 @@ test('production dataPointReadResult loads live manual/receipt links, canonical 
     ['inventoryItem', () => [
       {
         id: 'item-covered',
+        warrantyApplicabilities: [],
         propertyId: 'prop-ny-1',
         roomId: 'room-k',
         name: 'Dishwasher',
@@ -377,6 +378,7 @@ test('production dataPointReadResult loads live manual/receipt links, canonical 
       },
       {
         id: 'item-missing',
+        warrantyApplicabilities: [],
         propertyId: 'prop-ny-1',
         roomId: 'room-k',
         name: 'Microwave',

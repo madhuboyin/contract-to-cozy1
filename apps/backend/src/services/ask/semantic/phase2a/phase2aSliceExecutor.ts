@@ -984,6 +984,10 @@ export async function loadPhase2aPropertySnapshot(propertyId: string): Promise<P
         condition: true,
         roomId: true,
         coverageEvidenceStatus: true,
+        warrantyApplicabilities: {
+          where: { propertyId, status: 'COVERED', warranty: { scopeKind: 'PROPERTY_PLAN' } },
+          select: { warrantyId: true },
+        },
       },
     }),
     prisma.warranty.findMany({
@@ -1035,7 +1039,7 @@ export async function loadPhase2aPropertySnapshot(propertyId: string): Promise<P
       installedOn: item.installedOn ? item.installedOn.toISOString().slice(0, 10) : null,
       condition: String(item.condition),
       roomId: item.roomId ?? null,
-      propertyPlanWarrantyId: null,
+      propertyPlanWarrantyId: item.warrantyApplicabilities[0]?.warrantyId ?? null,
       itemWarrantyIds: warrantiesByItem.get(item.id) ?? [],
       coverageEvidenceStatus: String(item.coverageEvidenceStatus ?? 'UNKNOWN'),
     })),

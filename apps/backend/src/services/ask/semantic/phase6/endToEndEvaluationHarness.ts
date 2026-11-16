@@ -794,7 +794,6 @@ export async function runPhase6EndToEndEvaluation(options: {
   const entryBackups = new Map<string, Record<string, Function>>();
   const claimChecklistField = ['checklist', 'Items'].join('');
   const saleReadinessField = ['readiness', 'Items'].join('');
-  const itemPlanLinkField = ['warranty', 'Id'].join('');
   const itemLinkedDocs = baseSnapshot.extendedItems.flatMap((ext) => [
     ...(ext.manualDocumentId
       ? [{
@@ -835,7 +834,7 @@ export async function runPhase6EndToEndEvaluation(options: {
       serialNumber: null,
       isVerified: true,
       documents: [],
-      [itemPlanLinkField]: it.propertyPlanWarrantyId ?? null,
+      warrantyApplicabilities: it.propertyPlanWarrantyId ? [{ warrantyId: it.propertyPlanWarrantyId }] : [],
       coverageEvidenceStatus: it.coverageEvidenceStatus ?? null,
     })),
     warranty: () => baseSnapshot.warranties.map((w) => ({
