@@ -402,22 +402,29 @@ export const OFFLINE_LEXICON_ENRICHMENT_PROPOSALS: readonly OfflineLexiconEnrich
   { proposalId: 'lex-enrich-004', source: 'DICTIONARY_VARIANT', targetSemanticId: 'entity.property_record', targetRole: 'ENTITY', candidatePhrase: 'warranty', status: 'REJECTED_COLLISION', reason: 'Collides with canonical label of entity.warranty in generated shared lexicon.' },
 ]);
 
+const SECTION5_DOMAIN_ALIASES: Readonly<Record<string, SemanticDomainId>> = {
+  'domain.property_core': 'domain.property_profile',
+  'domain.rooms_areas': 'domain.inventory',
+  'domain.home_systems_risk': 'domain.risks_recalls_inspections',
+  'domain.protection': 'domain.warranties_coverage',
+  'domain.finance_tax_cost': 'domain.ownership_costs_finance',
+  'domain.timeline_events_monitoring': 'domain.timeline_home_events',
+  'domain.transactions_projects': 'domain.projects_quotes_vendors',
+  'domain.operations_saved_work': 'domain.account_household_preferences',
+};
+
+const CANONICAL_SECTION5_DOMAIN_SET = new Set<string>(ASK_SEMANTIC_DOMAINS.map((domain) => domain.domainId));
+
+/**
+ * Strictly maps canonical Section 5 domain IDs and legacy aliases, returning null for unrecognized domains.
+ */
+export function tryNormalizeToCanonicalSection5Domain(domainId: string): SemanticDomainId | null {
+  const resolved = SECTION5_DOMAIN_ALIASES[domainId] ?? domainId;
+  return CANONICAL_SECTION5_DOMAIN_SET.has(resolved) ? (resolved as SemanticDomainId) : null;
+}
+
 export function normalizeToCanonicalSection5Domain(domainId: string): SemanticDomainId {
-  const aliases: Readonly<Record<string, SemanticDomainId>> = {
-    'domain.property_core': 'domain.property_profile',
-    'domain.rooms_areas': 'domain.inventory',
-    'domain.home_systems_risk': 'domain.risks_recalls_inspections',
-    'domain.protection': 'domain.warranties_coverage',
-    'domain.finance_tax_cost': 'domain.ownership_costs_finance',
-    'domain.timeline_events_monitoring': 'domain.timeline_home_events',
-    'domain.transactions_projects': 'domain.projects_quotes_vendors',
-    'domain.operations_saved_work': 'domain.account_household_preferences',
-  };
-  const resolved = (aliases[domainId] ?? domainId) as SemanticDomainId;
-  if (ASK_SEMANTIC_DOMAINS.some((domain) => domain.domainId === resolved)) {
-    return resolved;
-  }
-  return 'domain.property_profile';
+  return tryNormalizeToCanonicalSection5Domain(domainId) ?? 'domain.property_profile';
 }
 
 export function assignMixedStackFacetOwnership(

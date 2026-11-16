@@ -316,11 +316,9 @@ export function evaluateRiskStratifiedCalibration(
     }
     const ece = sampleCount > 0 ? Number((eceSum / sampleCount).toFixed(4)) : 0;
 
-    // Require sample representation, zero observed incorrect high-confidence outputs, and ECE <= 0.15;
-    // when sampleCount >= 380, Wilson 95% upper bound with 0 errors strictly satisfies < 0.01 too.
-    const statisticalBoundPassed = sampleCount >= 380
-      ? upper95 < policy.maxAllowedIncorrectHighUpper95
-      : incorrectHigh === 0 && sampleCount > 0;
+    // FR-EVAL-4 strictly requires incorrect-high-confidence Wilson 95% upper bound < 1%
+    // for every risk stratum (at 0 observed errors this mathematically requires n >= 381).
+    const statisticalBoundPassed = sampleCount > 0 && upper95 < policy.maxAllowedIncorrectHighUpper95;
 
     const gatePassed =
       sampleCount > 0

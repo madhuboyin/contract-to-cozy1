@@ -27,7 +27,7 @@ import {
 } from '../waves/crossDomainPlanBuilder';
 import {
   DOMAIN_WAVE_MANIFEST,
-  normalizeToCanonicalSection5Domain,
+  tryNormalizeToCanonicalSection5Domain,
 } from '../waves/domainWaveManifest';
 
 export const ASK_PHASE6_PROVIDER_VERSION = 'phase6-provider-orchestrator-1.0.0' as const;
@@ -132,6 +132,7 @@ export interface StageOneProviderInput {
   readonly unresolvedMinimizedSpans: readonly SemanticSourceSpan[];
   readonly eligibleDomainIds: readonly SemanticDomainId[];
   readonly placeholderTokens: readonly string[];
+  readonly timeoutMs?: number;
 }
 
 export interface StageTwoProviderInput {
@@ -140,6 +141,43 @@ export interface StageTwoProviderInput {
   readonly assignedFacets: readonly StableStageOneFacetAssignment[];
   readonly unionDomainIds: readonly SemanticDomainId[];
   readonly eligibleJobsByDomain: Readonly<Record<string, readonly string[]>>;
+  readonly timeoutMs?: number;
+}
+
+export class ProviderSchemaValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ProviderSchemaValidationError';
+  }
+}
+
+async function withStageBudgetTimeout<T>(
+  work: Promise<T>,
+  timeoutMs: number,
+  stageLabel: string,
+): Promise<T> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return work;
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`PROVIDER_BUDGET_EXCEEDED:${stageLabel}_timeout:${timeoutMs}ms`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+function isSchemaValidationError(err: unknown): boolean {
+  return err instanceof ProviderSchemaValidationError || err instanceof z.ZodError;
 }
 
 export interface SemanticUnderstandingProvider {
@@ -195,9 +233,119 @@ const StageTwoProposalSchema = z.object({
   }).strict()),
 }).strict();
 
+interface AlignedCharSpan {
+  readonly ch: string;
+  readonly protStart: number;
+  readonly protEnd: number;
+}
+
+const MINIMIZE_REDACTION_RULES: ReadonlyArray<{ readonly pattern: RegExp; readonly replacement: string }> = [
+  { pattern: /[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, replacement: '[email redacted]' },
+  { pattern: /https?:\/\/\S+/gi, replacement: '[link redacted]' },
+  { pattern: /\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g, replacement: '[phone redacted]' },
+  { pattern: /\b(?:\d[ -]*?){12,19}\b/g, replacement: '[account number redacted]' },
+];
+
+function applyRedactionRuleToCharSpans(
+  input: readonly AlignedCharSpan[],
+  pattern: RegExp,
+  replacement: string,
+): readonly AlignedCharSpan[] {
+  const joined = input.map((c) => c.ch).join('');
+  const globalRegex = new RegExp(pattern.source, pattern.flags);
+  const output: AlignedCharSpan[] = [];
+  let cursor = 0;
+  for (const match of joined.matchAll(globalRegex)) {
+    if (match.index === undefined) continue;
+    for (let i = cursor; i < match.index; i += 1) {
+      output.push(input[i]);
+    }
+    const matchEnd = match.index + match[0].length;
+    const protStart = input[match.index]?.protStart ?? 0;
+    const protEnd = input[Math.max(match.index, matchEnd - 1)]?.protEnd ?? protStart;
+    for (let r = 0; r < replacement.length; r += 1) {
+      output.push({ ch: replacement[r], protStart, protEnd });
+    }
+    cursor = matchEnd;
+  }
+  for (let i = cursor; i < input.length; i += 1) {
+    output.push(input[i]);
+  }
+  return output;
+}
+
+function buildMinimizedToProtectedCharMap(
+  protectedText: string,
+  expectedMinimizedText: string,
+): readonly AlignedCharSpan[] | null {
+  let stream: AlignedCharSpan[] = [];
+  let pCursor = 0;
+  for (const cp of protectedText) {
+    const protStart = pCursor;
+    const protEnd = pCursor + cp.length;
+    pCursor = protEnd;
+    const normalized = cp.normalize('NFKC');
+    for (let i = 0; i < normalized.length; i += 1) {
+      stream.push({ ch: normalized[i], protStart, protEnd });
+    }
+  }
+
+  for (const rule of MINIMIZE_REDACTION_RULES) {
+    stream = [...applyRedactionRuleToCharSpans(stream, rule.pattern, rule.replacement)];
+  }
+
+  // Collapse \s+ -> ' ', trim ends, and slice to 600 chars to mirror minimizeAskQuestion identically.
+  const collapsed: AlignedCharSpan[] = [];
+  let idx = 0;
+  while (idx < stream.length) {
+    if (/\s/.test(stream[idx].ch)) {
+      const wsStart = stream[idx].protStart;
+      let wsEnd = stream[idx].protEnd;
+      idx += 1;
+      while (idx < stream.length && /\s/.test(stream[idx].ch)) {
+        wsEnd = stream[idx].protEnd;
+        idx += 1;
+      }
+      collapsed.push({ ch: ' ', protStart: wsStart, protEnd: wsEnd });
+    } else {
+      collapsed.push(stream[idx]);
+      idx += 1;
+    }
+  }
+
+  while (collapsed.length > 0 && collapsed[0].ch === ' ') {
+    collapsed.shift();
+  }
+  while (collapsed.length > 0 && collapsed[collapsed.length - 1].ch === ' ') {
+    collapsed.pop();
+  }
+
+  const sliced = collapsed.slice(0, 600);
+  const reconstructed = sliced.map((c) => c.ch).join('');
+  return reconstructed === expectedMinimizedText ? sliced : null;
+}
+
+function mapProtectedOffsetToRaw(
+  protectedOffset: number,
+  spanMap: SemanticTextEnvelope['spanMap'],
+): { readonly ok: true; readonly rawOffset: number } | { readonly ok: false; readonly reason: string } {
+  const sorted = [...spanMap].sort((a, b) => a.protectedStart - b.protectedStart);
+  let delta = 0;
+  for (const entry of sorted) {
+    if (protectedOffset > entry.protectedStart && protectedOffset < entry.protectedEnd) {
+      return { ok: false, reason: `prot_span_splits_placeholder:${entry.placeholder}` };
+    }
+    if (entry.protectedEnd <= protectedOffset) {
+      delta += (entry.rawEnd - entry.rawStart) - (entry.protectedEnd - entry.protectedStart);
+    }
+  }
+  return { ok: true, rawOffset: protectedOffset + delta };
+}
+
 /**
  * Validates provider minimized-text offsets strictly against the minimized envelope
- * (never accepting raw-offset guesswork per §19 #23 / FR-UND-2) and bijectively maps to raw spans.
+ * (never accepting raw-offset guesswork per §19 #23 / FR-UND-2) and bijectively maps
+ * exact coordinates to raw text via the protected-text alignment and envelope spanMap.
  */
 export function validateAndMapMinimizedSpanToRaw(
   minimizedSpan: SemanticSourceSpan,
@@ -218,48 +366,46 @@ export function validateAndMapMinimizedSpanToRaw(
     };
   }
 
-  // Restore placeholder tokens strictly using envelope mapping.
-  let restoredText = minimizedSpan.text;
-  let minStartRaw: number | null = null;
-  let maxEndRaw: number | null = null;
-  for (const mapping of envelope.spanMap) {
-    if (mapping.minimizedStart >= minimizedSpan.start && mapping.minimizedEnd <= minimizedSpan.end) {
-      const rawValue = envelope.rawText.slice(mapping.rawStart, mapping.rawEnd);
-      restoredText = restoredText.replace(mapping.placeholder, rawValue);
-      minStartRaw = minStartRaw === null ? mapping.rawStart : Math.min(minStartRaw, mapping.rawStart);
-      maxEndRaw = maxEndRaw === null ? mapping.rawEnd : Math.max(maxEndRaw, mapping.rawEnd);
+  for (const entry of envelope.spanMap) {
+    if (entry.minimizedStart < 0 || entry.minimizedEnd < 0) continue;
+    const splitsStart = minimizedSpan.start > entry.minimizedStart && minimizedSpan.start < entry.minimizedEnd;
+    const splitsEnd = minimizedSpan.end > entry.minimizedStart && minimizedSpan.end < entry.minimizedEnd;
+    if (splitsStart || splitsEnd) {
+      return { ok: false, reason: `min_span_splits_placeholder:${entry.placeholder}` };
     }
   }
 
-  // Locate exact raw span matching restored text
-  const searchFrom = minStartRaw !== null ? Math.max(0, minStartRaw - 40) : 0;
-  const exactIdx = envelope.rawText.indexOf(restoredText, searchFrom);
-  if (exactIdx >= 0) {
-    return {
-      ok: true,
-      rawSpan: {
-        start: exactIdx,
-        end: exactIdx + restoredText.length,
-        text: restoredText,
-      },
-    };
+  const charMap = buildMinimizedToProtectedCharMap(envelope.protectedText, envelope.minimizedText);
+  if (!charMap) {
+    return { ok: false, reason: 'min_to_prot_alignment_unavailable' };
   }
 
-  // Fallback for normalized whitespace differences inside restored substring
-  const fallbackIdx = envelope.rawText.toLowerCase().indexOf(restoredText.toLowerCase());
-  if (fallbackIdx >= 0) {
-    const matchedRaw = envelope.rawText.slice(fallbackIdx, fallbackIdx + restoredText.length);
-    return {
-      ok: true,
-      rawSpan: {
-        start: fallbackIdx,
-        end: fallbackIdx + matchedRaw.length,
-        text: matchedRaw,
-      },
-    };
+  const protStart = charMap[minimizedSpan.start].protStart;
+  const protEnd = charMap[minimizedSpan.end - 1].protEnd;
+
+  const rawStartMapped = mapProtectedOffsetToRaw(protStart, envelope.spanMap);
+  if (!rawStartMapped.ok) {
+    return rawStartMapped;
+  }
+  const rawEndMapped = mapProtectedOffsetToRaw(protEnd, envelope.spanMap);
+  if (!rawEndMapped.ok) {
+    return rawEndMapped;
   }
 
-  return { ok: false, reason: `raw_span_unmappable:${restoredText}` };
+  const rawStart = rawStartMapped.rawOffset;
+  const rawEnd = rawEndMapped.rawOffset;
+  if (rawStart < 0 || rawEnd <= rawStart || rawEnd > envelope.rawText.length) {
+    return { ok: false, reason: `raw_span_out_of_bounds:${rawStart}:${rawEnd}` };
+  }
+
+  return {
+    ok: true,
+    rawSpan: {
+      start: rawStart,
+      end: rawEnd,
+      text: envelope.rawText.slice(rawStart, rawEnd),
+    },
+  };
 }
 
 function buildEligibleJobsByDomain(): Readonly<Record<string, readonly string[]>> {
@@ -335,37 +481,83 @@ export async function executeTwoStageProviderRetrieval(input: {
     };
   }
 
+  const buildFailureResult = (params: {
+    readonly status: 'PROVIDER_UNAVAILABLE' | 'SCHEMA_INVALID';
+    readonly stageOneMode: 'FACET_SPANS' | 'FLAT_DOMAIN_LIST' | null;
+    readonly stage2CallCount: number;
+    readonly unionStage2Used: boolean;
+    readonly overflowFacets?: readonly PlanOverflowFacet[];
+    readonly failureReason: string;
+    readonly estimatedCostUsd: number;
+    readonly spanFailures?: readonly string[];
+  }): TwoStageRetrievalResult => ({
+    status: params.status,
+    plan: SemanticRequestPlanSchema.parse({
+      schemaVersion: ASK_SEMANTIC_PLAN_VERSION,
+      producer: { kind: 'PROVIDER', version: `${input.provider.providerId}:${input.provider.version}` },
+      outcome: params.status,
+      rawText: input.rawText,
+      normalizedText: envelope.normalizedText,
+      minimizedText: envelope.minimizedText,
+      unresolvedSpans: [],
+      facets: [],
+    }),
+    overflowFacets: params.overflowFacets ?? [],
+    stageOneMode: params.stageOneMode,
+    stage2CallCount: params.stage2CallCount,
+    unionStage2Used: params.unionStage2Used,
+    protectedSpanRoundTripOk: roundTrip.ok,
+    minimizedSpanValidationFailures: params.spanFailures ?? [],
+    latencyMs: Number((performance.now() - startedAt).toFixed(3)),
+    estimatedCostUsd: Number(params.estimatedCostUsd.toFixed(6)),
+    failureReason: params.failureReason,
+  });
+
+  const stage1StartedAt = performance.now();
   let stage1: StageOneProviderOutput;
   try {
-    stage1 = await input.provider.runStageOne({
-      minimizedText: envelope.minimizedText,
-      unresolvedMinimizedSpans: input.unresolvedMinimizedSpans ?? [],
-      eligibleDomainIds: ASK_SEMANTIC_DOMAINS.map((d) => d.domainId),
-      placeholderTokens: envelope.placeholders.map((p) => p.placeholder),
-    });
-  } catch (err) {
-    return {
-      status: 'PROVIDER_UNAVAILABLE',
-      plan: SemanticRequestPlanSchema.parse({
-        schemaVersion: ASK_SEMANTIC_PLAN_VERSION,
-        producer: { kind: 'PROVIDER', version: `${input.provider.providerId}:${input.provider.version}` },
-        outcome: 'PROVIDER_UNAVAILABLE',
-        rawText: input.rawText,
-        normalizedText: envelope.normalizedText,
+    stage1 = await withStageBudgetTimeout(
+      input.provider.runStageOne({
         minimizedText: envelope.minimizedText,
-        unresolvedSpans: [],
-        facets: [],
+        unresolvedMinimizedSpans: input.unresolvedMinimizedSpans ?? [],
+        eligibleDomainIds: ASK_SEMANTIC_DOMAINS.map((d) => d.domainId),
+        placeholderTokens: envelope.placeholders.map((p) => p.placeholder),
+        timeoutMs: policy.budgets.maxStage1LatencyMs,
       }),
-      overflowFacets: [],
+      policy.budgets.maxStage1LatencyMs,
+      'stage1',
+    );
+  } catch (err) {
+    return buildFailureResult({
+      status: isSchemaValidationError(err) ? 'SCHEMA_INVALID' : 'PROVIDER_UNAVAILABLE',
       stageOneMode: null,
       stage2CallCount: 0,
       unionStage2Used: false,
-      protectedSpanRoundTripOk: roundTrip.ok,
-      minimizedSpanValidationFailures: [],
-      latencyMs: Number((performance.now() - startedAt).toFixed(3)),
       estimatedCostUsd: 0,
       failureReason: err instanceof Error ? err.message : 'stage1_provider_error',
-    };
+    });
+  }
+
+  const measuredStage1LatencyMs = Math.max(stage1.latencyMs, performance.now() - stage1StartedAt);
+  if (measuredStage1LatencyMs > policy.budgets.maxStage1LatencyMs) {
+    return buildFailureResult({
+      status: 'PROVIDER_UNAVAILABLE',
+      stageOneMode: stage1.mode,
+      stage2CallCount: 0,
+      unionStage2Used: false,
+      estimatedCostUsd: stage1.estimatedCostUsd,
+      failureReason: `PROVIDER_BUDGET_EXCEEDED:stage1_latency:${measuredStage1LatencyMs.toFixed(1)}ms>${policy.budgets.maxStage1LatencyMs}ms`,
+    });
+  }
+  if (stage1.estimatedCostUsd > policy.budgets.maxEstimatedCostUsdPerTurn) {
+    return buildFailureResult({
+      status: 'PROVIDER_UNAVAILABLE',
+      stageOneMode: stage1.mode,
+      stage2CallCount: 0,
+      unionStage2Used: false,
+      estimatedCostUsd: stage1.estimatedCostUsd,
+      failureReason: `PROVIDER_BUDGET_EXCEEDED:cost:${stage1.estimatedCostUsd.toFixed(6)}>${policy.budgets.maxEstimatedCostUsdPerTurn}`,
+    });
   }
 
   const eligibleJobsByDomain = buildEligibleJobsByDomain();
@@ -374,9 +566,25 @@ export async function executeTwoStageProviderRetrieval(input: {
   const minimizedSpanValidationFailures: string[] = [];
 
   if (stage1.mode === 'FLAT_DOMAIN_LIST') {
-    const unionDomains = stage1.domainIds
-      .map((d) => normalizeToCanonicalSection5Domain(d))
-      .slice(0, maxAdmitted);
+    const validatedUnionDomains: SemanticDomainId[] = [];
+    for (const rawDomainId of stage1.domainIds) {
+      const normalizedDomain = tryNormalizeToCanonicalSection5Domain(rawDomainId);
+      if (!normalizedDomain) {
+        return buildFailureResult({
+          status: 'SCHEMA_INVALID',
+          stageOneMode: 'FLAT_DOMAIN_LIST',
+          stage2CallCount: 0,
+          unionStage2Used: false,
+          estimatedCostUsd: stage1.estimatedCostUsd,
+          spanFailures: [`invalid_provider_domain:${rawDomainId}`],
+          failureReason: `invalid_provider_domain:${rawDomainId}`,
+        });
+      }
+      if (!validatedUnionDomains.includes(normalizedDomain)) {
+        validatedUnionDomains.push(normalizedDomain);
+      }
+    }
+    const unionDomains = validatedUnionDomains.slice(0, maxAdmitted);
     if (unionDomains.length === 0) {
       return {
         status: 'NONE_FITS',
@@ -401,38 +609,53 @@ export async function executeTwoStageProviderRetrieval(input: {
       };
     }
 
+    const stage2StartedAt = performance.now();
     let stage2: StageTwoProviderOutput;
     try {
-      stage2 = await input.provider.runStageTwo({
-        mode: 'UNION_DOMAINS',
-        minimizedText: envelope.minimizedText,
-        assignedFacets: [],
-        unionDomainIds: unionDomains,
-        eligibleJobsByDomain,
-      });
-    } catch (err) {
-      return {
-        status: 'PROVIDER_UNAVAILABLE',
-        plan: SemanticRequestPlanSchema.parse({
-          schemaVersion: ASK_SEMANTIC_PLAN_VERSION,
-          producer: { kind: 'PROVIDER', version: `${input.provider.providerId}:${input.provider.version}` },
-          outcome: 'PROVIDER_UNAVAILABLE',
-          rawText: input.rawText,
-          normalizedText: envelope.normalizedText,
+      stage2 = await withStageBudgetTimeout(
+        input.provider.runStageTwo({
+          mode: 'UNION_DOMAINS',
           minimizedText: envelope.minimizedText,
-          unresolvedSpans: [],
-          facets: [],
+          assignedFacets: [],
+          unionDomainIds: unionDomains,
+          eligibleJobsByDomain,
+          timeoutMs: policy.budgets.maxStage2LatencyMs,
         }),
-        overflowFacets: [],
+        policy.budgets.maxStage2LatencyMs,
+        'stage2_union',
+      );
+    } catch (err) {
+      return buildFailureResult({
+        status: isSchemaValidationError(err) ? 'SCHEMA_INVALID' : 'PROVIDER_UNAVAILABLE',
         stageOneMode: 'FLAT_DOMAIN_LIST',
         stage2CallCount: 1,
         unionStage2Used: true,
-        protectedSpanRoundTripOk: roundTrip.ok,
-        minimizedSpanValidationFailures: [],
-        latencyMs: Number((performance.now() - startedAt).toFixed(3)),
         estimatedCostUsd: stage1.estimatedCostUsd,
         failureReason: err instanceof Error ? err.message : 'stage2_union_error',
-      };
+      });
+    }
+
+    const measuredStage2LatencyMs = Math.max(stage2.latencyMs, performance.now() - stage2StartedAt);
+    const totalUnionCost = stage1.estimatedCostUsd + stage2.estimatedCostUsd;
+    if (measuredStage2LatencyMs > policy.budgets.maxStage2LatencyMs) {
+      return buildFailureResult({
+        status: 'PROVIDER_UNAVAILABLE',
+        stageOneMode: 'FLAT_DOMAIN_LIST',
+        stage2CallCount: 1,
+        unionStage2Used: true,
+        estimatedCostUsd: totalUnionCost,
+        failureReason: `PROVIDER_BUDGET_EXCEEDED:stage2_latency:${measuredStage2LatencyMs.toFixed(1)}ms>${policy.budgets.maxStage2LatencyMs}ms`,
+      });
+    }
+    if (totalUnionCost > policy.budgets.maxEstimatedCostUsdPerTurn) {
+      return buildFailureResult({
+        status: 'PROVIDER_UNAVAILABLE',
+        stageOneMode: 'FLAT_DOMAIN_LIST',
+        stage2CallCount: 1,
+        unionStage2Used: true,
+        estimatedCostUsd: totalUnionCost,
+        failureReason: `PROVIDER_BUDGET_EXCEEDED:cost:${totalUnionCost.toFixed(6)}>${policy.budgets.maxEstimatedCostUsdPerTurn}`,
+      });
     }
 
     const admitted = stage2.proposals.slice(0, maxAdmitted);
@@ -446,33 +669,39 @@ export async function executeTwoStageProviderRetrieval(input: {
     }
 
     try {
-      const builtFacets = admitted.map((proposal, index) => ({
-        id: proposal.stableFacetId || `facet-${index + 1}`,
-        sourceSpan: { start: 0, end: input.rawText.length, text: input.rawText },
-        requestClass: proposal.requestClass,
-        domainCandidates: [{ id: proposal.domainId, score: 0.9 }],
-        subject: proposal.subject,
-        relations: [...proposal.relations],
-        polarity: proposal.polarity,
-        projection: proposal.projection,
-        fields: [...proposal.fields],
-        where: proposal.where,
-        sort: [],
-        limit: null,
-        time: proposal.time,
-        groupBy: [],
-        targetCandidates: [{ id: proposal.jobMatch, score: 0.9 }],
-        requiredSlots: [...proposal.requiredSlots],
-        dependsOn: [...(proposal.dependsOn ?? [])],
-        evidence: {
-          jobMatch: proposal.jobMatch,
-          subjectNamed: proposal.subject !== null,
-          relationNamed: proposal.relations.length > 0,
-          projectionNamed: true,
-          polarityNamed: proposal.polarity !== null,
-        },
-        confidenceSignals: { grammarComplete: false, unresolvedSpanCount: 0 },
-      }));
+      const builtFacets = admitted.map((proposal, index) => {
+        const canonicalDomain = tryNormalizeToCanonicalSection5Domain(proposal.domainId);
+        if (!canonicalDomain) {
+          throw new ProviderSchemaValidationError(`invalid_provider_domain:${proposal.domainId}`);
+        }
+        return {
+          id: proposal.stableFacetId || `facet-${index + 1}`,
+          sourceSpan: { start: 0, end: input.rawText.length, text: input.rawText },
+          requestClass: proposal.requestClass,
+          domainCandidates: [{ id: canonicalDomain, score: 0.9 }],
+          subject: proposal.subject,
+          relations: [...proposal.relations],
+          polarity: proposal.polarity,
+          projection: proposal.projection,
+          fields: [...proposal.fields],
+          where: proposal.where,
+          sort: [],
+          limit: null,
+          time: proposal.time,
+          groupBy: [],
+          targetCandidates: [{ id: proposal.jobMatch, score: 0.9 }],
+          requiredSlots: [...proposal.requiredSlots],
+          dependsOn: [...(proposal.dependsOn ?? [])],
+          evidence: {
+            jobMatch: proposal.jobMatch,
+            subjectNamed: proposal.subject !== null,
+            relationNamed: proposal.relations.length > 0,
+            projectionNamed: true,
+            polarityNamed: proposal.polarity !== null,
+          },
+          confidenceSignals: { grammarComplete: false, unresolvedSpanCount: 0 },
+        };
+      });
 
       const flatStatus: 'MATCH' | 'NONE_FITS' = builtFacets.length > 0 ? 'MATCH' : 'NONE_FITS';
       const plan = SemanticRequestPlanSchema.parse({
@@ -495,38 +724,40 @@ export async function executeTwoStageProviderRetrieval(input: {
         protectedSpanRoundTripOk: roundTrip.ok,
         minimizedSpanValidationFailures,
         latencyMs: Number((performance.now() - startedAt).toFixed(3)),
-        estimatedCostUsd: Number((stage1.estimatedCostUsd + stage2.estimatedCostUsd).toFixed(6)),
+        estimatedCostUsd: Number(totalUnionCost.toFixed(6)),
       };
     } catch (err) {
-      return {
+      return buildFailureResult({
         status: 'SCHEMA_INVALID',
-        plan: SemanticRequestPlanSchema.parse({
-          schemaVersion: ASK_SEMANTIC_PLAN_VERSION,
-          producer: { kind: 'PROVIDER', version: `${input.provider.providerId}:${input.provider.version}` },
-          outcome: 'SCHEMA_INVALID',
-          rawText: input.rawText,
-          normalizedText: envelope.normalizedText,
-          minimizedText: envelope.minimizedText,
-          unresolvedSpans: [],
-          facets: [],
-        }),
-        overflowFacets,
         stageOneMode: 'FLAT_DOMAIN_LIST',
         stage2CallCount: 1,
         unionStage2Used: true,
-        protectedSpanRoundTripOk: roundTrip.ok,
-        minimizedSpanValidationFailures: [err instanceof Error ? err.message : 'schema_invalid'],
-        latencyMs: Number((performance.now() - startedAt).toFixed(3)),
-        estimatedCostUsd: Number((stage1.estimatedCostUsd + stage2.estimatedCostUsd).toFixed(6)),
+        overflowFacets,
+        estimatedCostUsd: totalUnionCost,
+        spanFailures: [err instanceof Error ? err.message : 'schema_invalid'],
         failureReason: err instanceof Error ? err.message : 'union_stage2_schema_invalid',
-      };
+      });
     }
   }
 
-  // Stage 1 produced FACET_SPANS: map minimized spans strictly back to raw coordinates and allocate server-side stable IDs BEFORE Stage 2.
+  // Stage 1 produced FACET_SPANS: map minimized spans strictly back to raw coordinates, validate domains strictly, and allocate server-side stable IDs BEFORE Stage 2.
   const mappedPreliminary: StableStageOneFacetAssignment[] = [];
+  const invalidDomainFailures: string[] = [];
   for (let i = 0; i < stage1.facets.length; i += 1) {
     const pre = stage1.facets[i];
+    const normalizedCandidates: Array<{ readonly id: SemanticDomainId; readonly score: number }> = [];
+    for (const candidate of pre.domainCandidates) {
+      const canonical = tryNormalizeToCanonicalSection5Domain(candidate.id);
+      if (!canonical) {
+        invalidDomainFailures.push(`invalid_provider_domain:${candidate.id}`);
+      } else {
+        normalizedCandidates.push({ id: canonical, score: candidate.score });
+      }
+    }
+    if (invalidDomainFailures.length > 0) {
+      continue;
+    }
+
     const mapped = validateAndMapMinimizedSpanToRaw(pre.preliminarySpan, envelope);
     if (!mapped.ok) {
       minimizedSpanValidationFailures.push(mapped.reason);
@@ -540,37 +771,33 @@ export async function executeTwoStageProviderRetrieval(input: {
       stableFacetId,
       rawSpan: mapped.rawSpan,
       minimizedSpan: pre.preliminarySpan,
-      domainCandidates: pre.domainCandidates.map((c) => ({
-        id: normalizeToCanonicalSection5Domain(c.id),
-        score: c.score,
-      })),
+      domainCandidates: normalizedCandidates,
       dependsOnStableIds,
     });
   }
 
-  if (minimizedSpanValidationFailures.length > 0 && mappedPreliminary.length === 0) {
-    return {
+  if (invalidDomainFailures.length > 0) {
+    return buildFailureResult({
       status: 'SCHEMA_INVALID',
-      plan: SemanticRequestPlanSchema.parse({
-        schemaVersion: ASK_SEMANTIC_PLAN_VERSION,
-        producer: { kind: 'PROVIDER', version: `${input.provider.providerId}:${input.provider.version}` },
-        outcome: 'SCHEMA_INVALID',
-        rawText: input.rawText,
-        normalizedText: envelope.normalizedText,
-        minimizedText: envelope.minimizedText,
-        unresolvedSpans: [],
-        facets: [],
-      }),
-      overflowFacets: [],
       stageOneMode: 'FACET_SPANS',
       stage2CallCount: 0,
       unionStage2Used: false,
-      protectedSpanRoundTripOk: roundTrip.ok,
-      minimizedSpanValidationFailures,
-      latencyMs: Number((performance.now() - startedAt).toFixed(3)),
       estimatedCostUsd: stage1.estimatedCostUsd,
+      spanFailures: [...minimizedSpanValidationFailures, ...invalidDomainFailures],
+      failureReason: invalidDomainFailures.join('; '),
+    });
+  }
+
+  if (minimizedSpanValidationFailures.length > 0 && mappedPreliminary.length === 0) {
+    return buildFailureResult({
+      status: 'SCHEMA_INVALID',
+      stageOneMode: 'FACET_SPANS',
+      stage2CallCount: 0,
+      unionStage2Used: false,
+      estimatedCostUsd: stage1.estimatedCostUsd,
+      spanFailures: minimizedSpanValidationFailures,
       failureReason: minimizedSpanValidationFailures.join('; '),
-    };
+    });
   }
 
   if (mappedPreliminary.length === 0) {
@@ -623,7 +850,21 @@ export async function executeTwoStageProviderRetrieval(input: {
   let maxObservedStage2Concurrency = 0;
 
   try {
-    for (const batch of batches) {
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
+      if (batchIndex > 0 && stage1.estimatedCostUsd + totalStage2Cost >= policy.budgets.maxEstimatedCostUsdPerTurn) {
+        return buildFailureResult({
+          status: 'PROVIDER_UNAVAILABLE',
+          stageOneMode: 'FACET_SPANS',
+          stage2CallCount,
+          unionStage2Used: false,
+          overflowFacets,
+          estimatedCostUsd: stage1.estimatedCostUsd + totalStage2Cost,
+          failureReason: `PROVIDER_BUDGET_EXCEEDED:cost:${(stage1.estimatedCostUsd + totalStage2Cost).toFixed(6)}>=${policy.budgets.maxEstimatedCostUsdPerTurn}`,
+        });
+      }
+
+      const batch = batches[batchIndex];
+      const batchStartedAt = performance.now();
       maxObservedStage2Concurrency = Math.max(maxObservedStage2Concurrency, Math.min(batch.length, concurrencyLimit));
       const batchCalls = input.enforceConcurrencyOverflow
         ? batch.map(async (item) => {
@@ -634,6 +875,7 @@ export async function executeTwoStageProviderRetrieval(input: {
               assignedFacets: [item],
               unionDomainIds: [item.domainCandidates[0].id],
               eligibleJobsByDomain,
+              timeoutMs: policy.budgets.maxStage2LatencyMs,
             });
           })
         : [
@@ -645,40 +887,67 @@ export async function executeTwoStageProviderRetrieval(input: {
                 assignedFacets: batch,
                 unionDomainIds: Array.from(new Set(batch.map((b) => b.domainCandidates[0].id))),
                 eligibleJobsByDomain,
+                timeoutMs: policy.budgets.maxStage2LatencyMs,
               });
             })(),
           ];
-      const batchResults = await Promise.all(batchCalls);
+
+      const batchResults = await withStageBudgetTimeout(
+        Promise.all(batchCalls),
+        policy.budgets.maxStage2LatencyMs,
+        'stage2_batch',
+      );
+      const batchWallMs = performance.now() - batchStartedAt;
+      const maxDeclaredLatency = batchResults.reduce((max, b) => Math.max(max, b.latencyMs), 0);
+      const measuredBatchLatency = Math.max(maxDeclaredLatency, batchWallMs);
       for (const batchOut of batchResults) {
         totalStage2Cost += batchOut.estimatedCostUsd;
         for (const proposal of batchOut.proposals) {
-          proposalsById.set(proposal.stableFacetId, proposal);
+          const canonicalProposalDomain = tryNormalizeToCanonicalSection5Domain(proposal.domainId);
+          if (!canonicalProposalDomain) {
+            throw new ProviderSchemaValidationError(`invalid_provider_domain:${proposal.domainId}`);
+          }
+          proposalsById.set(proposal.stableFacetId, {
+            ...proposal,
+            domainId: canonicalProposalDomain,
+          });
         }
+      }
+
+      if (measuredBatchLatency > policy.budgets.maxStage2LatencyMs) {
+        return buildFailureResult({
+          status: 'PROVIDER_UNAVAILABLE',
+          stageOneMode: 'FACET_SPANS',
+          stage2CallCount,
+          unionStage2Used: false,
+          overflowFacets,
+          estimatedCostUsd: stage1.estimatedCostUsd + totalStage2Cost,
+          failureReason: `PROVIDER_BUDGET_EXCEEDED:stage2_latency:${measuredBatchLatency.toFixed(1)}ms>${policy.budgets.maxStage2LatencyMs}ms`,
+        });
+      }
+      if (stage1.estimatedCostUsd + totalStage2Cost > policy.budgets.maxEstimatedCostUsdPerTurn) {
+        return buildFailureResult({
+          status: 'PROVIDER_UNAVAILABLE',
+          stageOneMode: 'FACET_SPANS',
+          stage2CallCount,
+          unionStage2Used: false,
+          overflowFacets,
+          estimatedCostUsd: stage1.estimatedCostUsd + totalStage2Cost,
+          failureReason: `PROVIDER_BUDGET_EXCEEDED:cost:${(stage1.estimatedCostUsd + totalStage2Cost).toFixed(6)}>${policy.budgets.maxEstimatedCostUsdPerTurn}`,
+        });
       }
     }
   } catch (err) {
-    return {
-      status: 'PROVIDER_UNAVAILABLE',
-      plan: SemanticRequestPlanSchema.parse({
-        schemaVersion: ASK_SEMANTIC_PLAN_VERSION,
-        producer: { kind: 'PROVIDER', version: `${input.provider.providerId}:${input.provider.version}` },
-        outcome: 'PROVIDER_UNAVAILABLE',
-        rawText: input.rawText,
-        normalizedText: envelope.normalizedText,
-        minimizedText: envelope.minimizedText,
-        unresolvedSpans: [],
-        facets: [],
-      }),
-      overflowFacets,
+    return buildFailureResult({
+      status: isSchemaValidationError(err) ? 'SCHEMA_INVALID' : 'PROVIDER_UNAVAILABLE',
       stageOneMode: 'FACET_SPANS',
       stage2CallCount,
       unionStage2Used: false,
-      protectedSpanRoundTripOk: roundTrip.ok,
-      minimizedSpanValidationFailures,
-      latencyMs: Number((performance.now() - startedAt).toFixed(3)),
-      estimatedCostUsd: Number((stage1.estimatedCostUsd + totalStage2Cost).toFixed(6)),
+      overflowFacets,
+      estimatedCostUsd: stage1.estimatedCostUsd + totalStage2Cost,
+      spanFailures: isSchemaValidationError(err) && err instanceof Error ? [err.message] : undefined,
       failureReason: err instanceof Error ? err.message : 'stage2_batch_error',
-    };
+    });
   }
 
   const builtFacets: SemanticFacet[] = [];
@@ -750,28 +1019,16 @@ export async function executeTwoStageProviderRetrieval(input: {
       estimatedCostUsd: Number((stage1.estimatedCostUsd + totalStage2Cost).toFixed(6)),
     };
   } catch (err) {
-    return {
+    return buildFailureResult({
       status: 'SCHEMA_INVALID',
-      plan: SemanticRequestPlanSchema.parse({
-        schemaVersion: ASK_SEMANTIC_PLAN_VERSION,
-        producer: { kind: 'PROVIDER', version: `${input.provider.providerId}:${input.provider.version}` },
-        outcome: 'SCHEMA_INVALID',
-        rawText: input.rawText,
-        normalizedText: envelope.normalizedText,
-        minimizedText: envelope.minimizedText,
-        unresolvedSpans: [],
-        facets: [],
-      }),
-      overflowFacets,
       stageOneMode: 'FACET_SPANS',
       stage2CallCount,
       unionStage2Used: false,
-      protectedSpanRoundTripOk: roundTrip.ok,
-      minimizedSpanValidationFailures: [err instanceof Error ? err.message : 'plan_validation_failed'],
-      latencyMs: Number((performance.now() - startedAt).toFixed(3)),
-      estimatedCostUsd: Number((stage1.estimatedCostUsd + totalStage2Cost).toFixed(6)),
+      overflowFacets,
+      estimatedCostUsd: stage1.estimatedCostUsd + totalStage2Cost,
+      spanFailures: [err instanceof Error ? err.message : 'plan_validation_failed'],
       failureReason: err instanceof Error ? err.message : 'stage2_schema_invalid',
-    };
+    });
   }
 }
 
@@ -893,6 +1150,24 @@ const LONG_TAIL_PARAPHRASE_RULES: readonly ParaphraseProviderRule[] = [
   },
 ];
 
+function requireCanonicalProviderDomain(rawId: string): SemanticDomainId {
+  const canonical = tryNormalizeToCanonicalSection5Domain(rawId);
+  if (!canonical) {
+    throw new ProviderSchemaValidationError(`invalid_provider_domain:${rawId}`);
+  }
+  return canonical;
+}
+
+function parseProviderJsonWithSchema<T>(schema: z.ZodType<T>, rawJson: string, label: string): T {
+  try {
+    return schema.parse(JSON.parse(rawJson));
+  } catch (err) {
+    throw new ProviderSchemaValidationError(
+      `${label}_schema_invalid:${err instanceof Error ? err.message : 'parse_failed'}`,
+    );
+  }
+}
+
 function clauseToProviderProposal(
   clauseText: string,
   domainId: SemanticDomainId,
@@ -907,7 +1182,7 @@ function clauseToProviderProposal(
     const f = det.plan.facets[0];
     return {
       requestClass: f.requestClass,
-      domainId: normalizeToCanonicalSection5Domain(f.domainCandidates[0]?.id ?? domainId),
+      domainId: requireCanonicalProviderDomain(f.domainCandidates[0]?.id ?? domainId),
       subject: f.subject,
       relations: f.relations,
       polarity: f.polarity,
@@ -997,7 +1272,7 @@ export class SealedOfflineStructuredProvider implements SemanticUnderstandingPro
       const det = parseCrossDomainSemanticRequest(clause.text);
       if (det.plan.outcome === 'MATCH' && det.plan.facets.length > 0) {
         for (const facet of det.plan.facets) {
-          const dom = normalizeToCanonicalSection5Domain(facet.domainCandidates[0]?.id ?? 'domain.property_profile');
+          const dom = requireCanonicalProviderDomain(facet.domainCandidates[0]?.id ?? 'domain.property_profile');
           const mappedStart = input.minimizedText.indexOf(facet.sourceSpan.text, clause.start);
           const spanStart = mappedStart >= 0 ? mappedStart : clause.start;
           const spanText = input.minimizedText.slice(spanStart, spanStart + facet.sourceSpan.text.length);
@@ -1047,7 +1322,7 @@ export class SealedOfflineStructuredProvider implements SemanticUnderstandingPro
           proposals.push({
             stableFacetId: `facet-${idx + 1}`,
             requestClass: f.requestClass,
-            domainId: normalizeToCanonicalSection5Domain(f.domainCandidates[0]?.id ?? input.unionDomainIds[0] ?? 'domain.property_profile'),
+            domainId: requireCanonicalProviderDomain(f.domainCandidates[0]?.id ?? input.unionDomainIds[0] ?? 'domain.property_profile'),
             subject: f.subject,
             relations: f.relations,
             polarity: f.polarity,
@@ -1125,7 +1400,7 @@ export class GeminiSemanticUnderstandingProvider implements SemanticUnderstandin
     const rawJson = await executeGovernedAIRequest<string>({
       routeId: 'ai:ask',
       model,
-      timeoutMs: 2500,
+      timeoutMs: input.timeoutMs ?? 600,
       structuredOutputRequired: true,
       work: async () => {
         const res = await ai.models.generateContent({
@@ -1141,12 +1416,12 @@ export class GeminiSemanticUnderstandingProvider implements SemanticUnderstandin
         return res.text ?? '{}';
       },
     });
-    const parsed = StageOneFacetSchema.parse(JSON.parse(rawJson));
+    const parsed = parseProviderJsonWithSchema(StageOneFacetSchema, rawJson, 'stage1');
     const latencyMs = Number((performance.now() - startedAt).toFixed(3));
     if (parsed.mode === 'FLAT_DOMAIN_LIST') {
       return {
         mode: 'FLAT_DOMAIN_LIST',
-        domainIds: (parsed.domainIds ?? []).map((d) => normalizeToCanonicalSection5Domain(d)),
+        domainIds: (parsed.domainIds ?? []).map((d) => requireCanonicalProviderDomain(d)),
         latencyMs,
         estimatedCostUsd: 0.001,
       };
@@ -1156,7 +1431,7 @@ export class GeminiSemanticUnderstandingProvider implements SemanticUnderstandin
       facets: (parsed.facets ?? []).map((f) => ({
         preliminarySpan: f.preliminarySpan,
         domainCandidates: f.domainCandidates.map((c) => ({
-          id: normalizeToCanonicalSection5Domain(c.id),
+          id: requireCanonicalProviderDomain(c.id),
           score: c.score,
         })),
         dependsOnIndexes: f.dependsOnIndexes,
@@ -1176,7 +1451,7 @@ export class GeminiSemanticUnderstandingProvider implements SemanticUnderstandin
     const rawJson = await executeGovernedAIRequest<string>({
       routeId: 'ai:ask',
       model,
-      timeoutMs: 3000,
+      timeoutMs: input.timeoutMs ?? 1200,
       structuredOutputRequired: true,
       work: async () => {
         const res = await ai.models.generateContent({
@@ -1192,11 +1467,11 @@ export class GeminiSemanticUnderstandingProvider implements SemanticUnderstandin
         return res.text ?? '{}';
       },
     });
-    const parsed = StageTwoProposalSchema.parse(JSON.parse(rawJson));
+    const parsed = parseProviderJsonWithSchema(StageTwoProposalSchema, rawJson, 'stage2');
     return {
       proposals: parsed.proposals.map((p) => ({
         ...p,
-        domainId: normalizeToCanonicalSection5Domain(p.domainId),
+        domainId: requireCanonicalProviderDomain(p.domainId),
         where: p.where as SemanticWhereExpression | null,
         time: p.time as SemanticTimeConstraint | null,
       })),
@@ -1438,11 +1713,11 @@ export async function interpretWithSemanticProducers(input: {
     };
   }
 
-  // Both failed to match cleanly -> fail closed preserving provider unavailability if relevant.
+  // Both failed to match cleanly -> fail closed preserving provider status when relevant.
   return {
     plan: detParse.plan.outcome !== 'NONE_FITS'
       ? detParse.plan
-      : providerResult.status === 'PROVIDER_UNAVAILABLE'
+      : (providerResult.status === 'PROVIDER_UNAVAILABLE' || providerResult.status === 'SCHEMA_INVALID')
         ? providerResult.plan
         : detParse.plan,
     deterministicParse: detParse,

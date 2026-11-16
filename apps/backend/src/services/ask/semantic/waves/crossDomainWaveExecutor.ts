@@ -28,7 +28,7 @@ import {
 } from '../phase2a/phase2aSliceExecutor';
 import {
   assignMixedStackFacetOwnership,
-  normalizeToCanonicalSection5Domain,
+  tryNormalizeToCanonicalSection5Domain,
   type MixedStackFacetOwnershipAssignment,
 } from './domainWaveManifest';
 import {
@@ -1984,7 +1984,10 @@ export function deriveSnapshotLoadScope(facets: readonly SemanticFacet[]): Cross
   for (const facet of facets) {
     if (facet.evidence.jobMatch) jobs.add(facet.evidence.jobMatch);
     for (const candidate of facet.domainCandidates) {
-      domains.add(normalizeToCanonicalSection5Domain(candidate.id));
+      const canonical = tryNormalizeToCanonicalSection5Domain(candidate.id);
+      if (canonical) {
+        domains.add(canonical);
+      }
     }
   }
   return { domains, jobs };
@@ -2825,36 +2828,46 @@ export async function executeCrossDomainOnProperty(input: {
   readonly rawText: string;
   readonly timeZone?: string;
   readonly snapshotOverride?: CrossDomainPropertySnapshot;
+  readonly planOverride?: SemanticRequestPlan;
 }): Promise<{
   readonly execution: CrossDomainExecutionResult;
   readonly operationResult: AskOperationResult;
   readonly snapshot: CrossDomainPropertySnapshot;
 }> {
-  const parsed = parseCrossDomainSemanticRequest(input.rawText);
+  const activePlan = input.planOverride ?? null;
+  const parsed = activePlan ? null : parseCrossDomainSemanticRequest(input.rawText);
   const snapshot = input.snapshotOverride
-    ?? (parsed.plan.outcome === 'MATCH'
+    ?? (activePlan && activePlan.outcome === 'MATCH'
       ? await loadCrossDomainPropertySnapshot(
           input.propertyId,
           input.userId,
           input.timeZone,
-          deriveSnapshotLoadScope(parsed.plan.facets),
+          deriveSnapshotLoadScope(activePlan.facets),
         )
-      : !parsed.clarification && parsed.plan.outcome === 'NONE_FITS' && mayNeedDynamicQuoteResolution(input.rawText)
+      : parsed && parsed.plan.outcome === 'MATCH'
         ? await loadCrossDomainPropertySnapshot(
             input.propertyId,
             input.userId,
             input.timeZone,
-            {
-              domains: new Set(['domain.projects_quotes_vendors']),
-              jobs: new Set(['job.projects.quote_comparison']),
-            },
+            deriveSnapshotLoadScope(parsed.plan.facets),
           )
-        : buildMinimalCrossDomainSnapshot(input.propertyId, input.timeZone));
+        : parsed && !parsed.clarification && parsed.plan.outcome === 'NONE_FITS' && mayNeedDynamicQuoteResolution(input.rawText)
+          ? await loadCrossDomainPropertySnapshot(
+              input.propertyId,
+              input.userId,
+              input.timeZone,
+              {
+                domains: new Set(['domain.projects_quotes_vendors']),
+                jobs: new Set(['job.projects.quote_comparison']),
+              },
+            )
+          : buildMinimalCrossDomainSnapshot(input.propertyId, input.timeZone));
   const execution = await executeCrossDomainWaves({
     rawText: input.rawText,
     snapshot,
     role: normalizeWaveRole(input.role),
     propertyAuthorized: input.propertyAuthorized,
+    planOverride: activePlan ?? undefined,
   });
   return {
     execution,

@@ -23,6 +23,13 @@ import { parseDeterministicSemanticRequest } from '../semantic/deterministicSema
 import { executePhase2aOnProperty } from '../semantic/phase2a/phase2aSliceExecutor';
 import { mayNeedDynamicQuoteResolution, parseCrossDomainSemanticRequest } from '../semantic/waves/crossDomainPlanBuilder';
 import { executeCrossDomainOnProperty } from '../semantic/waves/crossDomainWaveExecutor';
+import {
+  GeminiSemanticUnderstandingProvider,
+  interpretWithSemanticProducers,
+  resolveDefaultSemanticProviderPolicy,
+  type SemanticProviderPolicy,
+  type SemanticUnderstandingProvider,
+} from '../semantic/phase6/semanticProviderOrchestrator';
 
 const ENTITY_COPY: Record<string, { plural: string; singular: string; collection: string; record: string; none?: string }> = {
   InventoryItem: { plural: 'items', singular: 'inventory', collection: 'inventory', record: 'Home inventory record' },
@@ -299,12 +306,119 @@ function mergeFacetResults(results: AskOperationResult[]): AskOperationResult {
   };
 }
 
-export async function dataPointReadResult(userId: string, propertyId: string, message: string, forcedPoint?: DataPointDefinition): Promise<AskOperationResult> {
+export interface DataPointReadSemanticOptions {
+  readonly semanticProvider?: SemanticUnderstandingProvider | null;
+  readonly semanticProviderPolicy?: SemanticProviderPolicy;
+  readonly evaluationMode?: 'PRODUCTION_SHORT_CIRCUIT' | 'DUAL_PRODUCER';
+}
+
+function attachOrchestrationParameters(
+  result: AskOperationResult,
+  orchestration: Awaited<ReturnType<typeof interpretWithSemanticProducers>>,
+): AskOperationResult {
+  return {
+    ...result,
+    parameters: {
+      ...(result.parameters ?? {}),
+      providerOrchestration: {
+        reconciliationStatus: orchestration.reconciliationStatus,
+        shortCircuitedProvider: orchestration.shortCircuitedProvider,
+        providerStatus: orchestration.providerResult?.status ?? null,
+        disagreements: orchestration.disagreements,
+        ...(orchestration.providerResult?.failureReason
+          ? { failureReason: orchestration.providerResult.failureReason }
+          : {}),
+      },
+    },
+  };
+}
+
+async function tryExecuteWithSemanticOrchestration(input: {
+  readonly userId: string;
+  readonly propertyId: string;
+  readonly role: string;
+  readonly message: string;
+  readonly timeZone: string;
+  readonly evaluationMode: 'PRODUCTION_SHORT_CIRCUIT' | 'DUAL_PRODUCER';
+  readonly provider: SemanticUnderstandingProvider | null;
+  readonly policy: SemanticProviderPolicy;
+}): Promise<AskOperationResult | null> {
+  if (!input.provider) {
+    return null;
+  }
+  const orchestration = await interpretWithSemanticProducers({
+    rawText: input.message,
+    evaluationMode: input.evaluationMode,
+    provider: input.provider,
+    policy: input.policy,
+  });
+
+  if (orchestration.reconciliationStatus === 'MATERIAL_DISAGREEMENT') {
+    return attachOrchestrationParameters(
+      notice(
+        'DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED',
+        'data-point-semantic-disagreement',
+        'I need to confirm what you meant',
+        'Two independent interpretations of your question disagreed materially, so I did not run this read automatically. Try rephrasing more specifically.',
+      ),
+      orchestration,
+    );
+  }
+
+  if (orchestration.plan.outcome === 'MATCH' || orchestration.plan.outcome === 'BOUNDARY') {
+    const execRes = await executeCrossDomainOnProperty({
+      propertyId: input.propertyId,
+      userId: input.userId,
+      role: input.role,
+      propertyAuthorized: true,
+      rawText: input.message,
+      timeZone: input.timeZone,
+      planOverride: orchestration.plan,
+    });
+    if (execRes.execution.status !== 'NONE_FITS') {
+      return attachOrchestrationParameters(execRes.operationResult, orchestration);
+    }
+  }
+
+  if (
+    orchestration.providerResult?.status === 'PROVIDER_UNAVAILABLE'
+    || orchestration.providerResult?.status === 'SCHEMA_INVALID'
+  ) {
+    return attachOrchestrationParameters(
+      notice(
+        orchestration.providerResult.status,
+        'data-point-provider-unavailable',
+        'I could not complete an AI-expanded interpretation right now',
+        'The structured semantic interpreter was unavailable or exceeded safety limits. Try rephrasing using direct terms.',
+      ),
+      orchestration,
+    );
+  }
+
+  return null;
+}
+
+export async function dataPointReadResult(
+  userId: string,
+  propertyId: string,
+  message: string,
+  forcedPoint?: DataPointDefinition,
+  options?: DataPointReadSemanticOptions,
+): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const role = String(access.role);
   // The planner is pure: the property's timezone is read here and passed in, so calendar periods (this month, next week) use the property's calendar, not UTC.
   const timeZone = await propertyTimeZone(propertyId);
   const queryOutcome = forcedPoint ? ({ kind: 'NONE' } as const) : planDataPointQuery(message, new Date(), timeZone);
+  const providerPolicy = options?.semanticProviderPolicy ?? resolveDefaultSemanticProviderPolicy();
+  const activeSemanticProvider: SemanticUnderstandingProvider | null =
+    options?.semanticProvider !== undefined
+      ? options.semanticProvider
+      : providerPolicy.approvalStatus === 'APPROVED_FOR_STRUCTURED_PLANNING'
+        ? new GeminiSemanticUnderstandingProvider()
+        : null;
+  const evaluationMode = options?.evaluationMode ?? 'PRODUCTION_SHORT_CIRCUIT';
+
   if (!forcedPoint) {
     const phase2aPlan = parseDeterministicSemanticRequest(message);
     const phase2aJob = phase2aPlan.outcome === 'MATCH' ? phase2aPlan.facets[0]?.evidence.jobMatch : null;
@@ -323,6 +437,29 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
       return phase2aExecution.operationResult;
     }
     const crossDomainParsed = parseCrossDomainSemanticRequest(message);
+    if (
+      (
+        crossDomainParsed.plan.unresolvedSpans.length > 0
+        || evaluationMode === 'DUAL_PRODUCER'
+      )
+      && crossDomainParsed.plan.outcome === 'MATCH'
+      && !crossDomainParsed.clarification
+      && activeSemanticProvider
+    ) {
+      const orchestrated = await tryExecuteWithSemanticOrchestration({
+        userId,
+        propertyId,
+        role,
+        message,
+        timeZone,
+        evaluationMode,
+        provider: activeSemanticProvider,
+        policy: providerPolicy,
+      });
+      if (orchestrated) {
+        return orchestrated;
+      }
+    }
     if (
       crossDomainParsed.clarification
       || crossDomainParsed.plan.outcome === 'BOUNDARY'
@@ -358,7 +495,7 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
   // A multi-part question ("what is my deductible and when does my insurance policy expire") has several facets: each is read through the ordinary single-point path and all are answered in one summary.
   if (!forcedPoint && queryOutcome.kind === 'NONE') {
     const facets = resolveDataPointsMulti(message);
-    if (facets.length >= 2) return mergeFacetResults(await Promise.all(facets.map((facet) => dataPointReadResult(userId, propertyId, message, facet))));
+    if (facets.length >= 2) return mergeFacetResults(await Promise.all(facets.map((facet) => dataPointReadResult(userId, propertyId, message, facet, options))));
   }
   if (queryOutcome.kind === 'CLARIFY') return notice(queryOutcome.reasonCode, 'data-point-query-clarify', queryOutcome.title, queryOutcome.body);
   if (queryOutcome.kind === 'PLAN') {
@@ -378,7 +515,24 @@ export async function dataPointReadResult(userId: string, propertyId: string, me
     return dataPointQueryResult(propertyId, role, queryOutcome.plan, queryAgreement);
   }
   const point = forcedPoint ?? resolveDataPoint(message);
-  if (!point) return notice('DATA_POINT_NOT_IDENTIFIED', 'data-point-unidentified', 'Which detail do you mean?', 'Tell me the detail and the item, for example “the serial number of my refrigerator” or “when my furnace was installed”.');
+  if (!point) {
+    if (!forcedPoint && activeSemanticProvider) {
+      const orchestrated = await tryExecuteWithSemanticOrchestration({
+        userId,
+        propertyId,
+        role,
+        message,
+        timeZone,
+        evaluationMode,
+        provider: activeSemanticProvider,
+        policy: providerPolicy,
+      });
+      if (orchestrated) {
+        return orchestrated;
+      }
+    }
+    return notice('DATA_POINT_NOT_IDENTIFIED', 'data-point-unidentified', 'Which detail do you mean?', 'Tell me the detail and the item, for example “the serial number of my refrigerator” or “when my furnace was installed”.');
+  }
   let singlePointAgreement: LegacyGrammarAgreement | null = null;
   if (!forcedPoint) {
     singlePointAgreement = dataPointReadGrammarAgreement(message, {
