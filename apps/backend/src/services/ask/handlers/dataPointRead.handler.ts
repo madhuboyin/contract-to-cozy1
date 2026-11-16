@@ -1,6 +1,7 @@
 // DATA_POINT_READ (reliability FRD D12, Phase 1b): "what is the serial number of my fridge", "when was my furnace installed", "what did I pay for my dryer".
 // A STANDARD, read-only fact read through the one allowlisted template in dataPoint/dataPointReader.ts. No side effects; a value that is not recorded is said plainly,
 // with the authorised way to add it, and never guessed (FR-REC-2 MISSING_RECORD_DATA).
+import { inDomainNotUnderstoodResult } from '../recovery/inDomainNotUnderstood';
 import { sourceRef, type CompositeSourceType } from '../composition/sourceAuthorization';
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
@@ -603,6 +604,9 @@ export async function dataPointReadResult(
         return orchestrated.result;
       }
     }
+    // Cross-domain FRD §15: a message with verified subject evidence but no validated plan gets the specific, defect-counted recovery; anything else keeps the generic reply.
+    const inDomainRecovery = !forcedPoint ? inDomainNotUnderstoodResult(message) : null;
+    if (inDomainRecovery) return inDomainRecovery;
     return notice('DATA_POINT_NOT_IDENTIFIED', 'data-point-unidentified', 'Which detail do you mean?', 'Tell me the detail and the item, for example “the serial number of my refrigerator” or “when my furnace was installed”.');
   }
   let singlePointAgreement: LegacyGrammarAgreement | null = null;

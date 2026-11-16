@@ -3,7 +3,7 @@
 import type { AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 
 export type RecoveryCode =
-  | 'OUT_OF_DOMAIN' | 'CAPABILITY_ABSENT' | 'DATA_POINT_UNREACHABLE' | 'MISSING_RECORD_DATA'
+  | 'OUT_OF_DOMAIN' | 'IN_DOMAIN_NOT_UNDERSTOOD' | 'CAPABILITY_ABSENT' | 'DATA_POINT_UNREACHABLE' | 'MISSING_RECORD_DATA'
   | 'MODEL_NONE_FITS' | 'MODEL_INSUFFICIENT_TEXT' | 'UNINTERPRETABLE_AFTER_MINIMISATION'
   | 'MODEL_SCHEMA_INVALID' | 'STAGE1_UNAVAILABLE' | 'STAGE2_UNAVAILABLE' | 'MODEL_UNAVAILABLE';
 
@@ -24,6 +24,8 @@ const outcome = (code: RecoveryCode, reporting: RecoveryReporting, copy?: Recove
 
 export const RECOVERY_OUTCOMES: Readonly<Record<RecoveryCode, RecoveryOutcome>> = Object.freeze({
   OUT_OF_DOMAIN: outcome('OUT_OF_DOMAIN', 'RECOVERY_SHOWN', { title: 'That’s outside what I help with', body: 'That’s outside what I help with. I can help with questions about your home.' }),
+  // Cross-domain semantic FRD §15: clearly about the authorised home, but no producer yielded a validated plan. A coverage defect, distinct from CAPABILITY_ABSENT, OUT_OF_DOMAIN and provider failure. The handler (inDomainNotUnderstood.ts) writes the specific copy; this default is only the fallback wording.
+  IN_DOMAIN_NOT_UNDERSTOOD: outcome('IN_DOMAIN_NOT_UNDERSTOOD', 'COVERAGE_DEFECT', { title: 'I couldn’t tell what you want to know', body: 'That is about your home, but I couldn’t tell which question you mean. Tell me in a few words what you’d like to know.' }),
   // Reserved for a human-labelled or deterministic absence (FR-REC-2): never raised automatically from a model result.
   CAPABILITY_ABSENT: outcome('CAPABILITY_ABSENT', 'RECOVERY_SHOWN', { title: 'I can’t do that analysis yet', body: 'I can’t do that analysis yet.' }),
   DATA_POINT_UNREACHABLE: outcome('DATA_POINT_UNREACHABLE', 'COVERAGE_DEFECT', { title: 'I can’t show that yet', body: 'Your home record includes that, but I can’t show it yet.' }),

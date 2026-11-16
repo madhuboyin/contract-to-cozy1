@@ -151,7 +151,7 @@ test('Phase 0 Bullet 2: duplicate/legacy scalar field coalescence manifest mecha
 
 test('Phase 0 Bullet 3: recognizer and vocabulary retirement manifest (FR-ONT-8) mechanically scans all Ask recognizer files', () => {
   assert.deepEqual(validateRecognizerRetirementManifest(), []);
-  assert.equal(ASK_RECOGNIZER_RETIREMENT_MANIFEST.length, 13);
+  assert.equal(ASK_RECOGNIZER_RETIREMENT_MANIFEST.length, 14);
 
   const discovered = discoverLiveAskRecognizerSources();
   assert.ok(discovered.length >= 230, 'mechanically discovers all regex and vocabulary-bearing Ask files');

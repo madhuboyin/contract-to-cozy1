@@ -289,6 +289,21 @@ function annotateClauseTokens(tokens: readonly TokenSpan[]): {
   return { annotations, unresolvedSpans };
 }
 
+/**
+ * FR-REC / §15 recovery evidence: the generated-lexicon annotations and unconsumed spans of a whole message, so an
+ * in-domain-but-not-understood recovery can name what WAS verified without a second vocabulary.
+ */
+export function collectCrossDomainRecoveryEvidence(rawText: string): {
+  readonly lexemes: readonly Pick<CrossDomainLexeme, 'role' | 'semanticId' | 'phrase'>[];
+  readonly unresolvedSpans: readonly SemanticSourceSpan[];
+} {
+  const annotated = annotateClauseTokens(tokenizeClause(rawText.trim()));
+  return {
+    lexemes: annotated.annotations.map((a) => ({ role: a.lexeme.role, semanticId: a.lexeme.semanticId, phrase: a.lexeme.phrase })),
+    unresolvedSpans: annotated.unresolvedSpans,
+  };
+}
+
 const SINGLE_WORD_LEXICON_PHRASES = new Set(
   ASK_CROSS_DOMAIN_SEMANTIC_LEXICON.filter((l) => !l.phrase.includes(' ')).map((l) => l.phrase),
 );

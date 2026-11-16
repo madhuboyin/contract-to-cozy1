@@ -815,6 +815,33 @@ export const ASK_RECOGNIZER_RETIREMENT_MANIFEST: readonly RecognizerInventoryEnt
       'Operation-registry regex patterns and presentation/trust validators mix boundary enforcement with lexical surface heuristics.',
     ],
   },
+  {
+    recognizerId: 'recognizer.recovery.in_domain_not_understood_areas',
+    category: 'HANDLER_LOCAL_INTENT_REGEXES',
+    sourceFile: 'src/services/ask/recovery/inDomainNotUnderstood.ts',
+    coveredSourceFiles: ['src/services/ask/recovery/inDomainNotUnderstood.ts'],
+    exportedSymbols: ['assessInDomainNotUnderstood', 'inDomainNotUnderstoodResult'],
+    liveItemCount: 2,
+    affectedDomains: [
+      'domain.inventory',
+      'domain.maintenance',
+      'domain.warranties_coverage',
+      'domain.insurance_policies',
+      'domain.claims',
+      'domain.ownership_costs_finance',
+      'domain.projects_quotes_vendors',
+      'domain.risks_recalls_inspections',
+      'domain.timeline_home_events',
+      'domain.buyer_journey',
+      'domain.seller_preparation',
+      'domain.account_household_preferences',
+    ],
+    disposition: 'RETIRE_PHASE_2B',
+    canonicalReplacementTarget: 'Area labels and offered example questions generated from the Capability Registry representative examples (FR-ONT-4); subject evidence already comes from the generated shared lexicon (FR-ONT-6).',
+    knownFailureModes: [
+      'Candidate example prompts are hand-listed per area; a test proves each still parses to a validated plan, but new capabilities are not offered until added here.',
+    ],
+  },
 ] as const);
 
 function isStringLiteralArrayNode(node: ts.Node): boolean {

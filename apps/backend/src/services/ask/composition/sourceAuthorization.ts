@@ -209,7 +209,7 @@ export const COMPOSABLE_SOURCE_AUTHORIZATION: Readonly<Record<string, Composable
   }),
   DATA_POINT_READ: build({
     allowed: ['InventoryItem', 'Warranty', 'InsurancePolicy', 'PropertyMaintenanceTask', 'HomeReserveFund', 'PropertyTaxBillRecord', 'PropertyTaxAssessmentRecord', 'PropertySalePrepProfile', 'PropertySaleCase', 'HomeBuyerChecklist', 'PropertyRecord', 'HomeBuyerTask', 'BuyerJourneyMilestone', 'SaleReadinessItem', 'PropertyRecordVersion', 'CurrentPropertyRecordVersion', 'Claim', 'ClaimChecklistItem', 'ClaimTimelineEvent', 'ClaimDocument', 'Property'],
-    noRecordReasons: ['DATA_POINT_NOT_IDENTIFIED', 'DATA_POINT_NO_INVENTORY', 'DATA_POINT_ITEM_NOT_FOUND', 'DATA_POINT_NOT_RECORDED', 'DATA_POINT_RESTRICTED', 'DATA_POINT_AMBIGUOUS'],
+    noRecordReasons: ['DATA_POINT_NOT_IDENTIFIED', 'DATA_POINT_NO_INVENTORY', 'DATA_POINT_ITEM_NOT_FOUND', 'DATA_POINT_NOT_RECORDED', 'DATA_POINT_RESTRICTED', 'DATA_POINT_AMBIGUOUS', 'ASK_RECOVERY_IN_DOMAIN_NOT_UNDERSTOOD'],
   }),
   HOME_TIMELINE_EVENTS: build({
     allowed: ['HomeEvent', 'Property'], noRecordReasons: ['HOME_TIMELINE_EMPTY'],
