@@ -54,12 +54,20 @@ export interface SemanticProviderPolicy {
 export function resolveDefaultSemanticProviderPolicy(
   env: NodeJS.ProcessEnv = process.env,
 ): SemanticProviderPolicy {
-  const approved = env.ASK_SEMANTIC_PROVIDER_APPROVED === 'true';
+  const providerApproved = env.ASK_SEMANTIC_PROVIDER_APPROVED === 'true';
+  const providerTermsRecorded = env.ASK_UNDERSTANDING_PROVIDER_TERMS_RECORDED === 'true';
+  const homeownerTextApproved = env.ASK_UNDERSTANDING_HOMEOWNER_TEXT_APPROVED === 'true';
+  const approved = providerApproved && providerTermsRecorded && homeownerTextApproved;
+  const missingApprovals = [
+    !providerApproved ? 'semantic provider activation' : null,
+    !providerTermsRecorded ? 'provider terms' : null,
+    !homeownerTextApproved ? 'homeowner-text processing' : null,
+  ].filter((value): value is string => Boolean(value));
   return {
     approvalStatus: approved ? 'APPROVED_FOR_STRUCTURED_PLANNING' : 'UNRESOLVED_OWNER_APPROVAL',
     recordedDecisionNote: approved
-      ? 'Owner approval flag ASK_SEMANTIC_PROVIDER_APPROVED=true active with configured Phase 6 budgets.'
-      : 'FRD §22.3/§22.4 owner sign-off and live cost/latency budget approval remain open for external traffic; deterministic waves execute standalone.',
+      ? 'Structured planning is active with separate homeowner-text, provider-terms, and semantic-provider approvals plus configured Phase 6 budgets.'
+      : `External structured planning is disabled; missing ${missingApprovals.join(', ')} approval. Deterministic waves execute standalone.`,
     budgets: {
       maxStage1LatencyMs: 600,
       maxStage2LatencyMs: 1200,

@@ -277,7 +277,9 @@ async function invokeGuarded(
         hasSemanticProvider: Boolean(
           deps.semanticProvider
           || deps.semanticProviderPolicy?.approvalStatus === 'APPROVED_FOR_STRUCTURED_PLANNING'
-          || process.env.ASK_SEMANTIC_PROVIDER_APPROVED === 'true',
+          || (process.env.ASK_SEMANTIC_PROVIDER_APPROVED === 'true'
+            && controls.understandingProviderTermsRecorded
+            && controls.understandingHomeownerTextApproved),
         ),
       });
       if (semanticDecision.shouldDispatchToSemanticEntry) {

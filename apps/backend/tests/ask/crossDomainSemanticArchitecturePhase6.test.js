@@ -168,16 +168,31 @@ test('Track P enforces deterministic-first short-circuit, dual-producer reconcil
   });
   assert.equal(outageNoDet.plan.outcome, 'PROVIDER_UNAVAILABLE');
 
-  // §22.3 owner approval gate blocks unapproved live Gemini calls unless opted in explicitly
+  // Independent gates block live calls unless homeowner text, provider terms,
+  // and semantic-provider activation are all explicitly approved.
   const defaultPolicy = resolveDefaultSemanticProviderPolicy({});
   assert.equal(defaultPolicy.approvalStatus, 'UNRESOLVED_OWNER_APPROVAL');
+  for (const env of [
+    { ASK_SEMANTIC_PROVIDER_APPROVED: 'true' },
+    { ASK_UNDERSTANDING_PROVIDER_TERMS_RECORDED: 'true' },
+    { ASK_UNDERSTANDING_HOMEOWNER_TEXT_APPROVED: 'true' },
+    { ASK_SEMANTIC_PROVIDER_APPROVED: 'true', ASK_UNDERSTANDING_PROVIDER_TERMS_RECORDED: 'true' },
+    { ASK_SEMANTIC_PROVIDER_APPROVED: 'true', ASK_UNDERSTANDING_HOMEOWNER_TEXT_APPROVED: 'true' },
+  ]) {
+    assert.equal(resolveDefaultSemanticProviderPolicy(env).approvalStatus, 'UNRESOLVED_OWNER_APPROVAL');
+  }
+  assert.equal(resolveDefaultSemanticProviderPolicy({
+    ASK_SEMANTIC_PROVIDER_APPROVED: 'true',
+    ASK_UNDERSTANDING_PROVIDER_TERMS_RECORDED: 'true',
+    ASK_UNDERSTANDING_HOMEOWNER_TEXT_APPROVED: 'true',
+  }).approvalStatus, 'APPROVED_FOR_STRUCTURED_PLANNING');
   const geminiBlocked = await executeTwoStageProviderRetrieval({
     rawText: detPrompt,
     provider: new GeminiSemanticUnderstandingProvider(),
     policy: defaultPolicy,
   });
   assert.equal(geminiBlocked.status, 'PROVIDER_UNAVAILABLE');
-  assert.match(geminiBlocked.failureReason ?? '', /owner sign-off/i);
+  assert.match(geminiBlocked.failureReason ?? '', /missing .*approval/i);
 });
 
 test('Phase 6 6-stratum PAV calibration enforces 11-feature vectors and Wilson 95% bounds on high-confidence errors', () => {
