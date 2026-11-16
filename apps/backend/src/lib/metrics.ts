@@ -288,6 +288,18 @@ export const askRecoveryOutcomeTotal = new Counter({
   name: 'ask_recovery_outcome_total', help: 'Ask non-answer outcomes by recovery code (OUT_OF_DOMAIN, MODEL_NONE_FITS, MISSING_RECORD_DATA, ...).', labelNames: ['code'] as const, registers: [register],
 });
 
+/**
+ * Cross-domain semantic FRD §15 / §19 #21 / FR-EVAL-3 #32: understanding-coverage defects by bounded area, so a per-domain
+ * IN_DOMAIN_NOT_UNDERSTOOD rate can be reported (divide by that area's turns). Labels are fixed vocabularies only: never message
+ * text, spans or record ids (FR-SEC-5).
+ */
+export const askUnderstandingCoverageGapTotal = new Counter({
+  name: 'ask_understanding_coverage_gap_total',
+  help: 'Ask turns that ended in an understanding-coverage gap, by kind (IN_DOMAIN_NOT_UNDERSTOOD) and verified subject area',
+  labelNames: ['kind', 'area'] as const,
+  registers: [register],
+});
+
 export const askUnansweredRecoveryTotal = new Counter({
   name: 'ask_unanswered_recovery_total',
   help: 'Messages the generic fallback could not answer: a "Did you mean" was offered, or no candidate cleared the floor',

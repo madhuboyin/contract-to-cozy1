@@ -101,6 +101,12 @@ test('the data-point handler returns the recovery for an unplanned in-domain mes
   try {
     const recovered = await dataPointReadResult('u1', 'p1', 'my warranty frobnicate zorp', null, {});
     assert.equal(recovered.reasonCode, 'ASK_RECOVERY_IN_DOMAIN_NOT_UNDERSTOOD');
+    // Coverage-gap telemetry is labelled by bounded area only, never by message text (FR-SEC-5).
+    const { register } = require('../../src/lib/metrics.ts');
+    const metric = (await register.getMetricsAsJSON()).find((m) => m.name === 'ask_understanding_coverage_gap_total');
+    const sample = metric.values.find((v) => v.labels.kind === 'IN_DOMAIN_NOT_UNDERSTOOD' && v.labels.area === 'warranty');
+    assert.ok(sample && sample.value >= 1);
+    assert.ok(metric.values.every((v) => !JSON.stringify(v.labels).includes('frobnicate')));
     const generic = await dataPointReadResult('u1', 'p1', 'what is the weather in paris', null, {});
     assert.equal(generic.reasonCode, 'DATA_POINT_NOT_IDENTIFIED');
   } finally {

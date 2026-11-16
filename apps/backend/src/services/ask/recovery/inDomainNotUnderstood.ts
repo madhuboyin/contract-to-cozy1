@@ -106,7 +106,8 @@ export function buildInDomainNotUnderstoodResult(assessment: InDomainNotUndersto
   return {
     status: 'READY_WITH_LIMITATIONS',
     reasonCode: entry.reasonCode,
-    parameters: { sources: [] },
+    // recoveryArea is a bounded area id (never message text) used only for coverage-gap telemetry.
+    parameters: { sources: [], recoveryArea: assessment.areaIds[0] ?? 'unknown' },
     blocks: [{ type: 'SUMMARY', id: 'recovery-in-domain-not-understood', title: entry.copy?.title ?? 'I couldn’t tell what you want to know', body, tone: 'CAUTION', actions: [] } as AskPresentationBlock],
     suggestions: [],
   };
