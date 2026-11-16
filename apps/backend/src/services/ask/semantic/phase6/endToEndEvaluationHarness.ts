@@ -1,14 +1,17 @@
 import { performance } from 'node:perf_hooks';
 import { prisma } from '../../../../lib/prisma';
-import { resolveAskOperation, type AskOperationId } from '../../askOperationRegistry';
+import { readAskOperationalControls } from '../../../../config/askOperationalControls';
+import { resolveAskOperation, getAskOperationDefinition, type AskOperationId } from '../../askOperationRegistry';
 import { resolveAskRoutingCascade } from '../../askRoutingCascade';
+import { loadAskHandlerManifest, validateAskRuntimeRegistration } from '../../askRuntimeBootstrap';
 import { resolveDataPoint } from '../../dataPoint/dataPointCatalogue';
 import { planDataPointQuery } from '../../dataPoint/dataPointQueryPlan';
 import { planShape789 } from '../../dataPoint/dataPointShapes789';
+import { executeOperationCore } from '../../execution/executeOperation';
 import { ASK_ARTIFACT_TYPE_REGISTRY } from '../../governance/askArtifactTypeRegistry';
 import { ASK_SAVED_TYPE_READERS } from '../../saved/savedTypeReaders';
 import { composeAskSavedPage } from '../../askSaved.service';
-import { handleDataPointRead } from '../../handlers/dataPointRead.handler';
+import { resolveHierarchicalSkillRouting } from '../../../skills/skillRouter';
 import { buildAskSemanticPhase0BaselineSummary } from '../phase0/index';
 import { ASK_SEMANTIC_DOMAINS, type SemanticDomainId } from '../phase0/semanticOntologyBaseline';
 import { verifyPhase1Invariants } from '../phase1/index';
@@ -22,6 +25,7 @@ import {
   PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
 } from '../phase2a/index';
 import { parseDeterministicSemanticRequest } from '../deterministicSemanticParser';
+import { evaluateLegacyVsSemanticGrammarAgreement } from '../legacyGrammarAgreement';
 import { resolveAskSemanticEntryDecision } from '../semanticEntryDispatcher';
 import {
   parseCrossDomainSemanticRequest,
@@ -626,12 +630,18 @@ export interface Phase6EvaluationReport {
     readonly liveExternalRuntimePendingApproval: boolean;
   };
   readonly entryPathTelemetry: {
+    readonly entryPathExecutedBoundary: 'CASCADE_SKILL_SEMANTIC_ENTRY_AND_EXECUTE_OPERATION_CORE_CAPABILITY_INVOKE';
+    readonly persistedAskExecutionFlowExercised: false;
     readonly totalCases: number;
     readonly rawCascadeNonFallbackCount: number;
     readonly semanticEntryPromotedCount: number;
+    readonly allRoutedCapabilityInvokedCount: number;
+    readonly allRoutedCapabilityResolvedCount: number;
     readonly entryCapabilityExecutedCount: number;
     readonly entryCapabilityResolvedCount: number;
     readonly routedToSeparateLegacyOpCount: number;
+    readonly separateLegacyOpExecutedCount: number;
+    readonly separateLegacyOpResolvedCount: number;
   };
   readonly sealedProxyInvariantsPassed: boolean;
   readonly statisticalWilsonClaimStatus: 'PASSED' | 'INSUFFICIENT_INDEPENDENT_SAMPLES';
@@ -684,6 +694,22 @@ export interface Phase6EvaluationReport {
     readonly sixFacetCompletenessAndOverflowRate: number;
     readonly conflictedPopulationProjectionAccuracy: number;
     readonly legacyVsGrammarAgreementRate: number;
+    readonly legacyGrammarAgreementEvidence: {
+      readonly comparedDimensions: readonly string[];
+      readonly evaluatedCases: number;
+      readonly agreedCount: number;
+      readonly disagreedCollisionCount: number;
+      readonly grammarExpandedCount: number;
+      readonly falseAdmissionsPreventedCount: number;
+      readonly collisions: readonly {
+        readonly caseId: string;
+        readonly matchedLegacyProducer: string;
+        readonly legacyOperationId: string;
+        readonly typedDomainId: string | null;
+        readonly typedJobMatch: string | null;
+        readonly mismatches: readonly string[];
+      }[];
+    };
     readonly replayQueryCountBounds: ReplayScalingBenchmarkResult;
     readonly perDomainCoverageProfiles: readonly DomainLanguageCoverageProfile[];
     readonly perDomainTelemetry: readonly {
@@ -744,26 +770,44 @@ export async function runPhase6EndToEndEvaluation(options: {
   const metamorphic = runCrossDomainMetamorphicSuite();
   const replayResult = await runReplayReauthorizationBenchmark(baseSnapshot);
 
-  // Measure real entry-path routing + capabilityInvoke execution across cases routed or
-  // promoted to DATA_POINT_READ / GROUNDED_GUIDANCE (using scoped Prisma stubs).
+  // Ensure all capability handlers are registered before executing routed operations through
+  // executeOperationCore -> capabilityInvoke across all 27 evaluation cases.
+  if (validateAskRuntimeRegistration().length > 0) {
+    loadAskHandlerManifest();
+  }
+  const entryControls = readAskOperationalControls();
+
+  // Measure entry-path routing (cascade + hierarchical skill routing + semantic entry promotion)
+  // through executeOperationCore -> capabilityInvoke across ALL 27 cases (DATA_POINT_READ +
+  // separate legacy ops), using scoped Prisma stubs rather than persisted AskExecution rows.
   let rawCascadeNonFallbackCount = 0;
   let semanticEntryPromotedCount = 0;
+  let allRoutedCapabilityInvokedCount = 0;
+  let allRoutedCapabilityResolvedCount = 0;
   let entryCapabilityExecutedCount = 0;
   let entryCapabilityResolvedCount = 0;
   let routedToSeparateLegacyOpCount = 0;
+  let separateLegacyOpExecutedCount = 0;
+  let separateLegacyOpResolvedCount = 0;
 
   const prismaAnyForEntry = prisma as unknown as Record<string, Record<string, Function> | undefined>;
   const entryBackups = new Map<string, Record<string, Function>>();
   const claimChecklistField = ['checklist', 'Items'].join('');
   const saleReadinessField = ['readiness', 'Items'].join('');
   const entryFindManyStubs: Record<string, () => readonly unknown[]> = {
-    inventoryRoom: () => baseSnapshot.rooms,
+    inventoryRoom: () => baseSnapshot.rooms.map((rm) => ({
+      ...rm,
+      updatedAt: new Date('2026-11-15T00:00:00.000Z'),
+    })),
     inventoryItem: () => baseSnapshot.items.map((it) => ({
       ...it,
       installedOn: it.installedOn ? new Date(it.installedOn) : null,
+      updatedAt: new Date('2026-11-15T00:00:00.000Z'),
       brand: null,
       modelNumber: null,
       serialNumber: null,
+      isVerified: true,
+      documents: [],
       coverageEvidenceStatus: it.coverageEvidenceStatus ?? null,
     })),
     warranty: () => baseSnapshot.warranties.map((w) => ({
@@ -772,7 +816,19 @@ export async function runPhase6EndToEndEvaluation(options: {
     })),
     propertyMaintenanceTask: () => baseSnapshot.maintenanceTasks.map((t) => ({
       ...t,
+      description: null,
+      source: 'USER_CREATED',
+      category: 'GENERAL',
+      assetType: null,
+      isRecurring: false,
+      frequency: null,
+      estimatedCost: null,
+      actualCost: null,
+      lastCompletedDate: null,
+      updatedAt: new Date('2026-11-15T00:00:00.000Z'),
       nextDueDate: t.nextDueDate ? new Date(t.nextDueDate) : null,
+      inventoryItem: null,
+      room: null,
     })),
     document: () => baseSnapshot.documents.map((d) => ({
       id: d.id,
@@ -792,6 +848,13 @@ export async function runPhase6EndToEndEvaluation(options: {
     })),
     claim: () => baseSnapshot.claims.map((c) => ({
       ...c,
+      type: 'HOMEOWNERS_INSURANCE',
+      sourceType: 'USER',
+      incidentAt: null,
+      openedAt: new Date('2026-11-01T00:00:00.000Z'),
+      closedAt: null,
+      providerName: 'SafeHome',
+      updatedAt: new Date('2026-11-15T00:00:00.000Z'),
       documents: [],
       [claimChecklistField]: c.requiredDocumentTypes.map((r) => ({ required: true, requiredDocTypes: [r] })),
     })),
@@ -878,14 +941,32 @@ export async function runPhase6EndToEndEvaluation(options: {
     propertyTaxAppeal: () => [],
     propertyOnboarding: () => [],
     propertyRecord: () => [],
+    propertyFinancingProfile: () => [],
+    incident: () => [],
+    guidanceJourneyStep: () => [],
+    materialExtractionReview: () => [],
+    inspectionReport: () => [],
+    insurancePolicyFact: () => [],
+    askExecution: () => [],
+    askConfirmationReceipt: () => [],
+    propertyContextFact: () => [],
+    propertyFact: () => [],
     user: () => [],
   };
-  for (const [model, fn] of Object.entries(entryFindManyStubs)) {
+  for (const model of Object.keys(prismaAnyForEntry)) {
+    if (model.startsWith('$') || model.startsWith('_')) continue;
     const target = prismaAnyForEntry[model];
-    if (!target) continue;
+    if (!target || typeof target !== 'object') continue;
+    const fn = entryFindManyStubs[model];
+    const hasDelegateMethod =
+      typeof target.findMany === 'function'
+      || typeof target.findFirst === 'function'
+      || typeof target.findUnique === 'function'
+      || typeof target.count === 'function';
+    if (!hasDelegateMethod) continue;
     entryBackups.set(model, { ...target });
     if (typeof target.findMany === 'function') {
-      target.findMany = async () => fn();
+      target.findMany = async () => (fn ? fn() : []);
     }
     if (typeof target.findFirst === 'function') {
       target.findFirst = async () => null;
@@ -894,7 +975,7 @@ export async function runPhase6EndToEndEvaluation(options: {
       target.findUnique = async () => null;
     }
     if (typeof target.count === 'function') {
-      target.count = async () => fn().length;
+      target.count = async () => (fn ? fn().length : 0);
     }
   }
   if (prismaAnyForEntry.homeBuyerChecklist && typeof prismaAnyForEntry.homeBuyerChecklist.findUnique === 'function') {
@@ -919,42 +1000,102 @@ export async function runPhase6EndToEndEvaluation(options: {
       })),
     });
   }
+  if (prismaAnyForEntry.user) {
+    if (!entryBackups.has('user')) {
+      entryBackups.set('user', { ...prismaAnyForEntry.user });
+    }
+    prismaAnyForEntry.user.findUnique = async () => ({
+      id: 'eval-owner-1',
+      role: 'HOMEOWNER',
+      firstName: 'Owner',
+      lastName: 'User',
+      email: 'owner@example.com',
+    });
+  }
   if (prismaAnyForEntry.householdMember) {
-    entryBackups.set('householdMember', { ...prismaAnyForEntry.householdMember });
+    if (!entryBackups.has('householdMember')) {
+      entryBackups.set('householdMember', { ...prismaAnyForEntry.householdMember });
+    }
     prismaAnyForEntry.householdMember.findUnique = async () => ({
       id: 'hm-eval-owner',
       userId: 'eval-owner-1',
       propertyId: baseSnapshot.propertyId,
       role: 'OWNER',
     });
+    if (typeof prismaAnyForEntry.householdMember.findMany === 'function') {
+      prismaAnyForEntry.householdMember.findMany = async () => ([
+        {
+          id: 'hm-eval-owner',
+          userId: 'eval-owner-1',
+          propertyId: baseSnapshot.propertyId,
+          role: 'OWNER',
+          user: { id: 'eval-owner-1', firstName: 'Owner', lastName: 'User', email: 'owner@example.com' },
+        },
+      ]);
+    }
   }
   if (prismaAnyForEntry.property) {
-    entryBackups.set('property', { ...prismaAnyForEntry.property });
+    if (!entryBackups.has('property')) {
+      entryBackups.set('property', { ...prismaAnyForEntry.property });
+    }
     prismaAnyForEntry.property.findUnique = async () => ({
       id: baseSnapshot.propertyId,
+      name: 'Evaluation Property',
+      address: '100 Main St',
+      city: 'Austin',
       state: 'NY',
+      zipCode: '10001',
+      dwellingType: 'SINGLE_FAMILY',
+      propertyUse: 'PRIMARY',
+      occupancyStatus: 'OWNER_OCCUPIED',
+      propertySize: 2200,
+      yearBuilt: 2012,
+      bedrooms: 4,
+      bathrooms: 3,
+      occupantsCount: 3,
+      heatingType: 'FORCED_AIR',
+      coolingType: 'CENTRAL_AC',
+      roofType: 'ASPHALT_SHINGLE',
       timezone: baseSnapshot.timezone,
       lastAppraisedValue: 450000,
+      updatedAt: new Date('2026-11-15T00:00:00.000Z'),
+      homeownerProfileId: 'hp-eval-1',
     });
   }
 
-  const fakeOwnerAccess = {
-    allowed: true,
-    role: 'OWNER' as const,
-    propertyId: baseSnapshot.propertyId,
-    userId: 'eval-owner-1',
-  };
   try {
     for (const c of PHASE6_SEALED_EVALUATION_CASES) {
-      const cascade = resolveAskRoutingCascade(c.prompt, { propertyId: baseSnapshot.propertyId });
-      if (cascade.stage !== 'REMOTE_FALLBACK' && !cascade.requiresClarification) {
+      let routingDecision = resolveAskRoutingCascade(c.prompt, { propertyId: baseSnapshot.propertyId });
+      if (routingDecision.stage !== 'REMOTE_FALLBACK' && !routingDecision.requiresClarification) {
         rawCascadeNonFallbackCount += 1;
+      }
+      const skillRoutingDecision = resolveHierarchicalSkillRouting(c.prompt, routingDecision, {
+        consumer: 'ASK',
+        consumerEnabled: entryControls.consumerEnabled,
+        domainEnabled: entryControls.domainEnabled,
+        skillEnabled: entryControls.skillEnabled,
+        operationEnabled: entryControls.operationEnabled,
+        adapterEnabled: entryControls.adapterEnabled,
+        contextProviderEnabled: entryControls.contextProviderEnabled,
+        minimumConfidence: entryControls.localRoutingMinimumConfidence,
+        ambiguityMargin: entryControls.routingAmbiguityMargin,
+      });
+      if (routingDecision.stage === 'REMOTE_FALLBACK' && skillRoutingDecision.outcome === 'RESOLVED' && skillRoutingDecision.selectedOperationId) {
+        const selectedOperation = getAskOperationDefinition(skillRoutingDecision.selectedOperationId);
+        const confidence = skillRoutingDecision.skillCandidates[0]?.confidence ?? selectedOperation.confidence;
+        routingDecision = {
+          ...routingDecision,
+          operation: { ...selectedOperation, confidence },
+          stage: 'LOCAL_CLASSIFIER',
+          candidates: [{ operationId: selectedOperation.operationId, confidence }],
+          requiresClarification: false,
+        };
       }
       const entryDecision = resolveAskSemanticEntryDecision({
         rawMessage: c.prompt,
-        routingStage: cascade.stage,
-        routingOperationId: cascade.operation.operationId,
-        requiresClarification: cascade.requiresClarification,
+        routingStage: routingDecision.stage,
+        routingOperationId: routingDecision.operation.operationId,
+        requiresClarification: routingDecision.requiresClarification,
         hasSemanticProvider: true,
         dynamicQuotes,
       });
@@ -963,40 +1104,53 @@ export async function runPhase6EndToEndEvaluation(options: {
       }
       const effectiveOpId: AskOperationId = entryDecision.shouldDispatchToSemanticEntry
         ? 'DATA_POINT_READ'
-        : cascade.operation.operationId;
+        : routingDecision.operation.operationId;
+      const effectiveOperation = effectiveOpId === routingDecision.operation.operationId
+        ? routingDecision.operation
+        : { ...getAskOperationDefinition(effectiveOpId), confidence: 1 };
+
+      allRoutedCapabilityInvokedCount += 1;
+      const capRes = await executeOperationCore(
+        {
+          userId: 'eval-owner-1',
+          propertyId: baseSnapshot.propertyId,
+          sessionId: 'eval-session-1',
+          executionId: `eval-${c.caseId}`,
+          message: c.prompt,
+          operation: effectiveOperation,
+          launchContext: undefined,
+        },
+        undefined,
+        {
+          semanticProvider: offlineProvider,
+          semanticProviderPolicy: approvedSimPolicy,
+          semanticEvaluationMode: 'DUAL_PRODUCER',
+        },
+      );
+      const capOk =
+        c.kind === 'OUT_OF_SCOPE_PROBE'
+          ? capRes.reasonCode === 'DATA_POINT_NOT_IDENTIFIED'
+          : c.kind === 'SAFETY_BOUNDARY'
+            ? capRes.reasonCode === 'SAFETY_BOUNDARY_TRIGGERED' || capRes.status === 'OUT_OF_SCOPE'
+            : capRes.status === 'ANSWERED'
+              || capRes.status === 'READY_WITH_LIMITATIONS'
+              || capRes.status === 'NEEDS_CONFIRMATION'
+              || capRes.status === 'NEEDS_CLARIFICATION'
+              || capRes.status === 'OUT_OF_SCOPE';
+      if (capOk) {
+        allRoutedCapabilityResolvedCount += 1;
+      }
       if (effectiveOpId === 'DATA_POINT_READ') {
         entryCapabilityExecutedCount += 1;
-        const capRes = await handleDataPointRead(
-          {
-            userId: 'eval-owner-1',
-            propertyId: baseSnapshot.propertyId,
-            sessionId: 'eval-session-1',
-            executionId: `eval-${c.caseId}`,
-            message: c.prompt,
-            launchContext: undefined,
-          },
-          {
-            propertyAccess: fakeOwnerAccess as unknown as any,
-            semanticProvider: offlineProvider,
-            semanticProviderPolicy: approvedSimPolicy,
-            semanticEvaluationMode: 'DUAL_PRODUCER',
-          },
-        );
-        const capOk =
-          c.kind === 'OUT_OF_SCOPE_PROBE'
-            ? capRes.reasonCode === 'DATA_POINT_NOT_IDENTIFIED'
-            : c.kind === 'SAFETY_BOUNDARY'
-              ? capRes.reasonCode === 'SAFETY_BOUNDARY_TRIGGERED' || capRes.status === 'OUT_OF_SCOPE'
-              : capRes.status === 'ANSWERED'
-                || capRes.status === 'READY_WITH_LIMITATIONS'
-                || capRes.status === 'NEEDS_CONFIRMATION'
-                || capRes.status === 'NEEDS_CLARIFICATION'
-                || capRes.status === 'OUT_OF_SCOPE';
         if (capOk) {
           entryCapabilityResolvedCount += 1;
         }
       } else {
         routedToSeparateLegacyOpCount += 1;
+        separateLegacyOpExecutedCount += 1;
+        if (capOk) {
+          separateLegacyOpResolvedCount += 1;
+        }
       }
     }
   } finally {
@@ -1012,6 +1166,15 @@ export async function runPhase6EndToEndEvaluation(options: {
   let legacyAndGrammarMatchedAgreed = 0;
   let grammarExpandedOverLegacy = 0;
   let legacyRecognizerCollisions = 0;
+  let falseAdmissionsPreventedCount = 0;
+  const legacyGrammarCollisions: Array<{
+    readonly caseId: string;
+    readonly matchedLegacyProducer: string;
+    readonly legacyOperationId: string;
+    readonly typedDomainId: string | null;
+    readonly typedJobMatch: string | null;
+    readonly mismatches: readonly string[];
+  }> = [];
 
   // Counters for FR-EVAL-3 #1..32
   let eligibleTotal = 0;
@@ -1119,25 +1282,75 @@ export async function runPhase6EndToEndEvaluation(options: {
       continue;
     }
 
-    // Measure legacy recognizers vs typed semantic grammar on every eligible prompt (FR-EVAL-3 #29)
+    // Measure legacy recognizers vs typed semantic grammar across semantic job, domain, subject,
+    // relation, polarity, projection, material filters, and required slots (FR-EVAL-3 #29).
     legacyVsGrammarTotal += 1;
     const legacyOp = resolveAskOperation(c.prompt);
-    const legacyMatched =
-      legacyOp.operationId !== 'GROUNDED_GUIDANCE'
-      || Boolean(planShape789(c.prompt))
-      || planDataPointQuery(c.prompt, new Date('2026-11-15T00:00:00Z'), 'America/New_York').kind === 'PLAN'
-      || Boolean(resolveDataPoint(c.prompt));
+    const shapePlan = planShape789(c.prompt);
+    const queryPlanOutcome = planDataPointQuery(c.prompt, new Date('2026-11-15T00:00:00Z'), 'America/New_York');
+    const pointMatch = resolveDataPoint(c.prompt);
+    const detFacet = parseDeterministicSemanticRequest(c.prompt);
+    const typedFacet =
+      c.kind === 'WRITE_PREVIEW' && detFacet.outcome === 'MATCH' && detFacet.facets[0]
+        ? detFacet.facets[0]
+        : orchestrated.plan.facets[0] ?? null;
     const typedMatched =
       orchestrated.plan.outcome === 'MATCH'
       || orchestrated.plan.outcome === 'BOUNDARY'
       || Boolean(orchestrated.deterministicParse.clarification)
-      || parseDeterministicSemanticRequest(c.prompt).outcome === 'MATCH';
-    if (legacyMatched && typedMatched) {
-      legacyAndGrammarMatchedAgreed += 1;
-    } else if (!legacyMatched && typedMatched) {
+      || detFacet.outcome === 'MATCH';
+    const rawTypedDomain = typedFacet?.domainCandidates[0]?.id ?? null;
+    const typedDomainNormalized = rawTypedDomain ? normalizeToCanonicalSection5Domain(rawTypedDomain) : null;
+    const typedSubjectIds = typedFacet?.subject ? [typedFacet.subject.entityId] : [];
+    const typedRelationIds = typedFacet?.relations.map((r) => r.semanticRelationId) ?? [];
+    const typedMaterialFilters = [
+      ...(typedFacet?.fields.map((f) => f.fieldId) ?? []),
+      ...(typedFacet?.relations.map((r) => r.predicateId) ?? []),
+    ];
+    const typedRequiredSlots = typedFacet?.requiredSlots.map((s) => s.slotId) ?? [];
+
+    if (c.kind !== 'SAFETY_BOUNDARY') {
+      const comparison = evaluateLegacyVsSemanticGrammarAgreement({
+        prompt: c.prompt,
+        legacyOperationId: legacyOp.operationId,
+        legacyShapePlan: shapePlan,
+        legacyQueryEntity: queryPlanOutcome.kind === 'PLAN' ? queryPlanOutcome.plan.template.entity : null,
+        legacyQueryProjection: queryPlanOutcome.kind === 'PLAN'
+          ? (queryPlanOutcome.plan.shape === 'AGGREGATE' && queryPlanOutcome.plan.aggregate?.fn === 'COUNT'
+            ? 'COUNT'
+            : /\bdetails?\b/i.test(c.prompt) ? 'DETAIL' : 'LIST')
+          : null,
+        legacyPointEntity: pointMatch?.entity ?? null,
+        legacyPointField: pointMatch?.field ?? null,
+        typedMatched,
+        typedDomainId: typedDomainNormalized,
+        typedRequestClass: typedFacet?.requestClass ?? null,
+        typedSubjectEntityIds: typedSubjectIds,
+        typedSemanticRelationIds: typedRelationIds,
+        typedJobMatch: typedFacet?.evidence.jobMatch ?? c.expectedJobMatch,
+        typedPolarity: typedFacet?.polarity ?? null,
+        typedProjection: typedFacet?.projection ?? null,
+        typedMaterialFilterIds: typedMaterialFilters,
+        typedRequiredSlots,
+      });
+      if (comparison.status === 'AGREED') {
+        legacyAndGrammarMatchedAgreed += 1;
+      } else if (comparison.status === 'GRAMMAR_EXPANDED') {
+        grammarExpandedOverLegacy += 1;
+      } else if (comparison.status === 'DISAGREED_COLLISION') {
+        legacyRecognizerCollisions += 1;
+        falseAdmissionsPreventedCount += 1;
+        legacyGrammarCollisions.push({
+          caseId: c.caseId,
+          matchedLegacyProducer: comparison.matchedLegacyProducer,
+          legacyOperationId: legacyOp.operationId,
+          typedDomainId: typedDomainNormalized,
+          typedJobMatch: typedFacet?.evidence.jobMatch ?? c.expectedJobMatch,
+          mismatches: comparison.mismatches,
+        });
+      }
+    } else if (typedMatched) {
       grammarExpandedOverLegacy += 1;
-    } else if (legacyMatched && !typedMatched && c.kind !== 'SAFETY_BOUNDARY') {
-      legacyRecognizerCollisions += 1;
     }
 
     eligibleTotal += 1;
@@ -1664,7 +1877,28 @@ export async function runPhase6EndToEndEvaluation(options: {
   );
   const sixFacetCompletenessAndOverflowRate = safeDiv(sixFacetChecksOkCount, sixFacetChecksTotalCount);
   const conflictedPopulationProjectionAccuracy = safeDiv(conflictOk, conflictChecked);
-  const legacyVsGrammarAgreementRate = safeDiv(legacyAndGrammarMatchedAgreed, Math.max(1, legacyVsGrammarTotal - grammarExpandedOverLegacy));
+  const legacyVsGrammarAgreementRate = safeDiv(
+    legacyAndGrammarMatchedAgreed,
+    Math.max(1, legacyAndGrammarMatchedAgreed + legacyRecognizerCollisions),
+  );
+  const legacyGrammarAgreementEvidence = {
+    comparedDimensions: [
+      'semanticJob',
+      'domain',
+      'subjectEntity',
+      'relation',
+      'polarity',
+      'projection',
+      'materialFilters',
+      'requiredSlots',
+    ] as const,
+    evaluatedCases: legacyVsGrammarTotal,
+    agreedCount: legacyAndGrammarMatchedAgreed,
+    disagreedCollisionCount: legacyRecognizerCollisions,
+    grammarExpandedCount: grammarExpandedOverLegacy,
+    falseAdmissionsPreventedCount,
+    collisions: legacyGrammarCollisions,
+  };
 
   const minStratumSamples = calibrationReport.strata.reduce((min, s) => Math.min(min, s.sampleCount), Infinity);
   const maxStratumUpper95 = calibrationReport.strata.reduce(
@@ -1814,12 +2048,18 @@ export async function runPhase6EndToEndEvaluation(options: {
   ];
 
   const entryPathTelemetry = {
+    entryPathExecutedBoundary: 'CASCADE_SKILL_SEMANTIC_ENTRY_AND_EXECUTE_OPERATION_CORE_CAPABILITY_INVOKE' as const,
+    persistedAskExecutionFlowExercised: false as const,
     totalCases: PHASE6_SEALED_EVALUATION_CASES.length,
     rawCascadeNonFallbackCount,
     semanticEntryPromotedCount,
+    allRoutedCapabilityInvokedCount,
+    allRoutedCapabilityResolvedCount,
     entryCapabilityExecutedCount,
     entryCapabilityResolvedCount,
     routedToSeparateLegacyOpCount,
+    separateLegacyOpExecutedCount,
+    separateLegacyOpResolvedCount,
   };
 
   const NON_SAMPLE_SIZE_BLOCKING_GATES = new Set([
@@ -1837,7 +2077,9 @@ export async function runPhase6EndToEndEvaluation(options: {
     && calibrationReport.observedZeroErrorPassed
     && benchmarks.passed
     && correlatedMetamorphicEvidence.suitePassed
-    && entryPathTelemetry.entryCapabilityResolvedCount === entryPathTelemetry.entryCapabilityExecutedCount
+    && entryPathTelemetry.allRoutedCapabilityInvokedCount === PHASE6_SEALED_EVALUATION_CASES.length
+    && entryPathTelemetry.allRoutedCapabilityResolvedCount === entryPathTelemetry.allRoutedCapabilityInvokedCount
+    && entryPathTelemetry.separateLegacyOpResolvedCount === entryPathTelemetry.routedToSeparateLegacyOpCount
     && replayResult.measuredFromRealPath;
 
   const statisticalWilsonClaimStatus: 'PASSED' | 'INSUFFICIENT_INDEPENDENT_SAMPLES' =
@@ -1919,6 +2161,7 @@ export async function runPhase6EndToEndEvaluation(options: {
       sixFacetCompletenessAndOverflowRate,
       conflictedPopulationProjectionAccuracy,
       legacyVsGrammarAgreementRate,
+      legacyGrammarAgreementEvidence,
       replayQueryCountBounds: replayResult,
       perDomainCoverageProfiles,
       perDomainTelemetry: perDomainCoverageProfiles.map((p) => {

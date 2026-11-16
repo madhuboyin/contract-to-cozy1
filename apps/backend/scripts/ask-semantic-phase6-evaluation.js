@@ -7,9 +7,11 @@ require('ts-node').register({
   transpileOnly: true,
 });
 
+const { initializeAskRuntime } = require('../src/services/ask/askRuntimeBootstrap');
 const { buildPhase6CalibrationAndEvaluationSummary } = require('../src/services/ask/semantic/phase6/index');
 
 async function main() {
+  initializeAskRuntime();
   const args = new Set(process.argv.slice(2));
   const jsonMode = args.has('--json');
   const checkMode = args.has('--check');

@@ -263,11 +263,25 @@ test('Phase 6 end-to-end evaluation harness passes all sealed-proxy invariants a
   assert.equal(report.providerEvaluationDisclosure.providerKind, 'OFFLINE_SIMULATOR');
   assert.equal(report.providerEvaluationDisclosure.liveExternalModelEvaluated, false);
   assert.equal(report.entryPathTelemetry.totalCases, PHASE6_SEALED_EVALUATION_CASES.length);
+  assert.equal(report.entryPathTelemetry.persistedAskExecutionFlowExercised, false);
+  assert.equal(report.entryPathTelemetry.allRoutedCapabilityInvokedCount, PHASE6_SEALED_EVALUATION_CASES.length);
+  assert.equal(report.entryPathTelemetry.allRoutedCapabilityResolvedCount, PHASE6_SEALED_EVALUATION_CASES.length);
+  assert.equal(
+    report.entryPathTelemetry.separateLegacyOpExecutedCount,
+    report.entryPathTelemetry.routedToSeparateLegacyOpCount,
+  );
+  assert.equal(
+    report.entryPathTelemetry.separateLegacyOpResolvedCount,
+    report.entryPathTelemetry.routedToSeparateLegacyOpCount,
+  );
   assert.ok(report.entryPathTelemetry.semanticEntryPromotedCount > 0);
   assert.equal(
     report.entryPathTelemetry.entryCapabilityResolvedCount,
     report.entryPathTelemetry.entryCapabilityExecutedCount,
   );
+  assert.ok(report.frEval3Metrics.legacyGrammarAgreementEvidence.comparedDimensions.includes('semanticJob'));
+  assert.ok(report.frEval3Metrics.legacyGrammarAgreementEvidence.comparedDimensions.includes('materialFilters'));
+  assert.ok(report.frEval3Metrics.legacyGrammarAgreementEvidence.disagreedCollisionCount >= 1);
   assert.equal(report.sealedProxyInvariantsPassed, true);
   assert.equal(report.statisticalWilsonClaimStatus, 'INSUFFICIENT_INDEPENDENT_SAMPLES');
   assert.equal(report.passed, false);

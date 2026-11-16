@@ -86,8 +86,9 @@ async function dispatchOperationAdapterResult(
   composedContext: Awaited<ReturnType<typeof composeSkillContext>> | null,
   trace?: SkillExecutionTimingTrace,
   propertyAccess?: PropertyAccess | null,
+  depsOverrides?: Partial<Pick<CapabilityInvocationDependencies, 'semanticProvider' | 'semanticProviderPolicy' | 'semanticEvaluationMode'>>,
 ): Promise<AskOperationResult> {
-  const deps: CapabilityInvocationDependencies = { composedContext, trace, propertyAccess };
+  const deps: CapabilityInvocationDependencies = { composedContext, trace, propertyAccess, ...depsOverrides };
   return capabilityInvoke(input.operation.operationId, buildCapabilityInvocationEnvelope(input), deps);
 }
 
@@ -130,8 +131,9 @@ async function dispatchOperationAdapter(
   composedContext: ComposedSkillContext | null,
   trace?: SkillExecutionTimingTrace,
   propertyAccess?: PropertyAccess | null,
+  depsOverrides?: Partial<Pick<CapabilityInvocationDependencies, 'semanticProvider' | 'semanticProviderPolicy' | 'semanticEvaluationMode'>>,
 ): Promise<AskOperationResult> {
-  const result = await dispatchOperationAdapterResult(input, composedContext, trace, propertyAccess);
+  const result = await dispatchOperationAdapterResult(input, composedContext, trace, propertyAccess, depsOverrides);
   return attachAskAuthoritativeSourceEvidence(
     result,
     canonicalAdapterSourceEvidence(input.operation.operationId, composedContext),
@@ -201,7 +203,11 @@ export function resolveAskSkillHandoff(input: {
   return skillHandoff;
 }
 
-export async function executeOperationCore(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null; suppliedInput?: Record<string, unknown> | null }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
+export async function executeOperationCore(
+  input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null; suppliedInput?: Record<string, unknown> | null },
+  trace?: SkillExecutionTimingTrace,
+  depsOverrides?: Partial<Pick<CapabilityInvocationDependencies, 'semanticProvider' | 'semanticProviderPolicy' | 'semanticEvaluationMode'>>,
+): Promise<AskOperationResult> {
   const controls = readAskOperationalControls();
   const definition = getAskOperationDefinition(input.operation.operationId);
   const skill = getSkillForOperation(input.operation.operationId);
@@ -303,7 +309,7 @@ export async function executeOperationCore(input: { userId: string; sessionId: s
       );
     }
   }
-  if (!skill) return dispatchOperationAdapter(input, composedContext, trace, propertyAccess);
+  if (!skill) return dispatchOperationAdapter(input, composedContext, trace, propertyAccess, depsOverrides);
   const adapterResolutionStartedAt = process.hrtime.bigint();
   const adapterReference = skill.allowedAdapters.find((candidate) => candidate.id === definition.adapterKey)!;
   const adapter = getSkillAdapter(adapterReference.id, adapterReference.version)!;
@@ -316,7 +322,7 @@ export async function executeOperationCore(input: { userId: string; sessionId: s
   const canonicalStartedAt = process.hrtime.bigint();
   let canonicalStatus = 'threw';
   try {
-    const canonicalResult = await dispatchOperationAdapter(input, composedContext, trace, propertyAccess);
+    const canonicalResult = await dispatchOperationAdapter(input, composedContext, trace, propertyAccess, depsOverrides);
     const presentedResult = householdRole
       ? applyAskAudiencePresentation({
         result: canonicalResult,

@@ -1,12 +1,14 @@
 import type { AskOperationId } from '../askOperationRegistry';
 import type { AskRoutingStage } from '../askRoutingCascade';
 import { parseDeterministicSemanticRequest } from './deterministicSemanticParser';
+import { evaluateLegacyVsSemanticGrammarAgreement } from './legacyGrammarAgreement';
 import type { DynamicPlaceholderEntityCandidate } from './phase2a/placeholderSpanMap';
 import {
   mayNeedDynamicQuoteResolution,
   parseCrossDomainSemanticRequest,
   type DynamicQuoteCandidate,
 } from './waves/crossDomainPlanBuilder';
+import { normalizeToCanonicalSection5Domain } from './waves/domainWaveManifest';
 
 export interface SemanticEntryRoutingInput {
   readonly rawMessage: string;
@@ -83,9 +85,33 @@ export function resolveAskSemanticEntryDecision(
     return { shouldDispatchToSemanticEntry: true, reasonCode: 'CROSS_DOMAIN_CLARIFICATION' };
   }
 
+  let hasNonDeterministicLegacyCollision = false;
+  if (crossDomainParsed.plan.outcome === 'MATCH' && input.routingStage !== 'DETERMINISTIC' && !onFallbackOrDataPoint) {
+    const firstFacet = crossDomainParsed.plan.facets[0] ?? null;
+    const rawDomain = firstFacet?.domainCandidates[0]?.id ?? null;
+    const comparison = evaluateLegacyVsSemanticGrammarAgreement({
+      prompt: input.rawMessage,
+      legacyOperationId: input.routingOperationId,
+      typedMatched: true,
+      typedDomainId: rawDomain ? normalizeToCanonicalSection5Domain(rawDomain) : null,
+      typedRequestClass: firstFacet?.requestClass ?? null,
+      typedSubjectEntityIds: firstFacet?.subject ? [firstFacet.subject.entityId] : [],
+      typedSemanticRelationIds: firstFacet?.relations.map((r) => r.semanticRelationId) ?? [],
+      typedJobMatch: firstFacet?.evidence.jobMatch ?? null,
+      typedPolarity: firstFacet?.polarity ?? null,
+      typedProjection: firstFacet?.projection ?? null,
+      typedMaterialFilterIds: [
+        ...(firstFacet?.fields.map((f) => f.fieldId) ?? []),
+        ...(firstFacet?.relations.map((r) => r.predicateId) ?? []),
+      ],
+      typedRequiredSlots: firstFacet?.requiredSlots.map((s) => s.slotId) ?? [],
+    });
+    hasNonDeterministicLegacyCollision = comparison.status === 'DISAGREED_COLLISION';
+  }
+
   if (
     crossDomainParsed.plan.outcome === 'MATCH'
-    && (onFallbackOrDataPoint || crossDomainParsed.plan.facets.length > 1)
+    && (onFallbackOrDataPoint || crossDomainParsed.plan.facets.length > 1 || hasNonDeterministicLegacyCollision)
   ) {
     return { shouldDispatchToSemanticEntry: true, reasonCode: 'CROSS_DOMAIN_PLAN_MATCH' };
   }
