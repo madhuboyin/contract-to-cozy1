@@ -26,17 +26,17 @@ const { dataPointReadResult } = require('../../src/services/ask/handlers/dataPoi
 const { savedResultsFromPage } = require('../../src/services/ask/handlers/savedResults.handler.ts');
 const { GROUNDED_READ_CHECKS, PROVISIONAL_READ_FAMILY_DISPOSITIONS, verifyProvisionalReadFamilyDispositions } = require('../../src/services/ask/support/provisionalRead.ts');
 const {
-  PHASE1_SELECTED_BASIC_READ_FAMILIES,
-  PHASE1_DEFERRED_FAMILIES,
-  verifyPhase1FamilyManifestCompleteness,
+  SELECTED_BASIC_READ_FAMILIES,
+  DEFERRED_BASIC_READ_FAMILIES,
+  verifyBasicReadFamilyManifestCompleteness,
   validateCommandPreviewAdmission,
   gateUncertifiedCommandPreview,
   humanizePresentationToken,
   humanizePresentationText,
   stripRetryFromDeterministicFailure,
   verifyNoUnguardedLegacyWarrantyWrites,
-  verifyPhase1RuntimeWiring,
-  verifyPhase1Invariants,
+  verifyContainmentRuntimeWiring,
+  verifyContainmentInvariants,
 } = require('../../src/services/ask/semantic/containment/index.ts');
 
 test('the generated shared lexicon is stable and keeps warranty separate from insurance and claims', () => {
@@ -262,14 +262,14 @@ test('protection semantic tokens (warranty, insurance, policy, coverage, claim) 
 });
 
 test('Phase 1 family manifest covers all 11 §5 domain groups, all 4 known false-decline families, and records deferred families', () => {
-  const completeness = verifyPhase1FamilyManifestCompleteness();
+  const completeness = verifyBasicReadFamilyManifestCompleteness();
   assert.equal(completeness.valid, true);
   assert.deepEqual(completeness.missingDomainGroups, []);
   assert.deepEqual(completeness.missingFalseDeclineCategories, []);
-  assert.ok(PHASE1_SELECTED_BASIC_READ_FAMILIES.length >= 11);
-  assert.ok(PHASE1_DEFERRED_FAMILIES.length >= 5);
+  assert.ok(SELECTED_BASIC_READ_FAMILIES.length >= 11);
+  assert.ok(DEFERRED_BASIC_READ_FAMILIES.length >= 5);
 
-  for (const family of PHASE1_SELECTED_BASIC_READ_FAMILIES) {
+  for (const family of SELECTED_BASIC_READ_FAMILIES) {
     for (const prompt of family.representativeExamples) {
       const plan = parseDeterministicSemanticRequest(prompt);
       assert.equal(plan.outcome, 'MATCH', `Expected MATCH for "${prompt}" in ${family.familyId}`);
@@ -413,7 +413,7 @@ test('presentation humanizer translates registered internal tokens and strips re
 });
 
 test('Phase 1 invariant verification passes with zero issues', () => {
-  const check = verifyPhase1Invariants();
+  const check = verifyContainmentInvariants();
   assert.equal(check.valid, true);
   assert.deepEqual(check.issues, []);
   assert.equal(check.summary.runtimeWiringVerified, true);
@@ -422,17 +422,17 @@ test('Phase 1 invariant verification passes with zero issues', () => {
 });
 
 test('Phase 1 runtime wiring covers all 13 selected families across dataPointRead and savedResults handlers', () => {
-  const wiring = verifyPhase1RuntimeWiring();
+  const wiring = verifyContainmentRuntimeWiring();
   assert.equal(wiring.valid, true);
   assert.deepEqual(wiring.issues, []);
   assert.deepEqual(wiring.verifiedHandlerFiles.sort(), [
     'src/services/ask/handlers/dataPointRead.handler.ts',
     'src/services/ask/handlers/savedResults.handler.ts',
   ]);
-  assert.equal(wiring.verifiedFamilyIds.length, PHASE1_SELECTED_BASIC_READ_FAMILIES.length);
+  assert.equal(wiring.verifiedFamilyIds.length, SELECTED_BASIC_READ_FAMILIES.length);
   assert.deepEqual(
     [...wiring.verifiedFamilyIds].sort(),
-    PHASE1_SELECTED_BASIC_READ_FAMILIES.map((f) => f.familyId).sort(),
+    SELECTED_BASIC_READ_FAMILIES.map((f) => f.familyId).sort(),
   );
 });
 

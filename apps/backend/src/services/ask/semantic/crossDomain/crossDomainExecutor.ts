@@ -9,10 +9,10 @@ import {
 import { ASK_SEMANTIC_PLAN_VERSION, type SemanticFacet, type SemanticRequestPlan, type SemanticWhereExpression } from '../semanticRequestPlan';
 import { type SemanticDomainId } from '../governance/semanticOntologyBaseline';
 import {
-  buildPhase2aRichPresentation,
+  buildSliceRichPresentation,
   verifyRichPresentationPopulationEquivalence,
-  type Phase2aRichPresentationEquivalenceReport,
-} from '../slice/phase2aRichPresentationAdapter';
+  type SliceRichPresentationEquivalenceReport,
+} from '../slice/richPresentationAdapter';
 import { prisma } from '../../../../lib/prisma';
 import { visibleInventoryItemWhere } from '../../../riskAssetApplicability';
 import { type DynamicPlaceholderEntityCandidate } from '../slice/placeholderSpanMap';
@@ -23,16 +23,16 @@ import { safeTimezone } from '../../support/propertyContext';
 import { computeMonthlyPayment } from '../../../tools/mortgageMath';
 import { parseSellHoldRentOverrides } from '../../../toolOverrideContract';
 import {
-  executePhase2aVerticalSlice,
-  loadPhase2aPropertySnapshot,
-  type Phase2aAuthorizationContext,
-  type Phase2aPropertySnapshot,
-} from '../slice/phase2aSliceExecutor';
+  executeSemanticSlice,
+  loadSlicePropertySnapshot,
+  type SliceAuthorizationContext,
+  type SlicePropertySnapshot,
+} from '../slice/sliceExecutor';
 import {
   assignMixedStackFacetOwnership,
   tryNormalizeToCanonicalSection5Domain,
   type MixedStackFacetOwnershipAssignment,
-} from './domainWaveManifest';
+} from './domainRolloutManifest';
 import {
   applyCrossDomainFollowUpRefinement,
   mayNeedDynamicQuoteResolution,
@@ -42,9 +42,9 @@ import {
   type PlanOverflowFacet,
 } from './crossDomainPlanBuilder';
 
-export type AskUserRole = Phase2aAuthorizationContext['role'];
+export type AskUserRole = SliceAuthorizationContext['role'];
 
-export interface WaveExtendedItemRecord {
+export interface CrossDomainExtendedItemRecord {
   readonly id: string;
   readonly slug?: string;
   readonly propertyId: string;
@@ -60,7 +60,7 @@ export interface WaveExtendedItemRecord {
   readonly isHidden?: boolean;
 }
 
-export interface WaveWarrantyRecord {
+export interface CrossDomainWarrantyRecord {
   readonly id: string;
   readonly propertyId: string;
   readonly providerName: string;
@@ -68,12 +68,12 @@ export interface WaveWarrantyRecord {
   readonly expiryDate: string;
 }
 
-export interface WaveExtendedMaintenanceTaskMeta {
+export interface CrossDomainExtendedMaintenanceTaskMeta {
   readonly taskId: string;
   readonly category: 'PLUMBING' | 'ELECTRICAL' | 'HVAC' | 'GENERAL';
 }
 
-export interface WaveInsurancePolicyRecord {
+export interface CrossDomainInsurancePolicyRecord {
   readonly id: string;
   readonly propertyId: string;
   readonly carrierName: string;
@@ -83,7 +83,7 @@ export interface WaveInsurancePolicyRecord {
   readonly expiryDate: string;
 }
 
-export interface WaveClaimRecord {
+export interface CrossDomainClaimRecord {
   readonly id: string;
   readonly propertyId: string;
   readonly title: string;
@@ -92,7 +92,7 @@ export interface WaveClaimRecord {
   readonly requiredDocumentTypes: readonly string[];
 }
 
-export interface WaveDocumentRecord {
+export interface CrossDomainDocumentRecord {
   readonly id: string;
   readonly propertyId: string;
   readonly title: string;
@@ -101,13 +101,13 @@ export interface WaveDocumentRecord {
   readonly visibleToRoles: readonly AskUserRole[];
 }
 
-export interface WaveClaimDocLink {
+export interface CrossDomainClaimDocLink {
   readonly id: string;
   readonly claimId: string;
   readonly documentId: string;
 }
 
-export interface WaveHomeEventRecord {
+export interface CrossDomainHomeEventRecord {
   readonly id: string;
   readonly propertyId: string;
   readonly title: string;
@@ -116,7 +116,7 @@ export interface WaveHomeEventRecord {
   readonly actualCostCents: number | null;
 }
 
-export interface WaveTaxBillRecord {
+export interface CrossDomainTaxBillRecord {
   readonly id: string;
   readonly propertyId: string;
   readonly taxYear: number;
@@ -125,7 +125,7 @@ export interface WaveTaxBillRecord {
   readonly lifecycleStatus: 'ACTIVE' | 'SUPERSEDED';
 }
 
-export interface WaveFinanceSlots {
+export interface CrossDomainFinanceSlots {
   readonly monthlyRentCents: number | null;
   readonly homeValueCents: number | null;
   readonly horizonYears: number | null;
@@ -141,7 +141,7 @@ export interface WaveFinanceSlots {
   readonly sellHoldRentWinner?: string | null;
 }
 
-export interface WaveRecallRecord {
+export interface CrossDomainRecallRecord {
   readonly id: string;
   readonly propertyId: string;
   readonly title: string;
@@ -149,7 +149,7 @@ export interface WaveRecallRecord {
   readonly affectedInventoryItemId: string;
 }
 
-export interface WaveEnvironmentalRiskRecord {
+export interface CrossDomainEnvironmentalRiskRecord {
   readonly id: string;
   readonly propertyId: string;
   readonly hazardType: string;
@@ -160,7 +160,7 @@ export interface WaveEnvironmentalRiskRecord {
   readonly lastUpdatedIso: string;
 }
 
-export interface WaveInspectionFindingRecord {
+export interface CrossDomainInspectionFindingRecord {
   readonly id: string;
   readonly propertyId: string;
   readonly inspectionReportId: string;
@@ -169,7 +169,7 @@ export interface WaveInspectionFindingRecord {
   readonly status: 'ACTION_REQUIRED' | 'MONITORING' | 'RESOLVED';
 }
 
-export interface WaveBuyerTaskRecord {
+export interface CrossDomainBuyerTaskRecord {
   readonly id: string;
   readonly propertyId: string;
   readonly title: string;
@@ -178,14 +178,14 @@ export interface WaveBuyerTaskRecord {
   readonly dueAt: string;
 }
 
-export interface WaveSellerReadinessRecord {
+export interface CrossDomainSellerReadinessRecord {
   readonly id: string;
   readonly propertyId: string;
   readonly title: string;
   readonly status: 'PENDING' | 'COMPLETED';
 }
 
-export interface WaveProjectRecord {
+export interface CrossDomainProjectRecord {
   readonly id: string;
   readonly propertyId: string;
   readonly title: string;
@@ -193,7 +193,7 @@ export interface WaveProjectRecord {
   readonly permitStatus: 'CONFIRMED_NOT_REQUIRED' | 'NEEDS_PERMIT' | 'UNKNOWN' | 'APPROVED';
 }
 
-export interface WaveContractorQuoteRecord {
+export interface CrossDomainContractorQuoteRecord {
   readonly id: string;
   readonly propertyId: string;
   readonly roomTag: string;
@@ -204,7 +204,7 @@ export interface WaveContractorQuoteRecord {
   readonly warrantyMonths: number;
 }
 
-export interface WaveSavedResultRecord {
+export interface CrossDomainSavedResultRecord {
   readonly id: string;
   readonly propertyId: string;
   readonly title: string;
@@ -213,27 +213,27 @@ export interface WaveSavedResultRecord {
   readonly serializedPlan?: string;
 }
 
-export interface CrossDomainPropertySnapshot extends Phase2aPropertySnapshot {
+export interface CrossDomainPropertySnapshot extends SlicePropertySnapshot {
   readonly timezone: string;
   readonly closingDateIso: string | null;
-  readonly extendedItems: readonly WaveExtendedItemRecord[];
-  readonly warranties: readonly WaveWarrantyRecord[];
-  readonly maintenanceTaskMeta: readonly WaveExtendedMaintenanceTaskMeta[];
-  readonly insurancePolicies: readonly WaveInsurancePolicyRecord[];
-  readonly claims: readonly WaveClaimRecord[];
-  readonly documents: readonly WaveDocumentRecord[];
-  readonly claimDocLinks: readonly WaveClaimDocLink[];
-  readonly homeEvents: readonly WaveHomeEventRecord[];
-  readonly taxBills: readonly WaveTaxBillRecord[];
-  readonly financeSlots: WaveFinanceSlots | null;
-  readonly recalls: readonly WaveRecallRecord[];
-  readonly environmentalRisks: readonly WaveEnvironmentalRiskRecord[];
-  readonly inspectionFindings: readonly WaveInspectionFindingRecord[];
-  readonly buyerTasks: readonly WaveBuyerTaskRecord[];
-  readonly sellerReadinessItems: readonly WaveSellerReadinessRecord[];
-  readonly projects: readonly WaveProjectRecord[];
-  readonly contractorQuotes: readonly WaveContractorQuoteRecord[];
-  readonly savedResults: readonly WaveSavedResultRecord[];
+  readonly extendedItems: readonly CrossDomainExtendedItemRecord[];
+  readonly warranties: readonly CrossDomainWarrantyRecord[];
+  readonly maintenanceTaskMeta: readonly CrossDomainExtendedMaintenanceTaskMeta[];
+  readonly insurancePolicies: readonly CrossDomainInsurancePolicyRecord[];
+  readonly claims: readonly CrossDomainClaimRecord[];
+  readonly documents: readonly CrossDomainDocumentRecord[];
+  readonly claimDocLinks: readonly CrossDomainClaimDocLink[];
+  readonly homeEvents: readonly CrossDomainHomeEventRecord[];
+  readonly taxBills: readonly CrossDomainTaxBillRecord[];
+  readonly financeSlots: CrossDomainFinanceSlots | null;
+  readonly recalls: readonly CrossDomainRecallRecord[];
+  readonly environmentalRisks: readonly CrossDomainEnvironmentalRiskRecord[];
+  readonly inspectionFindings: readonly CrossDomainInspectionFindingRecord[];
+  readonly buyerTasks: readonly CrossDomainBuyerTaskRecord[];
+  readonly sellerReadinessItems: readonly CrossDomainSellerReadinessRecord[];
+  readonly projects: readonly CrossDomainProjectRecord[];
+  readonly contractorQuotes: readonly CrossDomainContractorQuoteRecord[];
+  readonly savedResults: readonly CrossDomainSavedResultRecord[];
   readonly savedResultsState?: {
     readonly status: 'AVAILABLE' | 'UNAVAILABLE';
     readonly reason?: string;
@@ -241,7 +241,7 @@ export interface CrossDomainPropertySnapshot extends Phase2aPropertySnapshot {
   };
 }
 
-export interface WaveFacetExecutionResult {
+export interface CrossDomainFacetExecutionResult {
   readonly facetId: string;
   readonly jobMatch?: string | null;
   readonly owner: MixedStackFacetOwnershipAssignment;
@@ -253,7 +253,7 @@ export interface WaveFacetExecutionResult {
   readonly redactedFieldIds: readonly string[];
   readonly receipt: SemanticReadReceipt | null;
   readonly entailment: SemanticReceiptEntailmentVerdict | null;
-  readonly presentationEquivalence: Phase2aRichPresentationEquivalenceReport | null;
+  readonly presentationEquivalence: SliceRichPresentationEquivalenceReport | null;
   readonly metrics?: Readonly<Record<string, number | string | boolean | null>>;
 }
 
@@ -262,7 +262,7 @@ export interface CrossDomainExecutionResult {
   readonly rawText: string;
   readonly answer: string;
   readonly clarification: CrossDomainClarification | null;
-  readonly facetResults: readonly WaveFacetExecutionResult[];
+  readonly facetResults: readonly CrossDomainFacetExecutionResult[];
   readonly overflowFacets: readonly PlanOverflowFacet[];
   readonly executionCountByFacetId: Readonly<Record<string, number>>;
   readonly redactedFieldIds: readonly string[];
@@ -347,7 +347,7 @@ function finalizeReceiptAndPresentation(input: {
 }): {
   readonly receipt: SemanticReadReceipt;
   readonly entailment: SemanticReceiptEntailmentVerdict;
-  readonly equivalence: Phase2aRichPresentationEquivalenceReport;
+  readonly equivalence: SliceRichPresentationEquivalenceReport;
   readonly rows: ReadonlyArray<{ readonly id: string; readonly label: string; readonly subtitle?: string }>;
 } {
   const resolvedRecordIds = input.rows.map((r) => r.id);
@@ -378,7 +378,7 @@ function finalizeReceiptAndPresentation(input: {
     answerVariantId: input.variantId,
   });
 
-  const blocks = buildPhase2aRichPresentation({
+  const blocks = buildSliceRichPresentation({
     receipt,
     title: input.title,
     summaryBody: renderedBody,
@@ -409,7 +409,7 @@ function finalizeReceiptAndPresentation(input: {
  * Computes cumulative year-by-year net owning vs renting comparison and crossover year.
  * Returns null crossoverYear if owning does not overtake renting within the evaluation window.
  */
-function computeOwnVsRentBreakEven(slots: WaveFinanceSlots): {
+function computeOwnVsRentBreakEven(slots: CrossDomainFinanceSlots): {
   readonly horizonYears: number;
   readonly crossoverYear: number | null;
   readonly breaksEvenWithinHorizon: boolean;
@@ -531,7 +531,7 @@ function computeOwnVsRentBreakEven(slots: WaveFinanceSlots): {
  * Uses canonical persisted fields when available, otherwise computes via mortgageMath.
  */
 function computeRefinanceBreakEven(
-  slots: WaveFinanceSlots,
+  slots: CrossDomainFinanceSlots,
   horizonYears: number,
 ): {
   readonly monthlySavingsCents: number | null;
@@ -595,7 +595,7 @@ function computeRefinanceBreakEven(
   };
 }
 
-function quoteMatchesRequestedScope(quote: WaveContractorQuoteRecord, requestedScope: string): boolean {
+function quoteMatchesRequestedScope(quote: CrossDomainContractorQuoteRecord, requestedScope: string): boolean {
   const scopeNorm = requestedScope.trim().toLowerCase();
   if (!scopeNorm) return true;
   const haystack = `${quote.roomTag ?? ''} ${quote.scopeText ?? ''} ${quote.vendorName ?? ''}`.toLowerCase();
@@ -629,8 +629,8 @@ function executeNewStackFacet(
   owner: MixedStackFacetOwnershipAssignment,
   snapshot: CrossDomainPropertySnapshot,
   role: AskUserRole,
-  priorResultsById: ReadonlyMap<string, WaveFacetExecutionResult>,
-): WaveFacetExecutionResult {
+  priorResultsById: ReadonlyMap<string, CrossDomainFacetExecutionResult>,
+): CrossDomainFacetExecutionResult {
   const job = facet.evidence.jobMatch;
   const adapterId = owner.adapterId;
   const visibleItems = snapshot.extendedItems.filter((item) => item.propertyId === snapshot.propertyId && !item.isHidden);
@@ -745,7 +745,7 @@ function executeNewStackFacet(
             }],
           }
         : undefined;
-    const sub = executePhase2aVerticalSlice({
+    const sub = executeSemanticSlice({
       rawText: rawQuery,
       snapshot,
       auth: { propertyId: snapshot.propertyId, role, propertyAuthorized: true },
@@ -1068,7 +1068,7 @@ function executeNewStackFacet(
     const activeBills = snapshot.taxBills.filter((b) => b.propertyId === snapshot.propertyId && b.lifecycleStatus === 'ACTIVE');
     const thisYearBill = activeBills.find((b) => b.taxYear === refYear) ?? null;
     const lastYearBill = activeBills.find((b) => b.taxYear === refYear - 1) ?? null;
-    const comparedBills = [lastYearBill, thisYearBill].filter((b): b is WaveTaxBillRecord => b !== null);
+    const comparedBills = [lastYearBill, thisYearBill].filter((b): b is CrossDomainTaxBillRecord => b !== null);
     const deltaCents = thisYearBill && lastYearBill ? thisYearBill.amountCents - lastYearBill.amountCents : null;
     const summary = deltaCents !== null
       ? `Property tax changed by $${(deltaCents / 100).toFixed(2)} (${refYear - 1}: $${(lastYearBill!.amountCents / 100).toFixed(2)} vs ${refYear}: $${(thisYearBill!.amountCents / 100).toFixed(2)}).`
@@ -1503,7 +1503,7 @@ function executeNewStackFacet(
       observedAt: `${snapshot.asOfDate.slice(0, 10)}T00:00:00.000Z`,
       answerVariantId: 'variant.project_permit_status',
     });
-    const blocks = buildPhase2aRichPresentation({
+    const blocks = buildSliceRichPresentation({
       receipt,
       title: 'Project permit requirements',
       summaryBody: summary,
@@ -1545,7 +1545,7 @@ function executeNewStackFacet(
     const resolvedBoundQuotes = boundQuoteIds.length > 0
       ? boundQuoteIds
           .map((id) => pool.find((q) => q.id === id))
-          .filter((q): q is WaveContractorQuoteRecord => Boolean(q))
+          .filter((q): q is CrossDomainContractorQuoteRecord => Boolean(q))
       : [];
     const exactPairResolved = boundQuoteIds.length > 0
       ? resolvedBoundQuotes.length === 2
@@ -1708,7 +1708,7 @@ function toDynamicQuoteCandidates(snapshot?: CrossDomainPropertySnapshot): Dynam
 /**
  * Unified Cross-Domain Wave 1-5 Executor (§18 Phases 2B-5, §19 #10-#13, #24-#30, #37).
  */
-export async function executeCrossDomainWaves(input: {
+export async function executeCrossDomainSnapshot(input: {
   readonly rawText: string;
   readonly snapshot: CrossDomainPropertySnapshot;
   readonly role: AskUserRole;
@@ -1785,14 +1785,14 @@ export async function executeCrossDomainWaves(input: {
   });
   const ownershipByFacetId = new Map(ownerships.map((o) => [o.facetId, o]));
 
-  const resultsById = new Map<string, WaveFacetExecutionResult>();
-  const orderedResults: WaveFacetExecutionResult[] = [];
+  const resultsById = new Map<string, CrossDomainFacetExecutionResult>();
+  const orderedResults: CrossDomainFacetExecutionResult[] = [];
   const executionCountByFacetId: Record<string, number> = {};
 
   for (const facet of parsed.plan.facets) {
     executionCountByFacetId[facet.id] = (executionCountByFacetId[facet.id] ?? 0) + 1;
     const owner = ownershipByFacetId.get(facet.id)!;
-    let facetResult: WaveFacetExecutionResult;
+    let facetResult: CrossDomainFacetExecutionResult;
 
     if (owner.owner === 'NEW_STACK') {
       facetResult = executeNewStackFacet(facet, owner, input.snapshot, input.role, resultsById);
@@ -1817,7 +1817,7 @@ export async function executeCrossDomainWaves(input: {
       };
     }
 
-    const enrichedFacetResult: WaveFacetExecutionResult = {
+    const enrichedFacetResult: CrossDomainFacetExecutionResult = {
       ...facetResult,
       jobMatch: facet.evidence.jobMatch ?? null,
     };
@@ -1877,7 +1877,7 @@ export async function executeCrossDomainWaves(input: {
 }
 
 export async function replaySavedCrossDomainResult(input: {
-  readonly savedResult: WaveSavedResultRecord;
+  readonly savedResult: CrossDomainSavedResultRecord;
   readonly currentSnapshot: CrossDomainPropertySnapshot;
   readonly currentRole: AskUserRole;
   readonly propertyAuthorized: boolean;
@@ -1895,7 +1895,7 @@ export async function replaySavedCrossDomainResult(input: {
       redactedFieldIds: [],
     };
   }
-  return executeCrossDomainWaves({
+  return executeCrossDomainSnapshot({
     rawText: input.rawPromptFallback,
     snapshot: input.currentSnapshot,
     role: input.currentRole,
@@ -1920,7 +1920,7 @@ export function executeCrossDomainFollowUp(input: {
   return applyCrossDomainFollowUpRefinement(prior.plan, input.followUpText, dynamicEntities, dynamicQuotes);
 }
 
-function normalizeWaveRole(role: string): AskUserRole {
+function normalizeCrossDomainRole(role: string): AskUserRole {
   const upper = role.toUpperCase();
   if (upper === 'OWNER' || upper === 'ADMIN') return 'OWNER';
   if (upper === 'EDITOR' || upper === 'MEMBER') return 'EDITOR';
@@ -1933,35 +1933,35 @@ function toCents(decimalOrNumber: unknown): number {
   return Number.isFinite(num) ? Math.round(num * 100) : 0;
 }
 
-function mapClaimStatus(status: string): WaveClaimRecord['status'] {
+function mapClaimStatus(status: string): CrossDomainClaimRecord['status'] {
   const upper = status.toUpperCase();
   if (upper === 'CLOSED' || upper === 'SETTLED' || upper === 'DENIED') return 'CLOSED';
   if (upper === 'UNDER_REVIEW' || upper === 'SUBMITTED' || upper === 'IN_REVIEW') return 'UNDER_REVIEW';
   return 'OPEN';
 }
 
-function mapTaxStatus(status: string): WaveTaxBillRecord['status'] {
+function mapTaxStatus(status: string): CrossDomainTaxBillRecord['status'] {
   const upper = status.toUpperCase();
   if (upper === 'PAID') return 'PAID';
   if (upper === 'OVERDUE' || upper === 'DELINQUENT') return 'OVERDUE';
   return 'UNPAID';
 }
 
-function mapInspectionStatus(status: string): WaveInspectionFindingRecord['status'] {
+function mapInspectionStatus(status: string): CrossDomainInspectionFindingRecord['status'] {
   const upper = status.toUpperCase();
   if (upper === 'RESOLVED' || upper === 'WAIVED') return 'RESOLVED';
   if (upper === 'MONITORING' || upper === 'DEFERRED') return 'MONITORING';
   return 'ACTION_REQUIRED';
 }
 
-function mapProjectStatus(status: string): WaveProjectRecord['status'] {
+function mapProjectStatus(status: string): CrossDomainProjectRecord['status'] {
   const upper = status.toUpperCase();
   if (upper === 'COMPLETED') return 'COMPLETED';
   if (upper === 'CANCELLED' || upper === 'ARCHIVED') return 'CANCELLED';
   return 'ACTIVE';
 }
 
-function mapPermitStatus(applicability: string): WaveProjectRecord['permitStatus'] {
+function mapPermitStatus(applicability: string): CrossDomainProjectRecord['permitStatus'] {
   const upper = applicability.toUpperCase();
   if (upper === 'CONFIRMED_NOT_REQUIRED' || upper === 'NOT_REQUIRED') return 'CONFIRMED_NOT_REQUIRED';
   if (upper === 'REQUIRED' || upper === 'NEEDS_PERMIT') return 'NEEDS_PERMIT';
@@ -2045,7 +2045,7 @@ export async function loadCrossDomainPropertySnapshot(
   const hasDomain = (domainId: SemanticDomainId): boolean => loadAll || scope!.domains.has(domainId);
   const hasJob = (...candidates: readonly string[]): boolean => loadAll || candidates.some((j) => scope!.jobs.has(j));
 
-  const needPhase2a = (
+  const needSlice = (
     hasDomain('domain.inventory')
     || hasDomain('domain.maintenance')
     || hasDomain('domain.warranties_coverage')
@@ -2084,8 +2084,8 @@ export async function loadCrossDomainPropertySnapshot(
     ? Boolean(userId)
     : hasDomain('domain.account_household_preferences') || hasJob('job.saved_results.lookup');
 
-  const phase2aPromise: Promise<Phase2aPropertySnapshot> = needPhase2a
-    ? loadPhase2aPropertySnapshot(propertyId)
+  const slicePromise: Promise<SlicePropertySnapshot> = needSlice
+    ? loadSlicePropertySnapshot(propertyId)
     : Promise.resolve({
         propertyId,
         asOfDate: new Date().toISOString().slice(0, 10),
@@ -2096,7 +2096,7 @@ export async function loadCrossDomainPropertySnapshot(
   const prismaAny = prisma as unknown as Record<string, { findUnique?: Function; findFirst?: Function; findMany?: Function } | undefined>;
 
   const [
-    phase2aSnapshot,
+    sliceSnapshot,
     propertyRow,
     warrantyRows,
     documentRows,
@@ -2116,7 +2116,7 @@ export async function loadCrossDomainPropertySnapshot(
     refinanceScenarioRow,
     refinanceOppRow,
   ] = await Promise.all([
-    phase2aPromise,
+    slicePromise,
     typeof prismaAny.property?.findUnique === 'function'
       ? prisma.property.findUnique({
           where: { id: propertyId },
@@ -2300,7 +2300,7 @@ export async function loadCrossDomainPropertySnapshot(
   const activeDocumentRows = (documentRows as Array<any>).filter((doc) => doc.deletedAt === null || doc.deletedAt === undefined);
   const manualDocByItem = new Map<string, string>();
   const receiptDocByItem = new Map<string, string>();
-  const propertyDocuments: WaveDocumentRecord[] = activeDocumentRows.map((doc) => {
+  const propertyDocuments: CrossDomainDocumentRecord[] = activeDocumentRows.map((doc) => {
     const typeUpper = String(doc.type ?? 'OTHER').toUpperCase();
     const meta = doc.metadata && typeof doc.metadata === 'object' ? (doc.metadata as Record<string, unknown>) : null;
     const metaKind = String(meta?.documentKind ?? meta?.kind ?? meta?.category ?? meta?.role ?? '').toUpperCase();
@@ -2327,7 +2327,7 @@ export async function loadCrossDomainPropertySnapshot(
     };
   });
 
-  const extendedItems: WaveExtendedItemRecord[] = phase2aSnapshot.items.map((item) => {
+  const extendedItems: CrossDomainExtendedItemRecord[] = sliceSnapshot.items.map((item) => {
     const cond = (item.condition ?? '').toUpperCase();
     return {
       id: item.id,
@@ -2335,7 +2335,7 @@ export async function loadCrossDomainPropertySnapshot(
       name: item.name,
       category: (['APPLIANCE', 'HVAC', 'PLUMBING', 'ELECTRICAL'].includes(item.category.toUpperCase())
         ? item.category.toUpperCase()
-        : 'OTHER') as WaveExtendedItemRecord['category'],
+        : 'OTHER') as CrossDomainExtendedItemRecord['category'],
       purchaseCostCents: item.purchaseCostCents ?? null,
       replacementCostCents: item.replacementCostCents ?? null,
       installedOn: item.installedOn ?? null,
@@ -2351,8 +2351,8 @@ export async function loadCrossDomainPropertySnapshot(
     };
   });
 
-  const claimDocLinks: WaveClaimDocLink[] = [];
-  const claims: WaveClaimRecord[] = (claimRows as Array<any>).map((claim) => {
+  const claimDocLinks: CrossDomainClaimDocLink[] = [];
+  const claims: CrossDomainClaimRecord[] = (claimRows as Array<any>).map((claim) => {
     const docs = Array.isArray(claim.documents) ? claim.documents : [];
     for (const d of docs) {
       claimDocLinks.push({ id: d.id, claimId: claim.id, documentId: d.documentId });
@@ -2463,7 +2463,7 @@ export async function loadCrossDomainPropertySnapshot(
     netHoldCents,
     netRentCents,
   ].some((v) => v !== null);
-  const financeSlots: WaveFinanceSlots | null = hasAnyFinanceSlot
+  const financeSlots: CrossDomainFinanceSlots | null = hasAnyFinanceSlot
     ? {
         monthlyRentCents: extractedMonthlyRentCents,
         homeValueCents,
@@ -2481,7 +2481,7 @@ export async function loadCrossDomainPropertySnapshot(
       }
     : null;
 
-  let savedResults: WaveSavedResultRecord[] = [];
+  let savedResults: CrossDomainSavedResultRecord[] = [];
   let savedResultsState: CrossDomainPropertySnapshot['savedResultsState'];
   if (needSaved) {
     if (!userId) {
@@ -2517,7 +2517,7 @@ export async function loadCrossDomainPropertySnapshot(
   }
 
   return {
-    ...phase2aSnapshot,
+    ...sliceSnapshot,
     asOfDate: localYmdInTimeZone(new Date(), propertyTimezone),
     timezone: propertyTimezone,
     closingDateIso,
@@ -2529,7 +2529,7 @@ export async function loadCrossDomainPropertySnapshot(
       category: String(w.category),
       expiryDate: w.expiryDate ? new Date(w.expiryDate).toISOString().slice(0, 10) : '',
     })),
-    maintenanceTaskMeta: phase2aSnapshot.maintenanceTasks.map((t) => ({
+    maintenanceTaskMeta: sliceSnapshot.maintenanceTasks.map((t) => ({
       taskId: t.id,
       category: /plumb|leak|water heater|pipe|drain/i.test(t.title)
         ? 'PLUMBING'
@@ -2975,10 +2975,10 @@ export async function executeCrossDomainOnProperty(input: {
               },
             )
           : buildMinimalCrossDomainSnapshot(input.propertyId, input.timeZone));
-  const execution = await executeCrossDomainWaves({
+  const execution = await executeCrossDomainSnapshot({
     rawText: input.rawText,
     snapshot,
-    role: normalizeWaveRole(input.role),
+    role: normalizeCrossDomainRole(input.role),
     propertyAuthorized: input.propertyAuthorized,
     planOverride: activePlan ?? undefined,
   });

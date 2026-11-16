@@ -26,11 +26,11 @@ import {
   type PlanOverflowFacet,
 } from '../crossDomain/crossDomainPlanBuilder';
 import {
-  DOMAIN_WAVE_MANIFEST,
+  DOMAIN_ROLLOUT_MANIFEST,
   tryNormalizeToCanonicalSection5Domain,
-} from '../crossDomain/domainWaveManifest';
+} from '../crossDomain/domainRolloutManifest';
 
-export const ASK_PHASE6_PROVIDER_VERSION = 'phase6-provider-orchestrator-1.0.0' as const;
+export const ASK_SEMANTIC_PROVIDER_VERSION = 'phase6-provider-orchestrator-1.0.0' as const;
 export const ASK_SEMANTIC_PROVIDER_BUDGET_POLICY_VERSION = 'semantic-provider-budget-1.0.0' as const;
 export const ASK_SEMANTIC_PROVIDER_BUDGET_APPROVED_AT = '2026-11-16' as const;
 const MAX_ADMITTED_FACETS = 6;
@@ -422,7 +422,7 @@ export function validateAndMapMinimizedSpanToRaw(
 
 function buildEligibleJobsByDomain(): Readonly<Record<string, readonly string[]>> {
   const map: Record<string, readonly string[]> = {};
-  for (const wave of DOMAIN_WAVE_MANIFEST) {
+  for (const wave of DOMAIN_ROLLOUT_MANIFEST) {
     for (const domainId of wave.domainIds) {
       map[domainId] = wave.registeredJobIds;
     }

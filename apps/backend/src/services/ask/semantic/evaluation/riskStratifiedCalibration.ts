@@ -1,7 +1,7 @@
 import { type SemanticFacet } from '../semanticRequestPlan';
-import { wilson95Interval } from '../crossDomain/domainWaveManifest';
+import { wilson95Interval } from '../crossDomain/domainRolloutManifest';
 
-export const ASK_PHASE6_CALIBRATION_VERSION = 'phase6-risk-calibration-1.0.0' as const;
+export const ASK_CALIBRATION_VERSION = 'phase6-risk-calibration-1.0.0' as const;
 export const MIN_INDEPENDENT_SAMPLES_AT_ZERO_ERRORS = 381 as const;
 
 export type SemanticRiskStratum =
@@ -393,7 +393,7 @@ export function evaluateRiskStratifiedCalibration(
   }
 
   return {
-    version: ASK_PHASE6_CALIBRATION_VERSION,
+    version: ASK_CALIBRATION_VERSION,
     minRequiredIndependentSamplesAtZeroErrors: MIN_INDEPENDENT_SAMPLES_AT_ZERO_ERRORS,
     calibrationEvaluationMode: hasDisjointFitSet ? 'HELD_OUT_SPLIT' : 'LEAVE_ONE_OUT_CV',
     observedZeroErrorPassed: summaries.every((s) => s.observedZeroErrorPassed),

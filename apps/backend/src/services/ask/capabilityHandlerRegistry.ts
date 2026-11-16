@@ -17,7 +17,7 @@ import {
 } from './askOperationRegistry';
 import { AskCapabilityHandlerMissingError, type CapabilityInvocationEnvelope } from './capabilityInvocation.contract';
 import { parseDeterministicSemanticRequest } from './semantic/deterministicSemanticParser';
-import { executePhase2aOnProperty } from './semantic/slice/phase2aSliceExecutor';
+import { executeSliceOnProperty } from './semantic/slice/sliceExecutor';
 import { resolveAskSemanticEntryDecision } from './semantic/semanticEntryDispatcher';
 import {
   type SemanticProviderPolicy,
@@ -243,29 +243,29 @@ async function invokeGuarded(
   // Phase 2A + Cross-Domain Wave 1-5 + Phase 6 unified semantic entry dispatch
   // (respecting explicit UI launch operations and maintaining property auth boundaries).
   if (envelope.propertyId && envelope.message) {
-    const phase2aPlan = parseDeterministicSemanticRequest(envelope.message);
-    const phase2aJob = phase2aPlan.outcome === 'MATCH' ? phase2aPlan.facets[0]?.evidence.jobMatch : null;
+    const slicePlan = parseDeterministicSemanticRequest(envelope.message);
+    const sliceJob = slicePlan.outcome === 'MATCH' ? slicePlan.facets[0]?.evidence.jobMatch : null;
     const isExplicitForcedOperation = Boolean(envelope.launchContext?.operationId);
-    const isPhase2aDispatch =
-      phase2aPlan.outcome === 'BOUNDARY'
-      || (operationId === 'DATA_POINT_READ' && phase2aJob === 'query.inventory_item.relation_boolean')
+    const isSliceDispatch =
+      slicePlan.outcome === 'BOUNDARY'
+      || (operationId === 'DATA_POINT_READ' && sliceJob === 'query.inventory_item.relation_boolean')
       || ((operationId === 'REPLACEMENT_GUIDANCE' || operationId === 'DATA_POINT_READ')
-        && phase2aJob === 'job.inventory.replacement_guidance')
+        && sliceJob === 'job.inventory.replacement_guidance')
       || ((operationId === 'MAINTENANCE_TASK_CREATE' || operationId === 'DATA_POINT_READ')
-        && phase2aJob === 'job.maintenance.create')
+        && sliceJob === 'job.maintenance.create')
       || (!isExplicitForcedOperation
-        && (phase2aJob === 'job.maintenance.create'
-          || phase2aJob === 'job.inventory.replacement_guidance'
-          || phase2aJob === 'query.inventory_item.relation_boolean'));
+        && (sliceJob === 'job.maintenance.create'
+          || sliceJob === 'job.inventory.replacement_guidance'
+          || sliceJob === 'query.inventory_item.relation_boolean'));
 
-    if (isPhase2aDispatch && (operationId !== 'DATA_POINT_READ' || deps.semanticEvaluationMode !== 'DUAL_PRODUCER')) {
-      const phase2aExecution = await executePhase2aOnProperty({
+    if (isSliceDispatch && (operationId !== 'DATA_POINT_READ' || deps.semanticEvaluationMode !== 'DUAL_PRODUCER')) {
+      const sliceExecution = await executeSliceOnProperty({
         propertyId: envelope.propertyId,
         role: resolvedRole,
         propertyAuthorized: true,
         rawText: envelope.message,
       });
-      return withDerivedCollectionDescriptors(phase2aExecution.operationResult);
+      return withDerivedCollectionDescriptors(sliceExecution.operationResult);
     }
 
     if (!isExplicitForcedOperation && operationId === 'GROUNDED_GUIDANCE') {

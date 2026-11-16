@@ -40,7 +40,7 @@ import {
 } from './relationGovernanceBaseline';
 import {
   ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES,
-  ASK_PHASE0_CONTAINMENT_REGRESSION_CASES,
+  ASK_CONTAINMENT_REGRESSION_CASES,
   ASK_SEEDED_PROPERTY_ARCHETYPES,
   ASK_SEEDED_SCENARIO_CATALOGUE_VERSION,
   evaluateSeededArchetypeFixtures,
@@ -54,7 +54,7 @@ export * from './recognizerRetirementManifest';
 export * from './relationGovernanceBaseline';
 export * from './seededScenarioCatalogue';
 
-export interface AskSemanticPhase0CompletenessProof {
+export interface AskSemanticGovernanceCompletenessProof {
   readonly discoveredRecognizerFilesCount: number;
   readonly inventoriedRecognizerFilesCount: number;
   readonly unaccountedRecognizerFiles: readonly string[];
@@ -71,7 +71,7 @@ export interface AskSemanticPhase0CompletenessProof {
   readonly familyFixtureReadinessPassedCount: number;
 }
 
-export interface AskSemanticPhase0BaselineSummary {
+export interface AskSemanticGovernanceBaselineSummary {
   readonly schemaVersion: '1.1.0';
   readonly versions: {
     readonly ontologyBaseline: string;
@@ -97,7 +97,7 @@ export interface AskSemanticPhase0BaselineSummary {
     readonly independentSemanticFamilies: number;
     readonly containmentRegressionCases: number;
   };
-  readonly completenessProof: AskSemanticPhase0CompletenessProof;
+  readonly completenessProof: AskSemanticGovernanceCompletenessProof;
   readonly schemaReconciliation: ReturnType<typeof buildSchemaCatalogueReconciliationReport>;
   readonly relationshipDuplicateReport: ReturnType<typeof buildRelationshipDuplicateDefinitionReport>;
   readonly validatorIssues: {
@@ -114,7 +114,7 @@ export interface AskSemanticPhase0BaselineSummary {
   };
 }
 
-export function buildAskSemanticPhase0BaselineSummary(): AskSemanticPhase0BaselineSummary {
+export function buildAskSemanticGovernanceBaselineSummary(): AskSemanticGovernanceBaselineSummary {
   const entities = buildSemanticEntityRegistry();
   const fields = buildSemanticFieldRegistry();
   const capabilities = buildSemanticCapabilityInventory();
@@ -170,7 +170,7 @@ export function buildAskSemanticPhase0BaselineSummary(): AskSemanticPhase0Baseli
     (f) => verifySeededFamilyFixtureReadiness(f.familyId).passed,
   ).length;
 
-  const completenessProof: AskSemanticPhase0CompletenessProof = {
+  const completenessProof: AskSemanticGovernanceCompletenessProof = {
     discoveredRecognizerFilesCount: discoveredRecognizers.length,
     inventoriedRecognizerFilesCount: inventoriedRecognizerSet.size,
     unaccountedRecognizerFiles,
@@ -241,7 +241,7 @@ export function buildAskSemanticPhase0BaselineSummary(): AskSemanticPhase0Baseli
       dualParentSchemaModels: relationshipDuplicateReport.dualParentModels.length,
       seededPropertyArchetypes: ASK_SEEDED_PROPERTY_ARCHETYPES.length,
       independentSemanticFamilies: ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES.length,
-      containmentRegressionCases: ASK_PHASE0_CONTAINMENT_REGRESSION_CASES.length,
+      containmentRegressionCases: ASK_CONTAINMENT_REGRESSION_CASES.length,
     },
     completenessProof,
     schemaReconciliation,

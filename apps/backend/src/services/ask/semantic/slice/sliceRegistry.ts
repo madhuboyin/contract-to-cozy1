@@ -1,7 +1,7 @@
 import { ASK_SEMANTIC_RELATION_REGISTRY } from '../semanticRelationRegistry';
 import { ASK_SHARED_SEMANTIC_LEXICON } from '../sharedSemanticLexicon';
 
-export interface Phase2aEntityRegistration {
+export interface SliceEntityRegistration {
   readonly entityId: string;
   readonly modelName: string;
   readonly displayLabel: string;
@@ -9,7 +9,7 @@ export interface Phase2aEntityRegistration {
   readonly propertyScopeField: string;
 }
 
-export interface Phase2aFieldRegistration {
+export interface SliceFieldRegistration {
   readonly fieldId: string;
   readonly entityId: string;
   readonly columnName: string;
@@ -17,7 +17,7 @@ export interface Phase2aFieldRegistration {
   readonly sensitive: boolean;
 }
 
-export interface Phase2aCapabilityRegistration {
+export interface SliceCapabilityRegistration {
   readonly capabilityId: string;
   readonly requestClass: 'CAPABILITY' | 'COMMAND';
   readonly semanticJobId: string;
@@ -27,7 +27,7 @@ export interface Phase2aCapabilityRegistration {
   readonly minimumRole: 'VIEWER' | 'EDITOR' | 'OWNER';
 }
 
-export const PHASE2A_SLICE_ENTITIES: readonly Phase2aEntityRegistration[] = Object.freeze([
+export const SLICE_ENTITIES: readonly SliceEntityRegistration[] = Object.freeze([
   {
     entityId: 'entity.inventory_item',
     modelName: 'InventoryItem',
@@ -65,7 +65,7 @@ export const PHASE2A_SLICE_ENTITIES: readonly Phase2aEntityRegistration[] = Obje
   },
 ]);
 
-export const PHASE2A_SLICE_FIELDS: readonly Phase2aFieldRegistration[] = Object.freeze([
+export const SLICE_FIELDS: readonly SliceFieldRegistration[] = Object.freeze([
   { fieldId: 'field.inventory_item.name', entityId: 'entity.inventory_item', columnName: 'name', valueType: 'STRING', sensitive: false },
   { fieldId: 'field.inventory_item.category', entityId: 'entity.inventory_item', columnName: 'category', valueType: 'ENUM', sensitive: false },
   { fieldId: 'field.inventory_item.brand', entityId: 'entity.inventory_item', columnName: 'brand', valueType: 'STRING', sensitive: false },
@@ -84,14 +84,14 @@ export const PHASE2A_SLICE_FIELDS: readonly Phase2aFieldRegistration[] = Object.
   { fieldId: 'field.room.name', entityId: 'entity.room', columnName: 'name', valueType: 'STRING', sensitive: false },
 ]);
 
-export const PHASE2A_SLICE_RELATIONS = ASK_SEMANTIC_RELATION_REGISTRY.filter((relation) =>
+export const SLICE_RELATIONS = ASK_SEMANTIC_RELATION_REGISTRY.filter((relation) =>
   relation.semanticRelationId === 'relation.inventory_item.warranty'
   || relation.semanticRelationId === 'relation.inventory_item.maintenance_task'
   || relation.semanticRelationId === 'relation.inventory_item.room'
   || relation.semanticRelationId === 'relation.maintenance_task.inventory_item'
 );
 
-export const PHASE2A_SLICE_CAPABILITIES: readonly Phase2aCapabilityRegistration[] = Object.freeze([
+export const SLICE_CAPABILITIES: readonly SliceCapabilityRegistration[] = Object.freeze([
   {
     capabilityId: 'capability.inventory.replacement_guidance',
     requestClass: 'CAPABILITY',
@@ -112,7 +112,7 @@ export const PHASE2A_SLICE_CAPABILITIES: readonly Phase2aCapabilityRegistration[
   },
 ]);
 
-export interface Phase2aRegistryCompletenessReport {
+export interface SliceRegistryCompletenessReport {
   readonly ok: boolean;
   readonly missing: readonly string[];
   readonly entityCount: number;
@@ -125,17 +125,17 @@ export interface Phase2aRegistryCompletenessReport {
  * Verifies that every Phase 2A entity, relation endpoint, and capability references
  * valid registrations within the unified slice registry.
  */
-export function verifyPhase2aSliceRegistryCompleteness(): Phase2aRegistryCompletenessReport {
+export function verifySliceRegistryCompleteness(): SliceRegistryCompletenessReport {
   const missing: string[] = [];
-  const entityIds = new Set(PHASE2A_SLICE_ENTITIES.map((entity) => entity.entityId));
+  const entityIds = new Set(SLICE_ENTITIES.map((entity) => entity.entityId));
 
-  for (const field of PHASE2A_SLICE_FIELDS) {
+  for (const field of SLICE_FIELDS) {
     if (!entityIds.has(field.entityId)) {
       missing.push(`field:${field.fieldId}->missing_entity:${field.entityId}`);
     }
   }
 
-  for (const relation of PHASE2A_SLICE_RELATIONS) {
+  for (const relation of SLICE_RELATIONS) {
     if (!entityIds.has(relation.sourceEntityId)) {
       missing.push(`relation:${relation.semanticRelationId}->missing_source:${relation.sourceEntityId}`);
     }
@@ -147,7 +147,7 @@ export function verifyPhase2aSliceRegistryCompleteness(): Phase2aRegistryComplet
     }
   }
 
-  for (const capability of PHASE2A_SLICE_CAPABILITIES) {
+  for (const capability of SLICE_CAPABILITIES) {
     if (!entityIds.has(capability.entityId)) {
       missing.push(`capability:${capability.capabilityId}->missing_entity:${capability.entityId}`);
     }
@@ -160,7 +160,7 @@ export function verifyPhase2aSliceRegistryCompleteness(): Phase2aRegistryComplet
   }
 
   // Verify lexicon field alignment for Phase 2A slice entities
-  const registeredFieldIds = new Set(PHASE2A_SLICE_FIELDS.map((field) => field.fieldId));
+  const registeredFieldIds = new Set(SLICE_FIELDS.map((field) => field.fieldId));
   const sliceFieldPrefixes = ['field.inventory_item.', 'field.warranty.', 'field.maintenance_task.'];
   for (const lexeme of ASK_SHARED_SEMANTIC_LEXICON) {
     if (lexeme.role === 'FIELD' && sliceFieldPrefixes.some((prefix) => lexeme.semanticId.startsWith(prefix))) {
@@ -171,11 +171,11 @@ export function verifyPhase2aSliceRegistryCompleteness(): Phase2aRegistryComplet
   }
 
   // Verify foreign-key MANY_TO_ONE cardinalities on item->room and task->item
-  const roomRel = PHASE2A_SLICE_RELATIONS.find((r) => r.semanticRelationId === 'relation.inventory_item.room');
+  const roomRel = SLICE_RELATIONS.find((r) => r.semanticRelationId === 'relation.inventory_item.room');
   if (roomRel?.cardinality !== 'MANY_TO_ONE') {
     missing.push('relation.inventory_item.room:expected_MANY_TO_ONE');
   }
-  const taskItemRel = PHASE2A_SLICE_RELATIONS.find((r) => r.semanticRelationId === 'relation.maintenance_task.inventory_item');
+  const taskItemRel = SLICE_RELATIONS.find((r) => r.semanticRelationId === 'relation.maintenance_task.inventory_item');
   if (taskItemRel?.cardinality !== 'MANY_TO_ONE') {
     missing.push('relation.maintenance_task.inventory_item:expected_MANY_TO_ONE');
   }
@@ -183,9 +183,9 @@ export function verifyPhase2aSliceRegistryCompleteness(): Phase2aRegistryComplet
   return {
     ok: missing.length === 0,
     missing,
-    entityCount: PHASE2A_SLICE_ENTITIES.length,
-    fieldCount: PHASE2A_SLICE_FIELDS.length,
-    relationCount: PHASE2A_SLICE_RELATIONS.length,
-    capabilityCount: PHASE2A_SLICE_CAPABILITIES.length,
+    entityCount: SLICE_ENTITIES.length,
+    fieldCount: SLICE_FIELDS.length,
+    relationCount: SLICE_RELATIONS.length,
+    capabilityCount: SLICE_CAPABILITIES.length,
   };
 }

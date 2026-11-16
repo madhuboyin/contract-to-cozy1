@@ -11,25 +11,25 @@ const {
   ASK_CROSS_DOMAIN_PARSER_VERSION,
   ASK_CROSS_DOMAIN_SEMANTIC_LEXICON,
   DOMAIN_ENABLEMENT_RECORDS,
-  DOMAIN_WAVE_MANIFEST,
+  DOMAIN_ROLLOUT_MANIFEST,
   OFFLINE_LEXICON_ENRICHMENT_PROPOSALS,
   assignMixedStackFacetOwnership,
   buildOperationResultFromCrossDomainExecution,
   buildSeededCrossDomainSnapshot,
   evaluateCrossDomainGovernanceReport,
   executeCrossDomainFollowUp,
-  executeCrossDomainWaves,
+  executeCrossDomainSnapshot,
   parseCrossDomainSemanticRequest,
   replaySavedCrossDomainResult,
   runCrossDomainAcceptanceBenchmarks,
   runCrossDomainMetamorphicSuite,
   verifyCrossDomainProtectionLexemeSeparation,
-  verifyDomainWaveManifestIntegrity,
+  verifyDomainRolloutManifestIntegrity,
 } = require('../../src/services/ask/semantic/crossDomain/index.ts');
 
 test('Waves 1-5 cover all 14 Section 5 homeowner domains and safety boundary with measured §18 enablement profiles', async () => {
-  assert.equal(DOMAIN_WAVE_MANIFEST.length, 5);
-  assert.deepEqual(DOMAIN_WAVE_MANIFEST.map((w) => w.order), [1, 2, 3, 4, 5]);
+  assert.equal(DOMAIN_ROLLOUT_MANIFEST.length, 5);
+  assert.deepEqual(DOMAIN_ROLLOUT_MANIFEST.map((w) => w.order), [1, 2, 3, 4, 5]);
   assert.equal(ASK_SEMANTIC_DOMAINS.length, 15);
   assert.ok(ASK_SEMANTIC_DOMAINS.every((d) => d.correctnessState === 'ENABLED_FOR_DECLARED_SCOPE'));
   assert.equal(DOMAIN_ENABLEMENT_RECORDS.length, 15);
@@ -234,7 +234,7 @@ test('mixed-stack migration assigns exclusive facet ownership without double exe
   const prompt = "which appliances are out of warranty and what's my deductible?";
 
   // Scenario A: warranties enabled on NEW_STACK, insurance delegated to LEGACY_STACK
-  const partialMigration = await executeCrossDomainWaves({
+  const partialMigration = await executeCrossDomainSnapshot({
     rawText: prompt,
     snapshot,
     role: 'OWNER',
@@ -249,7 +249,7 @@ test('mixed-stack migration assigns exclusive facet ownership without double exe
   assert.deepEqual(partialMigration.executionCountByFacetId, { 'facet-1': 1, 'facet-2': 1 });
 
   // Scenario B: no legacy fallback for insurance -> explicit UNRESOLVED remainder, zero silent drop
-  const unresolvedRemainder = await executeCrossDomainWaves({
+  const unresolvedRemainder = await executeCrossDomainSnapshot({
     rawText: prompt,
     snapshot,
     role: 'OWNER',
@@ -281,7 +281,7 @@ test('six-facet budget executes 6 dependent facets cleanly and records DOMAIN_NO
   assert.equal(parsed.overflowFacets.length, 1);
   assert.equal(parsed.overflowFacets[0].reasonCode, 'DOMAIN_NOT_SEARCHED');
 
-  const exec = await executeCrossDomainWaves({
+  const exec = await executeCrossDomainSnapshot({
     rawText: sevenClausePrompt,
     snapshot,
     role: 'OWNER',
@@ -301,7 +301,7 @@ test('fail-closed unresolved tokens, role redaction, unauthorized property acces
   assert.equal(parseCrossDomainSemanticRequest('would refinancing break even within three years zqxw').plan.outcome, 'NONE_FITS');
 
   // Role redaction for VIEWER on financial repair spend & insurance deductible
-  const viewerSpend = await executeCrossDomainWaves({
+  const viewerSpend = await executeCrossDomainSnapshot({
     rawText: 'how much did I spend on repairs last year?',
     snapshot,
     role: 'VIEWER',
@@ -311,7 +311,7 @@ test('fail-closed unresolved tokens, role redaction, unauthorized property acces
   assert.ok(viewerSpend.redactedFieldIds.includes('field.home_event.actual_cost'));
 
   // Property authorization refusal
-  const forbidden = await executeCrossDomainWaves({
+  const forbidden = await executeCrossDomainSnapshot({
     rawText: 'show my saved items',
     snapshot,
     role: 'OWNER',
@@ -777,7 +777,7 @@ test('Semantic receipts use domain-appropriate predicates, quote comparison resp
   const base = buildSeededCrossDomainSnapshot();
 
   // 1. Receipt lineage uses registered capability/scope predicates (never unrelated tax/inspection/project/buyer predicates)
-  const envRes = await executeCrossDomainWaves({
+  const envRes = await executeCrossDomainSnapshot({
     rawText: 'what environmental risks affect this home this week?',
     snapshot: base,
     role: 'OWNER',
@@ -785,7 +785,7 @@ test('Semantic receipts use domain-appropriate predicates, quote comparison resp
   });
   assert.deepEqual(envRes.facetResults[0].receipt.predicateIds, ['predicate.environmental_risk.active_in_week']);
 
-  const savedRes = await executeCrossDomainWaves({
+  const savedRes = await executeCrossDomainSnapshot({
     rawText: 'show my saved items',
     snapshot: base,
     role: 'OWNER',
@@ -832,7 +832,7 @@ test('Semantic receipts use domain-appropriate predicates, quote comparison resp
     ],
   };
 
-  const kitchenQuoteRes = await executeCrossDomainWaves({
+  const kitchenQuoteRes = await executeCrossDomainSnapshot({
     rawText: 'compare these two kitchen contractor quotes',
     snapshot: mixedQuotesSnapshot,
     role: 'OWNER',
@@ -850,7 +850,7 @@ test('Semantic receipts use domain-appropriate predicates, quote comparison resp
   );
 
   // If < 2 kitchen quotes exist, fail closed to PARTIAL rather than pulling bathroom quotes
-  const partialQuoteRes = await executeCrossDomainWaves({
+  const partialQuoteRes = await executeCrossDomainSnapshot({
     rawText: 'compare these two kitchen contractor quotes',
     snapshot: {
       ...base,
@@ -883,7 +883,7 @@ test('Semantic receipts use domain-appropriate predicates, quote comparison resp
       },
     ],
   };
-  const ambiguousQuoteRes = await executeCrossDomainWaves({
+  const ambiguousQuoteRes = await executeCrossDomainSnapshot({
     rawText: 'compare these two kitchen contractor quotes',
     snapshot: threeKitchenQuotesSnapshot,
     role: 'OWNER',
@@ -914,7 +914,7 @@ test('Semantic receipts use domain-appropriate predicates, quote comparison resp
   assert.equal(quoteFollowUp.plan.facets[0].where?.targetRecordId, 'kitchen');
   assert.deepEqual(quoteFollowUp.plan.facets[0].where?.targetCategorySet, ['quote-1', 'quote-3']);
 
-  const refinedQuoteExec = await executeCrossDomainWaves({
+  const refinedQuoteExec = await executeCrossDomainSnapshot({
     rawText: 'Harbor and Northside',
     snapshot: threeKitchenQuotesSnapshot,
     role: 'OWNER',
@@ -926,7 +926,7 @@ test('Semantic receipts use domain-appropriate predicates, quote comparison resp
   assert.equal(refinedQuoteExec.facetResults[0].metrics.deltaCents, -140000);
 
   // Direct comparison naming two quotes resolves & executes cleanly even with 3+ candidates on the property
-  const directNamedQuoteExec = await executeCrossDomainWaves({
+  const directNamedQuoteExec = await executeCrossDomainSnapshot({
     rawText: 'compare Harbor and Northside',
     snapshot: threeKitchenQuotesSnapshot,
     role: 'OWNER',
@@ -937,7 +937,7 @@ test('Semantic receipts use domain-appropriate predicates, quote comparison resp
   assert.equal(directNamedQuoteExec.facetResults[0].metrics.deltaCents, -140000);
 
   // Authoritative persisted RENT analysis must never be overridden by fallback crossover model
-  const persistedRentWins = await executeCrossDomainWaves({
+  const persistedRentWins = await executeCrossDomainSnapshot({
     rawText: 'how long until owning beats renting?',
     snapshot: {
       ...base,
@@ -961,7 +961,7 @@ test('Semantic receipts use domain-appropriate predicates, quote comparison resp
   assert.doesNotMatch(rentWinsFacet.summary, /starting in year/i);
 
   // 3. Rich list presentation renders real titles for claims & projects instead of raw IDs
-  const claimsAndProjects = await executeCrossDomainWaves({
+  const claimsAndProjects = await executeCrossDomainSnapshot({
     rawText: 'what claims are open and which active projects still need a permit?',
     snapshot: base,
     role: 'OWNER',

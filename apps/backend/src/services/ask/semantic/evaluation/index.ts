@@ -2,9 +2,9 @@ export * from './semanticProviderOrchestrator';
 export * from './riskStratifiedCalibration';
 export * from './endToEndEvaluationHarness';
 
-import { runPhase6EndToEndEvaluation, type Phase6EvaluationReport } from './endToEndEvaluationHarness';
+import { runEndToEndEvaluation, type EndToEndEvaluationReport } from './endToEndEvaluationHarness';
 
-export interface Phase6SummaryOutput {
+export interface EvaluationSummaryOutput {
   readonly version: string;
   readonly evaluatedAt: string;
   readonly evaluationNature: 'SEALED_PROXY';
@@ -22,11 +22,11 @@ export interface Phase6SummaryOutput {
   readonly providerTrackPCompleted: boolean;
   readonly liveExternalRuntimePendingApproval: boolean;
   readonly summaryLines: readonly string[];
-  readonly report: Phase6EvaluationReport;
+  readonly report: EndToEndEvaluationReport;
 }
 
-export async function buildPhase6CalibrationAndEvaluationSummary(): Promise<Phase6SummaryOutput> {
-  const report = await runPhase6EndToEndEvaluation();
+export async function buildCalibrationAndEvaluationSummary(): Promise<EvaluationSummaryOutput> {
+  const report = await runEndToEndEvaluation();
   const passedGateCount = report.frEval4ProductGates.filter((gate) => gate.passed).length;
   const totalGateCount = report.frEval4ProductGates.length;
   const frEval3KeyCount = Object.keys(report.frEval3Metrics).length;
@@ -42,7 +42,7 @@ export async function buildPhase6CalibrationAndEvaluationSummary(): Promise<Phas
     `Legacy vs Grammar Semantic Agreement (8 dimensions): rate=${(report.frEval3Metrics.legacyVsGrammarAgreementRate * 100).toFixed(1)}%, agreed=${report.frEval3Metrics.legacyGrammarAgreementEvidence.agreedCount}, collisions=${report.frEval3Metrics.legacyGrammarAgreementEvidence.disagreedCollisionCount}, grammarExpanded=${report.frEval3Metrics.legacyGrammarAgreementEvidence.grammarExpandedCount}, falseAdmissionsPrevented=${report.frEval3Metrics.legacyGrammarAgreementEvidence.falseAdmissionsPreventedCount}`,
     `Macro vs Per-Domain Lower 95% CI: macroPoint=${(report.frEval3Metrics.endToEndResolvedRateMacroByDomain * 100).toFixed(1)}%, meanDomainLower95=${(report.frEval3Metrics.macroDomainLower95Summary.meanDomainLower95 * 100).toFixed(2)}%, minDomainLower95=${(report.frEval3Metrics.macroDomainLower95Summary.minDomainLower95 * 100).toFixed(2)}% (pooledLower95=${(report.frEval3Metrics.endToEndResolvedConfidenceInterval95.lower * 100).toFixed(2)}%)`,
     `Risk-Stratified Calibration (${report.riskStratifiedCalibration.calibrationEvaluationMode}): observedZeroError=${report.riskStratifiedCalibration.observedZeroErrorPassed ? 'PASSED' : 'FAILED'}, wilsonUnder1PctBound=${report.riskStratifiedCalibration.overallPassed ? 'PASSED' : 'INSUFFICIENT_INDEPENDENT_SAMPLES'} (independentObs=${report.riskStratifiedCalibration.totalObservations}, maxStratumLOO_ECE=${maxStratumEce.toFixed(4)}, incorrectHighConfidence=${report.riskStratifiedCalibration.totalIncorrectHighConfidence})`,
-    `Correlated Metamorphic Evidence (FR-EVAL-5, separate from Wilson n): passed=${String(report.correlatedMetamorphicEvidence.suitePassed)}, domainPairs=${report.correlatedMetamorphicEvidence.passedPairs}/${report.correlatedMetamorphicEvidence.totalPairsEvaluated}, phase6Variants=${report.correlatedMetamorphicEvidence.phase6InvarianceVariantsPassed}/${report.correlatedMetamorphicEvidence.phase6InvarianceVariantsChecked}`,
+    `Correlated Metamorphic Evidence (FR-EVAL-5, separate from Wilson n): passed=${String(report.correlatedMetamorphicEvidence.suitePassed)}, domainPairs=${report.correlatedMetamorphicEvidence.passedPairs}/${report.correlatedMetamorphicEvidence.totalPairsEvaluated}, invarianceVariants=${report.correlatedMetamorphicEvidence.invarianceVariantsPassed}/${report.correlatedMetamorphicEvidence.invarianceVariantsChecked}`,
     `Provider Simulator Disclosure: kind=${report.providerEvaluationDisclosure.providerKind} (${report.providerEvaluationDisclosure.providerId}), liveExternalModelEvaluated=${String(report.providerEvaluationDisclosure.liveExternalModelEvaluated)}, simulatorIncremental=${(report.frEval3Metrics.providerExpandedIncrementalCoverageRate * 100).toFixed(1)}%, disagreements=${report.frEval3Metrics.producerDisagreementCount}`,
     `Security & Instrumented Replay: spanRoundTrip=${(report.frEval3Metrics.protectedSpanRoundTripAccuracy * 100).toFixed(1)}%, replayRedaction=${(report.frEval3Metrics.replayReauthorizationRedactionAccuracy * 100).toFixed(1)}%, measuredReplayQueries(N=5,25,100)=${report.frEval3Metrics.replayQueryCountBounds.queryCountsByPageSize.map((q) => q.authorizationQueryCount).join('/')}`,
     `External Provider Governance (§22.3/§22.4): status=${report.providerTrackPStatus.policy.approvalStatus}, liveExternalRuntimePendingApproval=${String(report.providerTrackPStatus.liveExternalRuntimePendingApproval)}`,

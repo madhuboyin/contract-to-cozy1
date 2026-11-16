@@ -8,7 +8,7 @@ import {
   parseCrossDomainSemanticRequest,
   type DynamicQuoteCandidate,
 } from './crossDomain/crossDomainPlanBuilder';
-import { normalizeToCanonicalSection5Domain } from './crossDomain/domainWaveManifest';
+import { normalizeToCanonicalSection5Domain } from './crossDomain/domainRolloutManifest';
 
 export interface SemanticEntryRoutingInput {
   readonly rawMessage: string;
@@ -34,7 +34,7 @@ export interface SemanticEntryDispatchDecision {
   readonly reasonCode: SemanticEntryDispatchReasonCode;
 }
 
-const PHASE2A_ENTRY_JOBS = new Set<string>([
+const SLICE_ENTRY_JOBS = new Set<string>([
   'query.inventory_item.relation_boolean',
   'job.inventory.replacement_guidance',
   'job.maintenance.create',
@@ -48,7 +48,7 @@ const PHASE2A_ENTRY_JOBS = new Set<string>([
 export function resolveAskSemanticEntryDecision(
   input: SemanticEntryRoutingInput,
 ): SemanticEntryDispatchDecision {
-  const phase2aPlan = parseDeterministicSemanticRequest(
+  const slicePlan = parseDeterministicSemanticRequest(
     input.rawMessage,
     input.dynamicEntities ? { dynamicEntities: input.dynamicEntities } : undefined,
   );
@@ -59,7 +59,7 @@ export function resolveAskSemanticEntryDecision(
 
   // Stage 0 safety & ambiguous negative coordination pre-filter always overrides fallback routing.
   if (
-    (phase2aPlan.outcome === 'BOUNDARY' || crossDomainParsed.plan.outcome === 'BOUNDARY')
+    (slicePlan.outcome === 'BOUNDARY' || crossDomainParsed.plan.outcome === 'BOUNDARY')
     && input.routingOperationId !== 'EMERGENCY_BOUNDARY'
     && input.routingOperationId !== 'UNSAFE_RESTRICTED_BOUNDARY'
   ) {
@@ -71,8 +71,8 @@ export function resolveAskSemanticEntryDecision(
     return { shouldDispatchToSemanticEntry: false, reasonCode: 'KEEP_LEGACY_ROUTE' };
   }
 
-  const phase2aJob = phase2aPlan.outcome === 'MATCH' ? phase2aPlan.facets[0]?.evidence.jobMatch ?? null : null;
-  if (phase2aJob && PHASE2A_ENTRY_JOBS.has(phase2aJob)) {
+  const sliceJob = slicePlan.outcome === 'MATCH' ? slicePlan.facets[0]?.evidence.jobMatch ?? null : null;
+  if (sliceJob && SLICE_ENTRY_JOBS.has(sliceJob)) {
     return { shouldDispatchToSemanticEntry: true, reasonCode: 'PHASE2A_STRUCTURED_MATCH' };
   }
 

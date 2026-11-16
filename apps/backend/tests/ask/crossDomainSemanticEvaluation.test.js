@@ -3,27 +3,27 @@ const assert = require('node:assert/strict');
 require('ts-node/register/transpile-only');
 
 const { ASK_SEMANTIC_DOMAINS } = require('../../src/services/ask/semantic/governance/semanticOntologyBaseline.ts');
-const { executeCrossDomainWaves, buildSeededCrossDomainSnapshot } = require('../../src/services/ask/semantic/crossDomain/index.ts');
+const { executeCrossDomainSnapshot, buildSeededCrossDomainSnapshot } = require('../../src/services/ask/semantic/crossDomain/index.ts');
 const { dataPointReadResult } = require('../../src/services/ask/handlers/dataPointRead.handler.ts');
 const {
-  ASK_PHASE6_CALIBRATION_VERSION,
-  ASK_PHASE6_EVALUATION_VERSION,
-  ASK_PHASE6_PROVIDER_VERSION,
+  ASK_CALIBRATION_VERSION,
+  ASK_EVALUATION_VERSION,
+  ASK_SEMANTIC_PROVIDER_VERSION,
   ASK_SEMANTIC_PROVIDER_BUDGET_APPROVED_AT,
   ASK_SEMANTIC_PROVIDER_BUDGET_POLICY_VERSION,
   APPROVED_SEMANTIC_PROVIDER_BUDGETS,
   GeminiSemanticUnderstandingProvider,
-  PHASE6_SEALED_EVALUATION_CASES,
+  SEALED_EVALUATION_CASES,
   SEMANTIC_RISK_STRATUM_POLICIES,
   SealedOfflineStructuredProvider,
-  buildPhase6CalibrationAndEvaluationSummary,
+  buildCalibrationAndEvaluationSummary,
   classifySemanticRiskStratum,
   evaluateRiskStratifiedCalibration,
   executeTwoStageProviderRetrieval,
   extractMultidimensionalConfidence,
   interpretWithSemanticProducers,
   resolveDefaultSemanticProviderPolicy,
-  runPhase6EndToEndEvaluation,
+  runEndToEndEvaluation,
   validateAndMapMinimizedSpanToRaw,
 } = require('../../src/services/ask/semantic/evaluation/index.ts');
 const { buildSemanticTextEnvelope } = require('../../src/services/ask/semantic/slice/placeholderSpanMap.ts');
@@ -46,7 +46,7 @@ test('Track P two-stage provider orchestration preserves stable facet IDs, depen
     enforceConcurrencyOverflow: true,
   });
 
-  assert.equal(ASK_PHASE6_PROVIDER_VERSION, 'phase6-provider-orchestrator-1.0.0');
+  assert.equal(ASK_SEMANTIC_PROVIDER_VERSION, 'phase6-provider-orchestrator-1.0.0');
   assert.equal(result.status, 'MATCH');
   assert.equal(result.unionStage2Used, false);
   assert.equal(result.plan.facets.length, 6);
@@ -135,7 +135,7 @@ test('Track P enforces deterministic-first short-circuit, dual-producer reconcil
 
   // Execute the provider plan end-to-end against seeded snapshot
   const snapshot = buildSeededCrossDomainSnapshot();
-  const execParaphrase = await executeCrossDomainWaves({
+  const execParaphrase = await executeCrossDomainSnapshot({
     rawText: paraphrasePrompt,
     snapshot,
     role: 'OWNER',
@@ -199,7 +199,7 @@ test('Track P enforces deterministic-first short-circuit, dual-producer reconcil
 });
 
 test('Phase 6 6-stratum PAV calibration enforces 11-feature vectors and Wilson 95% bounds on high-confidence errors', () => {
-  assert.equal(ASK_PHASE6_CALIBRATION_VERSION, 'phase6-risk-calibration-1.0.0');
+  assert.equal(ASK_CALIBRATION_VERSION, 'phase6-risk-calibration-1.0.0');
   assert.equal(Object.keys(SEMANTIC_RISK_STRATUM_POLICIES).length, 6);
 
   const detPrompt = 'compare my property tax this year vs last year';
@@ -270,9 +270,9 @@ test('Phase 6 6-stratum PAV calibration enforces 11-feature vectors and Wilson 9
 });
 
 test('Phase 6 end-to-end evaluation harness passes all sealed-proxy invariants across all 15 domains and reports correlated metamorphic checks separately from independent Wilson bounds', async () => {
-  const report = await runPhase6EndToEndEvaluation();
+  const report = await runEndToEndEvaluation();
 
-  assert.equal(report.version, ASK_PHASE6_EVALUATION_VERSION);
+  assert.equal(report.version, ASK_EVALUATION_VERSION);
   assert.equal(report.evaluationNature, 'SEALED_PROXY');
   assert.equal(report.isRealHomeownerTrafficDistribution, false);
   assert.equal(report.corpusProvenance.corpusType, 'INTERNAL_DEVELOPER_PROXY');
@@ -280,10 +280,10 @@ test('Phase 6 end-to-end evaluation harness passes all sealed-proxy invariants a
   assert.equal(report.corpusProvenance.heldOutFromImplementation, false);
   assert.equal(report.providerEvaluationDisclosure.providerKind, 'OFFLINE_SIMULATOR');
   assert.equal(report.providerEvaluationDisclosure.liveExternalModelEvaluated, false);
-  assert.equal(report.entryPathTelemetry.totalCases, PHASE6_SEALED_EVALUATION_CASES.length);
+  assert.equal(report.entryPathTelemetry.totalCases, SEALED_EVALUATION_CASES.length);
   assert.equal(report.entryPathTelemetry.persistedAskExecutionFlowExercised, false);
-  assert.equal(report.entryPathTelemetry.allRoutedCapabilityInvokedCount, PHASE6_SEALED_EVALUATION_CASES.length);
-  assert.equal(report.entryPathTelemetry.allRoutedCapabilityResolvedCount, PHASE6_SEALED_EVALUATION_CASES.length);
+  assert.equal(report.entryPathTelemetry.allRoutedCapabilityInvokedCount, SEALED_EVALUATION_CASES.length);
+  assert.equal(report.entryPathTelemetry.allRoutedCapabilityResolvedCount, SEALED_EVALUATION_CASES.length);
   assert.equal(
     report.entryPathTelemetry.separateLegacyOpExecutedCount,
     report.entryPathTelemetry.routedToSeparateLegacyOpCount,
@@ -309,11 +309,11 @@ test('Phase 6 end-to-end evaluation harness passes all sealed-proxy invariants a
   assert.equal(report.riskStratifiedCalibration.observedZeroErrorPassed, true);
   assert.equal(report.riskStratifiedCalibration.overallPassed, false);
   assert.equal(report.riskStratifiedCalibration.totalIncorrectHighConfidence, 0);
-  assert.equal(report.riskStratifiedCalibration.totalObservations, PHASE6_SEALED_EVALUATION_CASES.length);
+  assert.equal(report.riskStratifiedCalibration.totalObservations, SEALED_EVALUATION_CASES.length);
   assert.equal(report.correlatedMetamorphicEvidence.suitePassed, true);
   assert.equal(
-    report.correlatedMetamorphicEvidence.phase6InvarianceVariantsPassed,
-    PHASE6_SEALED_EVALUATION_CASES.length,
+    report.correlatedMetamorphicEvidence.invarianceVariantsPassed,
+    SEALED_EVALUATION_CASES.length,
   );
   assert.match(report.correlatedMetamorphicEvidence.note, /excluded from independent binomial sample counts/i);
 
@@ -337,11 +337,11 @@ test('Phase 6 end-to-end evaluation harness passes all sealed-proxy invariants a
   }
 
   // Verify §19 #22 requirement-to-evidence matrix and §22 openness
-  assert.ok(PHASE6_SEALED_EVALUATION_CASES.length >= 25);
+  assert.ok(SEALED_EVALUATION_CASES.length >= 25);
   assert.ok(report.requirementToEvidenceMatrix.some((r) => r.requirementId === 'FR-EVAL-1..6' && r.status === 'DEVELOPER_PROXY_UNHELD'));
   assert.ok(report.requirementToEvidenceMatrix.some((r) => r.requirementId === '§22.1..7' && r.status === 'OWNER_DECISION_OPEN'));
 
-  const summary = await buildPhase6CalibrationAndEvaluationSummary();
+  const summary = await buildCalibrationAndEvaluationSummary();
   assert.equal(summary.sealedProxyInvariantsPassed, true);
   assert.equal(summary.statisticalWilsonClaimStatus, 'INSUFFICIENT_INDEPENDENT_SAMPLES');
   assert.equal(summary.passed, false);

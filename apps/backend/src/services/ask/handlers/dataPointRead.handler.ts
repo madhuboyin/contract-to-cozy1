@@ -21,14 +21,14 @@ import { ASK_SEMANTIC_RECEIPT_VERSION, buildSemanticReadReceipt, type SemanticRe
 import { verifySemanticReadReceiptEntailment } from '../semantic/semanticReceiptEntailment';
 import { humanizePresentationToken } from '../semantic/containment/presentationHumanizer';
 import { parseDeterministicSemanticRequest } from '../semantic/deterministicSemanticParser';
-import { executePhase2aOnProperty } from '../semantic/slice/phase2aSliceExecutor';
+import { executeSliceOnProperty } from '../semantic/slice/sliceExecutor';
 import { type DynamicPlaceholderEntityCandidate } from '../semantic/slice/placeholderSpanMap';
 import { mayNeedDynamicQuoteResolution, parseCrossDomainSemanticRequest, type DynamicQuoteCandidate } from '../semantic/crossDomain/crossDomainPlanBuilder';
 import {
   executeCrossDomainOnProperty,
   loadAuthorizedProviderContext,
   type AuthorizedProviderContext,
-} from '../semantic/crossDomain/crossDomainWaveExecutor';
+} from '../semantic/crossDomain/crossDomainExecutor';
 import {
   GeminiSemanticUnderstandingProvider,
   interpretWithSemanticProducers,
@@ -451,24 +451,24 @@ export async function dataPointReadResult(
       ? await loadAuthorizedProviderContext(propertyId)
       : null;
 
-    const phase2aPlan = parseDeterministicSemanticRequest(
+    const slicePlan = parseDeterministicSemanticRequest(
       message,
       authorizedProviderContext ? { dynamicEntities: authorizedProviderContext.dynamicEntities } : undefined,
     );
-    const phase2aJob = phase2aPlan.outcome === 'MATCH' ? phase2aPlan.facets[0]?.evidence.jobMatch : null;
+    const sliceJob = slicePlan.outcome === 'MATCH' ? slicePlan.facets[0]?.evidence.jobMatch : null;
     if (
-      phase2aPlan.outcome === 'BOUNDARY'
-      || phase2aJob === 'query.inventory_item.relation_boolean'
-      || phase2aJob === 'job.inventory.replacement_guidance'
-      || phase2aJob === 'job.maintenance.create'
+      slicePlan.outcome === 'BOUNDARY'
+      || sliceJob === 'query.inventory_item.relation_boolean'
+      || sliceJob === 'job.inventory.replacement_guidance'
+      || sliceJob === 'job.maintenance.create'
     ) {
-      const phase2aExecution = await executePhase2aOnProperty({
+      const sliceExecution = await executeSliceOnProperty({
         propertyId,
         role,
         propertyAuthorized: true,
         rawText: message,
       });
-      return phase2aExecution.operationResult;
+      return sliceExecution.operationResult;
     }
 
     const crossDomainParsed = parseCrossDomainSemanticRequest(

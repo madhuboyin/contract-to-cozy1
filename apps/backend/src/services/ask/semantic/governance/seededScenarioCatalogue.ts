@@ -1006,7 +1006,7 @@ export const ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES: readonly IndependentSemanticSce
   },
 ] as const);
 
-export interface Phase0ContainmentRegressionCase {
+export interface ContainmentRegressionCase {
   readonly regressionId: string;
   readonly frdSectionRef: string;
   readonly evidenceClassification: 'CONTAINMENT_REGRESSION_NOT_COVERAGE_PROOF';
@@ -1015,7 +1015,7 @@ export interface Phase0ContainmentRegressionCase {
   readonly expectedContainmentBehavior: string;
 }
 
-export const ASK_PHASE0_CONTAINMENT_REGRESSION_CASES: readonly Phase0ContainmentRegressionCase[] = Object.freeze([
+export const ASK_CONTAINMENT_REGRESSION_CASES: readonly ContainmentRegressionCase[] = Object.freeze([
   {
     regressionId: 'containment.warranty.negative_paraphrase_list_down',
     frdSectionRef: '§2 Failure #1 / §17.2 #6',
@@ -1350,7 +1350,7 @@ export function validateSeededScenarioCatalogue(): string[] {
     }
   }
 
-  for (const regression of ASK_PHASE0_CONTAINMENT_REGRESSION_CASES) {
+  for (const regression of ASK_CONTAINMENT_REGRESSION_CASES) {
     if (regression.evidenceClassification !== 'CONTAINMENT_REGRESSION_NOT_COVERAGE_PROOF') {
       issues.push(`${regression.regressionId}: must be labelled CONTAINMENT_REGRESSION_NOT_COVERAGE_PROOF`);
     }

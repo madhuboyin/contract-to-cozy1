@@ -12,17 +12,17 @@ import { ASK_ARTIFACT_TYPE_REGISTRY } from '../../governance/askArtifactTypeRegi
 import { ASK_SAVED_TYPE_READERS } from '../../saved/savedTypeReaders';
 import { composeAskSavedPage } from '../../askSaved.service';
 import { resolveHierarchicalSkillRouting } from '../../../skills/skillRouter';
-import { buildAskSemanticPhase0BaselineSummary } from '../governance/index';
+import { buildAskSemanticGovernanceBaselineSummary } from '../governance/index';
 import { ASK_SEMANTIC_DOMAINS, type SemanticDomainId } from '../governance/semanticOntologyBaseline';
-import { verifyPhase1Invariants } from '../containment/index';
+import { verifyContainmentInvariants } from '../containment/index';
 import { buildSemanticTextEnvelope, verifyPlaceholderSpanMapRoundTrip } from '../slice/placeholderSpanMap';
 import {
-  executePhase2aVerticalSlice,
-  type Phase2aPropertySnapshot,
-} from '../slice/phase2aSliceExecutor';
+  executeSemanticSlice,
+  type SlicePropertySnapshot,
+} from '../slice/sliceExecutor';
 import {
-  PHASE2A_OWNER_AUTH,
-  PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+  SLICE_OWNER_AUTH,
+  SLICE_SEEDED_PROPERTY_SNAPSHOT,
 } from '../slice/index';
 import { parseDeterministicSemanticRequest } from '../deterministicSemanticParser';
 import { evaluateLegacyVsSemanticGrammarAgreement } from '../legacyGrammarAgreement';
@@ -33,20 +33,20 @@ import {
 } from '../crossDomain/crossDomainPlanBuilder';
 import {
   buildOperationResultFromCrossDomainExecution,
-  executeCrossDomainWaves,
+  executeCrossDomainSnapshot,
   replaySavedCrossDomainResult,
   type CrossDomainPropertySnapshot,
-  type WaveSavedResultRecord,
-} from '../crossDomain/crossDomainWaveExecutor';
+  type CrossDomainSavedResultRecord,
+} from '../crossDomain/crossDomainExecutor';
 import {
   buildMeasuredDomainCoverageProfiles,
   DOMAIN_ENABLEMENT_RECORDS,
   normalizeToCanonicalSection5Domain,
-  verifyDomainWaveManifestIntegrity,
+  verifyDomainRolloutManifestIntegrity,
   wilson95Interval,
   type DomainLanguageCoverageProfile,
   type DomainMeasurementInput,
-} from '../crossDomain/domainWaveManifest';
+} from '../crossDomain/domainRolloutManifest';
 import {
   buildSeededCrossDomainSnapshot,
   runCrossDomainAcceptanceBenchmarks,
@@ -70,9 +70,9 @@ import {
   type SemanticProviderPolicy,
 } from './semanticProviderOrchestrator';
 
-export const ASK_PHASE6_EVALUATION_VERSION = 'phase6-e2e-evaluation-1.0.0' as const;
+export const ASK_EVALUATION_VERSION = 'phase6-e2e-evaluation-1.0.0' as const;
 
-export interface Phase6SealedCase {
+export interface SealedEvaluationCase {
   readonly caseId: string;
   readonly domainId: SemanticDomainId;
   readonly family: string;
@@ -112,7 +112,7 @@ function buildMissingDataSnapshot(base: CrossDomainPropertySnapshot): CrossDomai
   };
 }
 
-export const PHASE6_SEALED_EVALUATION_CASES: readonly Phase6SealedCase[] = Object.freeze([
+export const SEALED_EVALUATION_CASES: readonly SealedEvaluationCase[] = Object.freeze([
   // All 15 domains with populated, missing-data, conflicted, ambiguous, write, safety, and provider-paraphrase cases
   {
     caseId: 'p6-prop-1',
@@ -402,7 +402,7 @@ export const PHASE6_SEALED_EVALUATION_CASES: readonly Phase6SealedCase[] = Objec
   },
 ]);
 
-function toPhase2aSnapshot(cross: CrossDomainPropertySnapshot): Phase2aPropertySnapshot {
+function toSliceSnapshot(cross: CrossDomainPropertySnapshot): SlicePropertySnapshot {
   return {
     propertyId: cross.propertyId,
     asOfDate: cross.asOfDate,
@@ -605,7 +605,7 @@ export interface RequirementEvidenceEntry {
   readonly status: 'IMPLEMENTED_VERIFIED' | 'DEVELOPER_PROXY_UNHELD' | 'OWNER_DECISION_OPEN';
 }
 
-export interface Phase6EvaluationReport {
+export interface EndToEndEvaluationReport {
   readonly version: string;
   readonly evaluatedAt: string;
   readonly evaluationNature: 'SEALED_PROXY';
@@ -736,8 +736,8 @@ export interface Phase6EvaluationReport {
     readonly totalPairsEvaluated: number;
     readonly passedPairs: number;
     readonly axesCovered: readonly string[];
-    readonly phase6InvarianceVariantsChecked: number;
-    readonly phase6InvarianceVariantsPassed: number;
+    readonly invarianceVariantsChecked: number;
+    readonly invarianceVariantsPassed: number;
     readonly note: string;
   };
   readonly failedDomains: readonly SemanticDomainId[];
@@ -745,9 +745,9 @@ export interface Phase6EvaluationReport {
   readonly requirementToEvidenceMatrix: readonly RequirementEvidenceEntry[];
 }
 
-export async function runPhase6EndToEndEvaluation(options: {
+export async function runEndToEndEvaluation(options: {
   readonly policy?: SemanticProviderPolicy;
-} = {}): Promise<Phase6EvaluationReport> {
+} = {}): Promise<EndToEndEvaluationReport> {
   const policy = options.policy ?? resolveDefaultSemanticProviderPolicy();
   const baseSnapshot = buildSeededCrossDomainSnapshot();
   const missingSnapshot = buildMissingDataSnapshot(baseSnapshot);
@@ -764,8 +764,8 @@ export async function runPhase6EndToEndEvaluation(options: {
     recordedDecisionNote: 'evaluation-simulator-policy',
   };
 
-  const phase0 = buildAskSemanticPhase0BaselineSummary();
-  const phase1 = verifyPhase1Invariants();
+  const phase0 = buildAskSemanticGovernanceBaselineSummary();
+  const phase1 = verifyContainmentInvariants();
   const benchmarks = await runCrossDomainAcceptanceBenchmarks();
   const metamorphic = runCrossDomainMetamorphicSuite();
   const replayResult = await runReplayReauthorizationBenchmark(baseSnapshot);
@@ -1120,7 +1120,7 @@ export async function runPhase6EndToEndEvaluation(options: {
   }
 
   try {
-    for (const c of PHASE6_SEALED_EVALUATION_CASES) {
+    for (const c of SEALED_EVALUATION_CASES) {
       useMissingFinanceForEntryCase = Boolean(c.useMissingDataSnapshot);
       let routingDecision = resolveAskRoutingCascade(c.prompt, { propertyId: baseSnapshot.propertyId });
       if (routingDecision.stage !== 'REMOTE_FALLBACK' && !routingDecision.requiresClarification) {
@@ -1359,7 +1359,7 @@ export async function runPhase6EndToEndEvaluation(options: {
 
   const calibrationObservations: CalibrationObservation[] = [];
 
-  for (const c of PHASE6_SEALED_EVALUATION_CASES) {
+  for (const c of SEALED_EVALUATION_CASES) {
     const activeSnapshot = c.useMissingDataSnapshot ? missingSnapshot : baseSnapshot;
     const envelope = buildSemanticTextEnvelope(c.prompt);
     protectedSpanChecked += 1;
@@ -1495,27 +1495,27 @@ export async function runPhase6EndToEndEvaluation(options: {
     // Write preview cases use Phase 2A command preview admission directly (never auto-executes write).
     if (c.kind === 'WRITE_PREVIEW') {
       writeSafeTotal += 1;
-      const phase2aRes = executePhase2aVerticalSlice({
+      const sliceRes = executeSemanticSlice({
         rawText: c.prompt,
-        snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-        auth: PHASE2A_OWNER_AUTH,
+        snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+        auth: SLICE_OWNER_AUTH,
       });
-      const planValid = phase2aRes.plan.outcome === 'MATCH';
+      const planValid = sliceRes.plan.outcome === 'MATCH';
       if (planValid) schemaValidCount += 1;
       facetExpectedTotal += 1;
-      if (phase2aRes.plan.facets.length === 1) facetMatchedTotal += 1;
-      facetPredictedTotal += phase2aRes.plan.facets.length;
-      if (phase2aRes.plan.facets[0]?.domainCandidates.some((dc) => normalizeToCanonicalSection5Domain(dc.id) === c.domainId)) {
+      if (sliceRes.plan.facets.length === 1) facetMatchedTotal += 1;
+      facetPredictedTotal += sliceRes.plan.facets.length;
+      if (sliceRes.plan.facets[0]?.domainCandidates.some((dc) => normalizeToCanonicalSection5Domain(dc.id) === c.domainId)) {
         domainTopKHitCount += 1;
       }
       entityResolvedCount += 1;
       projectionOk += 1;
       capabilityTotal += 1;
-      if (phase2aRes.plan.facets[0]?.evidence.jobMatch === c.expectedJobMatch) capabilityOk += 1;
+      if (sliceRes.plan.facets[0]?.evidence.jobMatch === c.expectedJobMatch) capabilityOk += 1;
 
       const isPreviewOnly =
-        phase2aRes.operationResult.status === 'NEEDS_CONFIRMATION'
-        && Boolean(phase2aRes.operationResult.confirmation);
+        sliceRes.operationResult.status === 'NEEDS_CONFIRMATION'
+        && Boolean(sliceRes.operationResult.confirmation);
       if (isPreviewOnly) {
         writeSafeOk += 1;
         exactResultOk += 1;
@@ -1525,12 +1525,12 @@ export async function runPhase6EndToEndEvaluation(options: {
       } else {
         wrongAnswerCount += 1;
       }
-      const phase2aBodyText = JSON.stringify(
-        phase2aRes.operationResult.blocks
+      const sliceBodyText = JSON.stringify(
+        sliceRes.operationResult.blocks
           .filter((b) => b.type !== 'EVIDENCE')
           .map((b) => ('body' in b ? b.body : '')),
       );
-      if (!hasInternalTokenLeak(phase2aBodyText)) {
+      if (!hasInternalTokenLeak(sliceBodyText)) {
         presentationOkCount += 1;
       } else {
         internalIdentifierLeaks += 1;
@@ -1539,7 +1539,7 @@ export async function runPhase6EndToEndEvaluation(options: {
       const writePolicy = SEMANTIC_RISK_STRATUM_POLICIES[c.expectedStratum];
       const conf = extractMultidimensionalConfidence({
         stratum: c.expectedStratum,
-        facet: phase2aRes.plan.facets[0],
+        facet: sliceRes.plan.facets[0],
         entityResolved: true,
         producerKind: 'DETERMINISTIC',
         providerAvailable: true,
@@ -1549,9 +1549,9 @@ export async function runPhase6EndToEndEvaluation(options: {
       // Admission decided strictly from calibrated confidence policy + non-rejected status BEFORE correctness check.
       const admittedWriteHigh =
         conf.compositeScore >= writePolicy.highConfidenceThreshold
-        && phase2aRes.operationResult.status !== 'OUT_OF_SCOPE'
-        && phase2aRes.operationResult.status !== 'NOT_APPLICABLE'
-        && phase2aRes.operationResult.status !== 'NEEDS_CLARIFICATION';
+        && sliceRes.operationResult.status !== 'OUT_OF_SCOPE'
+        && sliceRes.operationResult.status !== 'NOT_APPLICABLE'
+        && sliceRes.operationResult.status !== 'NEEDS_CLARIFICATION';
       calibrationObservations.push({
         caseId: c.caseId,
         stratum: c.expectedStratum,
@@ -1587,7 +1587,7 @@ export async function runPhase6EndToEndEvaluation(options: {
     if (schemaOk) schemaValidCount += 1;
 
     // Execute through cross-domain waves executor
-    const execRes = await executeCrossDomainWaves({
+    const execRes = await executeCrossDomainSnapshot({
       rawText: c.prompt,
       snapshot: activeSnapshot,
       role: c.role ?? 'OWNER',
@@ -1641,16 +1641,16 @@ export async function runPhase6EndToEndEvaluation(options: {
 
     if (c.kind === 'CONFLICTED') {
       conflictChecked += 1;
-      const phase2aConflict = executePhase2aVerticalSlice({
+      const sliceConflict = executeSemanticSlice({
         rawText: c.prompt,
-        snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-        auth: PHASE2A_OWNER_AUTH,
+        snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+        auth: SLICE_OWNER_AUTH,
       });
-      const receipt = phase2aConflict.receipt;
+      const receipt = sliceConflict.receipt;
       const separatedConflict = Boolean(
         receipt
-        && phase2aConflict.activeEntityIds.includes('item-dishwasher')
-        && !phase2aConflict.activeEntityIds.includes('item-furnace')
+        && sliceConflict.activeEntityIds.includes('item-dishwasher')
+        && !sliceConflict.activeEntityIds.includes('item-furnace')
         && receipt.population.conflictedCount === 1
         && receipt.population.unknownCount === 1,
       );
@@ -1738,11 +1738,11 @@ export async function runPhase6EndToEndEvaluation(options: {
   const METAMORPHIC_LEAD_SPACES = ['', ' '] as const;
   const METAMORPHIC_TIMEZONES = ['America/New_York', 'America/Los_Angeles', 'UTC'] as const;
 
-  let phase6InvarianceVariantsChecked = 0;
-  let phase6InvarianceVariantsPassed = 0;
+  let invarianceVariantsChecked = 0;
+  let invarianceVariantsPassed = 0;
   let variantIdx = 0;
 
-  for (const seed of PHASE6_SEALED_EVALUATION_CASES) {
+  for (const seed of SEALED_EVALUATION_CASES) {
     const casing = METAMORPHIC_CASINGS[variantIdx % METAMORPHIC_CASINGS.length];
     const punct = METAMORPHIC_PUNCTUATION[variantIdx % METAMORPHIC_PUNCTUATION.length];
     const lead = METAMORPHIC_LEAD_SPACES[variantIdx % METAMORPHIC_LEAD_SPACES.length];
@@ -1760,7 +1760,7 @@ export async function runPhase6EndToEndEvaluation(options: {
       timezone: tz,
     };
 
-    phase6InvarianceVariantsChecked += 1;
+    invarianceVariantsChecked += 1;
 
     if (seed.kind === 'OUT_OF_SCOPE_PROBE') {
       const out = await interpretWithSemanticProducers({
@@ -1771,19 +1771,19 @@ export async function runPhase6EndToEndEvaluation(options: {
         dynamicQuotes,
       });
       if (out.plan.outcome !== 'MATCH') {
-        phase6InvarianceVariantsPassed += 1;
+        invarianceVariantsPassed += 1;
       }
       continue;
     }
 
     if (seed.kind === 'WRITE_PREVIEW') {
-      const phase2aRes = executePhase2aVerticalSlice({
+      const sliceRes = executeSemanticSlice({
         rawText: variantPrompt,
-        snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-        auth: PHASE2A_OWNER_AUTH,
+        snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+        auth: SLICE_OWNER_AUTH,
       });
-      if (phase2aRes.operationResult.status === 'NEEDS_CONFIRMATION' && Boolean(phase2aRes.operationResult.confirmation)) {
-        phase6InvarianceVariantsPassed += 1;
+      if (sliceRes.operationResult.status === 'NEEDS_CONFIRMATION' && Boolean(sliceRes.operationResult.confirmation)) {
+        invarianceVariantsPassed += 1;
       }
       continue;
     }
@@ -1795,7 +1795,7 @@ export async function runPhase6EndToEndEvaluation(options: {
       policy,
       dynamicQuotes,
     });
-    const execRes = await executeCrossDomainWaves({
+    const execRes = await executeCrossDomainSnapshot({
       rawText: variantPrompt,
       snapshot: variantSnapshot,
       role: roleForVariant,
@@ -1807,7 +1807,7 @@ export async function runPhase6EndToEndEvaluation(options: {
         ? execRes.status === 'ANSWERED'
         : execRes.status === seed.expectedExecutionStatus;
     if (expectedOk) {
-      phase6InvarianceVariantsPassed += 1;
+      invarianceVariantsPassed += 1;
     }
   }
 
@@ -1860,7 +1860,7 @@ export async function runPhase6EndToEndEvaluation(options: {
     'what do I still need to finish before listing the house',
     'show my saved results',
   ].join(', ');
-  const sevenFacetExec = await executeCrossDomainWaves({
+  const sevenFacetExec = await executeCrossDomainSnapshot({
     rawText: sevenFacetPrompt,
     snapshot: baseSnapshot,
     role: 'OWNER',
@@ -1881,13 +1881,13 @@ export async function runPhase6EndToEndEvaluation(options: {
   const sixFacetChecksTotalCount = sixFacetChecks.length;
 
   //    (c) Multi-case relation-bound & role authorization conformance checks
-  const viewerInsuranceRead = await executeCrossDomainWaves({
+  const viewerInsuranceRead = await executeCrossDomainSnapshot({
     rawText: 'what is my deductible?',
     snapshot: baseSnapshot,
     role: 'VIEWER',
     propertyAuthorized: true,
   });
-  const unauthorizedWaveRead = await executeCrossDomainWaves({
+  const unauthorizedCrossDomainRead = await executeCrossDomainSnapshot({
     rawText: 'which claims are still open?',
     snapshot: baseSnapshot,
     role: 'OWNER',
@@ -1895,7 +1895,7 @@ export async function runPhase6EndToEndEvaluation(options: {
   });
   const relationAuthChecks = [
     replayResult.crossPropertyDenied,
-    unauthorizedWaveRead.status === 'FORBIDDEN',
+    unauthorizedCrossDomainRead.status === 'FORBIDDEN',
     replayResult.redactionAccurateForViewer,
     viewerInsuranceRead.redactedFieldIds.includes('field.insurance_policy.deductible'),
     phase1.valid,
@@ -1950,7 +1950,7 @@ export async function runPhase6EndToEndEvaluation(options: {
   });
 
   const perDomainCoverageProfiles = buildMeasuredDomainCoverageProfiles(measurementInputs);
-  const manifestIntegrity = verifyDomainWaveManifestIntegrity(perDomainCoverageProfiles);
+  const manifestIntegrity = verifyDomainRolloutManifestIntegrity(perDomainCoverageProfiles);
   const calibrationReport = evaluateRiskStratifiedCalibration(calibrationObservations);
 
   const safeDiv = (num: number, den: number): number => (den > 0 ? Number((num / den).toFixed(4)) : 1);
@@ -2047,12 +2047,12 @@ export async function runPhase6EndToEndEvaluation(options: {
     0,
   );
   const correlatedMetamorphicEvidence = {
-    suitePassed: metamorphic.passed && phase6InvarianceVariantsPassed === phase6InvarianceVariantsChecked,
+    suitePassed: metamorphic.passed && invarianceVariantsPassed === invarianceVariantsChecked,
     totalPairsEvaluated: metamorphic.pairCount,
     passedPairs: Math.max(0, metamorphic.pairCount - metamorphic.failures.length),
     axesCovered: [...metamorphic.axesCovered],
-    phase6InvarianceVariantsChecked,
-    phase6InvarianceVariantsPassed,
+    invarianceVariantsChecked,
+    invarianceVariantsPassed,
     note: 'Correlated metamorphic invariance checks are reported separately under FR-EVAL-5 and are excluded from independent binomial sample counts in FR-EVAL-4 Wilson confidence bounds.',
   };
 
@@ -2158,7 +2158,7 @@ export async function runPhase6EndToEndEvaluation(options: {
     {
       gateId: 'GATE_INDEPENDENT_HELD_OUT_PROVENANCE',
       label: 'Independently authored held-out sealed corpus provenance (FR-EVAL-1)',
-      observed: `corpusType=INTERNAL_DEVELOPER_PROXY, independentlyAuthored=false, heldOut=false, humanAdjudicated=0 (${PHASE6_SEALED_EVALUATION_CASES.length} internal cases)`,
+      observed: `corpusType=INTERNAL_DEVELOPER_PROXY, independentlyAuthored=false, heldOut=false, humanAdjudicated=0 (${SEALED_EVALUATION_CASES.length} internal cases)`,
       threshold: 'independently authored held-out human-adjudicated corpus',
       passed: false,
     },
@@ -2191,7 +2191,7 @@ export async function runPhase6EndToEndEvaluation(options: {
   const entryPathTelemetry = {
     entryPathExecutedBoundary: 'CASCADE_SKILL_SEMANTIC_ENTRY_AND_EXECUTE_OPERATION_CORE_CAPABILITY_INVOKE' as const,
     persistedAskExecutionFlowExercised: false as const,
-    totalCases: PHASE6_SEALED_EVALUATION_CASES.length,
+    totalCases: SEALED_EVALUATION_CASES.length,
     rawCascadeNonFallbackCount,
     semanticEntryPromotedCount,
     allRoutedCapabilityInvokedCount,
@@ -2218,7 +2218,7 @@ export async function runPhase6EndToEndEvaluation(options: {
     && calibrationReport.observedZeroErrorPassed
     && benchmarks.passed
     && correlatedMetamorphicEvidence.suitePassed
-    && entryPathTelemetry.allRoutedCapabilityInvokedCount === PHASE6_SEALED_EVALUATION_CASES.length
+    && entryPathTelemetry.allRoutedCapabilityInvokedCount === SEALED_EVALUATION_CASES.length
     && entryPathTelemetry.allRoutedCapabilityResolvedCount === entryPathTelemetry.allRoutedCapabilityInvokedCount
     && entryPathTelemetry.separateLegacyOpResolvedCount === entryPathTelemetry.routedToSeparateLegacyOpCount
     && replayResult.measuredFromRealPath;
@@ -2232,7 +2232,7 @@ export async function runPhase6EndToEndEvaluation(options: {
     && calibrationReport.overallPassed;
 
   return {
-    version: ASK_PHASE6_EVALUATION_VERSION,
+    version: ASK_EVALUATION_VERSION,
     evaluatedAt: new Date().toISOString(),
     evaluationNature: 'SEALED_PROXY',
     isRealHomeownerTrafficDistribution: false,
@@ -2242,7 +2242,7 @@ export async function runPhase6EndToEndEvaluation(options: {
       heldOutFromImplementation: false,
       humanAdjudicatedCount: 0,
       freezeVersion: 'unfrozen-internal-proxy',
-      caseCount: PHASE6_SEALED_EVALUATION_CASES.length,
+      caseCount: SEALED_EVALUATION_CASES.length,
     },
     providerEvaluationDisclosure: {
       providerKind: 'OFFLINE_SIMULATOR',

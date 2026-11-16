@@ -27,10 +27,10 @@ export interface CrossDomainLexeme {
   readonly role: CrossDomainLexemeRole;
   readonly semanticId: string;
   readonly phrase: string;
-  readonly lineage: 'PHASE1_SHARED_LEXICON' | 'ONTOLOGY_DERIVED' | 'REVIEWED_ALIAS';
+  readonly lineage: 'BASIC_READ_SHARED_LEXICON' | 'ONTOLOGY_DERIVED' | 'REVIEWED_ALIAS';
 }
 
-interface WaveLexemeSpec {
+interface CrossDomainLexemeSpec {
   readonly role: CrossDomainLexemeRole;
   readonly semanticId: string;
   readonly canonicalLabel: string;
@@ -41,7 +41,7 @@ interface WaveLexemeSpec {
  * Registry-derived Wave 1-5 lexeme specifications extending ASK_SHARED_SEMANTIC_LEXICON.
  * Strictly preserves separation across warranty, insurance, policy, coverage, and claim.
  */
-const WAVE_LEXEME_SPECS: readonly WaveLexemeSpec[] = Object.freeze([
+const CROSS_DOMAIN_LEXEME_SPECS: readonly CrossDomainLexemeSpec[] = Object.freeze([
   // Entities
   { role: 'ENTITY', semanticId: 'entity.inventory_room', canonicalLabel: 'room', reviewedAliases: ['bathroom', 'bath', 'mudroom', 'attic', 'bedroom', 'exterior'] },
   { role: 'ENTITY', semanticId: 'entity.inventory_item', canonicalLabel: 'inventory item', reviewedAliases: ['thing', 'things', 'hot water tank'] },
@@ -115,10 +115,10 @@ export function generateCrossDomainSemanticLexicon(): readonly CrossDomainLexeme
     role: entry.role,
     semanticId: entry.semanticId,
     phrase: entry.phrase,
-    lineage: 'PHASE1_SHARED_LEXICON',
+    lineage: 'BASIC_READ_SHARED_LEXICON',
   }));
 
-  for (const spec of WAVE_LEXEME_SPECS) {
+  for (const spec of CROSS_DOMAIN_LEXEME_SPECS) {
     const canonical = normalizePhrase(spec.canonicalLabel);
     if (canonical) {
       entries.push({

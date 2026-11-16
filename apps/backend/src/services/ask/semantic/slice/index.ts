@@ -1,20 +1,20 @@
-import { verifyPhase2aSliceRegistryCompleteness } from './phase2aSliceRegistry';
+import { verifySliceRegistryCompleteness } from './sliceRegistry';
 import { buildSemanticTextEnvelope, verifyPlaceholderSpanMapRoundTrip } from './placeholderSpanMap';
 import {
-  applyPhase2aFollowUpRefinement,
-  executePhase2aVerticalSlice,
-  replayPhase2aExecutionWithAuthorization,
-  type Phase2aAuthorizationContext,
-  type Phase2aPropertySnapshot,
-  type Phase2aSliceExecutionResult,
-} from './phase2aSliceExecutor';
+  applySliceFollowUpRefinement,
+  executeSemanticSlice,
+  replaySliceExecutionWithAuthorization,
+  type SliceAuthorizationContext,
+  type SlicePropertySnapshot,
+  type SliceExecutionResult,
+} from './sliceExecutor';
 
 export * from './placeholderSpanMap';
-export * from './phase2aSliceRegistry';
-export * from './phase2aRichPresentationAdapter';
-export * from './phase2aSliceExecutor';
+export * from './sliceRegistry';
+export * from './richPresentationAdapter';
+export * from './sliceExecutor';
 
-export const PHASE2A_SEEDED_PROPERTY_SNAPSHOT: Phase2aPropertySnapshot = Object.freeze({
+export const SLICE_SEEDED_PROPERTY_SNAPSHOT: SlicePropertySnapshot = Object.freeze({
   propertyId: 'prop-phase2a-1',
   asOfDate: '2026-11-15',
   rooms: [
@@ -139,23 +139,23 @@ export const PHASE2A_SEEDED_PROPERTY_SNAPSHOT: Phase2aPropertySnapshot = Object.
   ],
 });
 
-export const PHASE2A_OWNER_AUTH: Phase2aAuthorizationContext = Object.freeze({
+export const SLICE_OWNER_AUTH: SliceAuthorizationContext = Object.freeze({
   propertyId: 'prop-phase2a-1',
   role: 'OWNER',
   propertyAuthorized: true,
 });
 
-export const PHASE2A_VIEWER_AUTH: Phase2aAuthorizationContext = Object.freeze({
+export const SLICE_VIEWER_AUTH: SliceAuthorizationContext = Object.freeze({
   propertyId: 'prop-phase2a-1',
   role: 'VIEWER',
   propertyAuthorized: true,
 });
 
-export interface Phase2aDiscoveredAbstractionChange {
+export interface SliceDiscoveredAbstractionChange {
   readonly id: string;
   readonly area: string;
   readonly summary: string;
-  readonly actionBeforePhase2b: string;
+  readonly actionBeforeDomainRollout: string;
 }
 
 /**
@@ -163,35 +163,35 @@ export interface Phase2aDiscoveredAbstractionChange {
  * Concrete abstraction changes discovered while running the vertical slice,
  * recorded before expanding registry generation to the remaining domains.
  */
-export const PHASE2A_DISCOVERED_ABSTRACTION_CHANGES: readonly Phase2aDiscoveredAbstractionChange[] = Object.freeze([
+export const SLICE_DISCOVERED_ABSTRACTION_CHANGES: readonly SliceDiscoveredAbstractionChange[] = Object.freeze([
   {
     id: 'P2A-ABS-01',
     area: 'Facet requestClass vs Receipt projection',
     summary: 'CAPABILITY facets use projection ANALYSIS in SemanticRequestPlanSchema, whereas SemanticReadReceiptSchema expects DETAIL/LIST/COUNT/EXISTS.',
-    actionBeforePhase2b: 'Allow ANALYSIS projection on SemanticReadReceiptSchema or formalize capability-to-receipt projection mapping in registry metadata.',
+    actionBeforeDomainRollout: 'Allow ANALYSIS projection on SemanticReadReceiptSchema or formalize capability-to-receipt projection mapping in registry metadata.',
   },
   {
     id: 'P2A-ABS-02',
     area: 'Multi-relation Boolean scope vs unresolved coordination tokens',
     summary: 'Inventory queries combining Boolean coordinators ("and", "either", "or", "neither", "nor") with pronouns ("I") required explicit handling alongside unresolvedSpans.',
-    actionBeforePhase2b: 'Generate coordinator and pronoun stopword classes from the shared grammar lexicon rather than per-parser exclusion lists.',
+    actionBeforeDomainRollout: 'Generate coordinator and pronoun stopword classes from the shared grammar lexicon rather than per-parser exclusion lists.',
   },
   {
     id: 'P2A-ABS-03',
     area: 'Field-level authorization redaction in presentation & receipts',
     summary: 'Role downgrade (OWNER -> VIEWER) must redact sensitive fields (serialNumber, purchaseCostCents, replacementCostCents) while keeping population counts entailed.',
-    actionBeforePhase2b: 'Attach sensitivity classification from FieldRegistration directly to receipt/presentation redaction metadata.',
+    actionBeforeDomainRollout: 'Attach sensitivity classification from FieldRegistration directly to receipt/presentation redaction metadata.',
   },
 ]);
 
-export interface Phase2aMetamorphicCase {
+export interface SliceMetamorphicCase {
   readonly family: 'INFLECTION' | 'NEGATION' | 'COORDINATION' | 'TYPO' | 'WORD_ORDER';
   readonly leftPrompt: string;
   readonly rightPrompt: string;
   readonly expectedMatchedIds: readonly string[];
 }
 
-export const PHASE2A_METAMORPHIC_CASES: readonly Phase2aMetamorphicCase[] = Object.freeze([
+export const SLICE_METAMORPHIC_CASES: readonly SliceMetamorphicCase[] = Object.freeze([
   {
     family: 'INFLECTION',
     leftPrompt: 'which appliance has warranty',
@@ -266,19 +266,19 @@ export const PHASE2A_METAMORPHIC_CASES: readonly Phase2aMetamorphicCase[] = Obje
   },
 ]);
 
-export interface Phase2aMetamorphicSuiteResult {
+export interface SliceMetamorphicSuiteResult {
   readonly ok: boolean;
   readonly failures: readonly string[];
 }
 
-export function runPhase2aMetamorphicSuite(
-  snapshot: Phase2aPropertySnapshot = PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-  auth: Phase2aAuthorizationContext = PHASE2A_OWNER_AUTH
-): Phase2aMetamorphicSuiteResult {
+export function runSliceMetamorphicSuite(
+  snapshot: SlicePropertySnapshot = SLICE_SEEDED_PROPERTY_SNAPSHOT,
+  auth: SliceAuthorizationContext = SLICE_OWNER_AUTH
+): SliceMetamorphicSuiteResult {
   const failures: string[] = [];
-  for (const testCase of PHASE2A_METAMORPHIC_CASES) {
-    const left = executePhase2aVerticalSlice({ rawText: testCase.leftPrompt, snapshot, auth });
-    const right = executePhase2aVerticalSlice({ rawText: testCase.rightPrompt, snapshot, auth });
+  for (const testCase of SLICE_METAMORPHIC_CASES) {
+    const left = executeSemanticSlice({ rawText: testCase.leftPrompt, snapshot, auth });
+    const right = executeSemanticSlice({ rawText: testCase.rightPrompt, snapshot, auth });
     const leftIds = [...left.activeEntityIds].sort();
     const rightIds = [...right.activeEntityIds].sort();
     const expected = [...testCase.expectedMatchedIds].sort();
@@ -297,11 +297,11 @@ export function runPhase2aMetamorphicSuite(
   return { ok: failures.length === 0, failures };
 }
 
-export interface Phase2aInvariantReport {
+export interface SliceInvariantReport {
   readonly ok: boolean;
   readonly reasons: readonly string[];
-  readonly registryReport: ReturnType<typeof verifyPhase2aSliceRegistryCompleteness>;
-  readonly metamorphicReport: Phase2aMetamorphicSuiteResult;
+  readonly registryReport: ReturnType<typeof verifySliceRegistryCompleteness>;
+  readonly metamorphicReport: SliceMetamorphicSuiteResult;
 }
 
 /**
@@ -310,9 +310,9 @@ export interface Phase2aInvariantReport {
  * follow-up refinement, authorization replay, rich presentation equivalence,
  * adjacent negatives, and metamorphic invariance.
  */
-export function verifyPhase2aInvariants(): Phase2aInvariantReport {
+export function verifySliceInvariants(): SliceInvariantReport {
   const reasons: string[] = [];
-  const registryReport = verifyPhase2aSliceRegistryCompleteness();
+  const registryReport = verifySliceRegistryCompleteness();
   if (!registryReport.ok) {
     reasons.push(...registryReport.missing.map((m) => `registry:${m}`));
   }
@@ -326,7 +326,7 @@ export function verifyPhase2aInvariants(): Phase2aInvariantReport {
     reasons.push(...spanCheck.reasons.map((r) => `span:${r}`));
   }
 
-  const checkAnswered = (label: string, result: Phase2aSliceExecutionResult) => {
+  const checkAnswered = (label: string, result: SliceExecutionResult) => {
     if (result.status !== 'ANSWERED') reasons.push(`${label}:status=${result.status}`);
     if (!result.spanRoundTripOk) reasons.push(`${label}:span_round_trip_failed`);
     if (result.entailment?.outcome !== 'PASS') reasons.push(`${label}:entailment_failed`);
@@ -334,81 +334,81 @@ export function verifyPhase2aInvariants(): Phase2aInvariantReport {
   };
 
   // Core vertical-slice queries
-  const invCount = executePhase2aVerticalSlice({
+  const invCount = executeSemanticSlice({
     rawText: 'how many appliances do I have',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   checkAnswered('inventory_count', invCount);
   if (invCount.receipt?.population.confirmedCount !== 5) reasons.push('inventory_count:expected_5');
 
-  const warNeg = executePhase2aVerticalSlice({
+  const warNeg = executeSemanticSlice({
     rawText: 'which appliances have no warranty',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   checkAnswered('warranty_negative', warNeg);
   if (warNeg.receipt?.population.conflictedCount !== 1 || warNeg.receipt?.population.unknownCount !== 1) {
     reasons.push('warranty_negative:uncertainty_counts_mismatch');
   }
 
-  const boolAnd = executePhase2aVerticalSlice({
+  const boolAnd = executeSemanticSlice({
     rawText: 'which appliances have warranty and due maintenance',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   checkAnswered('boolean_and', boolAnd);
   if (JSON.stringify(boolAnd.activeEntityIds) !== JSON.stringify(['item-water-heater'])) {
     reasons.push('boolean_and:expected_water_heater');
   }
 
-  const boolNeither = executePhase2aVerticalSlice({
+  const boolNeither = executeSemanticSlice({
     rawText: 'which appliances have neither warranty nor due maintenance',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   checkAnswered('boolean_neither_nor', boolNeither);
   if (JSON.stringify(boolNeither.activeEntityIds) !== JSON.stringify(['item-dishwasher', 'item-sump-pump'])) {
     reasons.push('boolean_neither_nor:expected_dishwasher_and_sump_pump');
   }
 
-  const guidance = executePhase2aVerticalSlice({
+  const guidance = executeSemanticSlice({
     rawText: 'should I repair or replace my furnace',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   checkAnswered('replacement_guidance', guidance);
 
-  const cmdPreview = executePhase2aVerticalSlice({
+  const cmdPreview = executeSemanticSlice({
     rawText: 'schedule maintenance for my furnace on 2026-12-01',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   if (cmdPreview.status !== 'NEEDS_CONFIRMATION') {
     reasons.push(`command_preview:expected_NEEDS_CONFIRMATION_got_${cmdPreview.status}`);
   }
 
-  const followUp = applyPhase2aFollowUpRefinement({
+  const followUp = applySliceFollowUpRefinement({
     priorResult: warNeg,
     followUpText: 'how many',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   checkAnswered('follow_up_refinement', followUp);
   if (followUp.receipt?.population.confirmedCount !== 1) {
     reasons.push('follow_up_refinement:expected_1');
   }
 
-  const serialOwner = executePhase2aVerticalSlice({
+  const serialOwner = executeSemanticSlice({
     rawText: 'show serial number for my refrigerator',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   checkAnswered('serial_owner', serialOwner);
-  const serialViewer = replayPhase2aExecutionWithAuthorization({
+  const serialViewer = replaySliceExecutionWithAuthorization({
     priorResult: serialOwner,
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    updatedAuth: PHASE2A_VIEWER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    updatedAuth: SLICE_VIEWER_AUTH,
   });
   checkAnswered('serial_viewer_redacted', serialViewer);
   if (!serialViewer.redactedFields.includes('serialNumber') || JSON.stringify(serialViewer.operationResult.blocks).includes('SN-FRG-88412')) {
@@ -416,21 +416,21 @@ export function verifyPhase2aInvariants(): Phase2aInvariantReport {
   }
 
   // Adjacent negatives
-  const adjUnsupported = executePhase2aVerticalSlice({
+  const adjUnsupported = executeSemanticSlice({
     rawText: 'which appliances have no guarantee',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   if (adjUnsupported.status !== 'OUT_OF_SCOPE') reasons.push('adj_unsupported:expected_OUT_OF_SCOPE');
 
-  const adjAmbiguous = executePhase2aVerticalSlice({
+  const adjAmbiguous = executeSemanticSlice({
     rawText: 'which appliances do not have warranty or due maintenance',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   if (adjAmbiguous.status !== 'NEEDS_CLARIFICATION') reasons.push('adj_ambiguous:expected_NEEDS_CLARIFICATION');
 
-  const metamorphicReport = runPhase2aMetamorphicSuite();
+  const metamorphicReport = runSliceMetamorphicSuite();
   if (!metamorphicReport.ok) {
     reasons.push(...metamorphicReport.failures.map((f) => `metamorphic:${f}`));
   }

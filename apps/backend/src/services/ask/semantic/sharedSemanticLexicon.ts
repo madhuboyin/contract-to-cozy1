@@ -24,7 +24,7 @@ interface RegistryLexeme {
   reviewedAliases: readonly string[];
 }
 
-const PHASE1_REGISTRY_LEXEMES: readonly RegistryLexeme[] = [
+const BASIC_READ_REGISTRY_LEXEMES: readonly RegistryLexeme[] = [
   // §5 Domains (all 11 domain groups represented)
   { role: 'DOMAIN', semanticId: 'domain.property_core', canonicalLabel: 'property profile', reviewedAliases: ['home profile'] },
   { role: 'DOMAIN', semanticId: 'domain.rooms_areas', canonicalLabel: 'rooms', reviewedAliases: ['living areas'] },
@@ -126,7 +126,7 @@ function normalizePhrase(value: string): string {
 }
 
 export function generateSharedSemanticLexicon(): readonly GeneratedSemanticLexeme[] {
-  const generated = PHASE1_REGISTRY_LEXEMES.flatMap((entry) => [
+  const generated = BASIC_READ_REGISTRY_LEXEMES.flatMap((entry) => [
     { role: entry.role, semanticId: entry.semanticId, phrase: normalizePhrase(entry.canonicalLabel), lineage: 'CANONICAL_LABEL' as const },
     ...entry.reviewedAliases.map((alias) => ({ role: entry.role, semanticId: entry.semanticId, phrase: normalizePhrase(alias), lineage: 'REVIEWED_ALIAS' as const })),
   ]);

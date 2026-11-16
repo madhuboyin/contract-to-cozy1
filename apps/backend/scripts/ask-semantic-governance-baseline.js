@@ -3,16 +3,16 @@
  * Phase 0 — Baseline and invariants CLI (ASK_COZY_CROSS_DOMAIN_SEMANTIC_ARCHITECTURE_FRD.md §18).
  *
  * Usage:
- *   node scripts/ask-semantic-phase0-baseline.js          Print Phase 0 baseline summary & validate invariants
- *   node scripts/ask-semantic-phase0-baseline.js --check  Exit 1 if any Phase 0 validator reports drift/issues
- *   node scripts/ask-semantic-phase0-baseline.js --json   Emit JSON report to stdout
+ *   node scripts/ask-semantic-governance-baseline.js          Print Phase 0 baseline summary & validate invariants
+ *   node scripts/ask-semantic-governance-baseline.js --check  Exit 1 if any Phase 0 validator reports drift/issues
+ *   node scripts/ask-semantic-governance-baseline.js --json   Emit JSON report to stdout
  */
 require('ts-node/register/transpile-only');
 
-const { buildAskSemanticPhase0BaselineSummary } = require('../src/services/ask/semantic/governance/index.ts');
+const { buildAskSemanticGovernanceBaselineSummary } = require('../src/services/ask/semantic/governance/index.ts');
 
 const args = process.argv.slice(2);
-const summary = buildAskSemanticPhase0BaselineSummary();
+const summary = buildAskSemanticGovernanceBaselineSummary();
 const allIssues = Object.entries(summary.validatorIssues).flatMap(([category, issues]) =>
   issues.map((issue) => `[${category}] ${issue}`),
 );

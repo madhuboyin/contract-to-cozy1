@@ -86,7 +86,7 @@ export function verifyLegacyCandidateGrammarAgreement(
   return { outcome: 'AGREE', reasonCode: 'LEGACY_AND_TYPED_GRAMMAR_AGREE', plan, facet };
 }
 
-export const PRISMA_ENTITY_TO_PHASE1_SUBJECT: Readonly<Record<string, string>> = Object.freeze({
+export const PRISMA_ENTITY_TO_BASIC_READ_SUBJECT: Readonly<Record<string, string>> = Object.freeze({
   Property: 'entity.property',
   InventoryRoom: 'entity.inventory_room',
   InventoryItem: 'entity.inventory_item',
@@ -115,7 +115,7 @@ export function dataPointReadGrammarAgreement(
     readonly polarity?: 'POSITIVE' | 'NEGATIVE';
   },
 ): LegacyGrammarAgreement | null {
-  let subjectEntityId = PRISMA_ENTITY_TO_PHASE1_SUBJECT[spec.prismaEntity];
+  let subjectEntityId = PRISMA_ENTITY_TO_BASIC_READ_SUBJECT[spec.prismaEntity];
   if (!subjectEntityId) return null;
   if (spec.prismaEntity === 'InventoryItem') {
     const precheck = parseDeterministicSemanticRequest(message);
@@ -426,7 +426,7 @@ export function evaluateLegacyVsSemanticGrammarAgreement(
     }
   } else if (matchedLegacyProducer === 'QUERY_PLAN' || matchedLegacyProducer === 'DATA_POINT') {
     const prismaEntity = input.legacyQueryEntity ?? input.legacyPointEntity ?? '';
-    const expectedSubject = PRISMA_ENTITY_TO_PHASE1_SUBJECT[prismaEntity];
+    const expectedSubject = PRISMA_ENTITY_TO_BASIC_READ_SUBJECT[prismaEntity];
     const expectedDomains = ENTITY_TO_EXPECTED_DOMAINS[prismaEntity] ?? [];
     const expectedProj =
       matchedLegacyProducer === 'QUERY_PLAN'

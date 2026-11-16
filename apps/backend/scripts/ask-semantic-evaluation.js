@@ -8,7 +8,7 @@ require('ts-node').register({
 });
 
 const { initializeAskRuntime } = require('../src/services/ask/askRuntimeBootstrap');
-const { buildPhase6CalibrationAndEvaluationSummary } = require('../src/services/ask/semantic/evaluation/index');
+const { buildCalibrationAndEvaluationSummary } = require('../src/services/ask/semantic/evaluation/index');
 
 async function main() {
   initializeAskRuntime();
@@ -16,7 +16,7 @@ async function main() {
   const jsonMode = args.has('--json');
   const checkMode = args.has('--check');
 
-  const summary = await buildPhase6CalibrationAndEvaluationSummary();
+  const summary = await buildCalibrationAndEvaluationSummary();
 
   if (jsonMode) {
     console.log(JSON.stringify(summary, null, 2));

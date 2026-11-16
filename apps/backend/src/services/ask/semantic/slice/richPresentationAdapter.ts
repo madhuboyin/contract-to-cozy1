@@ -2,7 +2,7 @@ import type { AskPresentationBlock } from '../../../../productFramework/ask/ask.
 import type { SemanticReadReceipt } from '../semanticExecutionReceipt';
 import { humanizePresentationText, humanizePresentationToken } from '../containment/presentationHumanizer';
 
-export interface Phase2aPresentationRow {
+export interface SlicePresentationRow {
   readonly id: string;
   readonly label: string;
   readonly subtitle?: string;
@@ -11,14 +11,14 @@ export interface Phase2aPresentationRow {
   readonly groupKey?: string;
 }
 
-export interface Phase2aRichPresentationInput {
+export interface SliceRichPresentationInput {
   readonly receipt: SemanticReadReceipt;
   readonly title: string;
   readonly summaryBody: string;
-  readonly rows: readonly Phase2aPresentationRow[];
+  readonly rows: readonly SlicePresentationRow[];
 }
 
-export interface Phase2aRichPresentationEquivalenceReport {
+export interface SliceRichPresentationEquivalenceReport {
   readonly ok: boolean;
   readonly reasons: readonly string[];
   readonly renderedItemCount: number;
@@ -32,7 +32,7 @@ export interface Phase2aRichPresentationEquivalenceReport {
  * BOUNDARY (for conflicted/unknown populations), and EVIDENCE blocks while
  * preserving the canonical receipt population and predicate lineage.
  */
-export function buildPhase2aRichPresentation(input: Phase2aRichPresentationInput): AskPresentationBlock[] {
+export function buildSliceRichPresentation(input: SliceRichPresentationInput): AskPresentationBlock[] {
   const { receipt, rows } = input;
   const blocks: AskPresentationBlock[] = [
     {
@@ -46,7 +46,7 @@ export function buildPhase2aRichPresentation(input: Phase2aRichPresentationInput
   ];
 
   if (rows.length > 0) {
-    const grouped = new Map<string, Phase2aPresentationRow[]>();
+    const grouped = new Map<string, SlicePresentationRow[]>();
     for (const row of rows) {
       const key = row.groupKey ? humanizePresentationToken(row.groupKey) : 'Matched records';
       const bucket = grouped.get(key) ?? [];
@@ -114,7 +114,7 @@ export function buildPhase2aRichPresentation(input: Phase2aRichPresentationInput
 export function verifyRichPresentationPopulationEquivalence(
   receipt: SemanticReadReceipt,
   blocks: readonly AskPresentationBlock[]
-): Phase2aRichPresentationEquivalenceReport {
+): SliceRichPresentationEquivalenceReport {
   const reasons: string[] = [];
   const summary = blocks.find((block) => block.type === 'SUMMARY' && block.id === receipt.answerVariantId);
   if (!summary || summary.type !== 'SUMMARY') {

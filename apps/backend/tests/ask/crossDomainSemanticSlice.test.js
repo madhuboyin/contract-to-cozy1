@@ -5,25 +5,25 @@ const assert = require('node:assert/strict');
 require('ts-node/register/transpile-only');
 
 const {
-  PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-  PHASE2A_OWNER_AUTH,
-  PHASE2A_VIEWER_AUTH,
-  PHASE2A_DISCOVERED_ABSTRACTION_CHANGES,
-  verifyPhase2aSliceRegistryCompleteness,
+  SLICE_SEEDED_PROPERTY_SNAPSHOT,
+  SLICE_OWNER_AUTH,
+  SLICE_VIEWER_AUTH,
+  SLICE_DISCOVERED_ABSTRACTION_CHANGES,
+  verifySliceRegistryCompleteness,
   buildSemanticTextEnvelope,
   verifyPlaceholderSpanMapRoundTrip,
   roundTripRestorePlaceholderSpans,
   verifyRichPresentationPopulationEquivalence,
   checkRelationChainBound,
-  executePhase2aVerticalSlice,
-  applyPhase2aFollowUpRefinement,
-  replayPhase2aExecutionWithAuthorization,
-  runPhase2aMetamorphicSuite,
-  verifyPhase2aInvariants,
+  executeSemanticSlice,
+  applySliceFollowUpRefinement,
+  replaySliceExecutionWithAuthorization,
+  runSliceMetamorphicSuite,
+  verifySliceInvariants,
 } = require('../../src/services/ask/semantic/slice/index.ts');
 
 test('Phase 2A registry subset covers inventory, warranty, maintenance, and rooms with valid traversal bounds', () => {
-  const report = verifyPhase2aSliceRegistryCompleteness();
+  const report = verifySliceRegistryCompleteness();
   assert.equal(report.ok, true, `Registry completeness failed: ${report.missing.join(', ')}`);
   assert.ok(report.entityCount >= 4);
   assert.ok(report.fieldCount >= 14);
@@ -49,20 +49,20 @@ test('Phase 2A indexed typed placeholder span map preserves raw <-> protected <-
 });
 
 test('Phase 2A vertical slice executes inventory count, detail, and bounded room/maintenance relations with receipt entailment and rich presentation equivalence', () => {
-  const countResult = executePhase2aVerticalSlice({
+  const countResult = executeSemanticSlice({
     rawText: 'how many appliances do I have',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   assert.equal(countResult.status, 'ANSWERED');
   assert.equal(countResult.receipt.population.confirmedCount, 5);
   assert.equal(countResult.entailment.outcome, 'PASS');
   assert.equal(countResult.presentationEquivalence.ok, true);
 
-  const detailResult = executePhase2aVerticalSlice({
+  const detailResult = executeSemanticSlice({
     rawText: 'show replacement cost for my furnace',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   assert.equal(detailResult.status, 'ANSWERED');
   assert.deepEqual(detailResult.activeEntityIds, ['item-furnace']);
@@ -70,10 +70,10 @@ test('Phase 2A vertical slice executes inventory count, detail, and bounded room
   assert.equal(detailResult.presentationEquivalence.ok, true);
   assert.ok(JSON.stringify(detailResult.operationResult.blocks).includes('$6,800.00'));
 
-  const kitchenWarrantyResult = executePhase2aVerticalSlice({
+  const kitchenWarrantyResult = executeSemanticSlice({
     rawText: 'which appliances in kitchen have warranty',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   assert.equal(kitchenWarrantyResult.status, 'ANSWERED');
   assert.deepEqual(kitchenWarrantyResult.activeEntityIds, ['item-fridge']);
@@ -81,10 +81,10 @@ test('Phase 2A vertical slice executes inventory count, detail, and bounded room
 });
 
 test('Phase 2A vertical slice handles positive, negative, unknown, and conflicted warranty states with boundary disclosure', () => {
-  const negativeWarranty = executePhase2aVerticalSlice({
+  const negativeWarranty = executeSemanticSlice({
     rawText: 'which appliances have no warranty',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   assert.equal(negativeWarranty.status, 'ANSWERED');
   assert.deepEqual(negativeWarranty.activeEntityIds, ['item-dishwasher']);
@@ -98,115 +98,115 @@ test('Phase 2A vertical slice handles positive, negative, unknown, and conflicte
 });
 
 test('Phase 2A vertical slice evaluates Boolean AND / EITHER_OR / NEITHER_NOR and clarifies ambiguous negative OR', () => {
-  const andResult = executePhase2aVerticalSlice({
+  const andResult = executeSemanticSlice({
     rawText: 'which appliances have warranty and due maintenance',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   assert.equal(andResult.status, 'ANSWERED');
   assert.deepEqual(andResult.activeEntityIds, ['item-water-heater']);
 
-  const eitherOrResult = executePhase2aVerticalSlice({
+  const eitherOrResult = executeSemanticSlice({
     rawText: 'which appliances have either warranty or due maintenance',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   assert.equal(eitherOrResult.status, 'ANSWERED');
   assert.deepEqual([...eitherOrResult.activeEntityIds].sort(), ['item-fridge', 'item-furnace', 'item-water-heater']);
 
-  const neitherNorResult = executePhase2aVerticalSlice({
+  const neitherNorResult = executeSemanticSlice({
     rawText: 'which appliances have neither warranty nor due maintenance',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   assert.equal(neitherNorResult.status, 'ANSWERED');
   assert.deepEqual([...neitherNorResult.activeEntityIds].sort(), ['item-dishwasher', 'item-sump-pump']);
 
-  const ambiguousNegativeOr = executePhase2aVerticalSlice({
+  const ambiguousNegativeOr = executeSemanticSlice({
     rawText: 'which appliances do not have warranty or due maintenance',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   assert.equal(ambiguousNegativeOr.status, 'NEEDS_CLARIFICATION');
 });
 
 test('Phase 2A vertical slice executes replacement guidance capability, confirmed command preview, follow-up refinement, and authorization replay', () => {
-  const guidance = executePhase2aVerticalSlice({
+  const guidance = executeSemanticSlice({
     rawText: 'should I repair or replace my furnace',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   assert.equal(guidance.status, 'ANSWERED');
   assert.equal(guidance.plan.facets[0].requestClass, 'CAPABILITY');
   assert.equal(guidance.entailment.outcome, 'PASS');
   assert.equal(guidance.presentationEquivalence.ok, true);
 
-  const previewOk = executePhase2aVerticalSlice({
+  const previewOk = executeSemanticSlice({
     rawText: 'schedule maintenance for my furnace on 2026-12-01',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   assert.equal(previewOk.status, 'NEEDS_CONFIRMATION');
 
-  const previewMissingSlots = executePhase2aVerticalSlice({
+  const previewMissingSlots = executeSemanticSlice({
     rawText: 'schedule maintenance',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   assert.equal(previewMissingSlots.status, 'NEEDS_CLARIFICATION');
 
-  const warNeg = executePhase2aVerticalSlice({
+  const warNeg = executeSemanticSlice({
     rawText: 'which appliances have no warranty',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
-  const followUpCount = applyPhase2aFollowUpRefinement({
+  const followUpCount = applySliceFollowUpRefinement({
     priorResult: warNeg,
     followUpText: 'how many',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   assert.equal(followUpCount.status, 'ANSWERED');
   assert.equal(followUpCount.receipt.population.confirmedCount, 1);
 
-  const ownerSerial = executePhase2aVerticalSlice({
+  const ownerSerial = executeSemanticSlice({
     rawText: 'show serial number for my refrigerator',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   assert.ok(JSON.stringify(ownerSerial.operationResult.blocks).includes('SN-FRG-88412'));
 
-  const viewerReplay = replayPhase2aExecutionWithAuthorization({
+  const viewerReplay = replaySliceExecutionWithAuthorization({
     priorResult: ownerSerial,
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    updatedAuth: PHASE2A_VIEWER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    updatedAuth: SLICE_VIEWER_AUTH,
   });
   assert.equal(viewerReplay.status, 'ANSWERED');
   assert.ok(viewerReplay.redactedFields.includes('serialNumber'));
   assert.ok(!JSON.stringify(viewerReplay.operationResult.blocks).includes('SN-FRG-88412'));
 
-  const revokedReplay = replayPhase2aExecutionWithAuthorization({
+  const revokedReplay = replaySliceExecutionWithAuthorization({
     priorResult: ownerSerial,
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
     updatedAuth: { propertyId: 'prop-phase2a-1', role: 'VIEWER', propertyAuthorized: false },
   });
   assert.equal(revokedReplay.status, 'BLOCKED');
 });
 
 test('Phase 2A adjacent negatives, metamorphic suite, discovered abstraction changes, and full invariant suite pass', () => {
-  const unsupported = executePhase2aVerticalSlice({
+  const unsupported = executeSemanticSlice({
     rawText: 'which appliances have no guarantee',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   assert.equal(unsupported.status, 'OUT_OF_SCOPE');
 
-  const metamorphic = runPhase2aMetamorphicSuite();
+  const metamorphic = runSliceMetamorphicSuite();
   assert.equal(metamorphic.ok, true, `Metamorphic failures: ${metamorphic.failures.join(', ')}`);
 
-  assert.ok(PHASE2A_DISCOVERED_ABSTRACTION_CHANGES.length >= 3);
+  assert.ok(SLICE_DISCOVERED_ABSTRACTION_CHANGES.length >= 3);
 
-  const invariants = verifyPhase2aInvariants();
+  const invariants = verifySliceInvariants();
   assert.equal(invariants.ok, true, `Phase 2A invariants failed: ${invariants.reasons.join(', ')}`);
 });
 
@@ -241,10 +241,10 @@ test('Phase 2A protects dynamic property entities, hides restricted items as mis
   assert.equal(dynamicEnvelope.spanMap[1].authorizedCandidate.recordId, 'room-custom-1');
 
   // 2. Restricted item mention behaves identically to missing item (FR-ONT-3)
-  const restrictedResult = executePhase2aVerticalSlice({
+  const restrictedResult = executeSemanticSlice({
     rawText: 'show replacement cost for my refrigerator',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: { ...PHASE2A_OWNER_AUTH, restrictedItemIds: ['item-fridge'] },
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: { ...SLICE_OWNER_AUTH, restrictedItemIds: ['item-fridge'] },
   });
   assert.equal(restrictedResult.status, 'NEEDS_CLARIFICATION');
   assert.equal(restrictedResult.operationResult.reasonCode, 'ASK_ENTITY_MISSING');
@@ -270,24 +270,24 @@ test('Phase 2A protects dynamic property entities, hides restricted items as mis
     path.join(__dirname, '../../src/services/ask/handlers/dataPointRead.handler.ts'),
     'utf8'
   );
-  assert.ok(handlerSource.includes('executePhase2aOnProperty'));
-  assert.ok(handlerSource.indexOf('executePhase2aOnProperty') < handlerSource.indexOf('planShape789(message)'));
+  assert.ok(handlerSource.includes('executeSliceOnProperty'));
+  assert.ok(handlerSource.indexOf('executeSliceOnProperty') < handlerSource.indexOf('planShape789(message)'));
 
   const capabilityRegistrySource = fs.readFileSync(
     path.join(__dirname, '../../src/services/ask/capabilityHandlerRegistry.ts'),
     'utf8'
   );
-  assert.ok(capabilityRegistrySource.includes('executePhase2aOnProperty'));
+  assert.ok(capabilityRegistrySource.includes('executeSliceOnProperty'));
   assert.ok(!capabilityRegistrySource.includes("operationId === 'HVAC_DECISION_START'"));
   assert.ok(capabilityRegistrySource.includes('MAINTENANCE_TASK_CREATE'));
   assert.ok(capabilityRegistrySource.includes('REPLACEMENT_GUIDANCE'));
 
   // 4b. Maintenance preview passes AskConfirmationSchema and carries confirmMaintenanceTaskCreate params
   const { AskConfirmationSchema } = require('../../src/productFramework/ask/ask.contract.ts');
-  const maintPreview = executePhase2aVerticalSlice({
+  const maintPreview = executeSemanticSlice({
     rawText: 'schedule maintenance for my furnace on 2026-12-01',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   assert.equal(maintPreview.status, 'NEEDS_CONFIRMATION');
   const parsedConfirm = AskConfirmationSchema.safeParse(maintPreview.operationResult.confirmation);
@@ -299,16 +299,16 @@ test('Phase 2A protects dynamic property entities, hides restricted items as mis
 
   // 4c. Prisma snapshot loader applies visibleInventoryItemWhere()
   const executorSource = fs.readFileSync(
-    path.join(__dirname, '../../src/services/ask/semantic/slice/phase2aSliceExecutor.ts'),
+    path.join(__dirname, '../../src/services/ask/semantic/slice/sliceExecutor.ts'),
     'utf8'
   );
   assert.ok(executorSource.includes('visibleInventoryItemWhere()'));
 
   // 4d. Rich presentation equivalence rejects duplicate rendered IDs
-  const warNeg = executePhase2aVerticalSlice({
+  const warNeg = executeSemanticSlice({
     rawText: 'which appliances have either warranty or due maintenance',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   const listBlock = warNeg.operationResult.blocks.find((b) => b.type === 'GROUPED_LIST');
   const dupBlocks = warNeg.operationResult.blocks.map((b) =>
@@ -329,9 +329,9 @@ test('Phase 2A protects dynamic property entities, hides restricted items as mis
 
   // 5. Canonical plan.minimizedText masks dynamic custom property entities
   const customSnapshot = {
-    ...PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+    ...SLICE_SEEDED_PROPERTY_SNAPSHOT,
     items: [
-      ...PHASE2A_SEEDED_PROPERTY_SNAPSHOT.items,
+      ...SLICE_SEEDED_PROPERTY_SNAPSHOT.items,
       {
         id: 'item-custom-cooler',
         propertyId: 'prop-phase2a-1',
@@ -346,7 +346,7 @@ test('Phase 2A protects dynamic property entities, hides restricted items as mis
       },
     ],
     maintenanceTasks: [
-      ...PHASE2A_SEEDED_PROPERTY_SNAPSHOT.maintenanceTasks,
+      ...SLICE_SEEDED_PROPERTY_SNAPSHOT.maintenanceTasks,
       {
         id: 'maint-no-due-date',
         propertyId: 'prop-phase2a-1',
@@ -358,19 +358,19 @@ test('Phase 2A protects dynamic property entities, hides restricted items as mis
       },
     ],
   };
-  const customPlanResult = executePhase2aVerticalSlice({
+  const customPlanResult = executeSemanticSlice({
     rawText: 'show replacement cost for Upstairs beverage cooler',
     snapshot: customSnapshot,
-    auth: PHASE2A_OWNER_AUTH,
+    auth: SLICE_OWNER_AUTH,
   });
   assert.ok(!customPlanResult.plan.minimizedText.includes('Upstairs beverage cooler'));
   assert.ok(customPlanResult.plan.minimizedText.includes('[ITEM_1]'));
 
   // 6. Tasks with empty nextDueDate are NOT treated as overdue
-  const overdueResult = executePhase2aVerticalSlice({
+  const overdueResult = executeSemanticSlice({
     rawText: 'which appliances have overdue maintenance',
     snapshot: customSnapshot,
-    auth: PHASE2A_OWNER_AUTH,
+    auth: SLICE_OWNER_AUTH,
   });
   assert.deepEqual(overdueResult.activeEntityIds, ['item-furnace']);
 
@@ -380,18 +380,18 @@ test('Phase 2A protects dynamic property entities, hides restricted items as mis
   assert.ok(ASK_OPERATION_DEFINITIONS.DATA_POINT_READ.allowedBlockTypes.includes('BOUNDARY'));
 
   // 8. Apostrophe-less negative contraction resolves negatively, and unresolved tokens fail closed
-  const arentResult = executePhase2aVerticalSlice({
+  const arentResult = executeSemanticSlice({
     rawText: 'items that arent in the basement',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   assert.equal(arentResult.status, 'ANSWERED');
   assert.deepEqual(arentResult.activeEntityIds, ['item-fridge', 'item-dishwasher']);
 
-  const unresolvedNegResult = executePhase2aVerticalSlice({
+  const unresolvedNegResult = executeSemanticSlice({
     rawText: 'items that florb in the basement',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
   assert.equal(unresolvedNegResult.status, 'OUT_OF_SCOPE');
   assert.deepEqual(unresolvedNegResult.activeEntityIds, []);
@@ -402,10 +402,10 @@ test('Phase 2A protects dynamic property entities, hides restricted items as mis
     'schedule maintenance for my furnace on 2026-12-01 florb',
     'which maintenance tasks are not overdue florb',
   ]) {
-    const res = executePhase2aVerticalSlice({
+    const res = executeSemanticSlice({
       rawText: unresolvedPrompt,
-      snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-      auth: PHASE2A_OWNER_AUTH,
+      snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+      auth: SLICE_OWNER_AUTH,
     });
     assert.equal(res.status, 'OUT_OF_SCOPE', `expected OUT_OF_SCOPE for: ${unresolvedPrompt}`);
     assert.equal(res.plan.outcome, 'NONE_FITS');
@@ -414,11 +414,11 @@ test('Phase 2A protects dynamic property entities, hides restricted items as mis
   }
 
   for (const unresolvedFollowUp of ['florb', 'how many florb']) {
-    const followUpRes = applyPhase2aFollowUpRefinement({
+    const followUpRes = applySliceFollowUpRefinement({
       priorResult: arentResult,
       followUpText: unresolvedFollowUp,
-      snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-      auth: PHASE2A_OWNER_AUTH,
+      snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+      auth: SLICE_OWNER_AUTH,
     });
     assert.equal(followUpRes.status, 'OUT_OF_SCOPE', `expected OUT_OF_SCOPE for follow-up: ${unresolvedFollowUp}`);
     assert.equal(followUpRes.plan.outcome, 'NONE_FITS');
@@ -429,15 +429,15 @@ test('Phase 2A protects dynamic property entities, hides restricted items as mis
 
 test('Phase 2A maintenance preview includes matching confirmationVersion and confirmationExpiresAt in parameters', () => {
   const {
-    executePhase2aVerticalSlice,
-    PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    PHASE2A_OWNER_AUTH,
+    executeSemanticSlice,
+    SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    SLICE_OWNER_AUTH,
   } = require('../../src/services/ask/semantic/slice/index.ts');
 
-  const preview = executePhase2aVerticalSlice({
+  const preview = executeSemanticSlice({
     rawText: 'schedule maintenance for my furnace on 2026-12-01',
-    snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-    auth: PHASE2A_OWNER_AUTH,
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
   });
 
   assert.equal(preview.status, 'NEEDS_CONFIRMATION');

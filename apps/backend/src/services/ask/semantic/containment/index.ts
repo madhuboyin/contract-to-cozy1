@@ -2,7 +2,7 @@
  * ASK_COZY_CROSS_DOMAIN_SEMANTIC_ARCHITECTURE_FRD.md — §18 Phase 1 Barrel & Verification
  */
 
-export * from './phase1FamilyManifest';
+export * from './basicReadFamilyManifest';
 export * from './commandPreviewAdmission';
 export * from './presentationHumanizer';
 
@@ -21,16 +21,16 @@ import { planDataPointQuery } from '../../dataPoint/dataPointQueryPlan';
 import { resolveDataPoint } from '../../dataPoint/dataPointCatalogue';
 import { planShape789 } from '../../dataPoint/dataPointShapes789';
 import {
-  ASK_PHASE1_FAMILY_MANIFEST_VERSION,
-  PHASE1_SELECTED_BASIC_READ_FAMILIES,
-  verifyPhase1FamilyManifestCompleteness,
-} from './phase1FamilyManifest';
+  ASK_BASIC_READ_FAMILY_MANIFEST_VERSION,
+  SELECTED_BASIC_READ_FAMILIES,
+  verifyBasicReadFamilyManifestCompleteness,
+} from './basicReadFamilyManifest';
 import { ASK_COMMAND_PREVIEW_ADMISSION_VERSION } from './commandPreviewAdmission';
 import { ASK_PRESENTATION_HUMANIZER_VERSION } from './presentationHumanizer';
 
 const DEFAULT_BACKEND_ROOT = path.resolve(__dirname, '../../../../..');
 
-const PHASE1_CAPABILITY_HANDLER_FILES: Record<string, string> = {
+const BASIC_READ_CAPABILITY_HANDLER_FILES: Record<string, string> = {
   'data-point-read.read': 'src/services/ask/handlers/dataPointRead.handler.ts',
   'saved-results.read': 'src/services/ask/handlers/savedResults.handler.ts',
 };
@@ -84,7 +84,7 @@ export function verifyNoUnguardedLegacyWarrantyWrites(backendRoot: string = DEFA
   };
 }
 
-export function verifyPhase1RuntimeWiring(backendRoot: string = DEFAULT_BACKEND_ROOT): {
+export function verifyContainmentRuntimeWiring(backendRoot: string = DEFAULT_BACKEND_ROOT): {
   readonly valid: boolean;
   readonly issues: readonly string[];
   readonly verifiedHandlerFiles: readonly string[];
@@ -145,8 +145,8 @@ export function verifyPhase1RuntimeWiring(backendRoot: string = DEFAULT_BACKEND_
     }
   }
 
-  for (const family of PHASE1_SELECTED_BASIC_READ_FAMILIES) {
-    const handlerPath = PHASE1_CAPABILITY_HANDLER_FILES[family.canonicalAdapterKey];
+  for (const family of SELECTED_BASIC_READ_FAMILIES) {
+    const handlerPath = BASIC_READ_CAPABILITY_HANDLER_FILES[family.canonicalAdapterKey];
     if (!handlerPath) {
       issues.push(`Selected Phase 1 family ${family.familyId} (${family.canonicalAdapterKey}) has no mapped runtime handler.`);
       continue;
@@ -225,7 +225,7 @@ export function verifyPhase1RuntimeWiring(backendRoot: string = DEFAULT_BACKEND_
   };
 }
 
-export interface Phase1ContainmentSummary {
+export interface ContainmentSummary {
   readonly phase: 'PHASE_1_IMMEDIATE_CORRECTNESS_CONTAINMENT';
   readonly familyManifestVersion: string;
   readonly commandPreviewAdmissionVersion: string;
@@ -245,16 +245,16 @@ export interface Phase1ContainmentSummary {
   };
 }
 
-export function buildPhase1ContainmentSummary(backendRoot: string = DEFAULT_BACKEND_ROOT): Phase1ContainmentSummary {
+export function buildContainmentSummary(backendRoot: string = DEFAULT_BACKEND_ROOT): ContainmentSummary {
   const lexemeSeparation = verifyProtectionLexemeSeparation();
-  const manifestCheck = verifyPhase1FamilyManifestCompleteness();
-  const runtimeWiring = verifyPhase1RuntimeWiring(backendRoot);
+  const manifestCheck = verifyBasicReadFamilyManifestCompleteness();
+  const runtimeWiring = verifyContainmentRuntimeWiring(backendRoot);
   const writeContainment = verifyNoUnguardedLegacyWarrantyWrites(backendRoot);
   const contractCoverage = operationAnswerContractCoverage();
 
   return {
     phase: 'PHASE_1_IMMEDIATE_CORRECTNESS_CONTAINMENT',
-    familyManifestVersion: ASK_PHASE1_FAMILY_MANIFEST_VERSION,
+    familyManifestVersion: ASK_BASIC_READ_FAMILY_MANIFEST_VERSION,
     commandPreviewAdmissionVersion: ASK_COMMAND_PREVIEW_ADMISSION_VERSION,
     presentationHumanizerVersion: ASK_PRESENTATION_HUMANIZER_VERSION,
     warrantyMeaningsDefined: Object.keys(WARRANTY_RELATION_MEANINGS),
@@ -269,17 +269,17 @@ export function buildPhase1ContainmentSummary(backendRoot: string = DEFAULT_BACK
   };
 }
 
-export function verifyPhase1Invariants(backendRoot: string = DEFAULT_BACKEND_ROOT): {
+export function verifyContainmentInvariants(backendRoot: string = DEFAULT_BACKEND_ROOT): {
   readonly valid: boolean;
   readonly issues: readonly string[];
-  readonly summary: Phase1ContainmentSummary;
+  readonly summary: ContainmentSummary;
 } {
   const issues: string[] = [];
   const lexemeSeparation = verifyProtectionLexemeSeparation();
   if (!lexemeSeparation.valid) {
     issues.push(...lexemeSeparation.violations);
   }
-  const manifestCheck = verifyPhase1FamilyManifestCompleteness();
+  const manifestCheck = verifyBasicReadFamilyManifestCompleteness();
   if (!manifestCheck.valid) {
     if (manifestCheck.missingDomainGroups.length > 0) {
       issues.push(`Missing §5 domain groups in Phase 1 manifest: ${manifestCheck.missingDomainGroups.join(', ')}`);
@@ -295,11 +295,11 @@ export function verifyPhase1Invariants(backendRoot: string = DEFAULT_BACKEND_ROO
   if (!writeContainment.valid) {
     issues.push(`Unguarded legacy InventoryItem.warrantyId write(s) detected: ${writeContainment.unguardedFiles.join(', ')}`);
   }
-  const runtimeWiring = verifyPhase1RuntimeWiring(backendRoot);
+  const runtimeWiring = verifyContainmentRuntimeWiring(backendRoot);
   if (!runtimeWiring.valid) {
     issues.push(...runtimeWiring.issues);
   }
-  const summary = buildPhase1ContainmentSummary(backendRoot);
+  const summary = buildContainmentSummary(backendRoot);
   return {
     valid: issues.length === 0,
     issues,

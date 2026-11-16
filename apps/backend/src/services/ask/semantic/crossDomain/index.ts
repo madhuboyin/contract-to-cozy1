@@ -1,18 +1,18 @@
-export * from './domainWaveManifest';
+export * from './domainRolloutManifest';
 export * from './crossDomainPlanBuilder';
-export * from './crossDomainWaveExecutor';
+export * from './crossDomainExecutor';
 
 import { verifyProtectionLexemeSeparation } from '../sharedSemanticLexicon';
 import { type SemanticDomainId } from '../governance/semanticOntologyBaseline';
 import {
   buildMeasuredDomainCoverageProfiles,
   DOMAIN_ENABLEMENT_RECORDS,
-  DOMAIN_WAVE_MANIFEST,
-  verifyDomainWaveManifestIntegrity,
+  DOMAIN_ROLLOUT_MANIFEST,
+  verifyDomainRolloutManifestIntegrity,
   type DomainLanguageCoverageProfile,
   type DomainMeasurementInput,
   type MetamorphicAxis,
-} from './domainWaveManifest';
+} from './domainRolloutManifest';
 import {
   applyCrossDomainFollowUpRefinement,
   parseCrossDomainSemanticRequest,
@@ -20,11 +20,11 @@ import {
 } from './crossDomainPlanBuilder';
 import {
   executeCrossDomainFollowUp,
-  executeCrossDomainWaves,
+  executeCrossDomainSnapshot,
   replaySavedCrossDomainResult,
   type CrossDomainExecutionResult,
   type CrossDomainPropertySnapshot,
-} from './crossDomainWaveExecutor';
+} from './crossDomainExecutor';
 
 /**
  * Deterministic seeded cross-domain snapshot fixture spanning Waves 1-5 (§19 #17).
@@ -447,7 +447,7 @@ export async function runCrossDomainAcceptanceBenchmarks(): Promise<{
     },
   ) => {
     checkedCount += 1;
-    const res = await executeCrossDomainWaves({
+    const res = await executeCrossDomainSnapshot({
       rawText: prompt,
       snapshot: opts?.snapshotOverride ?? snapshot,
       role: opts?.role ?? 'OWNER',
@@ -584,13 +584,13 @@ export async function runCrossDomainAcceptanceBenchmarks(): Promise<{
 
   // ROW_21: non-emergency vs emergency safety boundary
   checkedCount += 1;
-  const nonEmergency = await executeCrossDomainWaves({
+  const nonEmergency = await executeCrossDomainSnapshot({
     rawText: 'my furnace is dying—what should I do?',
     snapshot,
     role: 'OWNER',
     propertyAuthorized: true,
   });
-  const emergency = await executeCrossDomainWaves({
+  const emergency = await executeCrossDomainSnapshot({
     rawText: 'my furnace smells like gas',
     snapshot,
     role: 'OWNER',
@@ -659,7 +659,7 @@ export async function runCrossDomainAcceptanceBenchmarks(): Promise<{
 
   // Additional explicit regression checks: neither/nor coordination, role replay, protection lexemes
   checkedCount += 1;
-  const neitherNor = await executeCrossDomainWaves({
+  const neitherNor = await executeCrossDomainSnapshot({
     rawText: 'which appliances have neither a manual nor a receipt?',
     snapshot,
     role: 'OWNER',
@@ -684,8 +684,8 @@ export async function runCrossDomainAcceptanceBenchmarks(): Promise<{
   checkedCount += 2;
   const sep = verifyProtectionLexemeSeparation();
   if (!sep.valid) failures.push(...sep.violations);
-  const waveLexSep = verifyCrossDomainProtectionLexemeSeparation();
-  if (!waveLexSep.valid) failures.push(...waveLexSep.violations);
+  const rolloutLexSep = verifyCrossDomainProtectionLexemeSeparation();
+  if (!rolloutLexSep.valid) failures.push(...rolloutLexSep.violations);
 
   const verifiedRowIds = rowResults.filter((r) => r.passed).map((r) => r.rowId);
 
@@ -1078,7 +1078,7 @@ export async function evaluateCrossDomainGovernanceReport(): Promise<{
   readonly metamorphic: ReturnType<typeof runCrossDomainMetamorphicSuite>;
   readonly coverageProfiles: readonly DomainLanguageCoverageProfile[];
   readonly evaluationDetailsByDomain: readonly DomainEvaluationDetails[];
-  readonly manifestIntegrity: ReturnType<typeof verifyDomainWaveManifestIntegrity>;
+  readonly manifestIntegrity: ReturnType<typeof verifyDomainRolloutManifestIntegrity>;
 }> {
   const benchmarks = await runCrossDomainAcceptanceBenchmarks();
   const metamorphic = runCrossDomainMetamorphicSuite();
@@ -1106,7 +1106,7 @@ export async function evaluateCrossDomainGovernanceReport(): Promise<{
             propertyAuthorized: true,
             rawPromptFallback: replayPrompt,
           })
-        : await executeCrossDomainWaves({
+        : await executeCrossDomainSnapshot({
             rawText: replayPrompt,
             snapshot,
             role: 'OWNER',
@@ -1123,7 +1123,7 @@ export async function evaluateCrossDomainGovernanceReport(): Promise<{
     let falseDeclineCount = 0;
     for (const probe of battery.falseDeclineProbes) {
       falseDeclineEvaluated += 1;
-      const res = await executeCrossDomainWaves({
+      const res = await executeCrossDomainSnapshot({
         rawText: probe,
         snapshot,
         role: 'OWNER',
@@ -1143,7 +1143,7 @@ export async function evaluateCrossDomainGovernanceReport(): Promise<{
     for (const unsupportedPrompt of battery.unsupportedProbes) {
       unsupportedEvaluated += 1;
       const parsed = parseCrossDomainSemanticRequest(unsupportedPrompt);
-      const res = await executeCrossDomainWaves({
+      const res = await executeCrossDomainSnapshot({
         rawText: unsupportedPrompt,
         snapshot,
         role: 'OWNER',
@@ -1195,7 +1195,7 @@ export async function evaluateCrossDomainGovernanceReport(): Promise<{
   }
 
   const coverageProfiles = buildMeasuredDomainCoverageProfiles(measurements);
-  const manifestIntegrity = verifyDomainWaveManifestIntegrity(coverageProfiles);
+  const manifestIntegrity = verifyDomainRolloutManifestIntegrity(coverageProfiles);
 
   return {
     passed: benchmarks.passed && metamorphic.passed && manifestIntegrity.valid,
@@ -1207,8 +1207,8 @@ export async function evaluateCrossDomainGovernanceReport(): Promise<{
   };
 }
 
-export const WAVES_DELIVERY_SUMMARY = {
-  waveCount: DOMAIN_WAVE_MANIFEST.length,
+export const ROLLOUT_DELIVERY_SUMMARY = {
+  rolloutCount: DOMAIN_ROLLOUT_MANIFEST.length,
   enabledDomainCount: DOMAIN_ENABLEMENT_RECORDS.filter((d) => d.correctnessState === 'ENABLED_FOR_DECLARED_SCOPE').length,
   applyCrossDomainFollowUpRefinement,
 } as const;

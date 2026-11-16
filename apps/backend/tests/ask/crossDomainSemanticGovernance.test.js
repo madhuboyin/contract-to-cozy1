@@ -5,7 +5,7 @@ require('ts-node/register/transpile-only');
 const {
   ASK_CROSS_DOMAIN_SEMANTIC_FAMILIES,
   ASK_OPERATION_DOMAIN_OWNERSHIP,
-  ASK_PHASE0_CONTAINMENT_REGRESSION_CASES,
+  ASK_CONTAINMENT_REGRESSION_CASES,
   ASK_RECOGNIZER_RETIREMENT_MANIFEST,
   ASK_RELATIONSHIP_STORAGE_ACCESS_SITES,
   ASK_SCALAR_FIELD_COALESCENCE_MANIFEST,
@@ -14,7 +14,7 @@ const {
   ASK_SEMANTIC_PREDICATE_MEANING_MANIFEST,
   ASK_TRAVERSABLE_RELATION_PATH_MANIFEST,
   auditDualParentSchemaModels,
-  buildAskSemanticPhase0BaselineSummary,
+  buildAskSemanticGovernanceBaselineSummary,
   buildRelationshipDuplicateDefinitionReport,
   buildSchemaCatalogueReconciliationReport,
   buildSemanticCapabilityInventory,
@@ -266,7 +266,7 @@ test('Phase 0 Bullet 8: seeded property archetypes instantiate executable fixtur
 });
 
 test('Phase 0 Bullet 9 [CONTAINMENT_REGRESSION_NOT_COVERAGE_PROOF]: exact failure prompts and conflicting/fail-open paths are contained', async () => {
-  assert.ok(ASK_PHASE0_CONTAINMENT_REGRESSION_CASES.every((c) => c.evidenceClassification === 'CONTAINMENT_REGRESSION_NOT_COVERAGE_PROOF'));
+  assert.ok(ASK_CONTAINMENT_REGRESSION_CASES.every((c) => c.evidenceClassification === 'CONTAINMENT_REGRESSION_NOT_COVERAGE_PROOF'));
 
   // 1. Warranty paraphrases including possessive determiners ("which of my appliances do not have a warranty")
   const prompts = [
@@ -342,8 +342,8 @@ test('Phase 0 Bullet 9 [CONTAINMENT_REGRESSION_NOT_COVERAGE_PROOF]: exact failur
   assert.deepEqual(crossDomain.facets, []);
 });
 
-test('Phase 0 Exit Criteria (Finding #5): buildAskSemanticPhase0BaselineSummary mechanically proves completeness across all inventories and fixtures', () => {
-  const summary = buildAskSemanticPhase0BaselineSummary();
+test('Phase 0 Exit Criteria (Finding #5): buildAskSemanticGovernanceBaselineSummary mechanically proves completeness across all inventories and fixtures', () => {
+  const summary = buildAskSemanticGovernanceBaselineSummary();
   assert.deepEqual(summary.completenessProof.unaccountedRecognizerFiles, []);
   assert.deepEqual(summary.completenessProof.unaccountedRelationAccessFiles, []);
   assert.deepEqual(summary.completenessProof.unaccountedRelationAccessPairs, []);

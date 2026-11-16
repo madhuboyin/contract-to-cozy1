@@ -9,7 +9,7 @@
  * - Records every deferred family with explicit deferral reason and target domain wave.
  */
 
-export const ASK_PHASE1_FAMILY_MANIFEST_VERSION = '1.0.0' as const;
+export const ASK_BASIC_READ_FAMILY_MANIFEST_VERSION = '1.0.0' as const;
 
 export type Section5DomainGroupId =
   | 'PROPERTY_CORE'
@@ -38,14 +38,14 @@ export const SECTION_5_DOMAIN_GROUP_IDS: readonly Section5DomainGroupId[] = Obje
   'OPERATIONS_AND_SAVED_WORK',
 ]);
 
-export type Phase1FalseDeclineCategory =
+export type BasicReadFalseDeclineCategory =
   | 'WARRANTY_INVENTORY_RELATION'
   | 'MAINTENANCE_RETRIEVAL'
   | 'ITEM_COST_RETRIEVAL'
   | 'SAVED_RESULT_RETRIEVAL'
   | null;
 
-export interface Phase1SelectedFamily {
+export interface SelectedBasicReadFamily {
   readonly familyId: string;
   readonly domainGroupId: Section5DomainGroupId;
   readonly semanticDomainId: string;
@@ -55,12 +55,12 @@ export interface Phase1SelectedFamily {
   readonly supportedPolarities: ReadonlyArray<'POSITIVE' | 'NEGATIVE'>;
   readonly relationOrFieldOrJobId: string;
   readonly canonicalAdapterKey: string;
-  readonly falseDeclineCategory: Phase1FalseDeclineCategory;
+  readonly falseDeclineCategory: BasicReadFalseDeclineCategory;
   readonly selectionRationale: string;
   readonly representativeExamples: readonly string[];
 }
 
-export interface Phase1DeferredFamily {
+export interface DeferredBasicReadFamily {
   readonly familyId: string;
   readonly domainGroupId: Section5DomainGroupId;
   readonly description: string;
@@ -70,16 +70,16 @@ export interface Phase1DeferredFamily {
     | 'REQUIRES_MULTI_HOP_BOOLEAN_QUERY_COMPILER'
     | 'REQUIRES_COMPOUND_MULTI_FACET_SEGMENTATION'
     | 'REQUIRES_CONSEQUENTIAL_WRITE_CONFIRMATION_ADMISSION';
-  readonly targetWave:
-    | 'WAVE_1_INVENTORY_AND_MAINTENANCE'
-    | 'WAVE_2_PROTECTION_AND_CLAIMS'
-    | 'WAVE_3_FINANCE_TAX_AND_PROPERTY_CORE'
-    | 'WAVE_4_TRANSACTIONS_PROJECTS_AND_RECORDS'
-    | 'WAVE_5_OPERATIONS_SAVED_WORK_AND_COMPOSITION';
+  readonly targetRollout:
+    | 'ROLLOUT_1_INVENTORY_AND_MAINTENANCE'
+    | 'ROLLOUT_2_PROTECTION_AND_CLAIMS'
+    | 'ROLLOUT_3_FINANCE_TAX_AND_PROPERTY_CORE'
+    | 'ROLLOUT_4_TRANSACTIONS_PROJECTS_AND_RECORDS'
+    | 'ROLLOUT_5_OPERATIONS_SAVED_WORK_AND_COMPOSITION';
   readonly representativePrompts: readonly string[];
 }
 
-export const PHASE1_SELECTED_BASIC_READ_FAMILIES: readonly Phase1SelectedFamily[] = Object.freeze([
+export const SELECTED_BASIC_READ_FAMILIES: readonly SelectedBasicReadFamily[] = Object.freeze([
   {
     familyId: 'FAM_P1_PROPERTY_CORE_FACT_DETAIL',
     domainGroupId: 'PROPERTY_CORE',
@@ -306,13 +306,13 @@ export const PHASE1_SELECTED_BASIC_READ_FAMILIES: readonly Phase1SelectedFamily[
   },
 ]);
 
-export const PHASE1_DEFERRED_FAMILIES: readonly Phase1DeferredFamily[] = Object.freeze([
+export const DEFERRED_BASIC_READ_FAMILIES: readonly DeferredBasicReadFamily[] = Object.freeze([
   {
     familyId: 'FAM_DEFERRED_OPEN_CLAIMS_FILTER',
     domainGroupId: 'PROTECTION',
     description: 'Filtered claim status queries such as open/closed/under-review claim predicates.',
     deferralReason: 'REQUIRES_ENUM_STATUS_PREDICATE_COMPILATION',
-    targetWave: 'WAVE_2_PROTECTION_AND_CLAIMS',
+    targetRollout: 'ROLLOUT_2_PROTECTION_AND_CLAIMS',
     representativePrompts: ['what claims are still open?'],
   },
   {
@@ -320,7 +320,7 @@ export const PHASE1_DEFERRED_FAMILIES: readonly Phase1DeferredFamily[] = Object.
     domainGroupId: 'PROTECTION',
     description: 'Temporal warranty expiration vs absence of linked warranty record ("out of warranty", "expired next month").',
     deferralReason: 'REQUIRES_TEMPORAL_EXPIRATION_SEMANTICS',
-    targetWave: 'WAVE_2_PROTECTION_AND_CLAIMS',
+    targetRollout: 'ROLLOUT_2_PROTECTION_AND_CLAIMS',
     representativePrompts: ['which appliances are out of warranty?', 'show appliances without warranty next month'],
   },
   {
@@ -328,7 +328,7 @@ export const PHASE1_DEFERRED_FAMILIES: readonly Phase1DeferredFamily[] = Object.
     domainGroupId: 'INVENTORY_ITEMS',
     description: 'Surface natural-language connective parsing into multi-node AND/OR/NOT query plans.',
     deferralReason: 'REQUIRES_MULTI_HOP_BOOLEAN_QUERY_COMPILER',
-    targetWave: 'WAVE_1_INVENTORY_AND_MAINTENANCE',
+    targetRollout: 'ROLLOUT_1_INVENTORY_AND_MAINTENANCE',
     representativePrompts: ['which kitchen appliances have neither a warranty nor a serial number?'],
   },
   {
@@ -336,7 +336,7 @@ export const PHASE1_DEFERRED_FAMILIES: readonly Phase1DeferredFamily[] = Object.
     domainGroupId: 'OPERATIONS_AND_SAVED_WORK',
     description: 'Multi-facet up-to-6 clause semantic plan execution with cross-facet slot binding.',
     deferralReason: 'REQUIRES_COMPOUND_MULTI_FACET_SEGMENTATION',
-    targetWave: 'WAVE_5_OPERATIONS_SAVED_WORK_AND_COMPOSITION',
+    targetRollout: 'ROLLOUT_5_OPERATIONS_SAVED_WORK_AND_COMPOSITION',
     representativePrompts: ['show my overdue maintenance tasks and tell me whether my furnace has a warranty'],
   },
   {
@@ -344,19 +344,19 @@ export const PHASE1_DEFERRED_FAMILIES: readonly Phase1DeferredFamily[] = Object.
     domainGroupId: 'MAINTENANCE',
     description: 'Semantic COMMAND plan synthesis for mutating domain commands.',
     deferralReason: 'REQUIRES_CONSEQUENTIAL_WRITE_CONFIRMATION_ADMISSION',
-    targetWave: 'WAVE_1_INVENTORY_AND_MAINTENANCE',
+    targetRollout: 'ROLLOUT_1_INVENTORY_AND_MAINTENANCE',
     representativePrompts: ['mark the furnace filter task complete and set the cost to $45'],
   },
 ]);
 
-export function verifyPhase1FamilyManifestCompleteness(): {
+export function verifyBasicReadFamilyManifestCompleteness(): {
   readonly valid: boolean;
   readonly missingDomainGroups: readonly Section5DomainGroupId[];
   readonly missingFalseDeclineCategories: readonly string[];
   readonly selectedCount: number;
   readonly deferredCount: number;
 } {
-  const coveredGroups = new Set(PHASE1_SELECTED_BASIC_READ_FAMILIES.map((family) => family.domainGroupId));
+  const coveredGroups = new Set(SELECTED_BASIC_READ_FAMILIES.map((family) => family.domainGroupId));
   const missingDomainGroups = SECTION_5_DOMAIN_GROUP_IDS.filter((groupId) => !coveredGroups.has(groupId));
 
   const requiredFalseDeclines = [
@@ -366,17 +366,17 @@ export function verifyPhase1FamilyManifestCompleteness(): {
     'SAVED_RESULT_RETRIEVAL',
   ] as const;
   const presentFalseDeclines = new Set(
-    PHASE1_SELECTED_BASIC_READ_FAMILIES
+    SELECTED_BASIC_READ_FAMILIES
       .map((family) => family.falseDeclineCategory)
-      .filter((category): category is NonNullable<Phase1FalseDeclineCategory> => category !== null),
+      .filter((category): category is NonNullable<BasicReadFalseDeclineCategory> => category !== null),
   );
   const missingFalseDeclineCategories = requiredFalseDeclines.filter((cat) => !presentFalseDeclines.has(cat));
 
   return {
-    valid: missingDomainGroups.length === 0 && missingFalseDeclineCategories.length === 0 && PHASE1_DEFERRED_FAMILIES.length > 0,
+    valid: missingDomainGroups.length === 0 && missingFalseDeclineCategories.length === 0 && DEFERRED_BASIC_READ_FAMILIES.length > 0,
     missingDomainGroups,
     missingFalseDeclineCategories,
-    selectedCount: PHASE1_SELECTED_BASIC_READ_FAMILIES.length,
-    deferredCount: PHASE1_DEFERRED_FAMILIES.length,
+    selectedCount: SELECTED_BASIC_READ_FAMILIES.length,
+    deferredCount: DEFERRED_BASIC_READ_FAMILIES.length,
   };
 }

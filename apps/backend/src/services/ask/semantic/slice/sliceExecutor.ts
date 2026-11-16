@@ -18,13 +18,13 @@ import {
   type SemanticTextEnvelope,
 } from './placeholderSpanMap';
 import {
-  buildPhase2aRichPresentation,
+  buildSliceRichPresentation,
   verifyRichPresentationPopulationEquivalence,
-  type Phase2aPresentationRow,
-  type Phase2aRichPresentationEquivalenceReport,
-} from './phase2aRichPresentationAdapter';
+  type SlicePresentationRow,
+  type SliceRichPresentationEquivalenceReport,
+} from './richPresentationAdapter';
 
-export interface Phase2aAuthorizationContext {
+export interface SliceAuthorizationContext {
   readonly propertyId: string;
   readonly role: 'VIEWER' | 'EDITOR' | 'OWNER';
   readonly propertyAuthorized: boolean;
@@ -32,13 +32,13 @@ export interface Phase2aAuthorizationContext {
   readonly allowSensitiveFields?: boolean;
 }
 
-export interface Phase2aRoomRecord {
+export interface SliceRoomRecord {
   readonly id: string;
   readonly propertyId: string;
   readonly name: string;
 }
 
-export interface Phase2aInventoryItemRecord {
+export interface SliceInventoryItemRecord {
   readonly id: string;
   readonly propertyId: string;
   readonly name: string;
@@ -56,7 +56,7 @@ export interface Phase2aInventoryItemRecord {
   readonly coverageEvidenceStatus: 'NONE' | 'NOT_SURE' | 'UNKNOWN' | string;
 }
 
-export interface Phase2aMaintenanceTaskRecord {
+export interface SliceMaintenanceTaskRecord {
   readonly id: string;
   readonly propertyId: string;
   readonly title: string;
@@ -66,16 +66,16 @@ export interface Phase2aMaintenanceTaskRecord {
   readonly inventoryItemId?: string | null;
 }
 
-export interface Phase2aPropertySnapshot {
+export interface SlicePropertySnapshot {
   readonly propertyId: string;
   readonly asOfDate: string;
   readonly maintenanceWorkflowVersion?: string;
-  readonly rooms: readonly Phase2aRoomRecord[];
-  readonly items: readonly Phase2aInventoryItemRecord[];
-  readonly maintenanceTasks: readonly Phase2aMaintenanceTaskRecord[];
+  readonly rooms: readonly SliceRoomRecord[];
+  readonly items: readonly SliceInventoryItemRecord[];
+  readonly maintenanceTasks: readonly SliceMaintenanceTaskRecord[];
 }
 
-export interface Phase2aSliceExecutionResult {
+export interface SliceExecutionResult {
   readonly status: 'ANSWERED' | 'NEEDS_CLARIFICATION' | 'NEEDS_CONFIRMATION' | 'BLOCKED' | 'OUT_OF_SCOPE';
   readonly envelope: SemanticTextEnvelope;
   readonly spanRoundTripOk: boolean;
@@ -83,7 +83,7 @@ export interface Phase2aSliceExecutionResult {
   readonly entityResolution: PropertyEntityResolution | null;
   readonly receipt: SemanticReadReceipt | null;
   readonly entailment: SemanticReceiptEntailmentVerdict | null;
-  readonly presentationEquivalence: Phase2aRichPresentationEquivalenceReport | null;
+  readonly presentationEquivalence: SliceRichPresentationEquivalenceReport | null;
   readonly operationResult: AskOperationResult;
   readonly redactedFields: readonly string[];
   readonly traversalDepthUsed: number;
@@ -91,8 +91,8 @@ export interface Phase2aSliceExecutionResult {
 }
 
 function buildItemCandidates(
-  snapshot: Phase2aPropertySnapshot,
-  auth: Phase2aAuthorizationContext
+  snapshot: SlicePropertySnapshot,
+  auth: SliceAuthorizationContext
 ): PropertyEntityCandidate[] {
   const restricted = new Set(auth.restrictedItemIds ?? []);
   return snapshot.items.map((item) => ({
@@ -104,7 +104,7 @@ function buildItemCandidates(
   }));
 }
 
-function detectMentionedItem(rawText: string, snapshot: Phase2aPropertySnapshot): string {
+function detectMentionedItem(rawText: string, snapshot: SlicePropertySnapshot): string {
   const lower = rawText.toLocaleLowerCase('en-US');
   for (const item of snapshot.items) {
     if (lower.includes(item.name.toLocaleLowerCase('en-US'))) {
@@ -114,7 +114,7 @@ function detectMentionedItem(rawText: string, snapshot: Phase2aPropertySnapshot)
   return '';
 }
 
-function evaluateWarrantyState(item: Phase2aInventoryItemRecord): TransitionalWarrantyRead {
+function evaluateWarrantyState(item: SliceInventoryItemRecord): TransitionalWarrantyRead {
   return classifyTransitionalWarrantyLinks({
     inventoryItemId: item.id,
     label: item.name,
@@ -181,8 +181,8 @@ function validateSiblingDepthOnePredicates(relationPathIds: readonly string[]): 
 }
 
 function buildDynamicPlaceholderCandidates(
-  snapshot: Phase2aPropertySnapshot,
-  auth: Phase2aAuthorizationContext
+  snapshot: SlicePropertySnapshot,
+  auth: SliceAuthorizationContext
 ): DynamicPlaceholderEntityCandidate[] {
   const restricted = new Set(auth.restrictedItemIds ?? []);
   const itemCandidates: DynamicPlaceholderEntityCandidate[] = snapshot.items.map((item) => ({
@@ -206,9 +206,9 @@ function buildDynamicPlaceholderCandidates(
 
 function evaluateWherePredicate(
   expr: Extract<SemanticWhereExpression, { kind: 'PREDICATE' }>,
-  item: Phase2aInventoryItemRecord,
+  item: SliceInventoryItemRecord,
   warranty: TransitionalWarrantyRead,
-  snapshot: Phase2aPropertySnapshot
+  snapshot: SlicePropertySnapshot
 ): boolean {
   const linkedTasks = snapshot.maintenanceTasks.filter((task) => task.inventoryItemId === item.id);
   const dueTasks = linkedTasks.filter((task) => task.status !== 'COMPLETED');
@@ -240,9 +240,9 @@ function evaluateWherePredicate(
 
 function evaluateWhereExpression(
   expr: SemanticWhereExpression,
-  item: Phase2aInventoryItemRecord,
+  item: SliceInventoryItemRecord,
   warranty: TransitionalWarrantyRead,
-  snapshot: Phase2aPropertySnapshot
+  snapshot: SlicePropertySnapshot
 ): boolean {
   switch (expr.kind) {
     case 'PREDICATE':
@@ -269,7 +269,7 @@ function buildBlockedResult(
   plan: SemanticRequestPlan,
   entityResolution: PropertyEntityResolution | null,
   reason: string
-): Phase2aSliceExecutionResult {
+): SliceExecutionResult {
   const operationResult: AskOperationResult = {
     status: 'BLOCKED',
     reasonCode: 'ASK_PROPERTY_AUTHORIZATION_BLOCKED',
@@ -310,13 +310,13 @@ function buildBlockedResult(
  * Boolean evaluation / capability / command preview -> typed receipt -> entailment
  * verification -> rich presentation equivalence.
  */
-export function executePhase2aVerticalSlice(input: {
+export function executeSemanticSlice(input: {
   readonly rawText: string;
-  readonly snapshot: Phase2aPropertySnapshot;
-  readonly auth: Phase2aAuthorizationContext;
+  readonly snapshot: SlicePropertySnapshot;
+  readonly auth: SliceAuthorizationContext;
   readonly filterEntityIds?: readonly string[];
   readonly planOverride?: SemanticRequestPlan;
-}): Phase2aSliceExecutionResult {
+}): SliceExecutionResult {
   const { rawText, snapshot, auth } = input;
   const dynamicEntities = buildDynamicPlaceholderCandidates(snapshot, auth);
   const envelope = buildSemanticTextEnvelope(rawText, { dynamicEntities });
@@ -324,7 +324,7 @@ export function executePhase2aVerticalSlice(input: {
   const plan = SemanticRequestPlanSchema.parse(
     input.planOverride ?? parseDeterministicSemanticRequest(rawText, { dynamicEntities }),
   );
-  return executeValidatedPhase2aPlan({
+  return executeValidatedSlicePlan({
     rawText,
     envelope,
     spanRoundTripOk,
@@ -339,7 +339,7 @@ function buildNonExecutableResult(input: {
   readonly envelope: SemanticTextEnvelope;
   readonly spanRoundTripOk: boolean;
   readonly plan: SemanticRequestPlan;
-}): Phase2aSliceExecutionResult {
+}): SliceExecutionResult {
   const { envelope, spanRoundTripOk, plan } = input;
   const isBoundary = plan.outcome === 'BOUNDARY';
   const operationResult: AskOperationResult = {
@@ -378,15 +378,15 @@ function buildNonExecutableResult(input: {
   };
 }
 
-function executeValidatedPhase2aPlan(input: {
+function executeValidatedSlicePlan(input: {
   readonly rawText: string;
   readonly envelope: SemanticTextEnvelope;
   readonly spanRoundTripOk: boolean;
   readonly plan: SemanticRequestPlan;
-  readonly snapshot: Phase2aPropertySnapshot;
-  readonly auth: Phase2aAuthorizationContext;
+  readonly snapshot: SlicePropertySnapshot;
+  readonly auth: SliceAuthorizationContext;
   readonly filterEntityIds?: readonly string[];
-}): Phase2aSliceExecutionResult {
+}): SliceExecutionResult {
   const { rawText, envelope, spanRoundTripOk, plan, snapshot, auth } = input;
 
   if (!auth.propertyAuthorized || auth.propertyId !== snapshot.propertyId) {
@@ -489,14 +489,14 @@ function executeValidatedPhase2aPlan(input: {
       observedAt: `${snapshot.asOfDate}T00:00:00.000Z`,
       answerVariantId,
     });
-    const rows: Phase2aPresentationRow[] = [{
+    const rows: SlicePresentationRow[] = [{
       id: targetItem.id,
       label: targetItem.name,
       subtitle: `${recommendation} Estimated replacement: ${costText}.`,
       stateCode: targetItem.condition ?? 'GOOD_CONDITION',
       groupKey: 'Replacement Guidance',
     }];
-    const blocks = buildPhase2aRichPresentation({
+    const blocks = buildSliceRichPresentation({
       receipt,
       title: `Replacement guidance for ${targetItem.name}`,
       summaryBody: `${recommendation} Estimated replacement cost: ${costText}.`,
@@ -664,7 +664,7 @@ function executeValidatedPhase2aPlan(input: {
       observedAt: `${snapshot.asOfDate}T00:00:00.000Z`,
       answerVariantId,
     });
-    const rows: Phase2aPresentationRow[] = projection === 'COUNT'
+    const rows: SlicePresentationRow[] = projection === 'COUNT'
       ? []
       : matchingTasks.map((task) => {
           const item = task.inventoryItemId ? accessibleItemsById.get(task.inventoryItemId) : undefined;
@@ -676,7 +676,7 @@ function executeValidatedPhase2aPlan(input: {
             groupKey: task.priority,
           };
         });
-    const blocks = buildPhase2aRichPresentation({
+    const blocks = buildSliceRichPresentation({
       receipt,
       title: projection === 'COUNT' ? `${matchingTasks.length} maintenance tasks matched` : 'Maintenance tasks',
       summaryBody: `Found ${matchingTasks.length} matching maintenance task${matchingTasks.length === 1 ? '' : 's'}.`,
@@ -783,7 +783,7 @@ function executeValidatedPhase2aPlan(input: {
   });
 
   const requestedFields = new Set(facet.fields.map((field) => field.fieldId));
-  const rows: Phase2aPresentationRow[] = projection === 'COUNT'
+  const rows: SlicePresentationRow[] = projection === 'COUNT'
     ? []
     : matched.map(({ item, warranty }) => {
         const room = snapshot.rooms.find((r) => r.id === item.roomId);
@@ -824,7 +824,7 @@ function executeValidatedPhase2aPlan(input: {
     ? `Confirmed count: ${matched.length} matching item${matched.length === 1 ? '' : 's'}.`
     : `Found ${matched.length} matching inventory item${matched.length === 1 ? '' : 's'}.`;
 
-  const blocks = buildPhase2aRichPresentation({
+  const blocks = buildSliceRichPresentation({
     receipt,
     title,
     summaryBody,
@@ -860,12 +860,12 @@ function executeValidatedPhase2aPlan(input: {
  * Semantic follow-up refinement preserving prior active entity population and
  * applying a follow-up constraint or projection change (e.g. "how many", "without warranty", "in kitchen").
  */
-export function applyPhase2aFollowUpRefinement(input: {
-  readonly priorResult: Phase2aSliceExecutionResult;
+export function applySliceFollowUpRefinement(input: {
+  readonly priorResult: SliceExecutionResult;
   readonly followUpText: string;
-  readonly snapshot: Phase2aPropertySnapshot;
-  readonly auth: Phase2aAuthorizationContext;
-}): Phase2aSliceExecutionResult {
+  readonly snapshot: SlicePropertySnapshot;
+  readonly auth: SliceAuthorizationContext;
+}): SliceExecutionResult {
   const { priorResult, followUpText, snapshot, auth } = input;
   const baseIds = priorResult.activeEntityIds;
   const dynamicEntities = buildDynamicPlaceholderCandidates(snapshot, auth);
@@ -889,7 +889,7 @@ export function applyPhase2aFollowUpRefinement(input: {
   }
   const priorFacet = priorResult.plan.facets[0];
   if (!priorFacet) {
-    return executePhase2aVerticalSlice({
+    return executeSemanticSlice({
       rawText: followUpText,
       snapshot,
       auth,
@@ -923,7 +923,7 @@ export function applyPhase2aFollowUpRefinement(input: {
     ],
   });
 
-  return executeValidatedPhase2aPlan({
+  return executeValidatedSlicePlan({
     rawText: priorResult.plan.rawText,
     envelope: priorResult.envelope,
     spanRoundTripOk: priorResult.spanRoundTripOk,
@@ -939,19 +939,19 @@ export function applyPhase2aFollowUpRefinement(input: {
  * authorization context (e.g. role downgrade or item/property access revocation),
  * redacting sensitive fields or blocking unauthorized access.
  */
-export function replayPhase2aExecutionWithAuthorization(input: {
-  readonly priorResult: Phase2aSliceExecutionResult;
-  readonly snapshot: Phase2aPropertySnapshot;
-  readonly updatedAuth: Phase2aAuthorizationContext;
-}): Phase2aSliceExecutionResult {
-  return executePhase2aVerticalSlice({
+export function replaySliceExecutionWithAuthorization(input: {
+  readonly priorResult: SliceExecutionResult;
+  readonly snapshot: SlicePropertySnapshot;
+  readonly updatedAuth: SliceAuthorizationContext;
+}): SliceExecutionResult {
+  return executeSemanticSlice({
     rawText: input.priorResult.plan.rawText,
     snapshot: input.snapshot,
     auth: input.updatedAuth,
   });
 }
 
-function normalizePhase2aRole(role: string): Phase2aAuthorizationContext['role'] {
+function normalizeSliceRole(role: string): SliceAuthorizationContext['role'] {
   const upper = role.toUpperCase();
   if (upper === 'OWNER' || upper === 'ADMIN') return 'OWNER';
   if (upper === 'EDITOR' || upper === 'MEMBER') return 'EDITOR';
@@ -960,9 +960,9 @@ function normalizePhase2aRole(role: string): Phase2aAuthorizationContext['role']
 
 /**
  * Loads a property's inventory, room, warranty, and maintenance records from Prisma
- * into the typed Phase2aPropertySnapshot contract.
+ * into the typed SlicePropertySnapshot contract.
  */
-export async function loadPhase2aPropertySnapshot(propertyId: string): Promise<Phase2aPropertySnapshot> {
+export async function loadSlicePropertySnapshot(propertyId: string): Promise<SlicePropertySnapshot> {
   const [rooms, items, warranties, maintenanceTasks, workflowVersion] = await Promise.all([
     prisma.inventoryRoom.findMany({
       where: { propertyId },
@@ -1059,20 +1059,20 @@ export async function loadPhase2aPropertySnapshot(propertyId: string): Promise<P
  * Production entry point connecting Phase 2A vertical-slice execution to real
  * Prisma-backed property records and authorization context.
  */
-export async function executePhase2aOnProperty(input: {
+export async function executeSliceOnProperty(input: {
   readonly propertyId: string;
   readonly role: string;
   readonly propertyAuthorized: boolean;
   readonly rawText: string;
   readonly restrictedItemIds?: readonly string[];
-}): Promise<Phase2aSliceExecutionResult> {
-  const snapshot = await loadPhase2aPropertySnapshot(input.propertyId);
-  return executePhase2aVerticalSlice({
+}): Promise<SliceExecutionResult> {
+  const snapshot = await loadSlicePropertySnapshot(input.propertyId);
+  return executeSemanticSlice({
     rawText: input.rawText,
     snapshot,
     auth: {
       propertyId: input.propertyId,
-      role: normalizePhase2aRole(input.role),
+      role: normalizeSliceRole(input.role),
       propertyAuthorized: input.propertyAuthorized,
       restrictedItemIds: input.restrictedItemIds,
     },
