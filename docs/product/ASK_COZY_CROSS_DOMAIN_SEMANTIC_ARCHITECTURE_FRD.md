@@ -1,6 +1,6 @@
 # Ask Cozy — Cross-Domain Semantic Request Architecture FRD
 
-**Status:** Draft v1.7 for owner review
+**Status:** Draft v1.8 for owner review
 
 **Date:** 2026-11-16
 
@@ -26,6 +26,8 @@
 
 **v1.7 amendment:** Records the 2026-11-16 owner decision that `UNKNOWN` warranty and coverage records appear by default in a separate owner-visible result group. Unknown records are never merged with confirmed protection, confirmed gaps, explicit absence, exclusions or conflicts; confirmed and unknown populations and totals remain separately labelled in every projection.
 
+**v1.8 amendment:** Records the 2026-11-16 owner decision that duplicate-looking scalar fields without an existing governed equivalence rule are explicitly distinct business meanings by default. No reader, writer, backfill or analysis may substitute or coalesce them, and differing values are not a conflict merely because the fields look similar. Equivalence requires a later field-specific owner approval with authoritative storage, normalization, conflict, write-target, consolidation and provenance rules.
+
 ---
 
 ## 0. Implementation status
@@ -39,6 +41,7 @@ This section is the maintained repository implementation ledger for this FRD. It
 | Area | Status | Current implementation |
 |---|---|---|
 | Phase 0 baseline & invariants (`§18 Phase 0`) | Implemented | `src/services/ask/semantic/phase0/index.ts` and `scripts/ask-semantic-phase0-baseline.js` generate and mechanically verify the authoritative cross-domain ontology baseline (`semanticOntologyBaseline.ts`, 14 `§5` domains + safety boundary, 20 catalogued `DataPointEntity` models, 107 approved data points reconciled against 525 Prisma models, 734 enums, and 118 `PROPERTY_FACT_CATALOG` entries, plus exhaustive 231-operation `ASK_OPERATION_DOMAIN_OWNERSHIP` with skill-domain reconciliation and zero default fallback), duplicate/legacy scalar field coalescence manifest (`scalarFieldCoalescenceManifest.ts`, 17 groups verified across all 525 Prisma DMMF models against 22 discovered candidate duplicate/shadow/overlapping pairs via `discoverCandidateDuplicateScalarFields`), recognizer-retirement manifest (`recognizerRetirementManifest.ts`, 13 buckets covering all 383 TypeScript AST-scanned recognizer/vocabulary files across Ask and Ask-adjacent entry points and 4,168 live AST signals under `FR-ONT-8` via `discoverLiveAskRecognizerSources`), relationship meaning-tag manifest, duplicate-definition report and traversable relation-path bounds (`relationGovernanceBaseline.ts`, 11 predicate meaning tags, 143 storage/token access sites verified across all 90 repository-wide `src/` relation files and 139 `(file, semanticRelationId)` access pairs via `discoverRepositoryRelationStorageAccessFiles`, 10 bounded relation paths, 17 dual-parent schema models audited), and 4 executable seeded property archetypes (`fixtureData` evaluated via `evaluateSeededArchetypeFixtures`) + 16 independent semantic families verified for seeded fixture readiness and data-state coverage (`verifySeededFamilyFixtureReadiness`; prompt/plan execution occurs incrementally in Phases 1–3) + 8 containment regression cases labelled `CONTAINMENT_REGRESSION_NOT_COVERAGE_PROOF` (`seededScenarioCatalogue.ts`). |
+| Duplicate-looking scalar default classification | Implemented (`FR-ONT-2`; owner decision recorded 2026-11-16) | `scalarFieldCoalescenceManifest.ts` classifies every discovered candidate pair as governed equivalence, intentionally distinct, or `DISTINCT_UNLESS_EQUIVALENCE_APPROVED`. The former pending pairs—brand/manufacturer, category/asset type, lot-size representations without verified units, and maintenance service/category/asset classification—keep separate schema fields and never coalesce unless a later field-specific approval changes their manifest entry. Unaccounted discovered pairs fail validation. |
 | Phase 1 immediate correctness containment (`§18 Phase 1`) | Implemented; canonical warranty model approved and applied | `src/services/ask/semantic/phase1/index.ts` coordinates the Phase 1 basic-read family manifest and runtime grammar admission. The 2026-11-16 warranty decision retires `InventoryItem.warrantyId`, uses `Warranty.inventoryItemId` for zero-to-many item warranties, and uses evidence-backed `WarrantyApplicability` rows for property-plan item/category/system applicability. `warrantyCanonicalModel.ts` owns scope and state invariants; `warrantyApplicability.service.ts` owns canonical applicability writes and resolution; Ask, inventory, coverage, risk, sale-readiness, status-board and property-context consumers use the canonical relations. |
 | Remote fallback fail-closed containment | Implemented | `askRemoteFallbackTypedClaims.ts` fails closed with an empty claim selection (`[]`) when the remote claim-selection provider throws or fails schema validation, eliminating the top-6 unrelated property-claim fallback on provider error. |
 | Canonical plan contract | Implemented foundation | `semanticRequestPlan.ts`, schema version `1.3.0`, defines the common deterministic/provider plan envelope, bounded facets, source spans, target kinds, projections, polarity and a recursive typed `WHERE` contract. Facet validation requires registered subject/relation/target/predicate agreement and a two-way match between declared data-query relations and `WHERE` predicates. Plan validation also requires unique stable facet ids, in-plan dependency references and an acyclic dependency graph. |
@@ -398,7 +401,7 @@ Every queryable entity shall declare:
 
 Every queryable field shall declare its type, units, null semantics, enum vocabulary, supported operators, projection eligibility, sort/group/aggregate eligibility, audience floor, sensitivity, and canonical data-point identity.
 
-When persisted models contain duplicate or legacy representations of one business meaning, the registry shall additionally declare a stable semantic field id, authoritative storage field, legacy aliases, ordered coalescence rule, blank-versus-null handling, conflict behavior, write target, backfill/consolidation disposition, and provenance preference. A reader shall not silently prefer whichever duplicate field it happens to query. Conflicting non-empty values shall produce `CONFLICTED` with provenance unless a reviewed domain rule deterministically resolves them. Fields that merely look similar—such as brand versus manufacturer, or a property roof versus an inventoried roof component—shall remain separate until their business equivalence is explicitly approved.
+When persisted models contain duplicate or legacy representations of one business meaning, the registry shall additionally declare a stable semantic field id, authoritative storage field, legacy aliases, ordered coalescence rule, blank-versus-null handling, conflict behavior, write target, backfill/consolidation disposition, and provenance preference. A reader shall not silently prefer whichever duplicate field it happens to query. Conflicting non-empty values within an approved equivalence group shall produce `CONFLICTED` with provenance unless a reviewed domain rule deterministically resolves them. Fields that merely look similar—such as brand versus manufacturer, or a property roof versus an inventoried roof component—are explicitly distinct business meanings by default. They shall not substitute for one another, share a write target, be consolidated, or produce a conflict merely because their populated values differ. Business equivalence requires a later field-specific owner approval defining authoritative storage, aliases, normalization or unit conversion, conflict behavior, write target, consolidation/backfill disposition, and provenance.
 
 ### FR-ONT-3 — Relation Registry
 
@@ -1223,7 +1226,7 @@ For every row, seeded data shall assert the exact plan, records, counts, missing
 23. **Protected-span bijection:** provider offsets are validated in minimised coordinates and mapped server-side to raw spans and eligible entities.
 24. **Deterministic-first topology:** complete validated deterministic plans may short-circuit production provider calls; unresolved spans invoke provider expansion and semantic reconciliation.
 25. **Query/presentation separation:** the query planner owns data semantics while domain presentation adapters own rich rendering without changing the receipt population.
-26. **Canonical scalar semantics:** duplicate persisted fields require one governed semantic identity/coalescence rule or an explicit declaration that they mean different things.
+26. **Canonical scalar semantics:** duplicate persisted fields require one governed semantic identity/coalescence rule or an explicit declaration that they mean different things; absent an approved equivalence rule, the default declaration is explicitly distinct.
 27. **Boolean query meaning:** conjunction, disjunction and negation are represented as a typed AST and ambiguous coordination clarifies.
 28. **Complete facet accounting:** provider budgets cannot silently discard any of the six supported facets or their cross-domain dependencies.
 29. **Replay is a new disclosure:** saved receipts and answer history are reauthorized and redacted against current visibility before display.
@@ -1244,11 +1247,12 @@ For every row, seeded data shall assert the exact plan, records, counts, missing
 
 **Resolved 2026-11-16 — default `UNKNOWN` result grouping:** Warranty and coverage records in an `UNKNOWN` state are included by default in a separate owner-visible result group. They are excluded from confirmed-protection and confirmed-gap totals and remain distinct from explicit absence, exclusions, `CONFLICTED`, and `CONFLICTED_LINKS`. Explicit filters may request only unknown or only confirmed populations; ordinary unfiltered results must not silently omit unknown records.
 
+**Resolved 2026-11-16 — duplicate-looking scalar default:** Every duplicate-looking scalar pair without an existing governed equivalence rule is explicitly distinct by default. Readers, writers, analyses and backfills shall not substitute or coalesce the fields, and differing values do not constitute a conflict solely because the fields look similar. A later equivalence decision must be field-specific and must define authoritative storage, aliases, normalization or unit conversion, conflict behavior, write target, consolidation/backfill disposition, and provenance.
+
 1. The final list of owner-visible entities/fields deliberately excluded from Ask, if any.
 2. Provider and homeowner-text processing approval for semantic interpretation.
 3. Latency and cost budgets for single-stage and two-stage interpretation.
 4. Which recommendation/analysis capabilities require additional materiality disclosures beyond their existing domain rules.
-5. Which currently duplicated scalar fields represent the same business meaning and which are intentionally distinct; until decided, conflicting non-empty values remain `CONFLICTED` rather than silently coalesced.
 
 These decisions do not block Phase 0 inventories, schema design, pure planners, seeded fixtures, or containment of known contradictory/fabricated-answer paths.
 

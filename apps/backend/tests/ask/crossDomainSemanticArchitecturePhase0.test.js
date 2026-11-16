@@ -125,6 +125,23 @@ test('Phase 0 Bullet 2: duplicate/legacy scalar field coalescence manifest mecha
   });
   assert.equal(brandVsManufacturer.state, 'SEPARATE_MEANINGS_NOT_COALESCED');
 
+  const defaultDistinctGroups = ASK_SCALAR_FIELD_COALESCENCE_MANIFEST.filter(
+    (entry) => entry.classification === 'DISTINCT_UNLESS_EQUIVALENCE_APPROVED',
+  );
+  assert.deepEqual(defaultDistinctGroups.map((entry) => entry.semanticFieldGroupId), [
+    'scalar_group.inventory_item.brand_vs_manufacturer',
+    'scalar_group.inventory_item.category_vs_asset_type',
+    'scalar_group.cross_entity.lot_size',
+    'scalar_group.maintenance_task.category_classification',
+  ]);
+  for (const entry of defaultDistinctGroups) {
+    assert.deepEqual(entry.orderedCoalescenceRule, []);
+    assert.equal(entry.conflictBehavior, 'NEVER_COALESCE_SEPARATE_FIELDS');
+    assert.equal(entry.writeTarget, null);
+    assert.equal(entry.backfillDisposition, 'KEEP_SEPARATE_SCHEMA_COLUMNS');
+    assert.equal(evaluateScalarFieldCoalescence(entry.semanticFieldGroupId, {}).state, 'SEPARATE_MEANINGS_NOT_COALESCED');
+  }
+
   const roofYearVsItem = evaluateScalarFieldCoalescence('scalar_group.cross_entity.roof_install_year', {
     'Property.roofReplacementYear': 2021,
     'InventoryItem.installedOn': '2018-06-01T00:00:00.000Z',

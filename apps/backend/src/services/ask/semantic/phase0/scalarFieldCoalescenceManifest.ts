@@ -10,19 +10,19 @@
  *   2. INTENTIONALLY_DISTINCT_BUSINESS_MEANING — distinct domain concepts that
  *      must never be coalesced (for example Property.roofReplacementYear versus
  *      an InventoryItem roof component's installedOn date); or
- *   3. DISTINCT_PENDING_OWNER_DECISION_7 — fields that look similar (such as
- *      InventoryItem.brand versus InventoryItem.manufacturer) and remain separate
- *      until owner decision §22.7 explicitly approves equivalence.
+ *   3. DISTINCT_UNLESS_EQUIVALENCE_APPROVED — fields that look similar are
+ *      separate business meanings by default. Field-specific owner approval is
+ *      required before equivalence, substitution, coalescence, or shared writes.
  */
 import { Prisma } from '@prisma/client';
 import { DATA_POINT_DEFINITIONS } from '../../dataPoint/dataPointCatalogue';
 
-export const ASK_SCALAR_FIELD_COALESCENCE_MANIFEST_VERSION = 'phase0-scalar-coalescence-1.1.0' as const;
+export const ASK_SCALAR_FIELD_COALESCENCE_MANIFEST_VERSION = 'phase0-scalar-coalescence-1.2.0' as const;
 
 export type ScalarFieldDuplicateClassification =
   | 'CANONICAL_WITH_GOVERNED_COALESCENCE'
   | 'INTENTIONALLY_DISTINCT_BUSINESS_MEANING'
-  | 'DISTINCT_PENDING_OWNER_DECISION_7';
+  | 'DISTINCT_UNLESS_EQUIVALENCE_APPROVED';
 
 export type ScalarFieldConflictBehavior =
   | 'CONFLICTED_WITH_PROVENANCE'
@@ -33,8 +33,7 @@ export type ScalarFieldConflictBehavior =
 export type ScalarFieldBackfillDisposition =
   | 'CONSOLIDATE_TO_AUTHORITATIVE_ON_WRITE'
   | 'DERIVED_NORMALIZATION_COLUMN'
-  | 'KEEP_SEPARATE_SCHEMA_COLUMNS'
-  | 'PENDING_OWNER_DECISION_7';
+  | 'KEEP_SEPARATE_SCHEMA_COLUMNS';
 
 export interface ScalarFieldStorageMember {
   readonly model: string;
@@ -78,7 +77,7 @@ export const ASK_SCALAR_FIELD_COALESCENCE_MANIFEST: readonly ScalarFieldCoalesce
     writeTarget: 'InventoryItem.modelNumber',
     backfillDisposition: 'CONSOLIDATE_TO_AUTHORITATIVE_ON_WRITE',
     provenancePreference: 'Prefer InventoryItem.modelNumber when InventoryItem.model is null/blank; if both are non-empty and case-insensitively unequal after trimming, emit CONFLICTED with both column values.',
-    ownerDecisionRef: '§22.7',
+    ownerDecisionRef: 'FR-ONT-2 governed equivalence',
   },
   {
     semanticFieldGroupId: 'scalar_group.inventory_item.serial_identity',
@@ -96,12 +95,12 @@ export const ASK_SCALAR_FIELD_COALESCENCE_MANIFEST: readonly ScalarFieldCoalesce
     writeTarget: 'InventoryItem.serialNumber',
     backfillDisposition: 'CONSOLIDATE_TO_AUTHORITATIVE_ON_WRITE',
     provenancePreference: 'Prefer InventoryItem.serialNumber when InventoryItem.serialNo is null/blank; if both are non-empty and unequal after trimming, emit CONFLICTED.',
-    ownerDecisionRef: '§22.7',
+    ownerDecisionRef: 'FR-ONT-2 governed equivalence',
   },
   {
     semanticFieldGroupId: 'scalar_group.inventory_item.brand_vs_manufacturer',
     domainId: 'domain.inventory',
-    classification: 'DISTINCT_PENDING_OWNER_DECISION_7',
+    classification: 'DISTINCT_UNLESS_EQUIVALENCE_APPROVED',
     businessMeaningSummary: 'Consumer-facing product brand (item.brand) versus legal/OEM manufacturer name (item.manufacturer) and normalized manufacturerNorm.',
     authoritativeStorage: null,
     storageMembers: [
@@ -113,27 +112,27 @@ export const ASK_SCALAR_FIELD_COALESCENCE_MANIFEST: readonly ScalarFieldCoalesce
     blankVersusNullPolicy: 'TRIM_EMPTY_STRING_AS_NULL',
     conflictBehavior: 'NEVER_COALESCE_SEPARATE_FIELDS',
     writeTarget: null,
-    backfillDisposition: 'PENDING_OWNER_DECISION_7',
-    provenancePreference: 'FR-ONT-2 explicit rule: brand and manufacturer remain separate semantic fields (item.brand vs item.manufacturer) until business equivalence is explicitly approved under §22.7.',
-    ownerDecisionRef: '§22.7',
+    backfillDisposition: 'KEEP_SEPARATE_SCHEMA_COLUMNS',
+    provenancePreference: 'FR-ONT-2 explicit rule: brand and manufacturer are separate semantic fields (item.brand vs item.manufacturer). Equivalence requires a new field-specific owner approval.',
+    ownerDecisionRef: '§22 resolved 2026-11-16',
   },
   {
     semanticFieldGroupId: 'scalar_group.inventory_item.category_vs_asset_type',
     domainId: 'domain.inventory',
-    classification: 'DISTINCT_PENDING_OWNER_DECISION_7',
+    classification: 'DISTINCT_UNLESS_EQUIVALENCE_APPROVED',
     businessMeaningSummary: 'Structured InventoryItemCategory enum (category) versus free-text/specialist assetType code on InventoryItem.',
     authoritativeStorage: { model: 'InventoryItem', field: 'category' },
     storageMembers: [
       { model: 'InventoryItem', field: 'category', prismaType: 'InventoryItemCategory', role: 'AUTHORITATIVE', canonicalDataPointId: 'item.category' },
       { model: 'InventoryItem', field: 'assetType', prismaType: 'String', role: 'DISTINCT_PEER', canonicalDataPointId: null },
     ],
-    orderedCoalescenceRule: ['InventoryItem.category'],
+    orderedCoalescenceRule: [],
     blankVersusNullPolicy: 'TRIM_EMPTY_STRING_AS_NULL',
     conflictBehavior: 'NEVER_COALESCE_SEPARATE_FIELDS',
-    writeTarget: 'InventoryItem.category',
-    backfillDisposition: 'PENDING_OWNER_DECISION_7',
+    writeTarget: null,
+    backfillDisposition: 'KEEP_SEPARATE_SCHEMA_COLUMNS',
     provenancePreference: 'Homeowner category queries read InventoryItem.category (enum); assetType is specialist subtype metadata and is not silently substituted for category.',
-    ownerDecisionRef: '§22.7',
+    ownerDecisionRef: '§22 resolved 2026-11-16',
   },
   {
     semanticFieldGroupId: 'scalar_group.insurance_policy.deductible',
@@ -151,7 +150,7 @@ export const ASK_SCALAR_FIELD_COALESCENCE_MANIFEST: readonly ScalarFieldCoalesce
     writeTarget: 'InsurancePolicy.deductibleAmount',
     backfillDisposition: 'CONSOLIDATE_TO_AUTHORITATIVE_ON_WRITE',
     provenancePreference: 'Coalesce when only one representation is populated or when Math.round(Number(deductibleAmount) * 100) === deductibleCents; otherwise emit CONFLICTED.',
-    ownerDecisionRef: '§22.7',
+    ownerDecisionRef: 'FR-ONT-2 governed equivalence',
   },
   {
     semanticFieldGroupId: 'scalar_group.property.postal_code',
@@ -207,30 +206,30 @@ export const ASK_SCALAR_FIELD_COALESCENCE_MANIFEST: readonly ScalarFieldCoalesce
     writeTarget: null,
     backfillDisposition: 'KEEP_SEPARATE_SCHEMA_COLUMNS',
     provenancePreference: 'Property-level summary install years (used when no inventory item exists) are distinct from specific InventoryItem.installedOn timestamps.',
-    ownerDecisionRef: '§22.7',
+    ownerDecisionRef: 'FR-ONT-2 distinct semantics',
   },
   {
     semanticFieldGroupId: 'scalar_group.cross_entity.lot_size',
     domainId: 'domain.property_profile',
-    classification: 'DISTINCT_PENDING_OWNER_DECISION_7',
+    classification: 'DISTINCT_UNLESS_EQUIVALENCE_APPROVED',
     businessMeaningSummary: 'Property.lotSize (Float) versus PropertyExteriorProfile.lotSizeSqFt (Float, exposed in Property Context as exterior.lotSizeSqFt).',
     authoritativeStorage: { model: 'PropertyExteriorProfile', field: 'lotSizeSqFt' },
     storageMembers: [
       { model: 'PropertyExteriorProfile', field: 'lotSizeSqFt', prismaType: 'Float', role: 'AUTHORITATIVE', canonicalDataPointId: null },
       { model: 'Property', field: 'lotSize', prismaType: 'Float', role: 'LEGACY_ALIAS', canonicalDataPointId: null },
     ],
-    orderedCoalescenceRule: ['PropertyExteriorProfile.lotSizeSqFt'],
+    orderedCoalescenceRule: [],
     blankVersusNullPolicy: 'TRIM_EMPTY_STRING_AS_NULL',
-    conflictBehavior: 'CONFLICTED_WITH_PROVENANCE',
-    writeTarget: 'PropertyExteriorProfile.lotSizeSqFt',
-    backfillDisposition: 'PENDING_OWNER_DECISION_7',
-    provenancePreference: 'Property.lotSize lacks explicit units in legacy rows (acres vs sq ft), whereas PropertyExteriorProfile.lotSizeSqFt is explicitly square feet; never silently coalesce without unit verification.',
-    ownerDecisionRef: '§22.7',
+    conflictBehavior: 'NEVER_COALESCE_SEPARATE_FIELDS',
+    writeTarget: null,
+    backfillDisposition: 'KEEP_SEPARATE_SCHEMA_COLUMNS',
+    provenancePreference: 'Property.lotSize lacks explicit units in legacy rows, whereas PropertyExteriorProfile.lotSizeSqFt is explicitly square feet. They remain distinct and are never silently converted or coalesced.',
+    ownerDecisionRef: '§22 resolved 2026-11-16',
   },
   {
     semanticFieldGroupId: 'scalar_group.maintenance_task.category_classification',
     domainId: 'domain.maintenance',
-    classification: 'DISTINCT_PENDING_OWNER_DECISION_7',
+    classification: 'DISTINCT_UNLESS_EQUIVALENCE_APPROVED',
     businessMeaningSummary: 'PropertyMaintenanceTask classification fields: serviceCategory (ServiceCategory enum), category (String), and assetType (String).',
     authoritativeStorage: { model: 'PropertyMaintenanceTask', field: 'serviceCategory' },
     storageMembers: [
@@ -238,13 +237,13 @@ export const ASK_SCALAR_FIELD_COALESCENCE_MANIFEST: readonly ScalarFieldCoalesce
       { model: 'PropertyMaintenanceTask', field: 'category', prismaType: 'String', role: 'LEGACY_ALIAS', canonicalDataPointId: null },
       { model: 'PropertyMaintenanceTask', field: 'assetType', prismaType: 'String', role: 'DISTINCT_PEER', canonicalDataPointId: null },
     ],
-    orderedCoalescenceRule: ['PropertyMaintenanceTask.serviceCategory', 'PropertyMaintenanceTask.category'],
+    orderedCoalescenceRule: [],
     blankVersusNullPolicy: 'TRIM_EMPTY_STRING_AS_NULL',
-    conflictBehavior: 'CONFLICTED_WITH_PROVENANCE',
-    writeTarget: 'PropertyMaintenanceTask.serviceCategory',
-    backfillDisposition: 'PENDING_OWNER_DECISION_7',
-    provenancePreference: 'Prefer structured ServiceCategory enum; if free-text category disagrees with serviceCategory, emit CONFLICTED until consolidated.',
-    ownerDecisionRef: '§22.7',
+    conflictBehavior: 'NEVER_COALESCE_SEPARATE_FIELDS',
+    writeTarget: null,
+    backfillDisposition: 'KEEP_SEPARATE_SCHEMA_COLUMNS',
+    provenancePreference: 'Service category, free-text category, and asset type remain separate classifications; none substitutes for or conflicts with another solely because their values differ.',
+    ownerDecisionRef: '§22 resolved 2026-11-16',
   },
   {
     semanticFieldGroupId: 'scalar_group.cross_entity.target_closing_date',
@@ -688,6 +687,19 @@ export function validateScalarFieldCoalescenceManifest(
       }
       if (entry.orderedCoalescenceRule.length < 2) {
         issues.push(`${entry.semanticFieldGroupId}: CANONICAL_WITH_GOVERNED_COALESCENCE requires at least 2 orderedCoalescenceRule sources`);
+      }
+    } else if (entry.classification === 'DISTINCT_UNLESS_EQUIVALENCE_APPROVED') {
+      if (entry.orderedCoalescenceRule.length !== 0) {
+        issues.push(`${entry.semanticFieldGroupId}: DISTINCT_UNLESS_EQUIVALENCE_APPROVED prohibits ordered coalescence sources`);
+      }
+      if (entry.conflictBehavior !== 'NEVER_COALESCE_SEPARATE_FIELDS') {
+        issues.push(`${entry.semanticFieldGroupId}: DISTINCT_UNLESS_EQUIVALENCE_APPROVED requires NEVER_COALESCE_SEPARATE_FIELDS`);
+      }
+      if (entry.writeTarget !== null) {
+        issues.push(`${entry.semanticFieldGroupId}: DISTINCT_UNLESS_EQUIVALENCE_APPROVED prohibits a shared write target`);
+      }
+      if (entry.backfillDisposition !== 'KEEP_SEPARATE_SCHEMA_COLUMNS') {
+        issues.push(`${entry.semanticFieldGroupId}: DISTINCT_UNLESS_EQUIVALENCE_APPROVED requires KEEP_SEPARATE_SCHEMA_COLUMNS`);
       }
     }
   }
