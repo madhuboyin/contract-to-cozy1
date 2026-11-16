@@ -418,6 +418,126 @@ function buildEligibleJobsByDomain(): Readonly<Record<string, readonly string[]>
   return map;
 }
 
+function whereHasPredicate(where: SemanticWhereExpression | null | undefined, predicateId: string): boolean {
+  if (!where) return false;
+  if (where.kind === 'PREDICATE') {
+    return where.predicateId === predicateId;
+  }
+  if (where.kind === 'NOT') {
+    return whereHasPredicate(where.operand, predicateId);
+  }
+  return where.operands.some((operand) => whereHasPredicate(operand, predicateId));
+}
+
+function mergeWhereAnd(
+  left: SemanticWhereExpression | null | undefined,
+  right: SemanticWhereExpression,
+): SemanticWhereExpression {
+  if (!left) return right;
+  if (left.kind === 'AND') {
+    return { kind: 'AND', operands: [...left.operands, right] };
+  }
+  return { kind: 'AND', operands: [left, right] };
+}
+
+function applyAuthorizedPlaceholderBindings(input: {
+  readonly proposal: StageTwoFacetProposal;
+  readonly facetRawSpan: SemanticSourceSpan;
+  readonly envelope: SemanticTextEnvelope;
+  readonly dynamicQuotes?: readonly DynamicQuoteCandidate[];
+}): {
+  readonly subject: StageTwoFacetProposal['subject'];
+  readonly relations: StageTwoFacetProposal['relations'];
+  readonly where: StageTwoFacetProposal['where'];
+  readonly requiredSlots: StageTwoFacetProposal['requiredSlots'];
+} {
+  const { proposal, facetRawSpan, envelope, dynamicQuotes } = input;
+  const intersecting = envelope.spanMap.filter(
+    (entry) =>
+      entry.authorizedCandidate !== null
+      && !(entry.rawEnd <= facetRawSpan.start || entry.rawStart >= facetRawSpan.end),
+  );
+  const authorizedEntries = intersecting.length > 0
+    ? intersecting
+    : envelope.spanMap.filter((entry) => entry.authorizedCandidate !== null);
+
+  let subject = proposal.subject;
+  if (subject && !subject.recordId) {
+    const matchingSubjectEntry = authorizedEntries.find(
+      (entry) => entry.authorizedCandidate?.entityId === subject!.entityId,
+    );
+    if (matchingSubjectEntry?.authorizedCandidate) {
+      subject = {
+        ...subject,
+        recordId: matchingSubjectEntry.authorizedCandidate.recordId,
+      };
+    }
+  }
+
+  let relations = [...proposal.relations];
+  let where = proposal.where;
+  let requiredSlots = [...proposal.requiredSlots];
+
+  // Bind authorized property room constraint onto item queries when a dynamic ROOM placeholder appears in scope.
+  if (subject?.entityId === 'entity.inventory_item') {
+    const roomEntry = authorizedEntries.find(
+      (entry) => entry.kind === 'ROOM' && entry.authorizedCandidate?.entityId === 'entity.room',
+    );
+    if (roomEntry?.authorizedCandidate && !whereHasPredicate(where, 'predicate.inventory_item.in_room')) {
+      where = mergeWhereAnd(where, {
+        kind: 'PREDICATE',
+        predicateId: 'predicate.inventory_item.in_room',
+        relationPathId: 'path.inventory_item.room',
+        targetRecordId: roomEntry.authorizedCandidate.recordId,
+      });
+      if (!relations.some((rel) => rel.semanticRelationId === 'relation.inventory_item.room')) {
+        relations.push({
+          semanticRelationId: 'relation.inventory_item.room',
+          predicateId: 'predicate.inventory_item.in_room',
+          targetEntityId: 'entity.room',
+        });
+      }
+    }
+  }
+
+  // Bind authorized contractor quote IDs onto quote comparisons when dynamic vendors or quotes appear in scope.
+  if (proposal.jobMatch === 'job.projects.quote_comparison') {
+    const vendorIds = authorizedEntries
+      .filter((entry) => entry.kind === 'VENDOR' && entry.authorizedCandidate?.entityId === 'entity.contractor_quote')
+      .map((entry) => entry.authorizedCandidate!.recordId);
+    const dynamicQuoteMatches = (dynamicQuotes ?? [])
+      .filter((q) => q.vendorName.trim().length > 0 && facetRawSpan.text.toLowerCase().includes(q.vendorName.trim().toLowerCase()))
+      .map((q) => q.id);
+    const uniqueQuoteIds = Array.from(new Set([...vendorIds, ...dynamicQuoteMatches]));
+    if (uniqueQuoteIds.length >= 2 && !whereHasPredicate(where, 'predicate.contractor_quote.compared_in_scope')) {
+      const boundIds = uniqueQuoteIds.slice(0, 2);
+      where = mergeWhereAnd(where, {
+        kind: 'PREDICATE',
+        predicateId: 'predicate.contractor_quote.compared_in_scope',
+        relationPathId: 'path.contractor_quote.comparison',
+        targetCategorySet: boundIds,
+      });
+      if (!relations.some((rel) => rel.semanticRelationId === 'relation.contractor_quote.comparison')) {
+        relations.push({
+          semanticRelationId: 'relation.contractor_quote.comparison',
+          predicateId: 'predicate.contractor_quote.compared_in_scope',
+          targetEntityId: 'entity.contractor_quote',
+        });
+      }
+      requiredSlots = requiredSlots.map((slot) =>
+        slot.slotId === 'slot.quotes.two_resolved_quotes'
+          ? { ...slot, state: 'RESOLVED' as const }
+          : slot,
+      );
+      if (!requiredSlots.some((slot) => slot.slotId === 'slot.quotes.two_resolved_quotes')) {
+        requiredSlots.push({ slotId: 'slot.quotes.two_resolved_quotes', state: 'RESOLVED' });
+      }
+    }
+  }
+
+  return { subject, relations, where, requiredSlots };
+}
+
 export interface TwoStageRetrievalResult {
   readonly status: 'MATCH' | 'NONE_FITS' | 'PROVIDER_UNAVAILABLE' | 'SCHEMA_INVALID';
   readonly plan: SemanticRequestPlan;
@@ -674,28 +794,35 @@ export async function executeTwoStageProviderRetrieval(input: {
         if (!canonicalDomain) {
           throw new ProviderSchemaValidationError(`invalid_provider_domain:${proposal.domainId}`);
         }
+        const facetRawSpan: SemanticSourceSpan = { start: 0, end: input.rawText.length, text: input.rawText };
+        const bound = applyAuthorizedPlaceholderBindings({
+          proposal,
+          facetRawSpan,
+          envelope,
+          dynamicQuotes: input.dynamicQuotes,
+        });
         return {
           id: proposal.stableFacetId || `facet-${index + 1}`,
-          sourceSpan: { start: 0, end: input.rawText.length, text: input.rawText },
+          sourceSpan: facetRawSpan,
           requestClass: proposal.requestClass,
           domainCandidates: [{ id: canonicalDomain, score: 0.9 }],
-          subject: proposal.subject,
-          relations: [...proposal.relations],
+          subject: bound.subject,
+          relations: bound.relations,
           polarity: proposal.polarity,
           projection: proposal.projection,
           fields: [...proposal.fields],
-          where: proposal.where,
+          where: bound.where,
           sort: [],
           limit: null,
           time: proposal.time,
           groupBy: [],
           targetCandidates: [{ id: proposal.jobMatch, score: 0.9 }],
-          requiredSlots: [...proposal.requiredSlots],
+          requiredSlots: bound.requiredSlots,
           dependsOn: [...(proposal.dependsOn ?? [])],
           evidence: {
             jobMatch: proposal.jobMatch,
-            subjectNamed: proposal.subject !== null,
-            relationNamed: proposal.relations.length > 0,
+            subjectNamed: bound.subject !== null,
+            relationNamed: bound.relations.length > 0,
             projectionNamed: true,
             polarityNamed: proposal.polarity !== null,
           },
@@ -963,28 +1090,34 @@ export async function executeTwoStageProviderRetrieval(input: {
       continue;
     }
     const safeDependsOn = assignment.dependsOnStableIds.filter((depId) => admittedIdSet.has(depId));
+    const bound = applyAuthorizedPlaceholderBindings({
+      proposal,
+      facetRawSpan: assignment.rawSpan,
+      envelope,
+      dynamicQuotes: input.dynamicQuotes,
+    });
     builtFacets.push({
       id: assignment.stableFacetId,
       sourceSpan: assignment.rawSpan,
       requestClass: proposal.requestClass,
       domainCandidates: [...assignment.domainCandidates],
-      subject: proposal.subject,
-      relations: [...proposal.relations],
+      subject: bound.subject,
+      relations: [...bound.relations],
       polarity: proposal.polarity,
       projection: proposal.projection,
       fields: [...proposal.fields],
-      where: proposal.where,
+      where: bound.where,
       sort: [],
       limit: null,
       time: proposal.time,
       groupBy: [],
       targetCandidates: [{ id: proposal.jobMatch, score: assignment.domainCandidates[0]?.score ?? 0.88 }],
-      requiredSlots: [...proposal.requiredSlots],
+      requiredSlots: [...bound.requiredSlots],
       dependsOn: safeDependsOn,
       evidence: {
         jobMatch: proposal.jobMatch,
-        subjectNamed: proposal.subject !== null,
-        relationNamed: proposal.relations.length > 0,
+        subjectNamed: bound.subject !== null,
+        relationNamed: bound.relations.length > 0,
         projectionNamed: true,
         polarityNamed: proposal.polarity !== null,
       },

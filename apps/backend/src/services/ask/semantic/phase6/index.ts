@@ -9,12 +9,15 @@ export interface Phase6SummaryOutput {
   readonly evaluatedAt: string;
   readonly evaluationNature: 'SEALED_PROXY';
   readonly isRealHomeownerTrafficDistribution: false;
+  readonly sealedProxyInvariantsPassed: boolean;
+  readonly statisticalWilsonClaimStatus: 'PASSED' | 'INSUFFICIENT_INDEPENDENT_SAMPLES';
   readonly passed: boolean;
   readonly passedGateCount: number;
   readonly totalGateCount: number;
   readonly failedDomains: readonly string[];
   readonly failedStrata: readonly string[];
   readonly totalMetricCountCovered: number;
+  readonly calibrationObservedZeroErrorPassed: boolean;
   readonly calibrationOverallPassed: boolean;
   readonly providerTrackPCompleted: boolean;
   readonly liveExternalRuntimePendingApproval: boolean;
@@ -33,9 +36,10 @@ export async function buildPhase6CalibrationAndEvaluationSummary(): Promise<Phas
     0,
   );
   const summaryLines = [
-    `Ask Phase 6 Evaluation (${report.version}): ${report.passed ? 'PASSED' : 'FAILED'} [${report.evaluationNature}, isRealHomeownerTrafficDistribution=${String(report.isRealHomeownerTrafficDistribution)}]`,
+    `Ask Phase 6 Evaluation (${report.version}): invariants=${report.sealedProxyInvariantsPassed ? 'PASSED' : 'FAILED'}, fullWilson1PctClaim=${report.passed ? 'PASSED' : report.statisticalWilsonClaimStatus} [${report.evaluationNature}, isRealHomeownerTrafficDistribution=${String(report.isRealHomeownerTrafficDistribution)}]`,
     `FR-EVAL-4 Product Gates: ${passedGateCount}/${totalGateCount} passed`,
-    `Risk-Stratified Calibration: ${report.riskStratifiedCalibration.overallPassed ? 'PASSED' : 'FAILED'} (maxStratumECE=${maxStratumEce.toFixed(4)}, incorrectHighConfidence=${report.riskStratifiedCalibration.totalIncorrectHighConfidence})`,
+    `Risk-Stratified Calibration: observedZeroError=${report.riskStratifiedCalibration.observedZeroErrorPassed ? 'PASSED' : 'FAILED'}, wilsonUnder1PctBound=${report.riskStratifiedCalibration.overallPassed ? 'PASSED' : 'INSUFFICIENT_INDEPENDENT_SAMPLES'} (independentObs=${report.riskStratifiedCalibration.totalObservations}, maxStratumECE=${maxStratumEce.toFixed(4)}, incorrectHighConfidence=${report.riskStratifiedCalibration.totalIncorrectHighConfidence})`,
+    `Correlated Metamorphic Evidence (FR-EVAL-5, separate from Wilson n): passed=${String(report.correlatedMetamorphicEvidence.suitePassed)}, domainPairs=${report.correlatedMetamorphicEvidence.passedPairs}/${report.correlatedMetamorphicEvidence.totalPairsEvaluated}, phase6Variants=${report.correlatedMetamorphicEvidence.phase6InvarianceVariantsPassed}/${report.correlatedMetamorphicEvidence.phase6InvarianceVariantsChecked}`,
     `End-to-End Sealed Proxy Resolved: macro=${(report.frEval3Metrics.endToEndResolvedRateMacroByDomain * 100).toFixed(1)}%, weighted=${(report.frEval3Metrics.endToEndResolvedRateWeighted * 100).toFixed(1)}%, wrongAnswerRate=${(report.frEval3Metrics.wrongAnswerRate * 100).toFixed(2)}%`,
     `Deterministic vs Provider: detCoverage=${(report.frEval3Metrics.deterministicParserCoverageRate * 100).toFixed(1)}%, providerIncremental=${(report.frEval3Metrics.providerExpandedIncrementalCoverageRate * 100).toFixed(1)}%, disagreements=${report.frEval3Metrics.producerDisagreementCount}`,
     `Security & Replay: spanRoundTrip=${(report.frEval3Metrics.protectedSpanRoundTripAccuracy * 100).toFixed(1)}%, replayRedaction=${(report.frEval3Metrics.replayReauthorizationRedactionAccuracy * 100).toFixed(1)}%, maxBatchQueries=${report.frEval3Metrics.replayQueryCountBounds.maxQueryCount}`,
@@ -47,12 +51,15 @@ export async function buildPhase6CalibrationAndEvaluationSummary(): Promise<Phas
     evaluatedAt: report.evaluatedAt,
     evaluationNature: report.evaluationNature,
     isRealHomeownerTrafficDistribution: report.isRealHomeownerTrafficDistribution,
+    sealedProxyInvariantsPassed: report.sealedProxyInvariantsPassed,
+    statisticalWilsonClaimStatus: report.statisticalWilsonClaimStatus,
     passed: report.passed,
     passedGateCount,
     totalGateCount,
     failedDomains: report.failedDomains,
     failedStrata: report.failedStrata,
     totalMetricCountCovered: frEval3KeyCount,
+    calibrationObservedZeroErrorPassed: report.riskStratifiedCalibration.observedZeroErrorPassed,
     calibrationOverallPassed: report.riskStratifiedCalibration.overallPassed,
     providerTrackPCompleted: report.providerTrackPStatus.trackCompleted,
     liveExternalRuntimePendingApproval: report.providerTrackPStatus.liveExternalRuntimePendingApproval,

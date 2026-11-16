@@ -14,6 +14,8 @@ import {
   type Phase2aRichPresentationEquivalenceReport,
 } from '../phase2a/phase2aRichPresentationAdapter';
 import { prisma } from '../../../../lib/prisma';
+import { visibleInventoryItemWhere } from '../../../riskAssetApplicability';
+import { type DynamicPlaceholderEntityCandidate } from '../phase2a/placeholderSpanMap';
 import { type AskPresentationBlock } from '../../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../../askOperationRegistry';
 import { getAskSavedPage } from '../../askSaved.service';
@@ -2815,6 +2817,108 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
       ...(primaryReceipt ? { semanticExecutionReceipt: primaryReceipt } : {}),
     },
   };
+}
+
+export interface AuthorizedProviderContext {
+  readonly dynamicEntities: readonly DynamicPlaceholderEntityCandidate[];
+  readonly dynamicQuotes: readonly DynamicQuoteCandidate[];
+}
+
+/**
+ * Loads lightweight authorized property-backed entity names and quote candidates
+ * so homeowner-specific item, room, and contractor/quote identifiers are converted
+ * into indexed placeholders before external provider calls (FR-PLAN-3 / FR-ENT).
+ */
+export async function loadAuthorizedProviderContext(propertyId: string): Promise<AuthorizedProviderContext> {
+  const prismaAny = prisma as unknown as Record<string, { findMany?: Function } | undefined>;
+  const [rooms, items, quotes] = await Promise.all([
+    typeof prismaAny.inventoryRoom?.findMany === 'function'
+      ? prisma.inventoryRoom.findMany({
+          where: { propertyId },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([]),
+    typeof prismaAny.inventoryItem?.findMany === 'function'
+      ? prisma.inventoryItem.findMany({
+          where: { propertyId, ...visibleInventoryItemWhere() },
+          select: { id: true, name: true, brand: true, modelNumber: true },
+        })
+      : Promise.resolve([]),
+    typeof prismaAny.quoteComparisonQuote?.findMany === 'function'
+      ? prisma.quoteComparisonQuote.findMany({
+          where: { workspace: { propertyId } },
+          orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+          select: { id: true, vendorName: true, quoteAmount: true, serviceLocation: true, serviceCategory: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const dynamicEntities: DynamicPlaceholderEntityCandidate[] = [];
+  for (const room of rooms as Array<{ id: string; name?: string | null }>) {
+    const name = typeof room.name === 'string' ? room.name.trim() : '';
+    if (!name) continue;
+    dynamicEntities.push({
+      kind: 'ROOM',
+      entityId: 'entity.room',
+      recordId: room.id,
+      names: [name],
+      authorized: true,
+      safeDisplayLabel: name,
+    });
+  }
+
+  for (const item of items as Array<{ id: string; name?: string | null; brand?: string | null; modelNumber?: string | null }>) {
+    const name = typeof item.name === 'string' ? item.name.trim() : '';
+    const brand = typeof item.brand === 'string' ? item.brand.trim() : '';
+    const model = typeof item.modelNumber === 'string' ? item.modelNumber.trim() : '';
+    const candidateNames = Array.from(
+      new Set(
+        [
+          name,
+          brand && model ? `${brand} ${model}` : '',
+          brand && name ? `${brand} ${name}` : '',
+          model,
+        ].filter((val) => val.length > 0),
+      ),
+    );
+    if (candidateNames.length === 0) continue;
+    dynamicEntities.push({
+      kind: 'ITEM',
+      entityId: 'entity.inventory_item',
+      recordId: item.id,
+      names: candidateNames,
+      authorized: true,
+      safeDisplayLabel: name || candidateNames[0],
+    });
+  }
+
+  const dynamicQuotes: DynamicQuoteCandidate[] = [];
+  for (const quote of quotes as Array<{
+    id: string;
+    vendorName?: string | null;
+    quoteAmount?: unknown;
+    serviceLocation?: string | null;
+    serviceCategory?: string | null;
+  }>) {
+    const vendorName = typeof quote.vendorName === 'string' ? quote.vendorName.trim() : '';
+    if (!vendorName) continue;
+    dynamicQuotes.push({
+      id: quote.id,
+      vendorName,
+      roomTag: quote.serviceLocation ?? quote.serviceCategory ?? 'GENERAL',
+      amountCents: toCents(quote.quoteAmount),
+    });
+    dynamicEntities.push({
+      kind: 'VENDOR',
+      entityId: 'entity.contractor_quote',
+      recordId: quote.id,
+      names: [vendorName],
+      authorized: true,
+      safeDisplayLabel: vendorName,
+    });
+  }
+
+  return { dynamicEntities, dynamicQuotes };
 }
 
 /**

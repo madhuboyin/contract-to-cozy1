@@ -466,6 +466,8 @@ export interface Phase6EvaluationReport {
     readonly policy: SemanticProviderPolicy;
     readonly liveExternalRuntimePendingApproval: boolean;
   };
+  readonly sealedProxyInvariantsPassed: boolean;
+  readonly statisticalWilsonClaimStatus: 'PASSED' | 'INSUFFICIENT_INDEPENDENT_SAMPLES';
   readonly passed: boolean;
   readonly frEval3Metrics: {
     readonly planSchemaValidRate: number;
@@ -530,6 +532,15 @@ export interface Phase6EvaluationReport {
     readonly passed: boolean;
   }[];
   readonly riskStratifiedCalibration: RiskStratifiedCalibrationReport;
+  readonly correlatedMetamorphicEvidence: {
+    readonly suitePassed: boolean;
+    readonly totalPairsEvaluated: number;
+    readonly passedPairs: number;
+    readonly axesCovered: readonly string[];
+    readonly phase6InvarianceVariantsChecked: number;
+    readonly phase6InvarianceVariantsPassed: number;
+    readonly note: string;
+  };
   readonly failedDomains: readonly SemanticDomainId[];
   readonly failedStrata: readonly SemanticRiskStratum[];
   readonly requirementToEvidenceMatrix: readonly RequirementEvidenceEntry[];
@@ -862,163 +873,85 @@ export async function runPhase6EndToEndEvaluation(options: {
     });
   }
 
-  // Expand each of the 6 risk strata via deterministic meaning-preserving casing/punctuation/
-  // whitespace/timezone/role transformations executed through the live Ask semantic pipeline
-  // until every stratum reaches >= 385 real sealed-proxy observations (FR-EVAL-4 Wilson < 1%).
-  const TARGET_OBSERVATIONS_PER_STRATUM = 385;
-  const CALIBRATION_CASINGS = ['ORIGINAL', 'LOWER', 'UPPER'] as const;
-  const CALIBRATION_LEAD_SPACES = ['', ' ', '  '] as const;
-  const CALIBRATION_TIMEZONES = [
-    'America/New_York',
-    'America/Chicago',
-    'America/Denver',
-    'America/Los_Angeles',
-    'America/Phoenix',
-    'Pacific/Honolulu',
-    'UTC',
-  ] as const;
-  const CALIBRATION_PUNCTUATION = ['', '?', '.', ' ?', '  ?'] as const;
-  const CALIBRATION_ROLES = ['OWNER', 'EDITOR'] as const;
+  // Run correlated meaning-preserving metamorphic invariance checks separately (casing,
+  // punctuation, whitespace, timezone, role) so they are reported strictly as metamorphic
+  // robustness evidence (FR-EVAL-5) and NEVER counted as independent binomial trials toward
+  // FR-EVAL-4 Wilson 95% confidence bounds.
+  const METAMORPHIC_CASINGS = ['LOWER', 'UPPER'] as const;
+  const METAMORPHIC_PUNCTUATION = ['', '?', '.'] as const;
+  const METAMORPHIC_LEAD_SPACES = ['', ' '] as const;
+  const METAMORPHIC_TIMEZONES = ['America/New_York', 'America/Los_Angeles', 'UTC'] as const;
 
-  const orderedStrataForSweep: readonly SemanticRiskStratum[] = [
-    'REVERSIBLE_PROPERTY_READ',
-    'AGGREGATE_OR_COMPARISON_READ',
-    'RECOMMENDATION_OR_MATERIAL_ANALYSIS',
-    'AMBIGUOUS_SLOT_OR_ENTITY',
-    'WRITE_OR_CONSEQUENTIAL_ACTION',
-    'SAFETY_OR_RESTRICTED_BOUNDARY',
-  ];
+  let phase6InvarianceVariantsChecked = 0;
+  let phase6InvarianceVariantsPassed = 0;
+  let variantIdx = 0;
 
-  for (const stratum of orderedStrataForSweep) {
-    let stratumCount = calibrationObservations.filter((obs) => obs.stratum === stratum).length;
-    const stratumSeeds = PHASE6_SEALED_EVALUATION_CASES.filter((c) => c.expectedStratum === stratum);
-    let variantIdx = 0;
+  for (const seed of PHASE6_SEALED_EVALUATION_CASES) {
+    const casing = METAMORPHIC_CASINGS[variantIdx % METAMORPHIC_CASINGS.length];
+    const punct = METAMORPHIC_PUNCTUATION[variantIdx % METAMORPHIC_PUNCTUATION.length];
+    const lead = METAMORPHIC_LEAD_SPACES[variantIdx % METAMORPHIC_LEAD_SPACES.length];
+    const tz = METAMORPHIC_TIMEZONES[variantIdx % METAMORPHIC_TIMEZONES.length];
+    const roleForVariant =
+      seed.role ?? (seed.kind === 'WRITE_PREVIEW' ? 'OWNER' : (variantIdx % 2 === 0 ? 'OWNER' : 'EDITOR'));
+    variantIdx += 1;
 
-    while (stratumCount < TARGET_OBSERVATIONS_PER_STRATUM && stratumSeeds.length > 0) {
-      const seed = stratumSeeds[variantIdx % stratumSeeds.length];
-      let cursor = Math.floor(variantIdx / stratumSeeds.length);
-      const casing = CALIBRATION_CASINGS[cursor % CALIBRATION_CASINGS.length];
-      cursor = Math.floor(cursor / CALIBRATION_CASINGS.length);
-      const punct = CALIBRATION_PUNCTUATION[cursor % CALIBRATION_PUNCTUATION.length];
-      cursor = Math.floor(cursor / CALIBRATION_PUNCTUATION.length);
-      const lead = CALIBRATION_LEAD_SPACES[cursor % CALIBRATION_LEAD_SPACES.length];
-      cursor = Math.floor(cursor / CALIBRATION_LEAD_SPACES.length);
-      const tz = CALIBRATION_TIMEZONES[cursor % CALIBRATION_TIMEZONES.length];
-      cursor = Math.floor(cursor / CALIBRATION_TIMEZONES.length);
-      const roleForVariant =
-        seed.role ?? (seed.kind === 'WRITE_PREVIEW' ? 'OWNER' : CALIBRATION_ROLES[cursor % CALIBRATION_ROLES.length]);
+    const corePrompt = seed.prompt.replace(/[?.]+$/, '');
+    const casedPrompt = casing === 'LOWER' ? corePrompt.toLowerCase() : corePrompt.toUpperCase();
+    const variantPrompt = `${lead}${casedPrompt}${punct}`;
+    const variantSnapshotBase = seed.useMissingDataSnapshot ? missingSnapshot : baseSnapshot;
+    const variantSnapshot: CrossDomainPropertySnapshot = {
+      ...variantSnapshotBase,
+      timezone: tz,
+    };
 
-      const corePrompt = seed.prompt.replace(/[?.]+$/, '');
-      const casedPrompt =
-        casing === 'LOWER'
-          ? corePrompt.toLowerCase()
-          : casing === 'UPPER'
-            ? corePrompt.toUpperCase()
-            : corePrompt;
-      const variantPrompt = `${lead}${casedPrompt}${punct}`;
-      const variantSnapshotBase = seed.useMissingDataSnapshot ? missingSnapshot : baseSnapshot;
-      const variantSnapshot: CrossDomainPropertySnapshot = {
-        ...variantSnapshotBase,
-        timezone: tz,
-      };
-      variantIdx += 1;
+    phase6InvarianceVariantsChecked += 1;
 
-      if (seed.kind === 'OUT_OF_SCOPE_PROBE') {
-        const out = await interpretWithSemanticProducers({
-          rawText: variantPrompt,
-          evaluationMode: 'DUAL_PRODUCER',
-          provider: offlineProvider,
-          policy,
-          dynamicQuotes,
-        });
-        const acceptedHigh = out.plan.outcome === 'MATCH';
-        calibrationObservations.push({
-          caseId: `${seed.caseId}-cal-${variantIdx}`,
-          stratum,
-          rawScore: acceptedHigh ? 0.9 : 0.25,
-          highConfidenceAdmitted: acceptedHigh,
-          correct: !acceptedHigh,
-          isOutOfScopeProbe: true,
-        });
-        stratumCount += 1;
-        continue;
-      }
-
-      if (seed.kind === 'WRITE_PREVIEW') {
-        const phase2aRes = executePhase2aVerticalSlice({
-          rawText: variantPrompt,
-          snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
-          auth: PHASE2A_OWNER_AUTH,
-        });
-        const isPreviewOnly =
-          phase2aRes.operationResult.status === 'NEEDS_CONFIRMATION'
-          && Boolean(phase2aRes.operationResult.confirmation);
-        const conf = extractMultidimensionalConfidence({
-          stratum,
-          facet: phase2aRes.plan.facets[0],
-          entityResolved: true,
-          producerKind: 'DETERMINISTIC',
-          providerAvailable: true,
-          shortCircuitedProvider: false,
-          schemaValid: phase2aRes.plan.outcome === 'MATCH',
-        });
-        calibrationObservations.push({
-          caseId: `${seed.caseId}-cal-${variantIdx}`,
-          stratum,
-          rawScore: conf.compositeScore,
-          highConfidenceAdmitted: isPreviewOnly,
-          correct: isPreviewOnly,
-        });
-        stratumCount += 1;
-        continue;
-      }
-
-      const orchestrated = await interpretWithSemanticProducers({
+    if (seed.kind === 'OUT_OF_SCOPE_PROBE') {
+      const out = await interpretWithSemanticProducers({
         rawText: variantPrompt,
-        evaluationMode: seed.kind === 'PROVIDER_PARAPHRASE' ? 'DUAL_PRODUCER' : 'PRODUCTION_SHORT_CIRCUIT',
+        evaluationMode: 'DUAL_PRODUCER',
         provider: offlineProvider,
         policy,
         dynamicQuotes,
       });
-      const execRes = await executeCrossDomainWaves({
+      if (out.plan.outcome !== 'MATCH') {
+        phase6InvarianceVariantsPassed += 1;
+      }
+      continue;
+    }
+
+    if (seed.kind === 'WRITE_PREVIEW') {
+      const phase2aRes = executePhase2aVerticalSlice({
         rawText: variantPrompt,
-        snapshot: variantSnapshot,
-        role: roleForVariant,
-        propertyAuthorized: seed.propertyAuthorized ?? true,
-        planOverride: orchestrated.reconciliationStatus === 'PROVIDER_INCREMENTAL' ? orchestrated.plan : undefined,
+        snapshot: PHASE2A_SEEDED_PROPERTY_SNAPSHOT,
+        auth: PHASE2A_OWNER_AUTH,
       });
-      const expectedOk =
-        seed.kind === 'CONFLICTED'
-          ? execRes.status === 'ANSWERED'
-          : execRes.status === seed.expectedExecutionStatus;
-      const conf = extractMultidimensionalConfidence({
-        stratum,
-        facet: orchestrated.plan.facets[0] ?? null,
-        entityResolved: Boolean(
-          orchestrated.plan.facets[0]?.subject
-          || execRes.status === 'BOUNDARY'
-          || execRes.status === 'CLARIFY',
-        ),
-        producerKind: orchestrated.reconciliationStatus === 'AGREED'
-          ? 'RECONCILED'
-          : orchestrated.reconciliationStatus === 'PROVIDER_INCREMENTAL'
-            ? 'PROVIDER'
-            : 'DETERMINISTIC',
-        providerAvailable: true,
-        shortCircuitedProvider: orchestrated.shortCircuitedProvider,
-        schemaValid:
-          orchestrated.plan.outcome === 'MATCH'
-          || orchestrated.plan.outcome === 'BOUNDARY'
-          || Boolean(orchestrated.deterministicParse.clarification),
-      });
-      calibrationObservations.push({
-        caseId: `${seed.caseId}-cal-${variantIdx}`,
-        stratum,
-        rawScore: conf.compositeScore,
-        highConfidenceAdmitted: expectedOk && execRes.status !== 'CLARIFY',
-        correct: expectedOk,
-      });
-      stratumCount += 1;
+      if (phase2aRes.operationResult.status === 'NEEDS_CONFIRMATION' && Boolean(phase2aRes.operationResult.confirmation)) {
+        phase6InvarianceVariantsPassed += 1;
+      }
+      continue;
+    }
+
+    const orchestrated = await interpretWithSemanticProducers({
+      rawText: variantPrompt,
+      evaluationMode: seed.kind === 'PROVIDER_PARAPHRASE' ? 'DUAL_PRODUCER' : 'PRODUCTION_SHORT_CIRCUIT',
+      provider: offlineProvider,
+      policy,
+      dynamicQuotes,
+    });
+    const execRes = await executeCrossDomainWaves({
+      rawText: variantPrompt,
+      snapshot: variantSnapshot,
+      role: roleForVariant,
+      propertyAuthorized: seed.propertyAuthorized ?? true,
+      planOverride: orchestrated.reconciliationStatus === 'PROVIDER_INCREMENTAL' ? orchestrated.plan : undefined,
+    });
+    const expectedOk =
+      seed.kind === 'CONFLICTED'
+        ? execRes.status === 'ANSWERED'
+        : execRes.status === seed.expectedExecutionStatus;
+    if (expectedOk) {
+      phase6InvarianceVariantsPassed += 1;
     }
   }
 
@@ -1161,6 +1094,21 @@ export async function runPhase6EndToEndEvaluation(options: {
   const conflictedPopulationProjectionAccuracy = safeDiv(conflictOk, conflictChecked);
   const legacyVsGrammarAgreementRate = phase1.valid && verifyCrossDomainProtectionLexemeSeparation() ? 1 : 0;
 
+  const minStratumSamples = calibrationReport.strata.reduce((min, s) => Math.min(min, s.sampleCount), Infinity);
+  const maxStratumUpper95 = calibrationReport.strata.reduce(
+    (max, s) => Math.max(max, s.incorrectHighConfidenceUpper95Bound),
+    0,
+  );
+  const correlatedMetamorphicEvidence = {
+    suitePassed: metamorphic.passed && phase6InvarianceVariantsPassed === phase6InvarianceVariantsChecked,
+    totalPairsEvaluated: metamorphic.pairCount,
+    passedPairs: Math.max(0, metamorphic.pairCount - metamorphic.failures.length),
+    axesCovered: [...metamorphic.axesCovered],
+    phase6InvarianceVariantsChecked,
+    phase6InvarianceVariantsPassed,
+    note: 'Correlated metamorphic invariance checks are reported separately under FR-EVAL-5 and are excluded from independent binomial sample counts in FR-EVAL-4 Wilson confidence bounds.',
+  };
+
   const frEval4ProductGates = [
     {
       gateId: 'GATE_END_TO_END_MACRO_RESOLVED_CI',
@@ -1245,13 +1193,20 @@ export async function runPhase6EndToEndEvaluation(options: {
     },
     {
       gateId: 'GATE_FALSE_DECLINE_AND_WRONG_WRITE',
-      label: 'False decline <= 1%, zero wrong writes, zero incorrect high-confidence across strata',
-      observed: `falseDecline=${(falseDeclineRate * 100).toFixed(2)}%, incorrectHigh=${calibrationReport.totalIncorrectHighConfidence}, writeSafe=${writeSafeOk}/${writeSafeTotal}`,
-      threshold: 'falseDecline <= 1%, incorrectHigh == 0, writeSafe == 100%',
+      label: 'Observed false decline <= 1%, zero wrong writes, zero observed incorrect high-confidence outputs',
+      observed: `falseDecline=${(falseDeclineRate * 100).toFixed(2)}%, observedIncorrectHigh=${calibrationReport.totalIncorrectHighConfidence}/${calibrationReport.totalObservations}, writeSafe=${writeSafeOk}/${writeSafeTotal}`,
+      threshold: 'falseDecline <= 1%, observedIncorrectHigh == 0, writeSafe == 100%',
       passed:
         falseDeclineRate <= 0.01
-        && calibrationReport.overallPassed
+        && calibrationReport.observedZeroErrorPassed
         && writeSafeOk === writeSafeTotal,
+    },
+    {
+      gateId: 'GATE_WILSON_95_UPPER_BOUND_UNDER_1PCT',
+      label: 'Incorrect high-confidence Wilson 95% upper bound < 1% per risk stratum (independent samples)',
+      observed: `minIndependentSamples=${Number.isFinite(minStratumSamples) ? minStratumSamples : 0}/${calibrationReport.minRequiredIndependentSamplesAtZeroErrors}, maxUpper95=${(maxStratumUpper95 * 100).toFixed(2)}% (correlated metamorphic reported separately)`,
+      threshold: `< 1.00% upper 95% CI per stratum (>= ${calibrationReport.minRequiredIndependentSamplesAtZeroErrors} independent samples/stratum at 0 errors)`,
+      passed: calibrationReport.overallPassed,
     },
   ];
 
@@ -1268,16 +1223,25 @@ export async function runPhase6EndToEndEvaluation(options: {
     { requirementId: 'FR-UND-1..8', description: 'Two-stage provider retrieval, reconciliation, 6-stratum risk calibration', artifactRef: 'src/services/ask/semantic/phase6/semanticProviderOrchestrator.ts', status: 'IMPLEMENTED_VERIFIED' },
     { requirementId: 'FR-ANS-1..6', description: 'Typed execution receipts, structural entailment & population equivalence', artifactRef: 'src/services/ask/semantic/semanticExecutionReceipt.ts', status: 'IMPLEMENTED_VERIFIED' },
     { requirementId: 'FR-SEC-1..5', description: 'Protected placeholder bijection, property/role bounds, replay redaction', artifactRef: 'src/services/ask/semantic/phase2a/placeholderSpanMap.ts', status: 'IMPLEMENTED_VERIFIED' },
-    { requirementId: 'FR-EVAL-1..6', description: 'Sealed-proxy 32-metric evaluation, metamorphic runner, FR-EVAL-4 gates', artifactRef: 'src/services/ask/semantic/phase6/endToEndEvaluationHarness.ts', status: 'SEALED_PROXY_VERIFIED' },
+    { requirementId: 'FR-EVAL-1..6', description: 'Sealed-proxy 32-metric evaluation, separate correlated metamorphic runner, FR-EVAL-4 gates', artifactRef: 'src/services/ask/semantic/phase6/endToEndEvaluationHarness.ts', status: 'SEALED_PROXY_VERIFIED' },
     { requirementId: '§22.1..7', description: 'Owner policy rulings (canonical warranty storage, external LLM traffic approval/budgets)', artifactRef: 'docs/product/ASK_COZY_CROSS_DOMAIN_SEMANTIC_ARCHITECTURE_FRD.md#22', status: 'OWNER_DECISION_OPEN' },
   ];
 
-  const allGatesPassed =
-    frEval4ProductGates.every((g) => g.passed)
+  const sealedProxyInvariantsPassed =
+    frEval4ProductGates
+      .filter((g) => g.gateId !== 'GATE_WILSON_95_UPPER_BOUND_UNDER_1PCT')
+      .every((g) => g.passed)
     && manifestIntegrity.valid
-    && calibrationReport.overallPassed
+    && calibrationReport.observedZeroErrorPassed
     && benchmarks.passed
-    && metamorphic.passed;
+    && correlatedMetamorphicEvidence.suitePassed;
+
+  const statisticalWilsonClaimStatus: 'PASSED' | 'INSUFFICIENT_INDEPENDENT_SAMPLES' =
+    calibrationReport.overallPassed ? 'PASSED' : 'INSUFFICIENT_INDEPENDENT_SAMPLES';
+
+  const allGatesPassed =
+    sealedProxyInvariantsPassed
+    && calibrationReport.overallPassed;
 
   return {
     version: ASK_PHASE6_EVALUATION_VERSION,
@@ -1289,6 +1253,8 @@ export async function runPhase6EndToEndEvaluation(options: {
       policy,
       liveExternalRuntimePendingApproval: policy.approvalStatus !== 'APPROVED_FOR_STRUCTURED_PLANNING',
     },
+    sealedProxyInvariantsPassed,
+    statisticalWilsonClaimStatus,
     passed: allGatesPassed,
     frEval3Metrics: {
       planSchemaValidRate,
@@ -1350,6 +1316,7 @@ export async function runPhase6EndToEndEvaluation(options: {
     },
     frEval4ProductGates,
     riskStratifiedCalibration: calibrationReport,
+    correlatedMetamorphicEvidence,
     failedDomains,
     failedStrata: calibrationReport.failedStrata,
     requirementToEvidenceMatrix,

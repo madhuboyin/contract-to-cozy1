@@ -1,9 +1,9 @@
 import { minimizeAskQuestion } from '../../askPromptMinimization';
 
-export type PlaceholderKind = 'ITEM' | 'DATE' | 'MONEY' | 'SERIAL' | 'ROOM';
+export type PlaceholderKind = 'ITEM' | 'DATE' | 'MONEY' | 'SERIAL' | 'ROOM' | 'VENDOR';
 
 export interface DynamicPlaceholderEntityCandidate {
-  readonly kind: 'ITEM' | 'ROOM';
+  readonly kind: 'ITEM' | 'ROOM' | 'VENDOR';
   readonly entityId: string;
   readonly recordId: string;
   readonly names: readonly string[];
@@ -243,6 +243,7 @@ export function buildSemanticTextEnvelope(
     MONEY: 0,
     SERIAL: 0,
     ROOM: 0,
+    VENDOR: 0,
   };
 
   let protectedText = '';

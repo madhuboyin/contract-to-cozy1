@@ -251,15 +251,27 @@ test('Phase 6 6-stratum PAV calibration enforces 11-feature vectors and Wilson 9
   assert.equal(badCalibration.totalIncorrectHighConfidence, 2);
 });
 
-test('Phase 6 end-to-end evaluation harness passes all FR-EVAL-4 gates across all 15 domains as SEALED_PROXY', async () => {
+test('Phase 6 end-to-end evaluation harness passes all sealed-proxy invariants across all 15 domains and reports correlated metamorphic checks separately from independent Wilson bounds', async () => {
   const report = await runPhase6EndToEndEvaluation();
 
   assert.equal(report.version, ASK_PHASE6_EVALUATION_VERSION);
   assert.equal(report.evaluationNature, 'SEALED_PROXY');
   assert.equal(report.isRealHomeownerTrafficDistribution, false);
-  assert.equal(report.passed, true);
+  assert.equal(report.sealedProxyInvariantsPassed, true);
+  assert.equal(report.statisticalWilsonClaimStatus, 'INSUFFICIENT_INDEPENDENT_SAMPLES');
+  assert.equal(report.passed, false);
   assert.deepEqual(report.failedDomains, []);
-  assert.deepEqual(report.failedStrata, []);
+  assert.equal(report.failedStrata.length, 6);
+  assert.equal(report.riskStratifiedCalibration.observedZeroErrorPassed, true);
+  assert.equal(report.riskStratifiedCalibration.overallPassed, false);
+  assert.equal(report.riskStratifiedCalibration.totalIncorrectHighConfidence, 0);
+  assert.equal(report.riskStratifiedCalibration.totalObservations, PHASE6_SEALED_EVALUATION_CASES.length);
+  assert.equal(report.correlatedMetamorphicEvidence.suitePassed, true);
+  assert.equal(
+    report.correlatedMetamorphicEvidence.phase6InvarianceVariantsPassed,
+    PHASE6_SEALED_EVALUATION_CASES.length,
+  );
+  assert.match(report.correlatedMetamorphicEvidence.note, /excluded from independent binomial sample counts/i);
 
   assert.equal(report.frEval3Metrics.perDomainCoverageProfiles.length, ASK_SEMANTIC_DOMAINS.length);
   assert.equal(report.frEval3Metrics.wrongAnswerRate, 0);
@@ -284,9 +296,17 @@ test('Phase 6 end-to-end evaluation harness passes all FR-EVAL-4 gates across al
   assert.ok(report.requirementToEvidenceMatrix.some((r) => r.requirementId === '§22.1..7' && r.status === 'OWNER_DECISION_OPEN'));
 
   const summary = await buildPhase6CalibrationAndEvaluationSummary();
-  assert.equal(summary.passed, true);
+  assert.equal(summary.sealedProxyInvariantsPassed, true);
+  assert.equal(summary.statisticalWilsonClaimStatus, 'INSUFFICIENT_INDEPENDENT_SAMPLES');
+  assert.equal(summary.passed, false);
   assert.equal(summary.evaluationNature, 'SEALED_PROXY');
-  assert.equal(summary.passedGateCount, summary.totalGateCount);
+  assert.equal(summary.calibrationObservedZeroErrorPassed, true);
+  assert.equal(summary.calibrationOverallPassed, false);
+  assert.equal(summary.passedGateCount, summary.totalGateCount - 1);
+  assert.deepEqual(
+    summary.report.frEval4ProductGates.filter((g) => !g.passed).map((g) => g.gateId),
+    ['GATE_WILSON_95_UPPER_BOUND_UNDER_1PCT'],
+  );
 });
 
 test('Phase 6 review fixes: repeated span mapping, strict calibration bound, budget enforcement, strict domains, and production handler wiring', async () => {
@@ -492,15 +512,42 @@ test('Phase 6 review fixes: repeated span mapping, strict calibration bound, bud
   const origFindFirst = new Map();
 
   const findManyStubs = [
-    ['inventoryRoom', () => []],
-    ['inventoryItem', () => [
-      { id: 'item-wh', propertyId: 'prop-p6-1', name: 'Water Heater', category: 'PLUMBING', warrantyId: null, purchaseCostCents: 180000, replacementCostCents: 220000, purchasedOn: null, installedOn: null },
+    ['inventoryRoom', () => [
+      { id: 'room-sunroom', propertyId: 'prop-p6-1', name: 'Sunroom Annex' },
     ]],
-    ['warranty', () => []],
+    ['inventoryItem', () => [
+      { id: 'item-wh', propertyId: 'prop-p6-1', name: 'Water Heater', brand: null, modelNumber: null, category: 'PLUMBING', roomId: 'room-sunroom', warrantyId: null, purchaseCostCents: 180000, replacementCostCents: 220000, purchasedOn: null, installedOn: null },
+      { id: 'item-thermador', propertyId: 'prop-p6-1', name: 'Thermador Column', brand: 'Thermador', modelNumber: 'T30IR905', category: 'APPLIANCE', roomId: 'room-sunroom', warrantyId: 'war-1', purchaseCostCents: 450000, replacementCostCents: 520000, purchasedOn: null, installedOn: null },
+    ]],
+    ['warranty', () => [
+      { id: 'war-1', propertyId: 'prop-p6-1', inventoryItemId: 'item-thermador', providerName: 'Sub-Zero Assure', category: 'APPLIANCE', expiryDate: new Date('2028-01-01T00:00:00Z') },
+    ]],
     ['propertyMaintenanceTask', () => []],
     ['document', () => []],
     ['claim', () => [
       { id: 'claim-1', propertyId: 'prop-p6-1', title: 'Roof Hail Claim', status: 'OPEN', openedAt: new Date('2026-09-01T00:00:00Z'), estimatedLossCents: 500000, documents: [], checklistItems: [] },
+    ]],
+    ['quoteComparisonQuote', () => [
+      {
+        id: 'quote-alpine',
+        vendorName: 'Alpine Roofing Co',
+        quoteAmount: 9800,
+        serviceLocation: 'Roof',
+        serviceCategory: 'ROOFING',
+        serviceLabelRaw: 'Roofing',
+        scopeSummary: 'Architectural shingle replacement',
+        workspace: { propertyId: 'prop-p6-1', scopeSummary: 'Roofing', serviceCategory: 'ROOFING' },
+      },
+      {
+        id: 'quote-pinnacle',
+        vendorName: 'Pinnacle Exteriors',
+        quoteAmount: 10400,
+        serviceLocation: 'Roof',
+        serviceCategory: 'ROOFING',
+        serviceLabelRaw: 'Roofing',
+        scopeSummary: 'Architectural shingle replacement',
+        workspace: { propertyId: 'prop-p6-1', scopeSummary: 'Roofing', serviceCategory: 'ROOFING' },
+      },
     ]],
     ['propertyDocument', () => []],
     ['claimDocument', () => []],
@@ -586,6 +633,107 @@ test('Phase 6 review fixes: repeated span mapping, strict calibration bound, bud
       { semanticProvider: new SealedOfflineStructuredProvider('OUTAGE'), semanticProviderPolicy: approvedPolicy },
     );
     assert.equal(outageProdRead.reasonCode, 'PROVIDER_UNAVAILABLE');
+
+    // (e) Legacy-matched phrasing outside deterministic coverage runs Phase 6 BEFORE legacy rejection
+    const legacyBlockedWithoutProvider = await dataPointReadResult(
+      'user-1',
+      'prop-p6-1',
+      'list appliances lacking protection coverage details',
+    );
+    assert.equal(legacyBlockedWithoutProvider.reasonCode, 'DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED');
+
+    const expandedBeforeLegacy = await dataPointReadResult(
+      'user-1',
+      'prop-p6-1',
+      'list appliances lacking protection coverage details',
+      undefined,
+      { semanticProvider: new SealedOfflineStructuredProvider('NOMINAL'), semanticProviderPolicy: approvedPolicy },
+    );
+    assert.equal(expandedBeforeLegacy.status, 'ANSWERED');
+    assert.equal(expandedBeforeLegacy.parameters.providerOrchestration.reconciliationStatus, 'PROVIDER_INCREMENTAL');
+    assert.match(JSON.stringify(expandedBeforeLegacy.blocks), /Water Heater/);
+
+    // (f) Property-backed identifiers (custom item, room, contractor/quote vendor) are masked as indexed
+    // placeholders BEFORE provider calls and bound back to authorized record IDs on execution.
+    const seenMinimizedPrompts = [];
+    const seenPlaceholders = [];
+    const piiRedactionSpyProvider = {
+      providerId: 'pii-redaction-spy',
+      version: '1.0.0',
+      isExternalNetworkProvider: true,
+      async runStageOne(input) {
+        seenMinimizedPrompts.push(input.minimizedText);
+        seenPlaceholders.push(...input.placeholderTokens);
+        return {
+          mode: 'FACET_SPANS',
+          facets: [{
+            preliminarySpan: { start: 0, end: input.minimizedText.length, text: input.minimizedText },
+            domainCandidates: [{ id: 'domain.warranties_coverage', score: 0.94 }],
+          }],
+          latencyMs: 5,
+          estimatedCostUsd: 0.001,
+        };
+      },
+      async runStageTwo(input) {
+        seenMinimizedPrompts.push(input.minimizedText);
+        const facetId = input.assignedFacets[0].stableFacetId;
+        return {
+          proposals: [{
+            stableFacetId: facetId,
+            requestClass: 'DATA_QUERY',
+            domainId: 'domain.warranties_coverage',
+            subject: { entityId: 'entity.inventory_item', recordId: null },
+            relations: [{
+              semanticRelationId: 'relation.inventory_item.warranty',
+              predicateId: 'predicate.inventory_item.has_no_warranty_record',
+              targetEntityId: 'entity.warranty',
+            }],
+            polarity: 'NEGATIVE',
+            projection: 'LIST',
+            fields: [],
+            where: {
+              kind: 'PREDICATE',
+              predicateId: 'predicate.inventory_item.has_no_warranty_record',
+              relationPathId: 'path.inventory_item.warranty',
+            },
+            time: null,
+            requiredSlots: [],
+            jobMatch: 'query.inventory_item.warranty_relation',
+          }],
+          latencyMs: 5,
+          estimatedCostUsd: 0.002,
+        };
+      },
+    };
+    const customEntityRead = await dataPointReadResult(
+      'user-1',
+      'prop-p6-1',
+      'is Thermador Column in Sunroom Annex lacking protection plan besides Alpine Roofing Co?',
+      undefined,
+      { semanticProvider: piiRedactionSpyProvider, semanticProviderPolicy: approvedPolicy },
+    );
+    assert.equal(customEntityRead.status, 'ANSWERED');
+    assert.ok(seenMinimizedPrompts.length >= 2);
+    for (const minPrompt of seenMinimizedPrompts) {
+      assert.doesNotMatch(minPrompt, /Thermador Column/i);
+      assert.doesNotMatch(minPrompt, /Sunroom Annex/i);
+      assert.doesNotMatch(minPrompt, /Alpine Roofing Co/i);
+      assert.match(minPrompt, /\[ITEM_1\]/);
+      assert.match(minPrompt, /\[ROOM_1\]/);
+      assert.match(minPrompt, /\[VENDOR_1\]/);
+    }
+    assert.ok(seenPlaceholders.includes('[ITEM_1]'));
+    assert.ok(seenPlaceholders.includes('[ROOM_1]'));
+    assert.ok(seenPlaceholders.includes('[VENDOR_1]'));
+    // Execution bound the authorized item record (Thermador Column -> has warranty -> excluded from uncovered list)
+    assert.equal(
+      customEntityRead.parameters.semanticExecutionReceipt.resolvedRecordIds.includes('item-wh'),
+      false,
+    );
+    assert.equal(
+      customEntityRead.parameters.providerOrchestration.reconciliationStatus,
+      'PROVIDER_INCREMENTAL',
+    );
   } finally {
     propertyAccess.resolvePropertyAccess = origResolveAccess;
     for (const [model, orig] of origFindMany.entries()) prisma[model].findMany = orig;

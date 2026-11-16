@@ -21,8 +21,13 @@ import { verifySemanticReadReceiptEntailment } from '../semantic/semanticReceipt
 import { humanizePresentationToken } from '../semantic/phase1/presentationHumanizer';
 import { parseDeterministicSemanticRequest } from '../semantic/deterministicSemanticParser';
 import { executePhase2aOnProperty } from '../semantic/phase2a/phase2aSliceExecutor';
-import { mayNeedDynamicQuoteResolution, parseCrossDomainSemanticRequest } from '../semantic/waves/crossDomainPlanBuilder';
-import { executeCrossDomainOnProperty } from '../semantic/waves/crossDomainWaveExecutor';
+import { type DynamicPlaceholderEntityCandidate } from '../semantic/phase2a/placeholderSpanMap';
+import { mayNeedDynamicQuoteResolution, parseCrossDomainSemanticRequest, type DynamicQuoteCandidate } from '../semantic/waves/crossDomainPlanBuilder';
+import {
+  executeCrossDomainOnProperty,
+  loadAuthorizedProviderContext,
+  type AuthorizedProviderContext,
+} from '../semantic/waves/crossDomainWaveExecutor';
 import {
   GeminiSemanticUnderstandingProvider,
   interpretWithSemanticProducers,
@@ -342,7 +347,12 @@ async function tryExecuteWithSemanticOrchestration(input: {
   readonly evaluationMode: 'PRODUCTION_SHORT_CIRCUIT' | 'DUAL_PRODUCER';
   readonly provider: SemanticUnderstandingProvider | null;
   readonly policy: SemanticProviderPolicy;
-}): Promise<AskOperationResult | null> {
+  readonly dynamicEntities?: readonly DynamicPlaceholderEntityCandidate[];
+  readonly dynamicQuotes?: readonly DynamicQuoteCandidate[];
+}): Promise<{
+  readonly result: AskOperationResult;
+  readonly isProviderFailure: boolean;
+} | null> {
   if (!input.provider) {
     return null;
   }
@@ -351,18 +361,23 @@ async function tryExecuteWithSemanticOrchestration(input: {
     evaluationMode: input.evaluationMode,
     provider: input.provider,
     policy: input.policy,
+    dynamicEntities: input.dynamicEntities,
+    dynamicQuotes: input.dynamicQuotes,
   });
 
   if (orchestration.reconciliationStatus === 'MATERIAL_DISAGREEMENT') {
-    return attachOrchestrationParameters(
-      notice(
-        'DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED',
-        'data-point-semantic-disagreement',
-        'I need to confirm what you meant',
-        'Two independent interpretations of your question disagreed materially, so I did not run this read automatically. Try rephrasing more specifically.',
+    return {
+      result: attachOrchestrationParameters(
+        notice(
+          'DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED',
+          'data-point-semantic-disagreement',
+          'I need to confirm what you meant',
+          'Two independent interpretations of your question disagreed materially, so I did not run this read automatically. Try rephrasing more specifically.',
+        ),
+        orchestration,
       ),
-      orchestration,
-    );
+      isProviderFailure: false,
+    };
   }
 
   if (orchestration.plan.outcome === 'MATCH' || orchestration.plan.outcome === 'BOUNDARY') {
@@ -376,7 +391,10 @@ async function tryExecuteWithSemanticOrchestration(input: {
       planOverride: orchestration.plan,
     });
     if (execRes.execution.status !== 'NONE_FITS') {
-      return attachOrchestrationParameters(execRes.operationResult, orchestration);
+      return {
+        result: attachOrchestrationParameters(execRes.operationResult, orchestration),
+        isProviderFailure: false,
+      };
     }
   }
 
@@ -384,15 +402,18 @@ async function tryExecuteWithSemanticOrchestration(input: {
     orchestration.providerResult?.status === 'PROVIDER_UNAVAILABLE'
     || orchestration.providerResult?.status === 'SCHEMA_INVALID'
   ) {
-    return attachOrchestrationParameters(
-      notice(
-        orchestration.providerResult.status,
-        'data-point-provider-unavailable',
-        'I could not complete an AI-expanded interpretation right now',
-        'The structured semantic interpreter was unavailable or exceeded safety limits. Try rephrasing using direct terms.',
+    return {
+      result: attachOrchestrationParameters(
+        notice(
+          orchestration.providerResult.status,
+          'data-point-provider-unavailable',
+          'I could not complete an AI-expanded interpretation right now',
+          'The structured semantic interpreter was unavailable or exceeded safety limits. Try rephrasing using direct terms.',
+        ),
+        orchestration,
       ),
-      orchestration,
-    );
+      isProviderFailure: true,
+    };
   }
 
   return null;
@@ -418,9 +439,18 @@ export async function dataPointReadResult(
         ? new GeminiSemanticUnderstandingProvider()
         : null;
   const evaluationMode = options?.evaluationMode ?? 'PRODUCTION_SHORT_CIRCUIT';
+  let deferredProviderFailure: AskOperationResult | null = null;
+  let orchestrationAttempted = false;
 
   if (!forcedPoint) {
-    const phase2aPlan = parseDeterministicSemanticRequest(message);
+    const authorizedProviderContext: AuthorizedProviderContext | null = activeSemanticProvider
+      ? await loadAuthorizedProviderContext(propertyId)
+      : null;
+
+    const phase2aPlan = parseDeterministicSemanticRequest(
+      message,
+      authorizedProviderContext ? { dynamicEntities: authorizedProviderContext.dynamicEntities } : undefined,
+    );
     const phase2aJob = phase2aPlan.outcome === 'MATCH' ? phase2aPlan.facets[0]?.evidence.jobMatch : null;
     if (
       phase2aPlan.outcome === 'BOUNDARY'
@@ -436,35 +466,23 @@ export async function dataPointReadResult(
       });
       return phase2aExecution.operationResult;
     }
-    const crossDomainParsed = parseCrossDomainSemanticRequest(message);
-    if (
-      (
-        crossDomainParsed.plan.unresolvedSpans.length > 0
-        || evaluationMode === 'DUAL_PRODUCER'
-      )
-      && crossDomainParsed.plan.outcome === 'MATCH'
-      && !crossDomainParsed.clarification
-      && activeSemanticProvider
-    ) {
-      const orchestrated = await tryExecuteWithSemanticOrchestration({
-        userId,
-        propertyId,
-        role,
-        message,
-        timeZone,
-        evaluationMode,
-        provider: activeSemanticProvider,
-        policy: providerPolicy,
-      });
-      if (orchestrated) {
-        return orchestrated;
-      }
-    }
+
+    const crossDomainParsed = parseCrossDomainSemanticRequest(
+      message,
+      authorizedProviderContext ? { dynamicQuotes: authorizedProviderContext.dynamicQuotes } : undefined,
+    );
+    const isCompleteDeterministicCrossDomain =
+      !crossDomainParsed.clarification
+      && (
+        crossDomainParsed.plan.outcome === 'BOUNDARY'
+        || (crossDomainParsed.plan.outcome === 'MATCH' && crossDomainParsed.plan.unresolvedSpans.length === 0)
+      );
+
     if (
       crossDomainParsed.clarification
       || crossDomainParsed.plan.outcome === 'BOUNDARY'
-      || crossDomainParsed.plan.outcome === 'MATCH'
-      || mayNeedDynamicQuoteResolution(message)
+      || (isCompleteDeterministicCrossDomain && evaluationMode === 'PRODUCTION_SHORT_CIRCUIT')
+      || (!activeSemanticProvider && crossDomainParsed.plan.outcome === 'MATCH')
     ) {
       const crossDomainExecution = await executeCrossDomainOnProperty({
         propertyId,
@@ -482,11 +500,55 @@ export async function dataPointReadResult(
         return crossDomainExecution.operationResult;
       }
     }
+
+    if (mayNeedDynamicQuoteResolution(message)) {
+      const quoteCrossDomainExecution = await executeCrossDomainOnProperty({
+        propertyId,
+        userId,
+        role,
+        propertyAuthorized: true,
+        rawText: message,
+        timeZone,
+      });
+      if (quoteCrossDomainExecution.execution.status !== 'NONE_FITS') {
+        return quoteCrossDomainExecution.operationResult;
+      }
+    }
+
+    // Invoke FR-UND provider expansion/reconciliation before legacy keyword/query branches so
+    // unresolved, NONE_FITS, ambiguous, or DUAL_PRODUCER prompts are never prematurely captured or
+    // rejected by legacy matchers before the provider sees the protected prompt.
+    if (activeSemanticProvider) {
+      orchestrationAttempted = true;
+      const orchestrated = await tryExecuteWithSemanticOrchestration({
+        userId,
+        propertyId,
+        role,
+        message,
+        timeZone,
+        evaluationMode,
+        provider: activeSemanticProvider,
+        policy: providerPolicy,
+        dynamicEntities: authorizedProviderContext?.dynamicEntities,
+        dynamicQuotes: authorizedProviderContext?.dynamicQuotes,
+      });
+      if (orchestrated) {
+        if (!orchestrated.isProviderFailure) {
+          return orchestrated.result;
+        }
+        // Preserve deterministic legacy fallback availability on provider outages (FR-UND-6).
+        deferredProviderFailure = orchestrated.result;
+      }
+    }
+
     const shapePlan = planShape789(message);
     if (shapePlan) {
       if (shapePlan.shape === 'NO_WARRANTY' || shapePlan.shape === 'HAS_WARRANTY') {
         const agreement = warrantyShapeGrammarAgreement(message, shapePlan);
-        if (agreement.outcome !== 'AGREE') return notice('DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED', 'data-point-semantic-agreement-required', 'I need a clearer warranty-record question', 'I could not verify the item, warranty relationship, polarity and answer shape independently, so I did not run this read.');
+        if (agreement.outcome !== 'AGREE') {
+          return deferredProviderFailure
+            ?? notice('DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED', 'data-point-semantic-agreement-required', 'I need a clearer warranty-record question', 'I could not verify the item, warranty relationship, polarity and answer shape independently, so I did not run this read.');
+        }
         return shape789Result(propertyId, role, shapePlan, agreement);
       }
       return shape789Result(propertyId, role, shapePlan);
@@ -509,14 +571,19 @@ export async function dataPointReadResult(
         projection,
       });
       if (!queryAgreement || queryAgreement.outcome !== 'AGREE') {
-        return notice('DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED', 'data-point-semantic-agreement-required', 'I need a clearer question', 'I could not verify the target entity and projection independently, so I did not run this read.');
+        return deferredProviderFailure
+          ?? notice('DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED', 'data-point-semantic-agreement-required', 'I need a clearer question', 'I could not verify the target entity and projection independently, so I did not run this read.');
       }
     }
     return dataPointQueryResult(propertyId, role, queryOutcome.plan, queryAgreement);
   }
   const point = forcedPoint ?? resolveDataPoint(message);
   if (!point) {
-    if (!forcedPoint && activeSemanticProvider) {
+    if (deferredProviderFailure) {
+      return deferredProviderFailure;
+    }
+    if (!forcedPoint && activeSemanticProvider && !orchestrationAttempted) {
+      const authorizedProviderContext = await loadAuthorizedProviderContext(propertyId);
       const orchestrated = await tryExecuteWithSemanticOrchestration({
         userId,
         propertyId,
@@ -526,9 +593,11 @@ export async function dataPointReadResult(
         evaluationMode,
         provider: activeSemanticProvider,
         policy: providerPolicy,
+        dynamicEntities: authorizedProviderContext.dynamicEntities,
+        dynamicQuotes: authorizedProviderContext.dynamicQuotes,
       });
       if (orchestrated) {
-        return orchestrated;
+        return orchestrated.result;
       }
     }
     return notice('DATA_POINT_NOT_IDENTIFIED', 'data-point-unidentified', 'Which detail do you mean?', 'Tell me the detail and the item, for example “the serial number of my refrigerator” or “when my furnace was installed”.');
@@ -540,7 +609,8 @@ export async function dataPointReadResult(
       projection: 'DETAIL',
     });
     if (!singlePointAgreement || singlePointAgreement.outcome !== 'AGREE') {
-      return notice('DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED', 'data-point-semantic-agreement-required', 'I need a clearer question', 'I could not verify the target entity and detail projection independently, so I did not run this read.');
+      return deferredProviderFailure
+        ?? notice('DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED', 'data-point-semantic-agreement-required', 'I need a clearer question', 'I could not verify the target entity and detail projection independently, so I did not run this read.');
     }
   }
   if (!roleMayRead(role, point)) {

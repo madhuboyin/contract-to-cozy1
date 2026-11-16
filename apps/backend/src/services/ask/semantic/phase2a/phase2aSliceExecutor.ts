@@ -457,9 +457,12 @@ function executeValidatedPhase2aPlan(input: {
 
   // 1. CAPABILITY: Replacement guidance
   if (facet.requestClass === 'CAPABILITY' && facet.evidence.jobMatch === 'job.inventory.replacement_guidance') {
+    const boundSubjectItemId = facet.subject?.entityId === 'entity.inventory_item' ? facet.subject.recordId : null;
     const targetItem = entityResolution?.outcome === 'RESOLVED'
       ? snapshot.items.find((item) => item.id === entityResolution.recordId)
-      : snapshot.items.find((item) => !restricted.has(item.id));
+      : boundSubjectItemId
+        ? snapshot.items.find((item) => item.id === boundSubjectItemId)
+        : snapshot.items.find((item) => !restricted.has(item.id));
     if (!targetItem || restricted.has(targetItem.id)) {
       return buildBlockedResult(rawText, envelope, spanRoundTripOk, plan, entityResolution, 'Target item is not accessible.');
     }
@@ -724,11 +727,13 @@ function executeValidatedPhase2aPlan(input: {
   }
 
   const filterSet = input.filterEntityIds ? new Set(input.filterEntityIds) : null;
+  const boundSubjectItemId = facet.subject?.entityId === 'entity.inventory_item' ? facet.subject.recordId : null;
 
   const authorisedItems = snapshot.items.filter((item) => {
     if (restricted.has(item.id)) return false;
     if (filterSet && !filterSet.has(item.id)) return false;
     if (entityResolution?.outcome === 'RESOLVED' && item.id !== entityResolution.recordId) return false;
+    if (boundSubjectItemId && item.id !== boundSubjectItemId) return false;
     return true;
   });
 

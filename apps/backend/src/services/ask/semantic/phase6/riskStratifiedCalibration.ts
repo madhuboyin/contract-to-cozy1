@@ -2,6 +2,7 @@ import { type SemanticFacet } from '../semanticRequestPlan';
 import { wilson95Interval } from '../waves/domainWaveManifest';
 
 export const ASK_PHASE6_CALIBRATION_VERSION = 'phase6-risk-calibration-1.0.0' as const;
+export const MIN_INDEPENDENT_SAMPLES_AT_ZERO_ERRORS = 381 as const;
 
 export type SemanticRiskStratum =
   | 'REVERSIBLE_PROPERTY_READ'
@@ -215,11 +216,15 @@ export interface StratumCalibrationSummary {
   readonly incorrectHighConfidenceUpper95Bound: number;
   readonly expectedCalibrationError: number;
   readonly pavAnchors: readonly (readonly [number, number])[];
+  readonly observedZeroErrorPassed: boolean;
+  readonly statisticalBoundPassed: boolean;
   readonly gatePassed: boolean;
 }
 
 export interface RiskStratifiedCalibrationReport {
   readonly version: string;
+  readonly minRequiredIndependentSamplesAtZeroErrors: number;
+  readonly observedZeroErrorPassed: boolean;
   readonly overallPassed: boolean;
   readonly totalObservations: number;
   readonly totalIncorrectHighConfidence: number;
@@ -318,13 +323,10 @@ export function evaluateRiskStratifiedCalibration(
 
     // FR-EVAL-4 strictly requires incorrect-high-confidence Wilson 95% upper bound < 1%
     // for every risk stratum (at 0 observed errors this mathematically requires n >= 381).
+    const observedZeroErrorPassed = sampleCount > 0 && incorrectHigh === 0 && ece <= 0.25;
     const statisticalBoundPassed = sampleCount > 0 && upper95 < policy.maxAllowedIncorrectHighUpper95;
 
-    const gatePassed =
-      sampleCount > 0
-      && incorrectHigh === 0
-      && statisticalBoundPassed
-      && ece <= 0.25;
+    const gatePassed = observedZeroErrorPassed && statisticalBoundPassed;
 
     if (!gatePassed) {
       failedStrata.push(stratum);
@@ -343,12 +345,16 @@ export function evaluateRiskStratifiedCalibration(
       incorrectHighConfidenceUpper95Bound: upper95,
       expectedCalibrationError: ece,
       pavAnchors,
+      observedZeroErrorPassed,
+      statisticalBoundPassed,
       gatePassed,
     });
   }
 
   return {
     version: ASK_PHASE6_CALIBRATION_VERSION,
+    minRequiredIndependentSamplesAtZeroErrors: MIN_INDEPENDENT_SAMPLES_AT_ZERO_ERRORS,
+    observedZeroErrorPassed: summaries.every((s) => s.observedZeroErrorPassed),
     overallPassed: failedStrata.length === 0,
     totalObservations: observations.length,
     totalIncorrectHighConfidence: summaries.reduce((acc, s) => acc + s.incorrectHighConfidenceCount, 0),
