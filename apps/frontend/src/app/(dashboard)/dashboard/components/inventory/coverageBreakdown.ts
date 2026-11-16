@@ -16,7 +16,7 @@ export function getCoverageStatus(item: InventoryItem): CoverageStatus {
   if (item.coverageState === 'INCOMPLETE') return 'incomplete';
   if (item.coverageNotRequired) return 'excluded';
 
-  const hasWarranty = Boolean(item.warrantyId);
+  const hasWarranty = Boolean(item.itemWarrantyId ?? item.linkedWarranties?.[0]?.id);
   const hasInsurance = Boolean(item.insurancePolicyId);
   if (!hasWarranty && !hasInsurance) return 'incomplete';
   return 'confirmed';

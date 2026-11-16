@@ -14,7 +14,7 @@ export type TransitionalWarrantyState =
 export interface TransitionalWarrantyLinkInput {
   readonly inventoryItemId: string;
   readonly label?: string;
-  /** Legacy InventoryItem.warrantyId path. Its final business meaning is owner-pending. */
+  /** Property-plan warranties explicitly applicable to this item. */
   readonly propertyPlanWarrantyId: string | null;
   /** Legacy Warranty.inventoryItemId path; more than one row is preserved. */
   readonly itemWarrantyIds: readonly string[];
@@ -61,11 +61,11 @@ export const WARRANTY_RELATION_MEANINGS: Readonly<Record<WarrantyRelationBusines
     relationKind: 'PROPERTY_WHOLE_HOME_PLAN',
     semanticRelationId: 'relation.property.home_warranty_plan',
     cardinality: 'ONE_PLAN_TO_MANY_ITEMS_BY_APPLICABILITY',
-    canonicalStoragePath: 'Pending §22.1 owner ruling (Warranty.propertyId + category/system applicability; InventoryItem.warrantyId is transitional)',
-    legacyStoragePath: 'InventoryItem.warrantyId',
-    newWriteStatus: 'PROHIBITED_LEGACY_AMBIGUOUS_LINK',
+    canonicalStoragePath: 'WarrantyApplicability.warrantyId + inventoryItemId with status=COVERED',
+    legacyStoragePath: 'Retired InventoryItem.warrantyId',
+    newWriteStatus: 'CANONICAL_ALLOWED',
     businessMeaning: 'A property-level or whole-home service plan linked to the Property that may apply to eligible systems or appliances.',
-    coverageProofRule: 'A legacy InventoryItem.warrantyId pointer is transitional link topology only and never proves item-level warranty coverage on its own.',
+    coverageProofRule: 'An applicability row establishes recorded applicability only; coverage of a failure still depends on active dates and contract terms.',
   },
 });
 
@@ -186,7 +186,7 @@ export function extractWarrantyReconciliationCases(
         state: row.state,
         warrantyIds: row.warrantyIds,
         reason: 'LEGACY_PROPERTY_PLAN_POINTER_ONLY',
-        recommendedAction: 'Migrate legacy InventoryItem.warrantyId pointer to canonical Warranty.inventoryItemId or property-plan applicability once §22.1 is finalized.',
+        recommendedAction: 'Migrate the retired InventoryItem.warrantyId pointer to canonical Warranty.inventoryItemId or evidence-backed property-plan applicability.',
       });
     } else if (row.state === 'UNKNOWN') {
       cases.push({
@@ -234,23 +234,26 @@ export function classifyTransitionalWarrantyLinks(input: TransitionalWarrantyLin
   return { inventoryItemId: input.inventoryItemId, label: input.label ?? 'inventory item', state: consistent ? 'BOTH_CONSISTENT' : 'CONFLICTED_LINKS', warrantyIds, reconciliationRequired: !consistent };
 }
 
-/** Property-scoped reader over both legacy link directions. */
+/** Property-scoped canonical reader; the classifier name remains stable for historical reconciliation receipts. */
 export async function readTransitionalWarrantyLinks(propertyId: string): Promise<readonly TransitionalWarrantyRead[]> {
   const items = await prisma.inventoryItem.findMany({
     where: { propertyId },
     select: {
       id: true,
       name: true,
-      warrantyId: true,
       coverageEvidenceStatus: true,
       linkedWarranties: { where: { propertyId }, select: { id: true } },
+      warrantyApplicabilities: {
+        where: { propertyId, status: 'COVERED', warranty: { scopeKind: 'PROPERTY_PLAN' } },
+        select: { warrantyId: true },
+      },
     },
     orderBy: [{ name: 'asc' }, { id: 'asc' }],
   });
   const reads = items.map((item) => classifyTransitionalWarrantyLinks({
     inventoryItemId: item.id,
     label: item.name,
-    propertyPlanWarrantyId: item.warrantyId,
+    propertyPlanWarrantyId: item.warrantyApplicabilities[0]?.warrantyId ?? null,
     itemWarrantyIds: item.linkedWarranties.map((warranty) => warranty.id),
     coverageEvidenceStatus: item.coverageEvidenceStatus,
   }));

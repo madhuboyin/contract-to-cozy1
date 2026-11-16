@@ -59,12 +59,12 @@ async function readInventoryDetail(context: DetailContext, itemId: string): Prom
       name: true, category: true, condition: true, brand: true, manufacturer: true, model: true, modelNumber: true, serialNo: true, serialNumber: true,
       installedOn: true, installedOnPrecision: true, purchasedOn: true, purchasedOnPrecision: true, lastServicedOn: true, expectedExpiryDate: true,
       purchaseCostCents: true, replacementCostCents: true, isVerified: true, verificationSource: true, sourceType: true, sourceFileName: true, importedAt: true,
-      sourceOcrSessionId: true, updatedAt: true, createdAt: true, room: { select: { name: true } }, warranty: { select: { providerName: true } },
+      sourceOcrSessionId: true, updatedAt: true, createdAt: true, room: { select: { name: true } },
       linkedWarranties: { select: { providerName: true } }, insurancePolicy: { select: { carrierName: true } }, _count: { select: { documents: true } },
     },
   });
   if (!item) throw new AskRecordNotFoundError('Record not found.');
-  const warranties = [...new Set([item.warranty?.providerName, ...item.linkedWarranties.map((entry) => entry.providerName)].filter((value): value is string => Boolean(value)))];
+  const warranties = [...new Set(item.linkedWarranties.map((entry) => entry.providerName).filter(Boolean))];
   const related: AskRecordRelated[] = [
     ...(item.room ? [{ label: item.room.name, kindLabel: 'Room', broken: null }] : []),
     ...warranties.map((label) => ({ label, kindLabel: 'Warranty', broken: null })),

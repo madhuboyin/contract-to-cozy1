@@ -6,6 +6,7 @@ import {
   Prisma,
   WarrantyCategory,
 } from '@prisma/client';
+import { WarrantyScopeKind } from '@prisma/client';
 import { majorApplianceIdentityForCreate } from '../../../services/majorAppliance.util';
 import { prisma } from '../../../lib/prisma';
 import { visibleInventoryItemWhere } from '../../../services/riskAssetApplicability';
@@ -176,15 +177,15 @@ export async function resolveRelationalCaptureSchema(
         replacementCostCents: true,
         coverageEvidenceStatus: true,
         insurancePolicyId: true,
-        warrantyId: true,
+        linkedWarranties: { select: { id: true }, orderBy: { createdAt: 'desc' }, take: 1 },
       },
     });
     if (!item) throw new Error('The selected inventory item does not belong to this property.');
     let fields = definition.inputSchema.fields;
     let coverageChoice: string = item.insurancePolicyId
       ? `INSURANCE:${item.insurancePolicyId}`
-      : item.warrantyId
-        ? `WARRANTY:${item.warrantyId}`
+      : item.linkedWarranties[0]
+        ? `WARRANTY:${item.linkedWarranties[0].id}`
         : item.coverageEvidenceStatus === 'NONE'
           ? 'NO_COVERAGE'
           : item.coverageEvidenceStatus === 'NOT_SURE'
@@ -433,8 +434,9 @@ async function updateInventoryItemCoverageEvidence(
     await tx.inventoryItem.update({ where: { id: item.id }, data: { insurancePolicyId: policy.id, coverageEvidenceStatus: 'UNKNOWN' } });
   } else if (coverageChoice.startsWith('WARRANTY:')) {
     const warrantyId = coverageChoice.slice('WARRANTY:'.length);
-    const warranty = await tx.warranty.findFirst({ where: { id: warrantyId, propertyId }, select: { id: true } });
+    const warranty = await tx.warranty.findFirst({ where: { id: warrantyId, propertyId }, select: { id: true, scopeKind: true } });
     if (!warranty) throw new Error('The selected warranty does not belong to this property.');
+    if (warranty.scopeKind !== WarrantyScopeKind.ITEM_SPECIFIC) throw new Error('Whole-home plans require an explicit applicability record and cannot be linked directly to an item.');
     await tx.warranty.update({ where: { id: warranty.id }, data: { inventoryItemId: item.id } });
     await tx.inventoryItem.update({ where: { id: item.id }, data: { coverageEvidenceStatus: 'UNKNOWN' } });
   } else if (coverageChoice === 'ADD_INSURANCE') {
@@ -448,6 +450,7 @@ async function updateInventoryItemCoverageEvidence(
     });
     await tx.inventoryItem.update({ where: { id: item.id }, data: { insurancePolicyId: selection.entityId, coverageEvidenceStatus: 'UNKNOWN' } });
   } else if (coverageChoice === 'ADD_WARRANTY') {
+    if (values.warrantyCategory === WarrantyCategory.HOME_WARRANTY_PLAN) throw new Error('Add whole-home plans at property scope, then record explicit item or system applicability.');
     const selection = await createWarranty(tx, propertyId, {
       providerName: values.warrantyProviderName,
       category: values.warrantyCategory,
@@ -608,6 +611,7 @@ async function createWarranty(
       providerName,
       policyNumber,
       category: category as WarrantyCategory,
+      scopeKind: WarrantyScopeKind.ITEM_SPECIFIC,
       startDate,
       expiryDate,
     },

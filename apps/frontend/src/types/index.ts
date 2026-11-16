@@ -145,7 +145,8 @@ export type InventoryItem = {
   propertyId: string;
   roomId: string | null;
 
-  warrantyId: string | null;
+  /** Canonical selected item-specific warranty. The source relation is Warranty.inventoryItemId. */
+  itemWarrantyId: string | null;
   insurancePolicyId: string | null;
 
   name: string;
@@ -199,6 +200,7 @@ export type InventoryItem = {
 
   // If your backend includes these (it does in our code)
   warranty?: any | null;
+  linkedWarranties?: any[];
   insurancePolicy?: any | null;
 
   documents?: any[]; // Document type exists already in your project; you can replace later

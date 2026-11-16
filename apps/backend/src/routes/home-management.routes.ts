@@ -327,6 +327,9 @@ router.route('/warranties')
  */
 router.post('/warranties/conflicts/resolve', HomeManagementController.resolveWarrantyConflict);
 
+router.put('/warranties/:warrantyId/applicabilities', HomeManagementController.putWarrantyApplicability);
+router.delete('/warranties/:warrantyId/applicabilities/:applicabilityId', HomeManagementController.deleteWarrantyApplicability);
+
 router.route('/warranties/:warrantyId')
   .patch(HomeManagementController.patchWarranty)
   .delete(HomeManagementController.deleteWarranty);

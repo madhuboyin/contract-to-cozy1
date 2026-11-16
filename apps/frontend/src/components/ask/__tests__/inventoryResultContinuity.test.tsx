@@ -28,7 +28,7 @@ function List({ response, onPage = () => {}, onAccessLost = () => {} }: { respon
 }
 function canonicalItem(overrides: Partial<InventoryItem> = {}): InventoryItem {
   return {
-    id: 'item-0', propertyId: 'home', roomId: null, warrantyId: null, insurancePolicyId: null,
+    id: 'item-0', propertyId: 'home', roomId: null, itemWarrantyId: null, insurancePolicyId: null,
     name: 'Water heater', category: 'PLUMBING' as InventoryItem['category'], condition: 'GOOD' as InventoryItem['condition'],
     brand: 'Rheem', model: 'XE50', serialNo: 'SN-1', installedOn: '2022-01-15T00:00:00.000Z', purchasedOn: '2022-01-10T00:00:00.000Z',
     lastServicedOn: null, purchaseCostCents: 85000, replacementCostCents: 120000, currency: 'USD', notes: 'Tank-style, in basement utility closet.',

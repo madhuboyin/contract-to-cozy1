@@ -288,8 +288,8 @@ export function verifyPhase1Invariants(backendRoot: string = DEFAULT_BACKEND_ROO
       issues.push(`Missing false-decline categories in Phase 1 manifest: ${manifestCheck.missingFalseDeclineCategories.join(', ')}`);
     }
   }
-  if (WARRANTY_RELATION_MEANINGS.PROPERTY_WHOLE_HOME_PLAN.newWriteStatus !== 'PROHIBITED_LEGACY_AMBIGUOUS_LINK') {
-    issues.push('Legacy InventoryItem.warrantyId write containment is not set to PROHIBITED_LEGACY_AMBIGUOUS_LINK');
+  if (WARRANTY_RELATION_MEANINGS.PROPERTY_WHOLE_HOME_PLAN.canonicalStoragePath !== 'WarrantyApplicability.warrantyId + inventoryItemId with status=COVERED') {
+    issues.push('Whole-home warranty applicability is not assigned to the canonical WarrantyApplicability relation');
   }
   const writeContainment = verifyNoUnguardedLegacyWarrantyWrites(backendRoot);
   if (!writeContainment.valid) {

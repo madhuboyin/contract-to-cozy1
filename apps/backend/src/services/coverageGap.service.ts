@@ -82,7 +82,8 @@ export async function getCoverageReviewItems(propertyId: string): Promise<Covera
       where: { propertyId, ...visibleInventoryItemWhere() },
       include: {
         room: { select: { name: true } },
-        warranty: { include: { documents: { where: { deletedAt: null }, select: { id: true } } } },
+        linkedWarranties: { include: { documents: { where: { deletedAt: null }, select: { id: true } } }, orderBy: { createdAt: 'desc' }, take: 1 },
+        warrantyApplicabilities: { where: { status: 'COVERED' }, include: { warranty: { include: { documents: { where: { deletedAt: null }, select: { id: true } } } } }, take: 1 },
         insurancePolicy: { include: { documents: { where: { deletedAt: null }, select: { id: true } } } },
       },
       orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
@@ -91,7 +92,8 @@ export async function getCoverageReviewItems(propertyId: string): Promise<Covera
   ]);
 
   return items.flatMap((item): CoverageReviewItem[] => {
-    const presentation = buildInventoryCoveragePresentation(item, responsibilities, today);
+    const warranty = item.linkedWarranties?.[0] ?? item.warrantyApplicabilities?.[0]?.warranty;
+    const presentation = buildInventoryCoveragePresentation({ ...item, warranty }, responsibilities, today);
     const isMaterialCandidate = isCoverageAssetCandidate({
       name: presentation.displayName,
       category: item.category ? String(item.category) : null,
@@ -100,12 +102,12 @@ export async function getCoverageReviewItems(propertyId: string): Promise<Covera
     });
     if (!isMaterialCandidate || ['NOT_REQUIRED', 'MANAGED_ELSEWHERE'].includes(presentation.coverageState)) return [];
 
-    const warrantyDocuments = item.warranty?.documents.length ?? 0;
+    const warrantyDocuments = warranty?.documents.length ?? 0;
     const insuranceDocuments = item.insurancePolicy?.documents.length ?? 0;
-    const hasLinkedCoverage = Boolean(item.warranty || item.insurancePolicy);
+    const hasLinkedCoverage = Boolean(warranty || item.insurancePolicy);
     const soonBoundary = new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000);
     const activeExpiries = [
-      item.warranty && isCoverageActive(item.warranty, propertyId, today) ? item.warranty.expiryDate : null,
+      warranty && isCoverageActive(warranty, propertyId, today) ? warranty.expiryDate : null,
       item.insurancePolicy && isCoverageActive(item.insurancePolicy, propertyId, today) ? item.insurancePolicy.expiryDate : null,
     ].filter((value): value is Date => Boolean(value));
     const expiresSoon = activeExpiries.some((date) => date <= soonBoundary);
@@ -120,13 +122,13 @@ export async function getCoverageReviewItems(propertyId: string): Promise<Covera
           : null;
     if (!group) return [];
 
-    const expiryDates = (activeExpiries.length ? activeExpiries : [item.warranty?.expiryDate, item.insurancePolicy?.expiryDate])
+    const expiryDates = (activeExpiries.length ? activeExpiries : [warranty?.expiryDate, item.insurancePolicy?.expiryDate])
       .filter((value): value is Date => Boolean(value));
     const coverageSources = [
-      item.warranty ? `Warranty · ${item.warranty.providerName}` : null,
+      warranty ? `Warranty · ${warranty.providerName}` : null,
       item.insurancePolicy ? `Insurance · ${item.insurancePolicy.carrierName}` : null,
     ].filter((value): value is string => Boolean(value));
-    const updatedAt = [item.updatedAt, item.warranty?.updatedAt, item.insurancePolicy?.updatedAt]
+    const updatedAt = [item.updatedAt, warranty?.updatedAt, item.insurancePolicy?.updatedAt]
       .filter((value): value is Date => Boolean(value))
       .sort((a, b) => b.getTime() - a.getTime())[0] ?? item.updatedAt;
 
@@ -170,7 +172,8 @@ export async function detectCoverageGaps(
       where: { propertyId, ...visibleInventoryItemWhere() },
       include: {
         room: { select: { name: true } },
-        warranty: true,
+        linkedWarranties: { orderBy: { createdAt: 'desc' }, take: 1 },
+        warrantyApplicabilities: { where: { status: 'COVERED' }, include: { warranty: true }, take: 1 },
         insurancePolicy: true,
       },
     }),
@@ -181,7 +184,8 @@ export async function detectCoverageGaps(
   const results: CoverageGapResult[] = [];
 
   for (const item of items) {
-    const presentation = buildInventoryCoveragePresentation(item, responsibilities, today);
+    const warranty = item.linkedWarranties?.[0] ?? item.warrantyApplicabilities?.[0]?.warranty;
+    const presentation = buildInventoryCoveragePresentation({ ...item, warranty }, responsibilities, today);
     if (item.coverageNotRequired) {
       waived.push({
         inventoryItemId: item.id,
@@ -206,11 +210,11 @@ export async function detectCoverageGaps(
     if (presentation.coverageState !== 'MISSING' || !presentation.coverageActionable || exposureCents < threshold) continue;
 
     const itemCategory = item.category ? String(item.category) : null;
-    const hasWarranty = !!item.warranty;
+    const hasWarranty = !!warranty;
     const hasInsurance = !!item.insurancePolicy;
 
     const warrantyActive =
-      hasWarranty && isCoverageActive(item.warranty as any, propertyId, today);
+      hasWarranty && isCoverageActive(warranty as any, propertyId, today);
     const insuranceActive =
       hasInsurance && isCoverageActive(item.insurancePolicy as any, propertyId, today);
 

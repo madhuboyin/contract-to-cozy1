@@ -718,7 +718,6 @@ export class CoverageIntelligenceService {
             replacementCostCents: true,
             installedOn: true,
             purchasedOn: true,
-            warrantyId: true,
             insurancePolicyId: true,
           },
         }),
@@ -1090,7 +1089,7 @@ export class CoverageIntelligenceService {
         purchasedOn: true,
         replacementCostCents: true,
         purchaseCostCents: true,
-        warranty: {
+        linkedWarranties: {
           select: {
             id: true,
             cost: true,
@@ -1098,6 +1097,8 @@ export class CoverageIntelligenceService {
             startDate: true,
             expiryDate: true,
           },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
         },
       },
     });
@@ -1106,7 +1107,8 @@ export class CoverageIntelligenceService {
       throw new Error('Inventory item not found for this property.');
     }
 
-    return item;
+    const { linkedWarranties, ...rest } = item;
+    return { ...rest, warranty: linkedWarranties[0] ?? null };
   }
 
   private async computeItemSnapshot(

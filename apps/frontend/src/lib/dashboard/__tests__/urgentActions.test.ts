@@ -6,7 +6,7 @@ function createInventoryItem(overrides: Partial<InventoryItem>): InventoryItem {
     id: 'item-default',
     propertyId: 'prop-1',
     roomId: null,
-    warrantyId: null,
+    itemWarrantyId: null,
     insurancePolicyId: null,
     name: 'Default Item',
     category: 'APPLIANCE',
@@ -56,7 +56,7 @@ describe('consolidateUrgentActions - Coverage Gaps', () => {
       createInventoryItem({
         id: 'item-2',
         name: 'Refrigerator',
-        warrantyId: 'warranty-1',
+        itemWarrantyId: 'warranty-1',
         coverageState: 'CONFIRMED',
         coverageStateLabel: 'Coverage confirmed',
         coverageActionable: false,
@@ -73,7 +73,7 @@ describe('consolidateUrgentActions - Coverage Gaps', () => {
       createInventoryItem({
         id: 'item-3',
         name: 'Oven',
-        warrantyId: 'warranty-1',
+        itemWarrantyId: 'warranty-1',
         insurancePolicyId: 'policy-1',
         coverageState: 'CONFIRMED',
         coverageActionable: false,

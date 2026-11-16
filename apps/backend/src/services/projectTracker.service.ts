@@ -2766,6 +2766,7 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
             homeownerProfileId: existing.property.homeownerProfileId,
             propertyId,
             inventoryItemId: existing.inventoryItemId,
+            scopeKind: existing.inventoryItemId ? 'ITEM_SPECIFIC' : 'PROPERTY_PLAN',
             projectId,
             category: 'OTHER',
             providerName: existing.contractorName ?? 'Manufacturer or installer',
@@ -2773,7 +2774,12 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
             startDate: actualEndDate,
             expiryDate: warrantyExpiresAt,
           },
-          update: { startDate: actualEndDate, expiryDate: warrantyExpiresAt, providerName: existing.contractorName ?? 'Manufacturer or installer' },
+          update: {
+            startDate: actualEndDate,
+            expiryDate: warrantyExpiresAt,
+            providerName: existing.contractorName ?? 'Manufacturer or installer',
+            scopeKind: existing.inventoryItemId ? 'ITEM_SPECIFIC' : 'PROPERTY_PLAN',
+          },
         });
         warrantyId = warranty.id;
         const warrantyRecordId = proofRecordIdByKey.get('warranty');

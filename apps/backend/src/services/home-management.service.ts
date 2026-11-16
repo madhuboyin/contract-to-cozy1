@@ -20,6 +20,7 @@ import { evaluateCoverageRecord } from './coverage/contextPolicy';
 import { markCoverageReviewsStale } from './coverageReview.service';
 import { emitPropertyChangeWithTransaction } from '../propertyChanges/propertyChange.service';
 import { getConflictedWarrantyGroups } from './coverageConflict.service';
+import { assertCanonicalWarrantyScope } from './warrantyCanonicalModel';
 
 // Helper interface for safe Decimal conversion (the object must have a toNumber method)
 interface DecimalLike {
@@ -288,13 +289,24 @@ export async function createWarranty(
   data: CreateWarrantyDTO
 ): Promise<Warranty> {
   try {
-    const inventoryItemId = data.inventoryItemId;
+    const inventoryItemId = data.inventoryItemId || null;
+    const scopeKind = assertCanonicalWarrantyScope({ ...data, inventoryItemId });
+    const property = await prisma.property.findFirst({
+      where: { id: data.propertyId, homeownerProfileId },
+      select: { id: true },
+    });
+    if (!property) throw new Error('Warranty property does not belong to this homeowner.');
+    if (inventoryItemId) {
+      const item = await prisma.inventoryItem.findFirst({ where: { id: inventoryItemId, propertyId: property.id }, select: { id: true } });
+      if (!item) throw new Error('Warranty inventory item does not belong to the selected property.');
+    }
     
     const rawWarranty = await prisma.warranty.create({
       data: {
         homeownerProfile: { connect: { id: homeownerProfileId } },
-        property: data.propertyId && data.propertyId !== "" ? { connect: { id: data.propertyId } } : undefined,
+        property: { connect: { id: property.id } },
         category: data.category, 
+        scopeKind,
         // Warranty ownership is canonicalized through the inventory relation.
         inventoryItem: inventoryItemId && inventoryItemId !== "" 
           ? { connect: { id: inventoryItemId } } 
@@ -344,11 +356,25 @@ export async function updateWarranty(
   // updatedAt, in the same statement, so a concurrent edit cannot be silently overwritten. Scalar fields only.
   options?: { expectedUpdatedAt?: Date }
 ): Promise<Warranty> {
+  const existing = await prisma.warranty.findFirst({ where: { id: warrantyId, homeownerProfileId } });
+  if (!existing) throw new Error('Warranty not found.');
+  const nextPropertyId = data.propertyId ?? existing.propertyId;
+  const nextInventoryItemId = data.inventoryItemId === undefined ? existing.inventoryItemId : (data.inventoryItemId || null);
+  const scopeKind = assertCanonicalWarrantyScope({
+    category: data.category ?? existing.category,
+    scopeKind: data.scopeKind ?? existing.scopeKind,
+    propertyId: nextPropertyId,
+    inventoryItemId: nextInventoryItemId,
+  });
+  if (nextInventoryItemId) {
+    const item = await prisma.inventoryItem.findFirst({ where: { id: nextInventoryItemId, propertyId: nextPropertyId! }, select: { id: true } });
+    if (!item) throw new Error('Warranty inventory item does not belong to the selected property.');
+  }
   let rawUpdatedWarranty;
   if (options?.expectedUpdatedAt) {
     const claimed = await prisma.warranty.updateMany({
       where: { id: warrantyId, homeownerProfileId, updatedAt: options.expectedUpdatedAt },
-      data: data as Prisma.WarrantyUpdateManyMutationInput,
+      data: { ...data, scopeKind, inventoryItemId: nextInventoryItemId } as Prisma.WarrantyUpdateManyMutationInput,
     });
     if (claimed.count !== 1) throw Object.assign(new Error('This warranty changed while the edit was open.'), { code: WARRANTY_VERSION_CONFLICT });
     rawUpdatedWarranty = await prisma.warranty.findUniqueOrThrow({ where: { id: warrantyId }, include: { documents: true } });
@@ -357,12 +383,13 @@ export async function updateWarranty(
       where: { id: warrantyId, homeownerProfileId },
       data: {
         ...data,
+        scopeKind,
         ...(data.startDate && { startDate: new Date(data.startDate) }),
         ...(data.expiryDate && { expiryDate: new Date(data.expiryDate) }),
         // Handle inventoryItemId update (supports both old and new field names)
-        ...(data.inventoryItemId && {
-          inventoryItem: { connect: { id: data.inventoryItemId } }
-        }),
+        ...(data.inventoryItemId !== undefined ? {
+          inventoryItem: data.inventoryItemId ? { connect: { id: data.inventoryItemId } } : { disconnect: true },
+        } : {}),
       } as Prisma.WarrantyUpdateInput,
       include: { documents: true }
     });

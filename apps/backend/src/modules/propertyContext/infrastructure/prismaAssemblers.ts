@@ -447,7 +447,7 @@ export const inventoryAssembler: PropertyContextAssembler = {
         lastServicedOn: true,
         expectedExpiryDate: true,
         replacementCostCents: true,
-        warrantyId: true,
+        linkedWarranties: { select: { id: true }, orderBy: { createdAt: 'asc' } },
         insurancePolicyId: true,
         coverageEvidenceStatus: true,
         currency: true,
@@ -459,9 +459,10 @@ export const inventoryAssembler: PropertyContextAssembler = {
       },
       orderBy: [{ roomId: 'asc' }, { name: 'asc' }],
     });
-    const serialized = items.map((item) => Object.fromEntries(
-      Object.entries(item).map(([key, value]) => [key, value instanceof Date ? value.toISOString() : value]),
-    ));
+    const serialized = items.map(({ linkedWarranties, ...item }) => ({
+      ...Object.fromEntries(Object.entries(item).map(([key, value]) => [key, value instanceof Date ? value.toISOString() : value])),
+      itemWarrantyIds: linkedWarranties.map((warranty) => warranty.id),
+    }));
     return [withPropertyId(createPropertyFact('inventory.items', serialized, undefined, now), propertyId)];
   },
 };

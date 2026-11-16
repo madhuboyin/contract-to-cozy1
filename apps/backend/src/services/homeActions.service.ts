@@ -666,7 +666,7 @@ async function loadCurrentCoverageStates(propertyId: string): Promise<Map<string
   const [items, responsibilities] = await Promise.all([
     prisma.inventoryItem.findMany({
       where: { propertyId, ...visibleInventoryItemWhere() },
-      include: { warranty: true, insurancePolicy: true },
+      include: { linkedWarranties: { orderBy: { createdAt: 'desc' }, take: 1 }, insurancePolicy: true },
     }),
     prisma.propertyResponsibility.findMany({
       where: { propertyId },
@@ -675,7 +675,7 @@ async function loadCurrentCoverageStates(propertyId: string): Promise<Map<string
   ]);
 
   return new Map(items.map((item) => {
-    const presentation = buildInventoryCoveragePresentation(item, responsibilities);
+    const presentation = buildInventoryCoveragePresentation({ ...item, warranty: item.linkedWarranties?.[0] }, responsibilities);
     return [item.id, {
       coverageState: presentation.coverageState,
       coverageActionable: presentation.coverageActionable,
@@ -1818,7 +1818,7 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
           name: true,
           category: true,
           isVerified: true,
-          warrantyId: true,
+          linkedWarranties: { select: { id: true }, take: 1 },
           insurancePolicyId: true,
           coverageNotRequired: true,
           updatedAt: true,

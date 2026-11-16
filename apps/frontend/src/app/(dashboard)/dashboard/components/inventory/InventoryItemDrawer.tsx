@@ -535,7 +535,7 @@ useEffect(() => {
       if (result.warranty?.id) {
         setWarrantyId(result.warranty.id);
         await updateInventoryItem(props.propertyId, props.initialItem.id, {
-          warrantyId: result.warranty.id,
+          itemWarrantyId: result.warranty.id,
         });
       }
 

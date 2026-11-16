@@ -47,11 +47,11 @@ function applyRequirementPolicy(requirement: EvaluatedContextRequirement): Evalu
 }
 
 export function selectedItemCoverageEvidenceState(item: {
-  warrantyId?: unknown;
+  itemWarrantyIds?: unknown[];
   insurancePolicyId?: unknown;
   coverageEvidenceStatus?: unknown;
 }): PropertyFact['state'] {
-  if (item.warrantyId || item.insurancePolicyId) return 'KNOWN';
+  if (item.itemWarrantyIds?.length || item.insurancePolicyId) return 'KNOWN';
   // "Not sure" is an explicit unknown, not evidence that coverage exists or
   // does not exist. Keep the inline capture available so the homeowner can
   // resolve or intentionally defer the question without creating a false gap.
@@ -141,13 +141,13 @@ function requirementState(
       return !inferred || item.isVerified === true ? 'KNOWN' : 'UNKNOWN';
     }
     if (requirement.collectionPredicate === 'SELECTED_ITEM_COVERAGE_LIFECYCLE_INCOMPLETE') {
-      if (item.warrantyId || item.insurancePolicyId) return 'KNOWN';
+      if ((Array.isArray(item.itemWarrantyIds) && item.itemWarrantyIds.length > 0) || item.insurancePolicyId) return 'KNOWN';
       const hasCondition = typeof item.condition === 'string' && item.condition !== 'UNKNOWN';
       const hasLifecycleDate = typeof item.purchasedOn === 'string';
       return hasCondition && hasLifecycleDate ? 'KNOWN' : 'UNKNOWN';
     }
     if (requirement.collectionPredicate === 'SELECTED_ITEM_VALUE_INCOMPLETE') {
-      if (item.warrantyId || item.insurancePolicyId) return 'KNOWN';
+      if ((Array.isArray(item.itemWarrantyIds) && item.itemWarrantyIds.length > 0) || item.insurancePolicyId) return 'KNOWN';
       return (typeof item.replacementCostCents === 'number' && item.replacementCostCents > 0)
         || operationInput?.hasDisclosedEstimate === true
         ? 'KNOWN'

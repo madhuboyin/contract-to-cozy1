@@ -249,7 +249,7 @@ router.get(
         include: {
           room: { select: { name: true } },
           documents: { select: { id: true, name: true, type: true, createdAt: true } },
-          warranty: { select: { providerName: true, policyNumber: true, expiryDate: true } },
+          linkedWarranties: { select: { providerName: true, policyNumber: true, expiryDate: true }, orderBy: { createdAt: 'desc' }, take: 1 },
           insurancePolicy: { select: { carrierName: true, policyNumber: true, expiryDate: true } },
         },
         orderBy: [{ roomId: 'asc' }, { name: 'asc' }],
@@ -288,6 +288,7 @@ router.get(
       const date = (d?: Date | null) => (d ? d.toISOString().slice(0, 10) : '');
 
       const rows = items.map((it) => {
+        const warranty = it.linkedWarranties[0];
         const docs = (it.documents || []).map((d) => d.name || d.id).join('; ');
         const tags = (it.tags || []).join('; ');
 
@@ -305,9 +306,9 @@ router.get(
           it.purchaseCostCents ?? '',
           it.replacementCostCents ?? '',
           it.currency || 'USD',
-          it.warranty?.providerName || '',
-          it.warranty?.policyNumber || '',
-          date(it.warranty?.expiryDate),
+          warranty?.providerName || '',
+          warranty?.policyNumber || '',
+          date(warranty?.expiryDate),
           it.insurancePolicy?.carrierName || '',
           it.insurancePolicy?.policyNumber || '',
           date(it.insurancePolicy?.expiryDate),
@@ -343,7 +344,7 @@ router.get(
       const item = await prisma.inventoryItem.findFirst({
         where: { id: itemId, propertyId },
         include: {
-          warranty: {
+          linkedWarranties: {
             select: {
               id: true,
               providerName: true,
@@ -353,6 +354,8 @@ router.get(
               startDate: true,
               expiryDate: true,
             },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
           },
           insurancePolicy: {
             select: {
@@ -371,8 +374,9 @@ router.get(
 
       if (!item) return res.status(404).json({ success: false, message: 'Inventory item not found' });
 
-      const warrantyDecision = item.warranty
-        ? evaluateCoverageRecord(item.warranty, propertyId)
+      const warranty = item.linkedWarranties[0];
+      const warrantyDecision = warranty
+        ? evaluateCoverageRecord(warranty, propertyId)
         : null;
       const insuranceDecision = item.insurancePolicy
         ? evaluateCoverageRecord(item.insurancePolicy, propertyId)
@@ -388,8 +392,8 @@ router.get(
             replacementCostCents: item.replacementCostCents,
             currency: item.currency,
           },
-          warranty: item.warranty
-            ? { ...item.warranty, active: warrantyDecision?.status === 'APPLICABLE', applicability: warrantyDecision }
+          warranty: warranty
+            ? { ...warranty, active: warrantyDecision?.status === 'APPLICABLE', applicability: warrantyDecision }
             : null,
           insurancePolicy: item.insurancePolicy
             ? { ...item.insurancePolicy, active: insuranceDecision?.status === 'APPLICABLE', applicability: insuranceDecision }

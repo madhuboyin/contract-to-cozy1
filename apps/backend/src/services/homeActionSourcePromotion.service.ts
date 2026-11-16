@@ -4732,7 +4732,6 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
               lastServicedOn: true,
               isVerified: true,
               updatedAt: true,
-              warranty: { select: { id: true, providerName: true, expiryDate: true, updatedAt: true } },
               linkedWarranties: {
                 select: { id: true, providerName: true, expiryDate: true, updatedAt: true },
                 orderBy: { expiryDate: 'desc' },
@@ -4776,7 +4775,6 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
     if (item.inventoryItemId && repairReplaceItemIds.has(item.inventoryItemId)) return [];
     const record = item.inventoryItem;
     const linkedWarrantyIds = [
-      record?.warranty?.id,
       ...(record?.linkedWarranties?.map((warranty) => warranty.id) ?? []),
     ].filter((id): id is string => Boolean(id));
     if (linkedWarrantyIds.some((id) => conflictedWarrantyIds.has(id))
@@ -4798,7 +4796,7 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
     const latestServiceEvent = record?.homeEvents?.find((event) => event.type === 'MAINTENANCE');
     const lastServiceDate = record?.lastServicedOn ?? latestServiceEvent?.occurredAt ?? null;
     const repairEvents = record?.homeEvents?.filter((event) => event.type === 'REPAIR') ?? [];
-    const warranty = record?.warranty ?? record?.linkedWarranties?.[0] ?? null;
+    const warranty = record?.linkedWarranties?.[0] ?? null;
     const warrantyActive = warranty?.expiryDate ? warranty.expiryDate >= analysis.computedAt : null;
     const policy = record?.insurancePolicy ?? null;
     const warrantyValue = (warranty?.expiryDate

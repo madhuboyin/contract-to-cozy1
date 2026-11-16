@@ -64,7 +64,7 @@ function inventoryItemSearchText(item: Awaited<ReturnType<InventoryService['list
 export type InventoryMissingFactsInput = {
   brand: string | null; manufacturer: string | null; model: string | null; modelNumber: string | null;
   serialNo: string | null; serialNumber: string | null; purchasedOn: Date | null;
-  documents: readonly unknown[]; warrantyId: string | null; insurancePolicyId: string | null; coverageEvidenceStatus: string;
+  documents: readonly unknown[]; linkedWarranties?: readonly unknown[]; insurancePolicyId: string | null; coverageEvidenceStatus: string;
 };
 
 export function inventoryMissingFacts(item: InventoryMissingFactsInput): string[] {
@@ -74,7 +74,7 @@ export function inventoryMissingFacts(item: InventoryMissingFactsInput): string[
     item.serialNo || item.serialNumber ? null : 'Serial number',
     item.purchasedOn ? null : 'Purchase date',
     item.documents.length ? null : 'Documents',
-    item.warrantyId || item.insurancePolicyId || item.coverageEvidenceStatus !== 'UNKNOWN' ? null : 'Coverage evidence',
+    item.linkedWarranties?.length || item.insurancePolicyId || item.coverageEvidenceStatus !== 'UNKNOWN' ? null : 'Coverage evidence',
   ].filter((value): value is string => Boolean(value));
 }
 
@@ -1009,7 +1009,7 @@ export function inventoryMissingCorrectionActions(
   item: {
     brand?: string | null; manufacturer?: string | null; model?: string | null; modelNumber?: string | null;
     serialNo?: string | null; serialNumber?: string | null; purchasedOn?: Date | string | null;
-    warrantyId?: string | null; insurancePolicyId?: string | null; coverageEvidenceStatus?: string | null;
+    linkedWarranties?: readonly unknown[]; insurancePolicyId?: string | null; coverageEvidenceStatus?: string | null;
   },
   canManage: boolean,
 ) {
@@ -1020,7 +1020,7 @@ export function inventoryMissingCorrectionActions(
     ...(!item.serialNo && !item.serialNumber ? ['serialNo' as const] : []),
     ...(!item.purchasedOn ? ['purchasedOn' as const] : []),
   ].length > 0;
-  const coverageUnknown = !item.warrantyId && !item.insurancePolicyId && (!item.coverageEvidenceStatus || item.coverageEvidenceStatus === 'UNKNOWN');
+  const coverageUnknown = !item.linkedWarranties?.length && !item.insurancePolicyId && (!item.coverageEvidenceStatus || item.coverageEvidenceStatus === 'UNKNOWN');
   return [
     ...(hasMissingFields ? [{
       id: 'complete-missing-details', label: 'Add missing details',

@@ -10,7 +10,7 @@ describe('coverage status and waiver', () => {
     expect(getCoverageStatus(item('a', 100, { coverageState: 'NOT_REQUIRED' }))).toBe('excluded');
     expect(getCoverageStatus(item('a', 100, { coverageState: 'MANAGED_ELSEWHERE' }))).toBe('excluded');
     expect(getCoverageStatus(item('a', 100, { coverageNotRequired: true }))).toBe('excluded');
-    expect(getCoverageStatus(item('a', 100, { warrantyId: 'w' }))).toBe('confirmed');
+    expect(getCoverageStatus(item('a', 100, { itemWarrantyId: 'w' }))).toBe('confirmed');
     expect(getCoverageStatus(item('a', 100))).toBe('incomplete');
   });
 

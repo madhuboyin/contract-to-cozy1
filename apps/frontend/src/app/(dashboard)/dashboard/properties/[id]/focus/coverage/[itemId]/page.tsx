@@ -108,10 +108,11 @@ export default function CoverageFocusPage() {
   const warranties = warrantiesRes?.success ? warrantiesRes.data.warranties : [];
   const policies = policiesRes?.success ? policiesRes.data.policies : [];
 
-  const linkedWarranty = item.warrantyId ? warranties.find(w => w.id === item.warrantyId) : null;
+  const canonicalWarrantyId = item.itemWarrantyId ?? item.linkedWarranties?.[0]?.id ?? null;
+  const linkedWarranty = canonicalWarrantyId ? warranties.find(w => w.id === canonicalWarrantyId) : null;
   const linkedPolicy = item.insurancePolicyId ? policies.find(p => p.id === item.insurancePolicyId) : null;
 
-  const hasWarranty = Boolean(item.warrantyId);
+  const hasWarranty = Boolean(canonicalWarrantyId);
   const hasInsurance = Boolean(item.insurancePolicyId);
   const isFullGap = !hasWarranty && !hasInsurance;
   const isPartialGap = (hasWarranty && !hasInsurance) || (!hasWarranty && hasInsurance);

@@ -8,7 +8,7 @@
 // (HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md
 // §1.1). No field is ever written to a canonical record until its candidate
 // has been explicitly CONFIRMED or CORRECTED by a homeowner.
-import type { HouseholdRole, ExpenseCategory, ExtractedFactCandidate, ExtractedFactReviewStatus, WarrantyCategory } from '@prisma/client';
+import { WarrantyCategory, type HouseholdRole, type ExpenseCategory, type ExtractedFactCandidate, type ExtractedFactReviewStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { auditLog, logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
@@ -555,7 +555,14 @@ export class HomeRecordsExtractionService {
     const categoryCandidate = byField.get('category');
     const category = categoryCandidate?.reviewedValue && WARRANTY_CATEGORY_VALUES.has(categoryCandidate.reviewedValue as WarrantyCategory)
       ? (categoryCandidate.reviewedValue as WarrantyCategory)
-      : undefined;
+      : WarrantyCategory.HOME_WARRANTY_PLAN;
+    if (category !== WarrantyCategory.HOME_WARRANTY_PLAN) {
+      throw new APIError(
+        'Link this item-specific warranty to an inventory item before promotion.',
+        409,
+        'WARRANTY_INVENTORY_ITEM_REQUIRED',
+      );
+    }
     const coverageDetails = byField.get('coverageDetails')?.reviewedValue ?? null;
     const costValue = byField.get('cost')?.reviewedValue;
     const cost = costValue && !Number.isNaN(Number(costValue)) ? Number(costValue) : null;
@@ -571,7 +578,8 @@ export class HomeRecordsExtractionService {
           providerName,
           startDate,
           expiryDate,
-          ...(category ? { category } : {}),
+          category,
+          scopeKind: 'PROPERTY_PLAN',
           ...(coverageDetails ? { coverageDetails } : {}),
           ...(cost != null ? { cost } : {}),
         },

@@ -3,7 +3,7 @@
 // Assuming @prisma/client is available in the backend environment.
 // FIX 1: Import all relevant enums/types from @prisma/client to resolve potential import resolution issues.
 import * as PrismaEnums from '@prisma/client'; 
-import { WarrantyCategory } from '@prisma/client';
+import { WarrantyCategory, WarrantyScopeKind } from '@prisma/client';
 
 /**
  * Expense Category Enum (Synced with Prisma)
@@ -130,6 +130,7 @@ export interface CreateWarrantyDTO {
   startDate: Date;
   expiryDate: Date;
   category: WarrantyCategory;
+  scopeKind?: WarrantyScopeKind;
 }
 
 export interface UpdateWarrantyDTO extends Partial<CreateWarrantyDTO> {}

@@ -528,7 +528,6 @@ export async function computeStatuses(propertyId: string): Promise<void> {
       status: true,
       inventoryItem: {
         include: {
-          warranty: { select: { expiryDate: true } },
           linkedWarranties: { select: { expiryDate: true } },
           maintenanceTasks: {
             where: { status: { not: 'COMPLETED' } },
@@ -562,7 +561,6 @@ export async function computeStatuses(propertyId: string): Promise<void> {
       installDate = item.inventoryItem.purchasedOn ?? null;
       inventoryCategory = item.inventoryItem.category;
       // Collect warranties
-      if (item.inventoryItem.warranty) allWarranties.push(item.inventoryItem.warranty);
       allWarranties.push(...(item.inventoryItem.linkedWarranties || []));
       assetType = item.inventoryItem.assetType;
       maintenanceTasks = item.inventoryItem.maintenanceTasks || [];
@@ -774,7 +772,6 @@ export async function listBoard(propertyId: string, query: ListBoardQuery, userI
     status: true as const,
     inventoryItem: {
       include: {
-        warranty: { select: { id: true, expiryDate: true, providerName: true } },
         linkedWarranties: { select: { id: true, expiryDate: true, providerName: true } },
         maintenanceTasks: {
           where: { status: { not: 'COMPLETED' as const } },
@@ -845,7 +842,6 @@ export async function listBoard(propertyId: string, query: ListBoardQuery, userI
 
     // Warranty
     const allWarranties: { expiryDate?: Date | null }[] = [];
-    if (item.inventoryItem?.warranty) allWarranties.push(item.inventoryItem.warranty);
     if (item.inventoryItem?.linkedWarranties) allWarranties.push(...item.inventoryItem.linkedWarranties);
 
     const warrantyInfo = getWarrantyStatus(allWarranties);

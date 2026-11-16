@@ -296,8 +296,8 @@ export class InventoryService {
         where: { id: itemId, propertyId },
         include: {
           room: true,
-          warranty: true,
           linkedWarranties: { orderBy: { createdAt: 'desc' }, take: 1 },
+          warrantyApplicabilities: { where: { status: 'COVERED' }, include: { warranty: true }, take: 1 },
           insurancePolicy: true,
           documents: { orderBy: { createdAt: 'desc' } },
         },
@@ -305,7 +305,7 @@ export class InventoryService {
       prisma.propertyResponsibility.findMany({ where: { propertyId }, select: { scope: true, party: true } }),
     ]);
     if (!item) throw new APIError('Inventory item not found', 404, 'ITEM_NOT_FOUND');
-    const canonicalWarranty = item.linkedWarranties[0] ?? item.warranty;
+    const canonicalWarranty = item.linkedWarranties?.[0] ?? item.warrantyApplicabilities?.[0]?.warranty;
     return { ...item, itemWarrantyId: canonicalWarranty?.id ?? null, ...buildInventoryCoveragePresentation({ ...item, warranty: canonicalWarranty }, responsibilities) };
   }
   async listItems(propertyId: string, query: ListItemsQuery) {
@@ -347,8 +347,8 @@ export class InventoryService {
         where,
         include: {
           room: true,
-          warranty: true,
           linkedWarranties: { orderBy: { createdAt: 'desc' }, take: 1 },
+          warrantyApplicabilities: { where: { status: 'COVERED' }, include: { warranty: true }, take: 1 },
           insurancePolicy: true,
           documents: { orderBy: { createdAt: 'desc' } },
         },
@@ -357,7 +357,7 @@ export class InventoryService {
       prisma.propertyResponsibility.findMany({ where: { propertyId }, select: { scope: true, party: true } }),
     ]);
     return items.map((item) => {
-      const canonicalWarranty = item.linkedWarranties[0] ?? item.warranty;
+      const canonicalWarranty = item.linkedWarranties?.[0] ?? item.warrantyApplicabilities?.[0]?.warranty;
       return { ...item, itemWarrantyId: canonicalWarranty?.id ?? null, ...buildInventoryCoveragePresentation({ ...item, warranty: canonicalWarranty }, responsibilities) };
     });
   }
@@ -431,7 +431,6 @@ export class InventoryService {
           verificationSource: 'USER_REPORTED',
 
           roomId: data.roomId || null,
-          warrantyId: null,
           insurancePolicyId: data.insurancePolicyId || null,
           assetType: data.assetType || null,
           efficiencyRating: data.efficiencyRating || null,
@@ -466,8 +465,8 @@ export class InventoryService {
         },
         include: {
           room: true,
-          warranty: true,
           linkedWarranties: { orderBy: { createdAt: 'desc' }, take: 1 },
+          warrantyApplicabilities: { where: { status: 'COVERED' }, include: { warranty: true }, take: 1 },
           insurancePolicy: true,
           documents: { orderBy: { createdAt: 'desc' } },
         },
@@ -647,8 +646,8 @@ export class InventoryService {
         data: updateData,
         include: {
           room: true,
-          warranty: true,
           linkedWarranties: { orderBy: { createdAt: 'desc' }, take: 1 },
+          warrantyApplicabilities: { where: { status: 'COVERED' }, include: { warranty: true }, take: 1 },
           insurancePolicy: true,
           documents: { orderBy: { createdAt: 'desc' } },
         },

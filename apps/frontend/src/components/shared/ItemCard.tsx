@@ -39,7 +39,7 @@ function getCoverageStatus(item: InventoryItem): CoverageStatus {
   }
   if (item.coverageNotRequired) return 'not-required';
 
-  const hasWarranty = Boolean(item.warrantyId);
+  const hasWarranty = Boolean(item.itemWarrantyId ?? item.linkedWarranties?.[0]?.id);
   const hasInsurance = Boolean(item.insurancePolicyId);
 
   if (!hasWarranty && !hasInsurance) return 'incomplete';
@@ -97,7 +97,7 @@ export default function ItemCard({
   const coverageStatus = getCoverageStatus(item);
   const coveragePercent = getCoveragePercent(item);
   const hasAssessableCoverage = coverageStatus === 'confirmed' || coverageStatus === 'missing';
-  const hasWarranty = Boolean(item.warrantyId);
+  const hasWarranty = Boolean(item.itemWarrantyId ?? item.linkedWarranties?.[0]?.id);
   const hasInsurance = Boolean(item.insurancePolicyId);
   const replacementValue = getReplacementValue(item);
   const hasReplacementValue = Number(replacementValue || 0) > 0;

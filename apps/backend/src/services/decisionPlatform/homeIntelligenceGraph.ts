@@ -72,8 +72,8 @@ export const HOME_INTELLIGENCE_GRAPH_EDGES: Readonly<Record<HomeIntelligenceGrap
     requiresHomeownerConfirmation: false,
   }),
   // "which future expense or warranty records are directly linked" — both
-  // Warranty relations (primary InventoryItem.warrantyId and the reverse
-  // linkedWarranties) plus HomeCapitalTimelineItem rows, owned by separate
+  // Canonical item warranties through Warranty.inventoryItemId
+  // (InventoryItem.linkedWarranties) plus HomeCapitalTimelineItem rows, owned by separate
   // features (Coverage, Home Capital Timeline) and only optionally linked.
   INVENTORY_ITEM_WARRANTY_AND_FUTURE_EXPENSE: edge({
     edgeType: 'INVENTORY_ITEM_WARRANTY_AND_FUTURE_EXPENSE',
@@ -183,14 +183,13 @@ export async function getSnapshotsReferencingFactPage(
 }
 
 // "which future expense or warranty records are directly linked" (FRD
-// §15.3). Both Warranty link kinds and HomeCapitalTimelineItem rows are
+// §15.3). Canonical item warranties and HomeCapitalTimelineItem rows are
 // optional and owned by other features — an empty result on either side is
 // an expected, not exceptional, outcome.
 export async function getWarrantyAndFutureExpenseForItem(propertyId: string, inventoryItemId: string) {
   const item = await prisma.inventoryItem.findFirst({
     where: { id: inventoryItemId, propertyId },
     select: {
-      warranty: true,
       linkedWarranties: true,
     },
   });
@@ -199,7 +198,7 @@ export async function getWarrantyAndFutureExpenseForItem(propertyId: string, inv
     orderBy: { windowStart: 'asc' },
   });
   return {
-    primaryWarranty: item?.warranty ?? null,
+    primaryWarranty: item?.linkedWarranties[0] ?? null,
     linkedWarranties: item?.linkedWarranties ?? [],
     futureExpenses,
   };

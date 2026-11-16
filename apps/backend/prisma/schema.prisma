@@ -357,6 +357,23 @@ enum WarrantyCategory {
   OTHER
 }
 
+enum WarrantyApplicabilityStatus {
+  COVERED
+  EXCLUDED
+  UNKNOWN
+}
+
+enum WarrantyApplicabilityScope {
+  INVENTORY_ITEM
+  INVENTORY_CATEGORY
+  HOME_SYSTEM
+}
+
+enum WarrantyScopeKind {
+  ITEM_SPECIFIC
+  PROPERTY_PLAN
+}
+
 enum LocalUpdateCategory {
   INTERNET
   INSURANCE
@@ -1238,8 +1255,8 @@ model InventoryItem {
   sourceFileName  String?
   importedAt      DateTime?
 
-  // Mapping & Coverage
-  warrantyId        String?
+  // Mapping & Coverage. Item-specific warranties are owned exclusively by
+  // Warranty.inventoryItemId; whole-home plan applicability is explicit.
   insurancePolicyId String?
 
   // Durable provenance back to the OCR scan this item was confirmed from
@@ -1314,8 +1331,8 @@ model InventoryItem {
   // Relations
   property         Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   room             InventoryRoom?        @relation(fields: [roomId], references: [id], onDelete: SetNull)
-  warranty         Warranty?             @relation(fields: [warrantyId], references: [id], onDelete: SetNull)
   linkedWarranties Warranty[]            @relation("WarrantyToInventoryItem")
+  warrantyApplicabilities WarrantyApplicability[]
   insurancePolicy  InsurancePolicy?      @relation(fields: [insurancePolicyId], references: [id], onDelete: SetNull)
   importBatch      InventoryImportBatch? @relation(fields: [sourceBatchId], references: [id], onDelete: SetNull)
   sourceOcrSession InventoryOcrSession?  @relation(fields: [sourceOcrSessionId], references: [id], onDelete: SetNull)
@@ -4156,6 +4173,7 @@ model Property {
 
   // NEW RELATIONS
   warranties                 Warranty[]
+  warrantyApplicabilities    WarrantyApplicability[]
   insurancePolicies          InsurancePolicy[]
   insurancePolicyTerms       InsurancePolicyTerm[]
   coverageReviews            CoverageReview[]
@@ -5463,6 +5481,7 @@ model Warranty {
   id                 String           @id @default(uuid())
   homeownerProfileId String
   category           WarrantyCategory @default(HOME_WARRANTY_PLAN)
+  scopeKind          WarrantyScopeKind
   propertyId         String? // Link to a specific property (e.g., HVAC unit warranty is for the main home)
   inventoryItemId    String? // NEW: Direct link to InventoryItem
   projectId          String?          @unique
@@ -5485,10 +5504,10 @@ model Warranty {
 
   // PHASE 1: NEW RELATION
   maintenanceTasks    PropertyMaintenanceTask[]
-  inventoryItems      InventoryItem[]
   claims              Claim[]
   homeSavingsAccounts HomeSavingsAccount[]
   homeEvents          HomeEvent[]
+  applicabilities     WarrantyApplicability[]
 
   // Ask Cozy Stage 3, Phase 2 (implementation plan §8/§17; FRD §22). The
   // CAPTURE_EVENT_CONFIRM AskExecution.id that created this warranty via
@@ -5504,6 +5523,32 @@ model Warranty {
   @@index([expiryDate])
   @@index([inventoryItemId])
   @@map("warranties")
+}
+
+model WarrantyApplicability {
+  id                String                      @id @default(uuid())
+  propertyId        String
+  warrantyId        String
+  targetKey         String
+  scope             WarrantyApplicabilityScope
+  status            WarrantyApplicabilityStatus @default(UNKNOWN)
+  inventoryItemId   String?
+  inventoryCategory InventoryItemCategory?
+  homeSystemType    String?
+  evidenceSource    String?
+  evidenceJson      Json?
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+
+  property      Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  warranty      Warranty       @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+
+  @@unique([warrantyId, targetKey])
+  @@index([propertyId, status])
+  @@index([warrantyId, scope])
+  @@index([inventoryItemId, status])
+  @@map("warranty_applicabilities")
 }
 
 // ============================================================================

@@ -17,6 +17,7 @@ import { collectionDescriptor } from '../support/collectionDescriptor';
 import { loadAskViewState } from './maintenance.handler';
 import { containsFilterContinuation } from '../askFollowUpContext';
 import { isOrderingId, orderingChips, orderingFromWords, withOrdering, type OrderingOption } from '../support/collectionOrdering';
+import { resolvePropertyPlanApplicabilityForItem } from '../../warrantyApplicability.service';
 
 // Warranties capability slice, W-1 (FRD v1.124; ACUI Warranties certification). A deterministic record read: what the Home Record
 // says about this home's warranties. It reads the same property-scoped rows the Warranties route does
@@ -426,7 +427,7 @@ export function itemWarrantyFromRecords(input: {
 
 async function itemWarrantyResult(userId: string, propertyId: string, itemId: string): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
-  const item = await prisma.inventoryItem.findFirst({ where: { id: itemId, propertyId }, select: { id: true, name: true, warrantyId: true } });
+  const item = await prisma.inventoryItem.findFirst({ where: { id: itemId, propertyId }, select: { id: true, name: true } });
   if (!item) {
     return {
       status: 'READY_WITH_LIMITATIONS', reasonCode: 'WARRANTY_ITEM_NOT_FOUND',
@@ -439,8 +440,17 @@ async function itemWarrantyResult(userId: string, propertyId: string, itemId: st
     };
   }
   const canWrite = access.role !== HouseholdRole.VIEWER;
+  const applicablePlanIds = (await resolvePropertyPlanApplicabilityForItem(propertyId, item.id))
+    .filter((entry) => entry.status === 'COVERED')
+    .map((entry) => entry.warrantyId);
   const records = await prisma.warranty.findMany({
-    where: { propertyId, OR: [{ inventoryItemId: item.id }, ...(item.warrantyId ? [{ id: item.warrantyId }] : [])] },
+    where: {
+      propertyId,
+      OR: [
+        { inventoryItemId: item.id },
+        ...(applicablePlanIds.length ? [{ id: { in: applicablePlanIds } }] : []),
+      ],
+    },
     orderBy: [{ expiryDate: 'asc' }, { id: 'asc' }],
     select: {
       id: true, propertyId: true, providerName: true, category: true, coverageDetails: true, startDate: true, expiryDate: true, updatedAt: true,

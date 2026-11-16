@@ -21,16 +21,19 @@
 // by every other Warranty-creating caller in this codebase
 // (relationalCaptureAdapters.ts's own createWarranty, confirmed by reading
 // it directly before writing this).
-import { Prisma, WarrantyCategory } from '@prisma/client';
+import { Prisma, WarrantyCategory, WarrantyScopeKind } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../../../lib/prisma';
 import { propertyContextCapturesTotal } from '../../../lib/metrics';
 import { resolvePropertyAccess, ROLE_RANK } from '../../../services/propertyAccess.service';
 import { PropertyContextAccessDeniedError } from './getPropertyContext';
+import { assertCanonicalWarrantyScope } from '../../../services/warrantyCanonicalModel';
 
 const captureWarrantyInputSchema = z.object({
   providerName: z.string().trim().min(1).max(160),
   category: z.nativeEnum(WarrantyCategory),
+  scopeKind: z.nativeEnum(WarrantyScopeKind).optional(),
+  inventoryItemId: z.string().uuid().nullable().optional(),
   policyNumber: z.string().trim().max(160).nullable().optional(),
   coverageDetails: z.string().trim().max(2000).nullable().optional(),
   cost: z.number().nonnegative().max(10_000_000).nullable().optional(),
@@ -53,17 +56,24 @@ export async function captureWarranty(
   const startDate = new Date(input.startDate);
   const expiryDate = new Date(input.expiryDate);
   if (expiryDate <= startDate) throw new Error('Warranty expiry date must be after the start date.');
+  const scopeKind = assertCanonicalWarrantyScope({ ...input, propertyId });
 
   try {
     const warranty = await prisma.$transaction(async (tx) => {
       const property = await tx.property.findUnique({ where: { id: propertyId }, select: { homeownerProfileId: true } });
       if (!property) throw new Error('Property not found.');
+      if (input.inventoryItemId) {
+        const item = await tx.inventoryItem.findFirst({ where: { id: input.inventoryItemId, propertyId }, select: { id: true } });
+        if (!item) throw new Error('Warranty inventory item does not belong to this property.');
+      }
       return tx.warranty.create({
         data: {
           homeownerProfileId: property.homeownerProfileId,
           propertyId,
           providerName: input.providerName,
           category: input.category,
+          scopeKind,
+          inventoryItemId: input.inventoryItemId ?? null,
           policyNumber: input.policyNumber ?? null,
           coverageDetails: input.coverageDetails ?? null,
           cost: input.cost != null ? new Prisma.Decimal(input.cost) : null,

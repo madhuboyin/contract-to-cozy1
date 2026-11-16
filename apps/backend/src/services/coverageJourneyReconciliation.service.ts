@@ -37,14 +37,14 @@ export async function reconcileCoverageGuidanceJourneyApplicability(
         id: { in: itemIds },
         ...visibleInventoryItemWhere(),
       },
-      include: { warranty: true, insurancePolicy: true },
+      include: { linkedWarranties: { orderBy: { createdAt: 'desc' }, take: 1 }, insurancePolicy: true },
     }),
     prisma.propertyResponsibility.findMany({
       where: { propertyId },
       select: { scope: true, party: true },
     }),
   ]);
-  const itemById = new Map(items.map((item) => [item.id, item]));
+  const itemById = new Map(items.map((item) => [item.id, { ...item, warranty: item.linkedWarranties?.[0] }]));
 
   const ineligible = journeys.filter((journey) => {
     if (!journey.inventoryItemId) return false;

@@ -38,7 +38,7 @@ test('item-specific warranties and property whole-home plans have distinct busin
   assert.equal(WARRANTY_RELATION_MEANINGS.ITEM_SPECIFIC_WARRANTY.cardinality, 'ONE_ITEM_TO_MANY_WARRANTIES');
   assert.equal(WARRANTY_RELATION_MEANINGS.ITEM_SPECIFIC_WARRANTY.newWriteStatus, 'CANONICAL_ALLOWED');
   assert.equal(WARRANTY_RELATION_MEANINGS.PROPERTY_WHOLE_HOME_PLAN.cardinality, 'ONE_PLAN_TO_MANY_ITEMS_BY_APPLICABILITY');
-  assert.equal(WARRANTY_RELATION_MEANINGS.PROPERTY_WHOLE_HOME_PLAN.newWriteStatus, 'PROHIBITED_LEGACY_AMBIGUOUS_LINK');
+  assert.equal(WARRANTY_RELATION_MEANINGS.PROPERTY_WHOLE_HOME_PLAN.newWriteStatus, 'CANONICAL_ALLOWED');
 });
 
 test('write containment prohibits new ambiguous legacy InventoryItem.warrantyId writes and captures reconciliation cases', () => {

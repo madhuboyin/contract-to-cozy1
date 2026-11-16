@@ -56,7 +56,7 @@ const canonicalRoom = (): RoomInsightsDTO => ({
 } as RoomInsightsDTO);
 
 const canonicalItem = (): InventoryItem => ({
-  id: 'oven', propertyId: 'home', roomId: 'kitchen', warrantyId: null, insurancePolicyId: null,
+  id: 'oven', propertyId: 'home', roomId: 'kitchen', itemWarrantyId: null, insurancePolicyId: null,
   name: 'Oven Range', category: 'APPLIANCE' as InventoryItem['category'], condition: 'GOOD' as InventoryItem['condition'],
   brand: 'Samsung', model: 'NX60', serialNo: 'OVEN-1', installedOn: '2022-01-15T00:00:00.000Z', purchasedOn: '2022-01-10T00:00:00.000Z',
   lastServicedOn: null, purchaseCostCents: 85000, replacementCostCents: 120000, currency: 'USD', notes: 'Gas range in the kitchen.',

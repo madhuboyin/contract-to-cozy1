@@ -242,7 +242,7 @@ export function inventoryStatusWhere(status: string, now = new Date()): Record<s
         { AND: [blank('serialNo'), blank('serialNumber')] },
         { purchasedOn: null },
         { documents: { none: {} } },
-        { AND: [{ warrantyId: null }, { insurancePolicyId: null }, { coverageEvidenceStatus: 'UNKNOWN' }] },
+        { AND: [{ linkedWarranties: { none: {} } }, { insurancePolicyId: null }, { coverageEvidenceStatus: 'UNKNOWN' }] },
       ],
     };
   }
@@ -285,7 +285,7 @@ export async function readInventoryPage(propertyId: string, query: AskRecordColl
       select: {
         id: true, name: true, category: true, condition: true, isVerified: true, updatedAt: true, expectedExpiryDate: true,
         brand: true, manufacturer: true, model: true, modelNumber: true, serialNo: true, serialNumber: true, purchasedOn: true,
-        warrantyId: true, insurancePolicyId: true, coverageEvidenceStatus: true,
+        linkedWarranties: { select: { id: true }, take: 1 }, insurancePolicyId: true, coverageEvidenceStatus: true,
         room: { select: { name: true } },
         documents: { select: { id: true }, take: 1 },
       },

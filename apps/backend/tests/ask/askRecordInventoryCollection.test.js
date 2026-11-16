@@ -13,7 +13,7 @@ const NOW = new Date('2026-10-19T12:00:00Z');
 const item = (n, overrides = {}) => ({
   id: `item-${String(n).padStart(3, '0')}`, propertyId: 'p1', name: `Item ${n}`, assetType: null, tags: [], category: 'APPLIANCE', condition: 'GOOD', isVerified: true,
   updatedAt: new Date(NOW.getTime() - n * 60_000), expectedExpiryDate: null, brand: 'Acme', manufacturer: null, model: 'M1', modelNumber: null, serialNo: 'S1', serialNumber: null,
-  purchasedOn: new Date('2024-01-01T00:00:00Z'), warrantyId: 'w1', insurancePolicyId: null, coverageEvidenceStatus: 'UNKNOWN', documents: [{ id: 'd1' }], roomId: null, room: null, upc: null, sku: null, ...overrides,
+  purchasedOn: new Date('2024-01-01T00:00:00Z'), linkedWarranties: [{ id: 'w1' }], insurancePolicyId: null, coverageEvidenceStatus: 'UNKNOWN', documents: [{ id: 'd1' }], roomId: null, room: null, upc: null, sku: null, ...overrides,
 });
 
 function install(rows) {
@@ -71,7 +71,7 @@ test('the incomplete filter selects exactly the items Ask judges to have missing
     item(5, { model: null }), item(6, { model: null, modelNumber: 'MN' }),
     item(7, { serialNo: null }), item(8, { serialNo: null, serialNumber: 'SN' }),
     item(9, { purchasedOn: null }), item(10, { documents: [] }),
-    item(11, { warrantyId: null }), item(12, { warrantyId: null, coverageEvidenceStatus: 'NOT_COVERED' }), item(13, { warrantyId: null, insurancePolicyId: 'pol' }),
+    item(11, { linkedWarranties: [] }), item(12, { linkedWarranties: [], coverageEvidenceStatus: 'NOT_COVERED' }), item(13, { linkedWarranties: [], insurancePolicyId: 'pol' }),
   ];
   for (const candidate of items) {
     const expected = inventoryMissingFacts(candidate).length > 0;

@@ -257,8 +257,8 @@ export async function composeHvacDecisionContext(
       where: { id: inventoryItemId, propertyId, category: 'HVAC' },
       select: {
         id: true, name: true, condition: true, installedOn: true, purchasedOn: true,
-        replacementCostCents: true, warrantyId: true,
-        warranty: { select: { expiryDate: true } },
+        replacementCostCents: true,
+        linkedWarranties: { select: { expiryDate: true }, orderBy: { createdAt: 'desc' }, take: 1 },
         documents: {
           where: {
             deletedAt: null,
@@ -324,7 +324,7 @@ export async function composeHvacDecisionContext(
       condition: item.condition,
       repairSpendCentsLast30Months,
       repairEventCountLast30Months: repairEvents.length,
-      warrantyActive: Boolean(item.warranty?.expiryDate && item.warranty.expiryDate.getTime() > Date.now()),
+      warrantyActive: Boolean(item.linkedWarranties[0]?.expiryDate && item.linkedWarranties[0].expiryDate.getTime() > Date.now()),
       currentQuoteAmountCents: bestQuote?.amount ? Math.round(Number(bestQuote.amount) * 100) : null,
       currentQuoteVendor: bestQuote?.vendorName ?? null,
       technicianAssessmentOnFile: item.documents.length > 0,

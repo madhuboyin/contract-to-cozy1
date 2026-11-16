@@ -19,6 +19,8 @@ import {
   PolicyFactValue,
 } from '../services/insurancePolicyRecord.service';
 import { APIError } from '../middleware/error.middleware';
+import { recordWarrantyApplicability, removeWarrantyApplicability } from '../services/warrantyApplicability.service';
+import type { WarrantyApplicabilityInput } from '../services/warrantyCanonicalModel';
 
 // ============================================================================
 // FILE UPLOAD SETUP
@@ -210,6 +212,28 @@ export const patchWarranty = async (req: AuthRequest, res: Response, next: NextF
       updateData
     );
     res.status(200).json({ success: true, data: warranty });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const putWarrantyApplicability = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const applicability = await recordWarrantyApplicability(
+      getHomeownerId(req),
+      req.params.warrantyId,
+      req.body as WarrantyApplicabilityInput,
+    );
+    res.status(200).json({ success: true, data: applicability });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteWarrantyApplicability = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    await removeWarrantyApplicability(getHomeownerId(req), req.params.warrantyId, req.params.applicabilityId);
+    res.status(200).json({ success: true, message: 'Warranty applicability removed.' });
   } catch (error) {
     next(error);
   }

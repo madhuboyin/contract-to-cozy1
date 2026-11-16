@@ -331,7 +331,7 @@ function resolveExpectedLifespanYears(category: string, name: string): number | 
 interface AgingInventoryItem {
   id: string;
   name: string;
-  warrantyId: string | null;
+  hasItemWarranty: boolean;
   ageYears: number;
   expectedLifespanYears: number;
   pastExpectedLife: boolean;
@@ -343,7 +343,7 @@ interface AgingInventoryItem {
 async function findAgingInventoryItems(propertyId: string): Promise<AgingInventoryItem[]> {
   const items = await prisma.inventoryItem.findMany({
     where: { propertyId, isVerified: true },
-    select: { id: true, name: true, category: true, installedOn: true, purchasedOn: true, warrantyId: true },
+    select: { id: true, name: true, category: true, installedOn: true, purchasedOn: true, linkedWarranties: { select: { id: true }, take: 1 } },
   });
   const now = Date.now();
   const results: AgingInventoryItem[] = [];
@@ -357,7 +357,7 @@ async function findAgingInventoryItems(propertyId: string): Promise<AgingInvento
     results.push({
       id: item.id,
       name: item.name,
-      warrantyId: item.warrantyId,
+      hasItemWarranty: item.linkedWarranties.length > 0,
       ageYears,
       expectedLifespanYears,
       pastExpectedLife: ageYears >= expectedLifespanYears,
@@ -393,7 +393,7 @@ function projectAgingSystems(agingItems: AgingInventoryItem[]): ProjectedItem[] 
 // already uses for its `highlight:` prefix.
 function projectWarrantySuggestions(agingItems: AgingInventoryItem[]): ProjectedItem[] {
   return agingItems
-    .filter((item) => !item.warrantyId)
+    .filter((item) => !item.hasItemWarranty)
     .map((item) => ({
       sourceEntityType: 'INVENTORY_ITEM' as const,
       sourceEntityId: `warranty-suggestion:${item.id}`,

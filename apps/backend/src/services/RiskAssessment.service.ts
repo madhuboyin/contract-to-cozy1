@@ -37,6 +37,7 @@ interface PropertyWithRelations extends Property {
   inventoryItems: Array<
     InventoryItem & {
       room?: Pick<InventoryRoom, 'id' | 'name'> | null;
+      linkedWarranties?: Pick<Warranty, 'id'>[];
     }
   >;
 }
@@ -514,8 +515,8 @@ class RiskAssessmentService {
         ratio >= 1 ? 'HIGH' : ratio >= 0.8 ? 'MODERATE' : 'LOW';
   
       // CoverageFactor: simple V1 heuristic:
-      // - insurancePolicyId or warrantyId reduces out-of-pocket exposure
-      const hasCoverage = Boolean(item.warrantyId || item.insurancePolicyId);
+      // Canonical item warranty links or an insurance policy reduce recorded exposure.
+      const hasCoverage = Boolean(item.linkedWarranties?.length || item.insurancePolicyId);
       const coverageFactor = hasCoverage ? 0.7 : 0.0;
   
       const outOfPocketCost =
@@ -611,6 +612,7 @@ class RiskAssessmentService {
         inventoryItems: {
           include: {
             room: { select: { id: true, name: true } },
+            linkedWarranties: { select: { id: true } },
           },
         },
       },

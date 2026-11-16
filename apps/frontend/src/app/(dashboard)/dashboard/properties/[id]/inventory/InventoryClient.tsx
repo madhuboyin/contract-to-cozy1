@@ -55,7 +55,7 @@ function getCoverageStatus(item: InventoryItem): 'uncovered' | 'partial' | 'cove
   if (item.coverageState === 'INCOMPLETE') return 'partial';
   if (item.coverageNotRequired) return 'waived';
 
-  const hasWarranty = Boolean(item.warrantyId);
+  const hasWarranty = Boolean(item.itemWarrantyId ?? item.linkedWarranties?.[0]?.id);
   const hasInsurance = Boolean(item.insurancePolicyId);
 
   if (!hasWarranty && !hasInsurance) return 'uncovered';
@@ -348,7 +348,7 @@ export default function InventoryClient() {
       if (activeSmartFilter === 'not-required' && !item.coverageNotRequired) return false;
       if (activeSmartFilter === 'missing-age' && item.purchasedOn) return false;
       if (activeSmartFilter === 'missing-date' && (item.recordGroup === 'SYSTEMS_STRUCTURE' || item.purchasedOn)) return false;
-      if (activeSmartFilter === 'missing-warranty' && (!isActionableCoverageGap(item) || item.warrantyId)) return false;
+      if (activeSmartFilter === 'missing-warranty' && (!isActionableCoverageGap(item) || item.itemWarrantyId || item.linkedWarranties?.length)) return false;
 
       return true;
     });
@@ -375,7 +375,7 @@ export default function InventoryClient() {
 
   const missingAgeCount = useMemo(() => items.filter((item) => !item.purchasedOn).length, [items]);
   const missingDateCount = useMemo(() => items.filter((item) => item.recordGroup !== 'SYSTEMS_STRUCTURE' && !item.purchasedOn).length, [items]);
-  const missingWarrantyCount = useMemo(() => items.filter((item) => isActionableCoverageGap(item) && !item.warrantyId).length, [items]);
+  const missingWarrantyCount = useMemo(() => items.filter((item) => isActionableCoverageGap(item) && !item.itemWarrantyId && !item.linkedWarranties?.length).length, [items]);
 
   const groupedItems = useMemo(() => ({
     systems: filteredItems.filter((item) => item.recordGroup === 'SYSTEMS_STRUCTURE').sort(byNeedsAttentionFirst),

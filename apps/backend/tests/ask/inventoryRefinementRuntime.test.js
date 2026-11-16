@@ -25,7 +25,7 @@ const originals = { listItems: InventoryService.prototype.listItems, resolveAcce
 const soon = new Date(); soon.setUTCFullYear(soon.getUTCFullYear() + 1);
 const item = (id, name, category, overrides = {}) => ({
   id, name, category, assetType: null, brand: 'Acme', model: 'X1', manufacturer: null, modelNumber: null, serialNo: 'S1', serialNumber: null,
-  purchasedOn: new Date('2020-01-01'), documents: [{ id: 'd' }], warrantyId: 'w1', insurancePolicyId: null, coverageEvidenceStatus: 'UNKNOWN',
+  purchasedOn: new Date('2020-01-01'), documents: [{ id: 'd' }], linkedWarranties: [{ id: 'w1' }], insurancePolicyId: null, coverageEvidenceStatus: 'UNKNOWN',
   expectedExpiryDate: null, room: { name: 'Basement' }, tags: [], updatedAt: new Date('2026-09-01'), condition: 'GOOD', notes: null, isVerified: true,
   sourceType: 'USER_ADDED', verificationSource: null, ...overrides,
 });
