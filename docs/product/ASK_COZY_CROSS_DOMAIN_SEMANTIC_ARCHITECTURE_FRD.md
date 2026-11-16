@@ -1,8 +1,8 @@
 # Ask Cozy — Cross-Domain Semantic Request Architecture FRD
 
-**Status:** Draft v1.5 for owner review
+**Status:** Draft v1.7 for owner review
 
-**Date:** 2026-11-14
+**Date:** 2026-11-16
 
 **Scope:** All Ask Cozy homeowner turns, all product domains, reads, analyses, guided workflows, and confirmed writes
 
@@ -23,6 +23,8 @@
 **v1.5 amendment:** Replaces the temporary per-family structural verifier with the first shared-lexicon typed-grammar subset in Phase 1; moves provider integration to an optional early parallel track after the vertical slice; defines exclusive facet ownership during mixed new/legacy migration; adds offline model-assisted lexicon enrichment governance; and separates correctness for a declared domain scope from measured homeowner-language coverage.
 
 **v1.6 amendment:** Records the 2026-11-16 owner decision for canonical warranty relationships. Item-specific warranties are zero-to-many through `Warranty.inventoryItemId`; property and whole-home plans remain property-scoped and use evidence-backed `WarrantyApplicability` rows for item, inventory-category or home-system applicability. `InventoryItem.warrantyId` is retired. Recorded linkage, plan applicability, contract coverage, explicit absence, unknown and conflict remain distinct meanings.
+
+**v1.7 amendment:** Records the 2026-11-16 owner decision that `UNKNOWN` warranty and coverage records appear by default in a separate owner-visible result group. Unknown records are never merged with confirmed protection, confirmed gaps, explicit absence, exclusions or conflicts; confirmed and unknown populations and totals remain separately labelled in every projection.
 
 ---
 
@@ -48,6 +50,7 @@ This section is the maintained repository implementation ledger for this FRD. It
 | Typed Boolean query contract | Implemented contract and deterministic assembly seam; surface parsing deferred | `SemanticWhereExpressionSchema` permits only bounded `PREDICATE`, `AND`, `OR` and `NOT` nodes. `semanticBooleanAssembler.ts`, version `semantic-boolean-0.1.0`, assembles explicit conjunction, either/or and neither/nor meanings from registered predicates, rejects duplicates and invalid arity, and returns clarification for ambiguous negative `OR`. Warranty plans emit a registered predicate and `path.inventory_item.warranty`; natural-language connective annotation is not yet wired to multi-node plans. |
 | Relation registry | Implemented for canonical item-warranty and property-plan applicability relations | `semanticRelationRegistry.ts`, `warrantyCanonicalModel.ts`, and `warrantyApplicability.service.ts` bind item-specific warranty links to `Warranty.inventoryItemId` and whole-home plan applicability to typed, evidence-backed `WarrantyApplicability` targets. Plan validation rejects unknown or cross-field-inconsistent relation constraints and predicate/path pairs. |
 | Canonical warranty relation, applicability and state model | Implemented (`FR-QUERY-7`; owner decision recorded 2026-11-16) | Prisma removes `InventoryItem.warrantyId`, adds `Warranty.scopeKind` and `WarrantyApplicability`, and preserves item-specific recorded links, applicable property plans, exclusions, unknowns, explicit no-coverage evidence and conflicts as separate states. `HOME_WARRANTY_PLAN` cannot link directly to an item; item/category/system applicability requires one typed target and confirmed applicability requires provenance. Database migration generation remains owner-operated per repository policy. |
+| Default `UNKNOWN` warranty/coverage grouping | Owner-approved 2026-11-16; implementation consistency audit pending | Ordinary warranty and coverage projections shall include unknown records by default in a separately labelled `Coverage unclear` or `Needs confirmation` group. Unknown rows and counts shall not contribute to confirmed-protection or confirmed-gap totals. Existing `COVERAGE_GAPS` presentation already uses `COVERAGE_UNCLEAR`; generic semantic and cross-domain projections still require consistency verification against this rule. |
 | Legacy admission agreement | Implemented (`FR-CAP-3`) | `legacyGrammarAgreement.ts` provides `warrantyShapeGrammarAgreement`, `dataPointReadGrammarAgreement`, `savedResultsGrammarAgreement`, and `verifyLegacyCandidateGrammarAgreement` to independently compare legacy candidates with the typed grammar plan on semantic job/relation, subject, polarity, projection, material filters, and required slots before admission across `dataPointRead.handler.ts` and `savedResults.handler.ts`. |
 | Minimal read receipt and entailment | Implemented (`FR-ANS-1`, `FR-ANS-2`) | `semanticExecutionReceipt.ts` (`buildSemanticReadReceipt`) and `semanticReceiptEntailment.ts` (`verifySemanticReadReceiptEntailment`) validate plan lineage, registered predicates, resolved-record cardinality, separated confirmed/conflicted/unknown populations, authorization, provenance and answer projection across `dataPointRead.handler.ts` (`dataPointQueryResult`, `shape789Result`, and single-point `dataPointReadResult`) and `savedResults.handler.ts` (`savedResultsFromPage`). |
 | Command preview admission & presentation humanizer | Implemented (`FR-CAP-4`, `FR-ANS-6`) | `commandPreviewAdmission.ts` validates semantic job, target entity, parameters, and required slots before any uncertified command candidate opens a preview. `presentationHumanizer.ts` humanizes registered enums and internal codes at the shared rendering boundary and strips retry actions (`retryable: false`, `actions: []`) from deterministic contract or entailment failures. |
@@ -163,6 +166,8 @@ The requested output shape: `EXISTS`, `COUNT`, `LIST`, `DETAIL`, `AGGREGATE`, `C
 ### 4.5 Polarity and record state
 
 `HAS`, `HAS_NOT`, `UNKNOWN`, `CONFLICTED`, `CONFLICTED_LINKS`, `EXPIRED`, `INACTIVE`, `MISSING_EVIDENCE`, and `NOT_APPLICABLE` are separate states. Absence of a linked record is not automatically proof that a real-world warranty, policy, permit, or document does not exist. A conflict is neither confirmed positive nor confirmed negative.
+
+For warranty and coverage results, `UNKNOWN` records shall be included by default in their own owner-visible group, labelled `Coverage unclear` or an equivalent approved plain-language label. They shall not be counted as confirmed protection or as confirmed gaps. `CONFLICTED` and `CONFLICTED_LINKS` remain separate conflict populations. `COUNT`, `LIST`, `DETAIL`, `AGGREGATE`, and `COMPARE` projections shall preserve separately labelled confirmed, unknown, and conflicted populations; an explicit filter may narrow to one population but may not silently reclassify another.
 
 ### 4.6 Semantic equivalence family
 
@@ -1237,12 +1242,13 @@ For every row, seeded data shall assert the exact plan, records, counts, missing
 
 **Resolved 2026-11-16 — canonical warranty model:** Item-specific warranties are zero-to-many through `Warranty.inventoryItemId`. Property/whole-home plans remain property-scoped and use evidence-backed `WarrantyApplicability` rows for item, inventory-category or home-system applicability. `InventoryItem.warrantyId` is retired. A recorded link or applicability row does not by itself prove coverage of a particular failure.
 
+**Resolved 2026-11-16 — default `UNKNOWN` result grouping:** Warranty and coverage records in an `UNKNOWN` state are included by default in a separate owner-visible result group. They are excluded from confirmed-protection and confirmed-gap totals and remain distinct from explicit absence, exclusions, `CONFLICTED`, and `CONFLICTED_LINKS`. Explicit filters may request only unknown or only confirmed populations; ordinary unfiltered results must not silently omit unknown records.
+
 1. The final list of owner-visible entities/fields deliberately excluded from Ask, if any.
 2. Provider and homeowner-text processing approval for semantic interpretation.
 3. Latency and cost budgets for single-stage and two-stage interpretation.
-4. Whether `UNKNOWN` warranty/coverage state should default to a separate result group or be excluded unless explicitly requested. Recommendation: separate group.
-5. Which recommendation/analysis capabilities require additional materiality disclosures beyond their existing domain rules.
-6. Which currently duplicated scalar fields represent the same business meaning and which are intentionally distinct; until decided, conflicting non-empty values remain `CONFLICTED` rather than silently coalesced.
+4. Which recommendation/analysis capabilities require additional materiality disclosures beyond their existing domain rules.
+5. Which currently duplicated scalar fields represent the same business meaning and which are intentionally distinct; until decided, conflicting non-empty values remain `CONFLICTED` rather than silently coalesced.
 
 These decisions do not block Phase 0 inventories, schema design, pure planners, seeded fixtures, or containment of known contradictory/fabricated-answer paths.
 
