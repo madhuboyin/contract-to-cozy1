@@ -812,6 +812,7 @@ export async function runPhase6EndToEndEvaluation(options: {
     })),
     warranty: () => baseSnapshot.warranties.map((w) => ({
       ...w,
+      inventoryItemId: baseSnapshot.items.find((it) => it.itemWarrantyIds.includes(w.id))?.id ?? null,
       expiryDate: w.expiryDate ? new Date(w.expiryDate) : null,
     })),
     propertyMaintenanceTask: () => baseSnapshot.maintenanceTasks.map((t) => ({
@@ -1063,8 +1064,32 @@ export async function runPhase6EndToEndEvaluation(options: {
     });
   }
 
+  let useMissingFinanceForEntryCase = false;
+  if (prismaAnyForEntry.toolOverride && typeof prismaAnyForEntry.toolOverride.findMany === 'function') {
+    prismaAnyForEntry.toolOverride.findMany = async () => (
+      useMissingFinanceForEntryCase || baseSnapshot.financeSlots?.monthlyRentCents == null
+        ? []
+        : [{ key: 'MONTHLY_RENT_NOW', value: String(baseSnapshot.financeSlots.monthlyRentCents / 100) }]
+    );
+  }
+  if (prismaAnyForEntry.sellHoldRentAnalysis && typeof prismaAnyForEntry.sellHoldRentAnalysis.findFirst === 'function') {
+    prismaAnyForEntry.sellHoldRentAnalysis.findFirst = async () => (
+      useMissingFinanceForEntryCase || !baseSnapshot.financeSlots
+        ? null
+        : {
+            years: baseSnapshot.financeSlots.horizonYears,
+            winner: baseSnapshot.financeSlots.sellHoldRentWinner,
+            homeValueNowCents: baseSnapshot.financeSlots.homeValueCents,
+            netHoldCents: baseSnapshot.financeSlots.netHoldCents,
+            netRentCents: baseSnapshot.financeSlots.netRentCents,
+            drivers: { monthlyRentCents: baseSnapshot.financeSlots.monthlyRentCents },
+          }
+    );
+  }
+
   try {
     for (const c of PHASE6_SEALED_EVALUATION_CASES) {
+      useMissingFinanceForEntryCase = Boolean(c.useMissingDataSnapshot);
       let routingDecision = resolveAskRoutingCascade(c.prompt, { propertyId: baseSnapshot.propertyId });
       if (routingDecision.stage !== 'REMOTE_FALLBACK' && !routingDecision.requiresClarification) {
         rawCascadeNonFallbackCount += 1;
@@ -1127,16 +1152,73 @@ export async function runPhase6EndToEndEvaluation(options: {
           semanticEvaluationMode: 'DUAL_PRODUCER',
         },
       );
-      const capOk =
-        c.kind === 'OUT_OF_SCOPE_PROBE'
-          ? capRes.reasonCode === 'DATA_POINT_NOT_IDENTIFIED'
-          : c.kind === 'SAFETY_BOUNDARY'
-            ? capRes.reasonCode === 'SAFETY_BOUNDARY_TRIGGERED' || capRes.status === 'OUT_OF_SCOPE'
-            : capRes.status === 'ANSWERED'
-              || capRes.status === 'READY_WITH_LIMITATIONS'
-              || capRes.status === 'NEEDS_CONFIRMATION'
-              || capRes.status === 'NEEDS_CLARIFICATION'
-              || capRes.status === 'OUT_OF_SCOPE';
+      const crossExec = capRes.parameters?.crossDomainExecution as
+        | {
+            readonly status?: string;
+            readonly conflictedRecordIds?: readonly string[];
+            readonly facetResults?: readonly {
+              readonly jobMatch?: string | null;
+              readonly recordIds?: readonly string[];
+              readonly receipt?: { readonly conflictedCount?: number };
+            }[];
+          }
+        | undefined;
+      const semanticReceipt = capRes.parameters?.semanticExecutionReceipt as
+        | {
+            readonly resolvedRecordIds?: readonly string[];
+            readonly populationCounts?: { readonly conflicted?: number };
+          }
+        | undefined;
+      const resolvedIds = new Set<string>([
+        ...(semanticReceipt?.resolvedRecordIds ?? []),
+        ...(crossExec?.facetResults?.flatMap((f) => f.recordIds ?? []) ?? []),
+      ]);
+      const blocksJson = JSON.stringify(capRes.blocks ?? []);
+
+      let capOk = false;
+      if (c.expectedExecutionStatus === 'NONE_FITS') {
+        capOk = capRes.reasonCode === 'DATA_POINT_NOT_IDENTIFIED' || capRes.status === 'OUT_OF_SCOPE';
+      } else if (c.expectedExecutionStatus === 'BOUNDARY') {
+        capOk =
+          capRes.reasonCode === 'SAFETY_BOUNDARY_TRIGGERED'
+          || capRes.reasonCode === 'EMERGENCY_BOUNDARY'
+          || capRes.reasonCode === 'UNSAFE_RESTRICTED_BOUNDARY'
+          || crossExec?.status === 'BOUNDARY';
+      } else if (c.expectedExecutionStatus === 'CLARIFY') {
+        capOk = capRes.status === 'NEEDS_CLARIFICATION' || crossExec?.status === 'CLARIFY';
+      } else if (c.expectedExecutionStatus === 'PREVIEW_CONFIRMATION') {
+        capOk = capRes.status === 'NEEDS_CONFIRMATION' && Boolean(capRes.confirmation);
+      } else if (c.expectedExecutionStatus === 'PARTIAL') {
+        capOk =
+          (capRes.status === 'READY_WITH_LIMITATIONS' && capRes.reasonCode === 'CROSS_DOMAIN_PARTIAL')
+          || crossExec?.status === 'PARTIAL';
+      } else if (c.expectedExecutionStatus === 'ANSWERED') {
+        if (effectiveOpId === 'SAVED_RESULTS') {
+          capOk =
+            (capRes.status === 'ANSWERED'
+              || (capRes.status === 'READY_WITH_LIMITATIONS' && capRes.reasonCode === 'SAVED_PARTIAL'))
+            && capRes.blocks.length > 0;
+        } else {
+          capOk = capRes.status === 'ANSWERED' && capRes.blocks.length > 0;
+          if (capOk && crossExec) {
+            if (crossExec.status !== 'ANSWERED') capOk = false;
+            if (capOk && c.expectedRecordIds?.length) {
+              capOk = c.expectedRecordIds.every((id) => resolvedIds.has(id));
+            }
+            if (capOk && c.kind === 'CONFLICTED') {
+              capOk = !resolvedIds.has('item-furnace');
+            }
+            if (capOk && c.expectedJobMatch && (crossExec.facetResults?.length ?? 0) > 0) {
+              const matchedJobs = crossExec.facetResults!.map((f) => f.jobMatch).filter(Boolean);
+              if (matchedJobs.length > 0 && !matchedJobs.includes(c.expectedJobMatch)) {
+                capOk = false;
+              }
+            }
+          } else if (capOk && effectiveOpId === 'INCIDENT_CLAIM_STATUS') {
+            capOk = blocksJson.includes(baseSnapshot.claims[0]?.title ?? 'Water damage');
+          }
+        }
+      }
       if (capOk) {
         allRoutedCapabilityResolvedCount += 1;
       }
