@@ -582,7 +582,7 @@ export const ASK_RECOGNIZER_RETIREMENT_MANIFEST: readonly RecognizerInventoryEnt
       'DATA_POINT_DEFINITIONS',
       'QUERY_SHAPE_REGISTRIES',
     ],
-    liveItemCount: 247,
+    liveItemCount: 233,
     affectedDomains: [
       'domain.property_profile',
       'domain.inventory',
@@ -1019,6 +1019,34 @@ export function discoverLiveAskRecognizerSources(
   return Object.freeze(discovered);
 }
 
+/**
+ * FR-ONT-8: families whose legacy recognizer has been DELETED, not merely demoted. Each records the successor, the parity
+ * evidence that justified deletion, and the source tokens that must never reappear (a mechanical guard against a competing
+ * claim path returning). `validateRetiredRecognizerFamilies` fails if any forbidden token is found in `src/`.
+ */
+export interface RetiredRecognizerFamily {
+  readonly familyId: string;
+  readonly retiredOn: string;
+  readonly formerSources: readonly string[];
+  readonly successor: string;
+  readonly parityEvidence: string;
+  readonly forbiddenTokens: readonly string[];
+}
+
+export const ASK_RETIRED_RECOGNIZER_FAMILIES: readonly RetiredRecognizerFamily[] = Object.freeze([
+  {
+    familyId: 'recognizer.retired.inventory_item_warranty_relation_shape9',
+    retiredOn: '2026-11-16',
+    formerSources: [
+      'src/services/ask/dataPoint/dataPointShapes789.ts (Shape 9: NO_WARRANTY / HAS_WARRANTY planner, where-clause, runner, renderer)',
+      'src/services/ask/semantic/legacyGrammarAgreement.ts (warrantyShapeGrammarAgreement)',
+    ],
+    successor: 'deterministicSemanticParser + cross-domain executor, job query.inventory_item.warranty_relation, relation relation.inventory_item.warranty (canonical adapter readTransitionalWarrantyLinks)',
+    parityEvidence: 'Over 13,446 generated phrasings (14 leads x 8 nouns x 20 warranty phrases x 3 politeness x 2 punctuation, plus 10 fixed rows), every prompt the legacy recognizer would have executed (792 with grammar agreement) is also parsed by the typed grammar; 0 legacy-only answers. All 792 reach the semantic entry (CROSS_DOMAIN_PLAN_MATCH) identically before and after deletion. The 2,016 legacy-only matches were already refused by the agreement gate (DISAGREE).',
+    forbiddenTokens: ['NO_WARRANTY\'', 'HAS_WARRANTY\'', 'warrantyShapeGrammarAgreement'],
+  },
+]);
+
 export interface ValidateRecognizerRetirementOptions {
   readonly backendRoot?: string;
   readonly extraDiscoveredFiles?: readonly string[];
@@ -1115,5 +1143,32 @@ export function validateRecognizerRetirementManifest(
     }
   }
 
+  return issues;
+}
+
+/** Mechanical proof that a retired family stays retired: none of its forbidden tokens may appear in repository source. */
+export function validateRetiredRecognizerFamilies(options: { readonly backendRoot?: string } = {}): string[] {
+  const issues: string[] = [];
+  const backendRoot = options.backendRoot ?? resolveDefaultBackendRoot();
+  const srcRoot = path.join(backendRoot, 'src');
+  const stack = [srcRoot];
+  const files: string[] = [];
+  while (stack.length > 0) {
+    const dir = stack.pop() as string;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name.startsWith('graphify-out')) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) stack.push(full);
+      else if (entry.name.endsWith('.ts') && !full.endsWith('recognizerRetirementManifest.ts')) files.push(full);
+    }
+  }
+  for (const family of ASK_RETIRED_RECOGNIZER_FAMILIES) {
+    for (const file of files) {
+      const text = fs.readFileSync(file, 'utf8');
+      for (const token of family.forbiddenTokens) {
+        if (text.includes(token)) issues.push(`Retired recognizer ${family.familyId}: forbidden token ${token} reappeared in ${path.relative(backendRoot, file)}.`);
+      }
+    }
+  }
   return issues;
 }

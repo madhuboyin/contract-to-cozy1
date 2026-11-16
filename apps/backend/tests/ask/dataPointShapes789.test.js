@@ -6,7 +6,6 @@ const { resolveAskOperation } = require('../../src/services/ask/askOperationRegi
 const { prisma } = require('../../src/lib/prisma.ts');
 const propertyAccessService = require('../../src/services/propertyAccess.service.ts');
 const { dataPointReadResult } = require('../../src/services/ask/handlers/dataPointRead.handler.ts');
-const { verifySemanticReadReceiptEntailment } = require('../../src/services/ask/semantic/semanticReceiptEntailment.ts');
 
 test('planning: absence, service gap, no warranty, change over time; ordinary questions are left alone', () => {
   const shape = (m) => planShape789(m)?.shape ?? null;
@@ -18,12 +17,11 @@ test('planning: absence, service gap, no warranty, change over time; ordinary qu
   assert.equal(shape('How much does a new roof cost?'), null); assert.equal(shape('What is the replacement cost of my furnace?'), null);
   assert.equal(shape('Which appliances have I not serviced in over a year?'), 'STALE_SERVICE');
   assert.equal(planShape789('Which appliances have never been serviced?').cutoff, null);
-  assert.equal(shape('Which appliances have no warranty?'), 'NO_WARRANTY');
-  assert.equal(shape('Which appliances have a warranty?'), 'HAS_WARRANTY');
-  assert.equal(planShape789('Which appliances are out of warranty?').currentOnly, true);
-  assert.equal(planShape789('Which appliances have no warranty?').currentOnly, false);
-  assert.equal(planShape789('Provide details of appliances without warranty').detail, true);
-  assert.equal(planShape789('Do any appliances have a warranty?').exists, true);
+  // FR-ONT-8: the warranty relation ("which appliances have / have no warranty") has no legacy recognizer any more; the typed
+  // grammar and cross-domain executor are its sole producer, so the shape planner must never claim these questions.
+  for (const m of ['Which appliances have no warranty?', 'Which appliances have a warranty?', 'Which appliances are out of warranty?', 'Provide details of appliances without warranty', 'Do any appliances have a warranty?', 'How many appliances are not having warranty?']) {
+    assert.equal(planShape789(m), null, m);
+  }
   assert.equal(shape('How has my property tax changed over the years?'), 'TIME_SERIES');
   assert.equal(planShape789('How has my assessed value changed?').pointId, 'taxAssessment.totalAssessedValue');
   assert.equal(shape('Compare my property tax to last year'), 'TIME_SERIES');
@@ -31,7 +29,17 @@ test('planning: absence, service gap, no warranty, change over time; ordinary qu
   assert.equal(planShape789('which appliances have I not serviced in over 60 years'), null);
 });
 test('routing: these questions reach DATA_POINT_READ', () => {
-  for (const m of ['Which appliances have no serial number recorded?', 'Which appliances have no warranty?', 'How has my property tax changed over the years?', 'Which appliances have I not serviced in over a year?']) assert.equal(resolveAskOperation(m).operationId, 'DATA_POINT_READ', m);
+  for (const m of ['Which appliances have no serial number recorded?', 'How has my property tax changed over the years?', 'Which appliances have I not serviced in over a year?']) assert.equal(resolveAskOperation(m).operationId, 'DATA_POINT_READ', m);
+});
+test('routing: the warranty relation reaches DATA_POINT_READ through the semantic entry, not a legacy rule (FR-ONT-8 parity)', () => {
+  const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
+  const { resolveAskSemanticEntryDecision } = require('../../src/services/ask/semantic/semanticEntryDispatcher.ts');
+  for (const m of ['Which appliances have no warranty?', 'which items are having warranty', 'how many appliances are not having warranty', 'provide details of all items without warranty']) {
+    const decision = resolveAskRoutingCascade(m, { propertyId: 'p1' });
+    const entry = resolveAskSemanticEntryDecision({ rawMessage: m, routingStage: decision.stage, routingOperationId: decision.operation.operationId, requiresClarification: decision.requiresClarification, hasSemanticProvider: true });
+    assert.equal(entry.shouldDispatchToSemanticEntry, true, m);
+    assert.equal(entry.reasonCode, 'CROSS_DOMAIN_PLAN_MATCH', m);
+  }
 });
 test('where clauses are property-scoped and built only from declarations', () => {
   const now = new Date('2026-11-13T00:00:00Z');
@@ -40,23 +48,17 @@ test('where clauses are property-scoped and built only from declarations', () =>
   assert.deepEqual(shapeWhere('p1', planShape789('which appliances have no serial number', now), now), { propertyId: 'p1', OR: [{ serialNumber: null }, { serialNumber: '' }] });
   const stale = shapeWhere('p1', planShape789('which appliances have I not serviced in over 2 years', now), now);
   assert.equal(stale.propertyId, 'p1'); assert.equal(stale.OR[1].lastServicedOn.lt.toISOString().slice(0, 10), '2024-11-13');
-  assert.deepEqual(shapeWhere('p1', planShape789('which appliances have no warranty', now), now), { propertyId: 'p1', linkedWarranties: { none: {} } });
-  assert.deepEqual(shapeWhere('p1', planShape789('which appliances are out of warranty', now), now).linkedWarranties.none.expiryDate.gte, now);
+  // No second, handler-local definition of the item-to-warranty relation remains (FR-ONT-7).
+  assert.equal(planShape789('which appliances have no warranty', now), null);
+  assert.throws(() => shapeWhere('p1', { shape: 'NO_WARRANTY' }, now));
 });
 
 function stub(role = 'OWNER') { propertyAccessService.resolvePropertyAccess = async () => ({ propertyId: 'p1', userId: 'u1', role, isOwner: role === 'OWNER' }); }
-test('handler: absence, no warranty and service gap answers name the items and what "not recorded" means', async () => {
+test('handler: absence and service gap answers name the items and what "not recorded" means (the warranty relation is answered by the typed-grammar executor, see crossDomainSemantic*.test.js)', async () => {
   stub();
   const calls = [];
   prisma.inventoryItem = { findMany: async (a) => {
     calls.push(a);
-    if (a.select?.linkedWarranties) return [
-      { id: 'i1', name: 'Dishwasher', warrantyId: null, coverageEvidenceStatus: 'UNKNOWN', linkedWarranties: [] },
-      { id: 'i2', name: 'Furnace', warrantyId: null, coverageEvidenceStatus: 'NONE', linkedWarranties: [] },
-      { id: 'i3', name: 'Washer', warrantyId: 'w-1', coverageEvidenceStatus: 'UNKNOWN', linkedWarranties: [{ id: 'w-2' }] },
-      { id: 'i4', name: 'Dryer', warrantyId: null, coverageEvidenceStatus: 'NOT_SURE', linkedWarranties: [] },
-      { id: 'i5', name: 'Range', warrantyId: null, coverageEvidenceStatus: 'UNKNOWN', linkedWarranties: [{ id: 'w-3' }] },
-    ];
     return [{ id: 'i1', name: 'Dishwasher', lastServicedOn: null }, { id: 'i2', name: 'Furnace', lastServicedOn: new Date('2023-01-01') }];
   }, count: async (a) => (a.where.lastServicedOn === null ? 1 : 2) };
   const absent = await dataPointReadResult('u1', 'p1', 'Which appliances have no serial number recorded?');
@@ -64,32 +66,6 @@ test('handler: absence, no warranty and service gap answers name the items and w
   assert.equal(absent.parameters.dataPointQuery.snapshot, true);
   const stale = await dataPointReadResult('u1', 'p1', 'Which appliances have I not serviced in over a year?');
   assert.equal(stale.status, 'READY_WITH_LIMITATIONS'); assert.match(stale.blocks[0].body, /no service date at all/);
-  const noWarranty = await dataPointReadResult('u1', 'p1', 'How many appliances have no warranty?');
-  assert.match(noWarranty.blocks[0].title, /2 items have no linked warranty record/);
-  assert.match(noWarranty.blocks[0].body, /1 item has conflicting warranty links/);
-  assert.match(noWarranty.blocks[0].body, /1 item has an unknown warranty state/);
-  assert.equal(noWarranty.parameters.semanticExecutionReceipt.projection, 'COUNT');
-  assert.equal(noWarranty.parameters.semanticExecutionReceipt.population.confirmedCount, 2);
-  assert.equal(noWarranty.parameters.semanticExecutionReceipt.population.conflictedCount, 1);
-  assert.equal(noWarranty.parameters.semanticExecutionReceipt.population.unknownCount, 1);
-  assert.deepEqual(noWarranty.parameters.semanticExecutionReceipt.predicateIds, ['predicate.inventory_item.has_no_warranty_record']);
-  assert.equal(verifySemanticReadReceiptEntailment(noWarranty).outcome, 'PASS');
-  const forged = structuredClone(noWarranty);
-  forged.parameters.semanticExecutionReceipt.population.confirmedCount = 99;
-  assert.deepEqual(verifySemanticReadReceiptEntailment(forged).reasonCodes, ['SEMANTIC_RECEIPT_NOT_ENTAILED', 'CONFIRMED_POPULATION_MISMATCH']);
-  const hasWarranty = await dataPointReadResult('u1', 'p1', 'Which appliances have a warranty?');
-  assert.match(hasWarranty.blocks[0].title, /1 item has a linked warranty record/);
-  assert.match(hasWarranty.blocks[0].body, /A linked record does not by itself establish/);
-  assert.deepEqual(hasWarranty.parameters.semanticExecutionReceipt.predicateIds, ['predicate.inventory_item.has_warranty_record']);
-  assert.equal(verifySemanticReadReceiptEntailment(hasWarranty).outcome, 'PASS');
-  const warrantyDetails = await dataPointReadResult('u1', 'p1', 'Provide details of all appliances without warranty');
-  assert.equal(warrantyDetails.parameters.semanticExecutionReceipt.projection, 'DETAIL');
-  assert.match(warrantyDetails.blocks[0].body, /Dishwasher \(no linked warranty record\)/);
-  assert.match(warrantyDetails.blocks[0].body, /Furnace \(explicitly recorded as no coverage\)/);
-  const warrantyExists = await dataPointReadResult('u1', 'p1', 'Do any appliances have a warranty?');
-  assert.equal(warrantyExists.parameters.semanticExecutionReceipt.projection, 'EXISTS');
-  assert.match(warrantyExists.blocks[0].title, /^Yes/);
-  assert.equal(verifySemanticReadReceiptEntailment(warrantyExists).outcome, 'PASS');
   prisma.inventoryItem = { findMany: async () => [], count: async () => 0 };
   const none = await dataPointReadResult('u1', 'p1', 'Which appliances have no serial number recorded?');
   assert.match(none.blocks[0].title, /Every item has its serial number/);

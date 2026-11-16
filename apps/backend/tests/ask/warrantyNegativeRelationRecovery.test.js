@@ -2,14 +2,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 require('ts-node/register/transpile-only');
 
-const { planShape789 } = require('../../src/services/ask/dataPoint/dataPointShapes789.ts');
-const { warrantyShapeGrammarAgreement } = require('../../src/services/ask/semantic/legacyGrammarAgreement.ts');
+const { parseDeterministicSemanticRequest } = require('../../src/services/ask/semantic/deterministicSemanticParser.ts');
 const { groundedReadVerdict } = require('../../src/services/ask/support/provisionalRead.ts');
 
 function semanticWarrantyResult(question, projection) {
-  const shape = planShape789(question);
-  const agreement = warrantyShapeGrammarAgreement(question, shape);
-  assert.equal(agreement.outcome, 'AGREE');
+  const plan = parseDeterministicSemanticRequest(question);
+  assert.equal(plan.outcome, 'MATCH');
+  const agreement = { facet: plan.facets[0] };
   const answerVariantId = 'phase2a-inventory-summary';
   const count = 2;
   return {

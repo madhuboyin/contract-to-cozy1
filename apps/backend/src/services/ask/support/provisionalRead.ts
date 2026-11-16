@@ -7,7 +7,7 @@ import { matchesOperationAnswerContract } from '../answerContract/operationAnswe
 import { ALTERNATE_POINT, isSingleWarrantyFact, resolveDataPoint, resolveDataPointsMulti } from '../dataPoint/dataPointCatalogue';
 import { planDataPointQuery } from '../dataPoint/dataPointQueryPlan';
 import { planShape789 } from '../dataPoint/dataPointShapes789';
-import { warrantyShapeGrammarAgreement } from '../semantic/legacyGrammarAgreement';
+import { parseDeterministicSemanticRequest } from '../semantic/deterministicSemanticParser';
 import { SemanticReadReceiptSchema } from '../semantic/semanticExecutionReceipt';
 import { verifySemanticReadReceiptEntailment } from '../semantic/semanticReceiptEntailment';
 
@@ -42,20 +42,19 @@ export function groundedReadVerdict(question: string, result: AskOperationResult
     if (!Array.isArray(parameters.sources) || parameters.sources.length === 0) return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'NO_SOURCE_RECORD'] };
     return { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] };
   }
-  // Unified semantic warranty-relation reads do not carry the legacy
-  // dataPointQuery.template marker. Their typed receipt is the grounding
-  // evidence, so validate it directly before falling back to the legacy
-  // computed-query marker. Without this branch, a correct COUNT/DETAIL
-  // answer was withheld as NO_GROUNDING_EVIDENCE after semantic promotion.
-  const shape = planShape789(question);
+  // A unified semantic read carries a typed receipt instead of the legacy dataPointQuery.template marker. The receipt is
+  // grounding evidence only if an independently built typed-grammar plan for the question agrees with it (facet, projection,
+  // relation predicate) and its structural entailment passes. No legacy recognizer participates (FR-ONT-8).
   const receipt = SemanticReadReceiptSchema.safeParse((result.parameters as { semanticExecutionReceipt?: unknown } | undefined)?.semanticExecutionReceipt);
-  if (shape?.shape === 'NO_WARRANTY' || shape?.shape === 'HAS_WARRANTY') {
-    const agreement = warrantyShapeGrammarAgreement(question, shape);
-    if (agreement.outcome !== 'AGREE') return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'TYPED_GRAMMAR_DISAGREES'] };
-    if (!receipt.success) return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'SEMANTIC_RECEIPT_INVALID'] };
-    if (receipt.data.facetId !== agreement.facet?.id
-      || receipt.data.projection !== agreement.facet.projection
-      || !receipt.data.predicateIds.includes(agreement.facet.relations[0].predicateId)) {
+  if (receipt.success && !parameters.dataPointQuery?.template) {
+    const plan = parseDeterministicSemanticRequest(question);
+    const facet = plan.outcome === 'MATCH' && plan.facets.length === 1 ? plan.facets[0] : null;
+    if (!facet) return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'TYPED_GRAMMAR_DISAGREES'] };
+    if (!facet.confidenceSignals.grammarComplete) return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'TYPED_GRAMMAR_DISAGREES'] };
+    const expectedPredicate = facet.relations[0]?.predicateId;
+    if (receipt.data.facetId !== facet.id
+      || receipt.data.projection !== facet.projection
+      || (expectedPredicate !== undefined && !receipt.data.predicateIds.includes(expectedPredicate))) {
       return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'SEMANTIC_RECEIPT_PLAN_MISMATCH'] };
     }
     const entailment = verifySemanticReadReceiptEntailment(result);
@@ -67,7 +66,7 @@ export function groundedReadVerdict(question: string, result: AskOperationResult
   if (parameters.dataPointQuery?.template) {
     const template = parameters.dataPointQuery.template;
     const plan = planDataPointQuery(question);
-    const planned = template === 'shape789' ? shape !== null : plan.kind === 'PLAN' && plan.plan.template.id === template;
+    const planned = template === 'shape789' ? planShape789(question) !== null : plan.kind === 'PLAN' && plan.plan.template.id === template;
     return planned ? { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] } : { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'QUESTION_DOES_NOT_PLAN_TO_THIS_QUERY'] };
   }
   // 3. an honest limitation: it states no value, so it can only be a reason, a question back, or a boundary
@@ -334,7 +333,7 @@ export const PROVISIONAL_READ_FAMILY_DISPOSITIONS: Readonly<Record<string, {
   readonly admissionEvidence: readonly string[];
 }>> = Object.freeze({
   DATA_POINT_READ: { disposition: 'TYPED_GRAMMAR_AGREEMENT', admissionEvidence: ['deterministicSemanticParser', 'dataPointReadGrammarAgreement', 'semanticExecutionReceipt'] },
-  WARRANTY_LOOKUP: { disposition: 'TYPED_GRAMMAR_AGREEMENT', admissionEvidence: ['deterministicSemanticParser', 'warrantyShapeGrammarAgreement', 'groundedWarrantyVerdict'] },
+  WARRANTY_LOOKUP: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'warrantyRouteGuard', 'groundedWarrantyVerdict', 'operationAnswerContract'] },
   SAVED_RESULTS: { disposition: 'TYPED_GRAMMAR_AGREEMENT', admissionEvidence: ['deterministicSemanticParser', 'savedResultsGrammarAgreement', 'semanticExecutionReceipt'] },
   MAINTENANCE_STATUS: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'maintenanceRouteGuard', 'groundedMaintenanceVerdict', 'operationAnswerContract'] },
   HOME_STATUS_BOARD: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'statusBoardRouteGuard', 'groundedStatusBoardVerdict', 'operationAnswerContract'] },

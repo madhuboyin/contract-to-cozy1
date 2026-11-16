@@ -9,28 +9,6 @@ export interface LegacyGrammarAgreement {
   readonly facet: SemanticFacet | null;
 }
 
-/** Independent admission evidence for the first migrated legacy family. */
-export function warrantyShapeGrammarAgreement(message: string, legacy: Shape789Plan): LegacyGrammarAgreement {
-  const plan = parseDeterministicSemanticRequest(message);
-  const facet = plan.outcome === 'MATCH' && plan.facets.length === 1 ? plan.facets[0] : null;
-  if (legacy.shape !== 'NO_WARRANTY' && legacy.shape !== 'HAS_WARRANTY') return { outcome: 'DISAGREE', reasonCode: 'LEGACY_FAMILY_NOT_MIGRATED', plan, facet };
-  if (!facet) return { outcome: 'DISAGREE', reasonCode: 'GRAMMAR_DID_NOT_MATCH', plan, facet };
-  if (!facet.confidenceSignals.grammarComplete) return { outcome: 'DISAGREE', reasonCode: 'GRAMMAR_HAS_UNRESOLVED_MEANING', plan, facet };
-  if (facet.requestClass !== 'DATA_QUERY'
-    || facet.subject?.entityId !== 'entity.inventory_item'
-    || facet.relations.length !== 1
-    || facet.relations[0].semanticRelationId !== 'relation.inventory_item.warranty'
-    || facet.polarity !== (legacy.shape === 'NO_WARRANTY' ? 'NEGATIVE' : 'POSITIVE')) {
-    return { outcome: 'DISAGREE', reasonCode: 'GRAMMAR_MEANING_MISMATCH', plan, facet };
-  }
-  const expectedProjection = legacy.count ? 'COUNT' : legacy.detail ? 'DETAIL' : legacy.exists ? 'EXISTS' : 'LIST';
-  if (facet.projection !== expectedProjection) return { outcome: 'DISAGREE', reasonCode: 'GRAMMAR_PROJECTION_MISMATCH', plan, facet };
-  // The first subset represents absence of a linked record. Expiration is a
-  // different predicate and remains withheld until that grammar is registered.
-  if (legacy.shape === 'NO_WARRANTY' && legacy.currentOnly) return { outcome: 'DISAGREE', reasonCode: 'CURRENT_WARRANTY_PREDICATE_NOT_MIGRATED', plan, facet };
-  return { outcome: 'AGREE', reasonCode: 'LEGACY_AND_TYPED_GRAMMAR_AGREE', plan, facet };
-}
-
 export interface LegacyReadCandidateSpec {
   readonly requestClass: 'DATA_QUERY' | 'CAPABILITY';
   readonly subjectEntityId: string;
@@ -388,43 +366,15 @@ export function evaluateLegacyVsSemanticGrammarAgreement(
   const normalizedSubjects = input.typedSubjectEntityIds.map(canonicalAgreementSubject);
 
   if (matchedLegacyProducer === 'SHAPE_789' && input.legacyShapePlan) {
-    if (input.legacyShapePlan.shape === 'NO_WARRANTY' || input.legacyShapePlan.shape === 'HAS_WARRANTY') {
-      const shapeAgreement = warrantyShapeGrammarAgreement(input.prompt, input.legacyShapePlan);
-      if (shapeAgreement.outcome !== 'AGREE') {
-        mismatches.push(`shape_agreement:${shapeAgreement.reasonCode}`);
-      }
-      if (normalizedDomain && normalizedDomain !== 'domain.warranties_protection') {
-        mismatches.push(`domain:${input.typedDomainId}!==domain.warranties_protection`);
-      }
-      if (!normalizedSubjects.includes('entity.inventory_item')) {
-        mismatches.push('subject:missing_entity.inventory_item');
-      }
-      if (!input.typedSemanticRelationIds.includes('relation.inventory_item.warranty')) {
-        mismatches.push('relation:missing_relation.inventory_item.warranty');
-      }
-      const expectedPolarity = input.legacyShapePlan.shape === 'NO_WARRANTY' ? 'NEGATIVE' : 'POSITIVE';
-      if (input.typedPolarity && input.typedPolarity !== expectedPolarity) {
-        mismatches.push(`polarity:${input.typedPolarity}!==${expectedPolarity}`);
-      }
-      const expectedProj = input.legacyShapePlan.count
-        ? 'COUNT'
-        : input.legacyShapePlan.detail
-          ? 'DETAIL'
-          : input.legacyShapePlan.exists
-            ? 'EXISTS'
-            : 'LIST';
-      if (input.typedProjection && input.typedProjection !== expectedProj) {
-        mismatches.push(`projection:${input.typedProjection}!==${expectedProj}`);
-      }
-    } else {
-      if (normalizedDomain && normalizedDomain !== 'domain.ownership_costs_finance') {
-        mismatches.push(`domain:${input.typedDomainId}!==domain.ownership_costs_finance`);
-      }
-      if (input.typedProjection && input.typedProjection !== 'TIMELINE') {
-        mismatches.push(`projection:${input.typedProjection}!==TIMELINE`);
-      }
+    // The warranty-relation shape was retired (FR-ONT-8): the typed grammar is its sole producer, so only the
+    // time-series, absence and stale-service shapes remain as legacy SHAPE_789 candidates.
+    if (normalizedDomain && normalizedDomain !== 'domain.ownership_costs_finance') {
+      mismatches.push(`domain:${input.typedDomainId}!==domain.ownership_costs_finance`);
     }
-  } else if (matchedLegacyProducer === 'QUERY_PLAN' || matchedLegacyProducer === 'DATA_POINT') {
+    if (input.typedProjection && input.typedProjection !== 'TIMELINE') {
+      mismatches.push(`projection:${input.typedProjection}!==TIMELINE`);
+    }
+    } else if (matchedLegacyProducer === 'QUERY_PLAN' || matchedLegacyProducer === 'DATA_POINT') {
     const prismaEntity = input.legacyQueryEntity ?? input.legacyPointEntity ?? '';
     const expectedSubject = PRISMA_ENTITY_TO_BASIC_READ_SUBJECT[prismaEntity];
     const expectedDomains = ENTITY_TO_EXPECTED_DOMAINS[prismaEntity] ?? [];

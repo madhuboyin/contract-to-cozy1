@@ -1,10 +1,9 @@
 // FR-DATA-10 shapes 7-9 (time series / comparison, absence, cross-entity) for the OWNER path. Every plan here is built from a DECLARATION in queryShapeRegistries.ts (a catalogued point, a named history column, a declared
 // relation); no message text reaches a query except a validated number of years or months. The planner is pure; `runShape789` is the only place that touches the database and it is read-only and property-scoped.
-// Shape 7: change over the tax years on record (tax bill, assessed value). Shape 8: inventory items with a field NOT RECORDED, or not serviced since a cutoff. Shape 9: inventory items with no (current) warranty record.
+// Shape 7: change over the tax years on record (tax bill, assessed value). Shape 8: inventory items with a field NOT RECORDED, or not serviced since a cutoff. Shape 9 (inventory items with / without a warranty record) was retired: the typed grammar plus the cross-domain executor is the sole producer for the warranty relation (FR-ONT-8).
 import { DATA_POINT_BY_ID, type DataPointDefinition } from './dataPointCatalogue';
-import { ABSENCE_REQUIREMENT_REGISTRY, CROSS_ENTITY_RELATION_REGISTRY, TIME_SERIES_REGISTRY, queryShapesEnabled } from './queryShapeRegistries';
+import { ABSENCE_REQUIREMENT_REGISTRY, TIME_SERIES_REGISTRY, queryShapesEnabled } from './queryShapeRegistries';
 import { prisma } from '../../../lib/prisma';
-import { readTransitionalWarrantyLinks } from '../semantic/transitionalWarrantyRead';
 
 const norm = (m: string) => ` ${m.toLowerCase().replace(/[^a-z0-9$.%' -]+/g, ' ').replace(/\s+/g, ' ').trim()} `;
 const ITEM_NOUN = /\b(?:appliances?|items?|inventory items?|household items?|items in my inventory|everything in my (?:home|house)|hvac (?:items|systems|equipment)|systems)\b/;
@@ -15,9 +14,7 @@ const NO_VALUE = /\b(?:no|without|missing|lacking|lacks|unrecorded|not having)\b
 export type Shape789Plan =
   | { readonly shape: 'TIME_SERIES'; readonly pointId: string; readonly entity: 'PropertyTaxBillRecord' | 'PropertyTaxAssessmentRecord'; readonly column: string; readonly maxPeriods: number; readonly label: string }
   | { readonly shape: 'ABSENCE'; readonly pointId: string; readonly column: string; readonly label: string; readonly count: boolean }
-  | { readonly shape: 'STALE_SERVICE'; readonly pointId: string; readonly column: string; readonly cutoff: Date | null; readonly windowText: string; readonly count: boolean }
-  | { readonly shape: 'NO_WARRANTY'; readonly relationId: string; readonly currentOnly: boolean; readonly count: boolean; readonly detail: boolean; readonly exists: boolean }
-  | { readonly shape: 'HAS_WARRANTY'; readonly relationId: string; readonly count: boolean; readonly detail: boolean; readonly exists: boolean };
+  | { readonly shape: 'STALE_SERVICE'; readonly pointId: string; readonly column: string; readonly cutoff: Date | null; readonly windowText: string; readonly count: boolean };
 
 const point = (id: string): DataPointDefinition | undefined => DATA_POINT_BY_ID.get(id);
 
@@ -38,18 +35,7 @@ export function planShape789(message: string, now: Date = new Date()): Shape789P
   const text = norm(message); const enabled = queryShapesEnabled();
   const count = COUNT.test(text);
   const detail = /\bdetails?\b/.test(text);
-  const exists = /\b(?:are there|are any|do any)\b/.test(text);
 
-  // Shape 9: an item with no warranty record ("which appliances have no warranty", "appliances that are out of warranty").
-  // "missing warranty coverage" / "coverage gaps" is the coverage-gaps analysis (COVERAGE_GAPS), not a record lookup: wording about coverage is never claimed here.
-  if (enabled.crossEntity && ITEM_NOUN.test(text) && /\bwarrant(?:y|ies)\b/.test(text) && !/\bcover(?:age|ed|s)?\b/.test(text)) {
-    const rel = CROSS_ENTITY_RELATION_REGISTRY.find((r) => r.from === 'InventoryItem' && r.to === 'Warranty');
-    const outside = /\b(?:outside|out of|not under|no longer under|expired|off)\b/.test(text);
-    const none = NO_VALUE.test(text) || /\bnot under\b/.test(text);
-    if (rel && (outside || none)) return { shape: 'NO_WARRANTY', relationId: rel.relationId, currentOnly: outside, count, detail, exists };
-    const positive = /\b(?:have|has|having|with)\b/.test(text);
-    if (rel && positive) return { shape: 'HAS_WARRANTY', relationId: rel.relationId, count, detail, exists };
-  }
   // Shape 8 (service gap): "appliances I haven't serviced in over a year", "never been serviced".
   if (enabled.absence && ITEM_NOUN.test(text) && /\b(?:never (?:been )?serviced|not (?:been )?serviced|haven'?t (?:been )?serviced|hasn'?t (?:been )?serviced|have not (?:been )?serviced|no service)\b|\bunserviced\b|\bserviced? (?:in|for) (?:over|more than)\b/.test(text) === true) {
     const entry = ABSENCE_REQUIREMENT_REGISTRY.find((e) => e.dataPointId === 'item.lastServicedOn'); const p = entry?.dataPointId ? point(entry.dataPointId) : undefined;
@@ -100,8 +86,6 @@ const LIMIT = 100;
 export function shapeWhere(propertyId: string, plan: Shape789Plan, now: Date = new Date()): Record<string, unknown> {
   if (plan.shape === 'ABSENCE') return { propertyId, ...(point(plan.pointId)?.family === 'text' ? { OR: [{ [plan.column]: null }, { [plan.column]: '' }] } : { [plan.column]: null }) };
   if (plan.shape === 'STALE_SERVICE') return { propertyId, ...(plan.cutoff ? { OR: [{ [plan.column]: null }, { [plan.column]: { lt: plan.cutoff } }] } : { [plan.column]: null }) };
-  if (plan.shape === 'NO_WARRANTY') return { propertyId, linkedWarranties: { none: plan.currentOnly ? { expiryDate: { gte: now } } : {} } };
-  if (plan.shape === 'HAS_WARRANTY') return { propertyId, linkedWarranties: { some: {} } };
   throw new Error('not an inventory shape');
 }
 
@@ -111,16 +95,6 @@ export async function runShape789(propertyId: string, plan: Shape789Plan, now: D
     const rows: any[] = await delegate.findMany({ where: { propertyId, status: 'ACTIVE', supersededById: null }, select: { id: true, taxYear: true, [plan.column]: true }, orderBy: [{ taxYear: 'desc' }, { id: 'asc' }], take: plan.maxPeriods });
     const series = rows.reverse().map((r) => ({ id: String(r.id), year: Number(r.taxYear), value: toNumber(r[plan.column]) }));
     return { total: series.length, rows: [], series };
-  }
-  if (plan.shape === 'NO_WARRANTY' || plan.shape === 'HAS_WARRANTY') {
-    const states = await readTransitionalWarrantyLinks(propertyId);
-    const row = (entry: typeof states[number]): ShapeRow => ({ id: entry.inventoryItemId, label: entry.label, detail: entry.state });
-    const rows = states.filter((entry) => plan.shape === 'NO_WARRANTY'
-      ? entry.state === 'NO_LINK_RECORDED' || entry.state === 'EXPLICIT_NO_COVERAGE'
-      : entry.state === 'ITEM_WARRANTY_LINKED' || entry.state === 'PROPERTY_PLAN_LINKED' || entry.state === 'BOTH_CONSISTENT').map(row);
-    const conflictedRows = states.filter((entry) => entry.state === 'CONFLICTED_LINKS').map(row);
-    const unknownRows = states.filter((entry) => entry.state === 'UNKNOWN').map(row);
-    return { total: rows.length, rows, conflictedRows, unknownRows };
   }
   const where = shapeWhere(propertyId, plan, now);
   const lastCol = plan.shape === 'STALE_SERVICE' ? plan.column : null;
@@ -134,6 +108,5 @@ export async function runShape789(propertyId: string, plan: Shape789Plan, now: D
 
 /** The points a plan touches, for the caller's audience floor. */
 export function shapePointIds(plan: Shape789Plan): string[] {
-  if (plan.shape === 'NO_WARRANTY' || plan.shape === 'HAS_WARRANTY') return ['warranty.expiryDate'];
   return [plan.pointId];
 }

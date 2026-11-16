@@ -15,7 +15,6 @@ import { parseDeterministicSemanticRequest } from '../deterministicSemanticParse
 import {
   dataPointReadGrammarAgreement,
   savedResultsGrammarAgreement,
-  warrantyShapeGrammarAgreement,
 } from '../legacyGrammarAgreement';
 import { planDataPointQuery } from '../../dataPoint/dataPointQueryPlan';
 import { resolveDataPoint } from '../../dataPoint/dataPointCatalogue';
@@ -103,7 +102,6 @@ export function verifyContainmentRuntimeWiring(backendRoot: string = DEFAULT_BAC
       relativePath: 'src/services/ask/handlers/dataPointRead.handler.ts',
       requiredTokens: [
         'dataPointReadGrammarAgreement',
-        'warrantyShapeGrammarAgreement',
         'buildSemanticReadReceipt',
         'verifySemanticReadReceiptEntailment',
         'agreement?.facet?.id',
@@ -172,11 +170,12 @@ export function verifyContainmentRuntimeWiring(backendRoot: string = DEFAULT_BAC
         }
         continue;
       }
-      const shapePlan = planShape789(prompt);
-      if (shapePlan && (shapePlan.shape === 'NO_WARRANTY' || shapePlan.shape === 'HAS_WARRANTY')) {
-        const agreement = warrantyShapeGrammarAgreement(prompt, shapePlan);
-        if (agreement.outcome !== 'AGREE' || !agreement.facet) {
-          issues.push(`Phase 1 family ${family.familyId} prompt "${prompt}" failed warranty shape agreement (${agreement.reasonCode}).`);
+      // A relation family has no legacy recognizer any more (FR-ONT-8): the typed grammar is its sole producer, so the
+      // example must parse to exactly the family's registered relation.
+      if (family.relationOrFieldOrJobId.startsWith('relation.')) {
+        const relationFacet = plan.facets[0];
+        if (relationFacet?.relations.length !== 1 || relationFacet.relations[0].semanticRelationId !== family.relationOrFieldOrJobId) {
+          issues.push(`Phase 1 family ${family.familyId} prompt "${prompt}" did not parse to relation ${family.relationOrFieldOrJobId}.`);
           allExamplesAgreed = false;
         }
         continue;

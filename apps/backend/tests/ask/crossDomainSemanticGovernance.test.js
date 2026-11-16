@@ -361,3 +361,25 @@ test('Phase 0 Exit Criteria (Finding #5): buildAskSemanticGovernanceBaselineSumm
   assert.equal(summary.exitCriteria.contradictionsAndUncoveredDataExplicit, true);
   assert.equal(summary.exitCriteria.noNinetyPercentCompletionClaim, true);
 });
+
+test('a retired recognizer family stays retired: its tokens never reappear in source and its evidence is recorded (FR-ONT-8)', () => {
+  const {
+    ASK_RETIRED_RECOGNIZER_FAMILIES,
+    validateRetiredRecognizerFamilies,
+  } = require('../../src/services/ask/semantic/governance/recognizerRetirementManifest.ts');
+  assert.ok(ASK_RETIRED_RECOGNIZER_FAMILIES.length >= 1);
+  for (const family of ASK_RETIRED_RECOGNIZER_FAMILIES) {
+    assert.ok(family.successor && family.parityEvidence && family.formerSources.length > 0 && family.forbiddenTokens.length > 0, family.familyId);
+  }
+  assert.deepEqual(validateRetiredRecognizerFamilies(), []);
+  // The guard actually bites: pointed at a tree that still contains a forbidden token it reports it.
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-guard-'));
+  fs.mkdirSync(path.join(root, 'src'));
+  fs.writeFileSync(path.join(root, 'src', 'reintroduced.ts'), "export const x = 'NO_WARRANTY';\n");
+  const issues = validateRetiredRecognizerFamilies({ backendRoot: root });
+  assert.equal(issues.length, 1);
+  assert.match(issues[0], /reintroduced\.ts/);
+});

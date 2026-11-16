@@ -9,7 +9,6 @@ const { SemanticRequestPlanSchema, SemanticWhereExpressionSchema } = require('..
 const { ASK_SHARED_SEMANTIC_LEXICON, generateSharedSemanticLexicon, verifyProtectionLexemeSeparation } = require('../../src/services/ask/semantic/sharedSemanticLexicon.ts');
 const { parseDeterministicSemanticRequest } = require('../../src/services/ask/semantic/deterministicSemanticParser.ts');
 const {
-  warrantyShapeGrammarAgreement,
   dataPointReadGrammarAgreement,
   savedResultsGrammarAgreement,
   verifyLegacyCandidateGrammarAgreement,
@@ -183,13 +182,22 @@ test('unsupported questions remain unmatched rather than selecting a nearby oper
   assert.deepEqual(plan.facets, []);
 });
 
-test('legacy warranty reads execute only when the independently built grammar agrees', () => {
-  const count = { shape: 'NO_WARRANTY', relationId: 'inventory-warranty', currentOnly: false, count: true, detail: false, exists: false };
-  assert.equal(warrantyShapeGrammarAgreement('how many appliances have no warranty?', count).outcome, 'AGREE');
-  assert.equal(warrantyShapeGrammarAgreement('provide details of appliances without warranty', { ...count, count: false, detail: true }).outcome, 'AGREE');
-  assert.equal(warrantyShapeGrammarAgreement('which appliances are out of warranty?', { ...count, currentOnly: true, count: false }).outcome, 'DISAGREE');
-  assert.equal(warrantyShapeGrammarAgreement('which appliances have a warranty?', { shape: 'HAS_WARRANTY', relationId: 'inventory-warranty', count: false, detail: false, exists: false }).outcome, 'AGREE');
-  assert.equal(warrantyShapeGrammarAgreement('do any appliances have a warranty?', { shape: 'HAS_WARRANTY', relationId: 'inventory-warranty', count: false, detail: false, exists: true }).outcome, 'AGREE');
+test('the warranty relation has one producer: the typed grammar owns every phrasing the retired legacy recognizer answered', () => {
+  const { planShape789 } = require('../../src/services/ask/dataPoint/dataPointShapes789.ts');
+  const expected = [
+    ['how many appliances have no warranty?', 'NEGATIVE', 'COUNT'],
+    ['provide details of appliances without warranty', 'NEGATIVE', 'DETAIL'],
+    ['which appliances have a warranty?', 'POSITIVE', 'LIST'],
+    ['do any appliances have a warranty?', 'POSITIVE', 'EXISTS'],
+  ];
+  for (const [prompt, polarity, projection] of expected) {
+    const facet = parseDeterministicSemanticRequest(prompt).facets[0];
+    assert.equal(facet.subject.entityId, 'entity.inventory_item', prompt);
+    assert.equal(facet.relations[0].semanticRelationId, 'relation.inventory_item.warranty', prompt);
+    assert.equal(facet.polarity, polarity, prompt);
+    assert.equal(facet.projection, projection, prompt);
+    assert.equal(planShape789(prompt), null, `${prompt}: no legacy recognizer may also claim this`);
+  }
 });
 
 test('the minimal receipt rejects missing structural evidence', () => {

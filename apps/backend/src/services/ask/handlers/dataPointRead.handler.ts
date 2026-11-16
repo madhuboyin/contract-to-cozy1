@@ -17,8 +17,8 @@ import { safeTimezone } from '../support/propertyContext';
 import { runDataPointQuery } from '../dataPoint/dataPointQueryRunner';
 import { applyLaunchHints } from '../dataPoint/dataPointLaunchHints';
 import { planShape789, runShape789, shapePointIds, type Shape789Plan } from '../dataPoint/dataPointShapes789';
-import { dataPointReadGrammarAgreement, warrantyShapeGrammarAgreement, type LegacyGrammarAgreement } from '../semantic/legacyGrammarAgreement';
-import { ASK_SEMANTIC_RECEIPT_VERSION, buildSemanticReadReceipt, type SemanticReadReceipt } from '../semantic/semanticExecutionReceipt';
+import { dataPointReadGrammarAgreement, type LegacyGrammarAgreement } from '../semantic/legacyGrammarAgreement';
+import { buildSemanticReadReceipt } from '../semantic/semanticExecutionReceipt';
 import { verifySemanticReadReceiptEntailment } from '../semantic/semanticReceiptEntailment';
 import { humanizePresentationToken } from '../semantic/containment/presentationHumanizer';
 import { parseDeterministicSemanticRequest } from '../semantic/deterministicSemanticParser';
@@ -190,7 +190,7 @@ async function dataPointQueryResult(propertyId: string, role: string, plan: Quer
 const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 const fmtMoney = (v: number) => `$${v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 /** Shapes 7-9: change over tax years, a field not recorded / not serviced since, items with no warranty. Always a snapshot (never composable), as every computed answer is. */
-async function shape789Result(propertyId: string, role: string, plan: Shape789Plan, agreement: LegacyGrammarAgreement | null = null): Promise<AskOperationResult> {
+async function shape789Result(propertyId: string, role: string, plan: Shape789Plan): Promise<AskOperationResult> {
   for (const id of shapePointIds(plan)) {
     const p = DATA_POINT_BY_ID.get(id);
     if (p && !roleMayRead(role, p)) { const copy = audienceFloorCopy(p.audience); return notice('DATA_POINT_RESTRICTED', 'data-point-restricted', copy.title, `${p.label} is only shown to ${copy.who}, so I can't answer this for you. Ask the home’s owner if you need it.`); }
@@ -198,7 +198,6 @@ async function shape789Result(propertyId: string, role: string, plan: Shape789Pl
   const run = await runShape789(propertyId, plan);
   const lines: string[] = []; let title = ''; let limited = false; let evidenceLabel = 'Your inventory';
   const names = (n: number) => run.rows.slice(0, 10).map((r) => r.label).join('; ') + (run.total > 10 ? `; and ${run.total - 10} more` : '');
-  const relationDetails = (n: number) => run.rows.slice(0, 10).map((row) => `${row.label} (${row.detail === 'EXPLICIT_NO_COVERAGE' ? 'explicitly recorded as no coverage' : row.detail === 'NO_LINK_RECORDED' ? 'no linked warranty record' : 'linked warranty record'})`).join('; ') + (n > 10 ? `; and ${n - 10} more` : '');
   if (plan.shape === 'TIME_SERIES') {
     evidenceLabel = plan.label === 'total assessed value' ? 'Your property tax assessments' : 'Your property tax bills';
     const series = run.series ?? []; const known = series.filter((x) => x.value !== null) as Array<{ id: string; year: number; value: number }>;
@@ -224,69 +223,14 @@ async function shape789Result(propertyId: string, role: string, plan: Shape789Pl
     title = run.total === 0 ? 'Nothing is overdue for service' : `${run.total} ${plural(run.total, 'item', 'items')} not serviced ${plan.cutoff ? `in over ${plan.windowText}` : 'ever'}`;
     lines.push(run.total === 0 ? `Every item with a service date was serviced ${plan.cutoff ? `within ${plan.windowText}` : 'at some point'}.` : `${plan.count ? `${run.total} of your items` : names(run.total)} ${plan.cutoff ? `${plural(run.total, 'was', 'were')} last serviced more than ${plan.windowText} ago or ${plural(run.total, 'has', 'have')} no service recorded` : `${plural(run.total, 'has', 'have')} no service recorded`}.`);
     if (plan.cutoff && never > 0) { limited = true; lines.push(`${never} of these ${plural(never, 'has', 'have')} no service date at all, so ${plural(never, 'it may', 'they may')} have been serviced without being recorded.`); }
-  } else if (plan.shape === 'NO_WARRANTY') {
-    const conflicted = run.conflictedRows?.length ?? 0;
-    const unknown = run.unknownRows?.length ?? 0;
-    title = plan.exists
-      ? run.total > 0 ? 'Yes—at least one item has no linked warranty record' : conflicted > 0 || unknown > 0 ? 'I cannot confirm whether any item has no linked warranty record' : 'No—every item has a linked warranty record'
-      : run.total === 0 ? 'No items have a confirmed missing warranty record' : `${run.total} ${plural(run.total, 'item has', 'items have')} no linked warranty record`;
-    lines.push(plan.exists
-      ? run.total > 0 ? `Yes. ${run.total} ${plural(run.total, 'item has', 'items have')} no warranty linked in your home record.` : conflicted > 0 || unknown > 0 ? 'The recorded conflicts or unknown states could change the answer, so I cannot give an unqualified yes or no.' : 'No. Every inventory item has a linked warranty record.'
-      : run.total === 0
-      ? 'No inventory item is confirmed in the requested no-linked-warranty population.'
-      : plan.count ? `${run.total} of your items ${plural(run.total, 'has', 'have')} no warranty linked in your home record.`
-        : plan.detail ? relationDetails(run.total)
-          : `${names(run.total)} ${plural(run.total, 'has', 'have')} no warranty linked in your home record.`);
-    if (conflicted > 0) lines.push(`${conflicted} ${plural(conflicted, 'item has', 'items have')} conflicting warranty links and ${plural(conflicted, 'is', 'are')} shown separately from the confirmed count.`);
-    if (unknown > 0) lines.push(`${unknown} ${plural(unknown, 'item has', 'items have')} an unknown warranty state and ${plural(unknown, 'is', 'are')} not counted as having or not having a linked warranty.`);
-    limited = conflicted > 0 || unknown > 0;
-    lines.push('This describes links recorded for each item; it does not decide whether warranty terms cover the item.');
-  } else {
-    const conflicted = run.conflictedRows?.length ?? 0;
-    const unknown = run.unknownRows?.length ?? 0;
-    title = plan.exists
-      ? run.total > 0 ? 'Yes—at least one item has a linked warranty record' : conflicted > 0 || unknown > 0 ? 'I cannot confirm whether any item has a linked warranty record' : 'No—no item has a linked warranty record'
-      : run.total === 0 ? 'No items have a confirmed linked warranty record' : `${run.total} ${plural(run.total, 'item has', 'items have')} a linked warranty record`;
-    lines.push(plan.exists
-      ? run.total > 0 ? `Yes. ${run.total} ${plural(run.total, 'item has', 'items have')} a warranty linked in your home record.` : conflicted > 0 || unknown > 0 ? 'The recorded conflicts or unknown states could change the answer, so I cannot give an unqualified yes or no.' : 'No. No inventory item has a linked warranty record.'
-      : run.total === 0
-      ? 'No inventory item is confirmed in the requested linked-warranty population.'
-      : plan.count ? `${run.total} of your items ${plural(run.total, 'has', 'have')} a warranty linked in your home record.`
-        : plan.detail ? relationDetails(run.total)
-          : `${names(run.total)} ${plural(run.total, 'has', 'have')} a warranty linked in your home record.`);
-    if (conflicted > 0) lines.push(`${conflicted} ${plural(conflicted, 'item has', 'items have')} conflicting warranty links and ${plural(conflicted, 'is', 'are')} shown separately from the confirmed count.`);
-    if (unknown > 0) lines.push(`${unknown} ${plural(unknown, 'item has', 'items have')} an unknown warranty state and ${plural(unknown, 'is', 'are')} not counted as having or not having a linked warranty.`);
-    limited = conflicted > 0 || unknown > 0;
-    lines.push('A linked record does not by itself establish that warranty terms cover the item.');
   }
   const sources = run.rows.length ? run.rows.slice(0, 10).map((r) => sourceRef('InventoryItem', r.id)) : [sourceRef('Property', propertyId)];
-  const receipt = (plan.shape === 'NO_WARRANTY' || plan.shape === 'HAS_WARRANTY') && agreement?.outcome === 'AGREE' && agreement.facet ? {
-    schemaVersion: ASK_SEMANTIC_RECEIPT_VERSION,
-    planVersion: agreement.plan.schemaVersion,
-    facetId: agreement.facet.id,
-    requestClass: 'DATA_QUERY' as const,
-    target: { entityId: 'entity.inventory_item', operationAdapter: 'data-point-read.read' },
-    projection: agreement.facet.projection as 'COUNT' | 'LIST' | 'DETAIL' | 'EXISTS',
-    predicateIds: agreement.facet.relations.map((relation) => relation.predicateId),
-    resolvedRecordIds: run.rows.map((row) => row.id),
-    population: {
-      confirmedCount: run.total,
-      conflictedCount: run.conflictedRows?.length ?? 0,
-      unknownCount: run.unknownRows?.length ?? 0,
-      totalMatchCount: run.total,
-      displayedCount: Math.min(run.rows.length, 10),
-      truncated: run.total > 10,
-    },
-    authorization: { propertyId, role, decision: 'ALLOWED' as const },
-    provenance: { sourceType: 'InventoryItem', observedAt: new Date().toISOString() },
-    answerVariantId: 'data-point-query-summary',
-  } satisfies SemanticReadReceipt : undefined;
-  return snapshotResult(sources, plan.shape, title, lines, limited, evidenceLabel, receipt);
+  return snapshotResult(sources, plan.shape, title, lines, limited, evidenceLabel);
 }
-function snapshotResult(sources: ReturnType<typeof sourceRef>[], shape: string, title: string, lines: string[], limited: boolean, evidenceLabel: string, semanticExecutionReceipt?: SemanticReadReceipt): AskOperationResult {
+function snapshotResult(sources: ReturnType<typeof sourceRef>[], shape: string, title: string, lines: string[], limited: boolean, evidenceLabel: string): AskOperationResult {
   return {
     status: limited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: limited ? 'DATA_POINT_QUERY_PARTIAL' : undefined,
-    parameters: { sources, dataPointQuery: { snapshot: true, shape, template: 'shape789', asOf: new Date().toISOString() }, ...(semanticExecutionReceipt ? { semanticExecutionReceipt } : {}) },
+    parameters: { sources, dataPointQuery: { snapshot: true, shape, template: 'shape789', asOf: new Date().toISOString() } },
     blocks: [
       { type: 'SUMMARY', id: 'data-point-query-summary', title, body: lines.join(' '), tone: limited ? 'CAUTION' : 'DEFAULT', actions: [] },
       { type: 'EVIDENCE', id: 'data-point-evidence', title: 'Where this comes from', items: [{ label: evidenceLabel, source: evidenceLabel, observedAt: new Date().toISOString() }] },
@@ -548,14 +492,6 @@ export async function dataPointReadResult(
 
     const shapePlan = planShape789(message);
     if (shapePlan) {
-      if (shapePlan.shape === 'NO_WARRANTY' || shapePlan.shape === 'HAS_WARRANTY') {
-        const agreement = warrantyShapeGrammarAgreement(message, shapePlan);
-        if (agreement.outcome !== 'AGREE') {
-          return deferredProviderFailure
-            ?? notice('DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED', 'data-point-semantic-agreement-required', 'I need a clearer warranty-record question', 'I could not verify the item, warranty relationship, polarity and answer shape independently, so I did not run this read.');
-        }
-        return shape789Result(propertyId, role, shapePlan, agreement);
-      }
       return shape789Result(propertyId, role, shapePlan);
     }
   }

@@ -416,15 +416,6 @@ export const ASK_RELATIONSHIP_STORAGE_ACCESS_SITES: readonly RelationshipStorage
     contradictionOrDriftNote: 'Canonical compatibility adapter (FR-QUERY-7): reads item warranties and evidence-backed property-plan applicability while separating positive, absent, unknown, and conflicted states.',
   },
   {
-    siteId: 'rel_site.data_point_shapes_789_warranty',
-    semanticRelationId: 'relation.inventory_item.warranty',
-    relativeFilePath: 'src/services/ask/dataPoint/dataPointShapes789.ts',
-    usage: 'READ',
-    storageColumnsAccessed: ['InventoryItem.linkedWarranties', 'Warranty.inventoryItemId', 'WarrantyApplicability.warrantyId'],
-    classification: 'GOVERNED_CONSUMER_OF_CANONICAL_ADAPTER',
-    contradictionOrDriftNote: 'Consumes readTransitionalWarrantyLinks from transitionalWarrantyRead.ts and separates conflicted rows from confirmed counts.',
-  },
-  {
     siteId: 'rel_site.ask_record_collections_warranty',
     semanticRelationId: 'relation.inventory_item.warranty',
     relativeFilePath: 'src/services/ask/askRecordCollections.service.ts',
