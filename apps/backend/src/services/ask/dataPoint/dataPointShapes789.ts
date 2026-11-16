@@ -1,43 +1,22 @@
 // FR-DATA-10 shapes 7-9 (time series / comparison, absence, cross-entity) for the OWNER path. Every plan here is built from a DECLARATION in queryShapeRegistries.ts (a catalogued point, a named history column, a declared
 // relation); no message text reaches a query except a validated number of years or months. The planner is pure; `runShape789` is the only place that touches the database and it is read-only and property-scoped.
-// Shape 7: change over the tax years on record (tax bill, assessed value). Shape 8: inventory items not serviced since a cutoff (the "field NOT RECORDED" absence branch was retired: the typed grammar's query.inventory_item.field_absence job is its sole producer, FR-ONT-8). Shape 9 (inventory items with / without a warranty record) was retired: the typed grammar plus the cross-domain executor is the sole producer for the warranty relation (FR-ONT-8).
+// Shape 7: change over the tax years on record (tax bill, assessed value). Shapes 8 (field absence, stale service) and 9 (warranty relation) were retired: the typed grammar's query.inventory_item.field_absence, query.inventory_item.service_gap and warranty-relation jobs are their sole producers (FR-ONT-8); only the tax time series remains here. Shape 9 (inventory items with / without a warranty record) was retired: the typed grammar plus the cross-domain executor is the sole producer for the warranty relation (FR-ONT-8).
 import { DATA_POINT_BY_ID, type DataPointDefinition } from './dataPointCatalogue';
-import { ABSENCE_REQUIREMENT_REGISTRY, TIME_SERIES_REGISTRY, queryShapesEnabled } from './queryShapeRegistries';
+import { TIME_SERIES_REGISTRY, queryShapesEnabled } from './queryShapeRegistries';
 import { prisma } from '../../../lib/prisma';
 
 const norm = (m: string) => ` ${m.toLowerCase().replace(/[^a-z0-9$.%' -]+/g, ' ').replace(/\s+/g, ' ').trim()} `;
-const ITEM_NOUN = /\b(?:appliances?|items?|inventory items?|household items?|items in my inventory|everything in my (?:home|house)|hvac (?:items|systems|equipment)|systems)\b/;
-const COUNT = /\bhow many\b/;
 const LEAD = /^\s*(?:what|which|how many|how much|list|show|provide|tell me|do any|do i have|are there|are any|have i|has my|have my|how has|how have|is my|are my|did my|compare|give me|find)\b/i;
 
 export type Shape789Plan =
-  | { readonly shape: 'TIME_SERIES'; readonly pointId: string; readonly entity: 'PropertyTaxBillRecord' | 'PropertyTaxAssessmentRecord'; readonly column: string; readonly maxPeriods: number; readonly label: string }
-  | { readonly shape: 'STALE_SERVICE'; readonly pointId: string; readonly column: string; readonly cutoff: Date | null; readonly windowText: string; readonly count: boolean };
+  | { readonly shape: 'TIME_SERIES'; readonly pointId: string; readonly entity: 'PropertyTaxBillRecord' | 'PropertyTaxAssessmentRecord'; readonly column: string; readonly maxPeriods: number; readonly label: string };
 
 const point = (id: string): DataPointDefinition | undefined => DATA_POINT_BY_ID.get(id);
 
 export function planShape789(message: string, now: Date = new Date()): Shape789Plan | null {
   if (!LEAD.test(message)) return null;
   const text = norm(message); const enabled = queryShapesEnabled();
-  const count = COUNT.test(text);
-  const detail = /\bdetails?\b/.test(text);
 
-  // Shape 8 (service gap): "appliances I haven't serviced in over a year", "never been serviced".
-  if (enabled.absence && ITEM_NOUN.test(text) && /\b(?:never (?:been )?serviced|not (?:been )?serviced|haven'?t (?:been )?serviced|hasn'?t (?:been )?serviced|have not (?:been )?serviced|no service)\b|\bunserviced\b|\bserviced? (?:in|for) (?:over|more than)\b/.test(text) === true) {
-    const entry = ABSENCE_REQUIREMENT_REGISTRY.find((e) => e.dataPointId === 'item.lastServicedOn'); const p = entry?.dataPointId ? point(entry.dataPointId) : undefined;
-    if (p) {
-      const w = /\b(?:in|for|within)(?: over| more than| at least| the last| the past| last| past)? (a|an|one|two|three|four|five|ten|\d+) (year|month)s?\b/.exec(text);
-      if (!w && !/\bnever\b|\bunserviced\b/.test(text)) return null;
-      let cutoff: Date | null = null; let windowText = 'never';
-      if (w) {
-        const n = ({ a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, ten: 10 } as Record<string, number>)[w[1]] ?? Number(w[1]);
-        if (!Number.isFinite(n) || n < 1 || (w[2] === 'year' ? n > 50 : n > 600)) return null;
-        cutoff = new Date(now); if (w[2] === 'year') cutoff.setUTCFullYear(cutoff.getUTCFullYear() - n); else cutoff.setUTCMonth(cutoff.getUTCMonth() - n);
-        windowText = `${n} ${w[2]}${n === 1 ? '' : 's'}`;
-      }
-      return { shape: 'STALE_SERVICE', pointId: p.id, column: p.field, cutoff, windowText, count };
-    }
-  }
   // Shape 7: change over the tax years on record.
   if (enabled.timeSeries && /\b(?:chang(?:e|ed|es|ing)|trend|over time|over the years|year over year|year-over-year|going up|going down|gone up|gone down|risen|increas(?:e|ed|ing)|decreas(?:e|ed|ing)|dropped|history of|compared? (?:to|with) (?:last|previous)|compar\w* .*\b(?:last|previous) year|vs|versus)\b/.test(text)) {
     const assess = /\bassess(?:ed|ment|ments)\b/.test(text); const bill = /\b(?:property )?tax(?:es)?\b|\btax bills?\b/.test(text);
@@ -54,19 +33,10 @@ export interface ShapeRow { readonly id: string; readonly label: string; readonl
 export interface ShapeRun {
   readonly total: number;
   readonly rows: readonly ShapeRow[];
-  readonly conflictedRows?: readonly ShapeRow[];
-  readonly unknownRows?: readonly ShapeRow[];
   readonly series?: ReadonlyArray<{ readonly id: string; readonly year: number; readonly value: number | null }>;
-  readonly neverServiced?: number;
 }
 const toNumber = (v: unknown): number | null => (v === null || v === undefined ? null : typeof v === 'object' && v && 'toNumber' in v ? (v as { toNumber(): number }).toNumber() : Number(v));
 const LIMIT = 100;
-
-/** The where for the inventory-based shapes. Exported so a test can assert exactly what would be sent. Always property-scoped. */
-export function shapeWhere(propertyId: string, plan: Shape789Plan, now: Date = new Date()): Record<string, unknown> {
-  if (plan.shape === 'STALE_SERVICE') return { propertyId, ...(plan.cutoff ? { OR: [{ [plan.column]: null }, { [plan.column]: { lt: plan.cutoff } }] } : { [plan.column]: null }) };
-  throw new Error('not an inventory shape');
-}
 
 export async function runShape789(propertyId: string, plan: Shape789Plan, now: Date = new Date()): Promise<ShapeRun> {
   if (plan.shape === 'TIME_SERIES') {
@@ -75,14 +45,7 @@ export async function runShape789(propertyId: string, plan: Shape789Plan, now: D
     const series = rows.reverse().map((r) => ({ id: String(r.id), year: Number(r.taxYear), value: toNumber(r[plan.column]) }));
     return { total: series.length, rows: [], series };
   }
-  const where = shapeWhere(propertyId, plan, now);
-  const lastCol = plan.shape === 'STALE_SERVICE' ? plan.column : null;
-  const [rows, total, never] = await Promise.all([
-    (prisma as any).inventoryItem.findMany({ where, take: LIMIT, select: { id: true, name: true, ...(lastCol ? { [lastCol]: true } : {}) }, orderBy: [{ name: 'asc' }, { id: 'asc' }] }),
-    (prisma as any).inventoryItem.count({ where }),
-    plan.shape === 'STALE_SERVICE' ? (prisma as any).inventoryItem.count({ where: { propertyId, [plan.column]: null } }) : Promise.resolve(0),
-  ]);
-  return { total, neverServiced: never, rows: (rows as any[]).map((r) => ({ id: String(r.id), label: String(r.name ?? 'inventory item'), detail: lastCol ? (r[lastCol] ? new Date(r[lastCol]).toISOString() : null) : null })) };
+  throw new Error('unreachable: every remaining shape is handled above');
 }
 
 /** The points a plan touches, for the caller's audience floor. */

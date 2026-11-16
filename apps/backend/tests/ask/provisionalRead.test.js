@@ -41,7 +41,7 @@ test('the grounded verdict: a value must be the value of a point the question na
   for (const reasonCode of ['DATA_POINT_NOT_RECORDED', 'DATA_POINT_AMBIGUOUS', 'DATA_POINT_ITEM_NOT_FOUND', 'DATA_POINT_RESTRICTED']) assert.equal(groundedReadVerdict(ask, result({ status: 'READY_WITH_LIMITATIONS', reasonCode, parameters: { sources: [] } })).outcome, 'PASS', reasonCode);
   assert.equal(groundedReadVerdict(ask, result({ parameters: {} })).outcome, 'FAIL'); assert.equal(groundedReadVerdict(ask, result({ reasonCode: 'SOMETHING_ELSE', parameters: {} })).outcome, 'FAIL');
   // a computed answer must be the plan the question itself produces
-  assert.equal(groundedReadVerdict('which appliances have I not serviced in over a year', result({ parameters: { dataPointQuery: { template: 'shape789' }, sources: [] } })).outcome, 'PASS');
+  assert.equal(groundedReadVerdict('how has my property tax changed over the years', result({ parameters: { dataPointQuery: { template: 'shape789' }, sources: [] } })).outcome, 'PASS');
   assert.equal(groundedReadVerdict('what is the weather', result({ parameters: { dataPointQuery: { template: 'shape789' }, sources: [] } })).outcome, 'FAIL');
 });
 

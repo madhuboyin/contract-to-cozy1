@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { findSemanticPredicateRegistration, findSemanticRelationConstraintRegistration } from './semanticRelationRegistry';
 
-export const ASK_SEMANTIC_PLAN_VERSION = '1.3.0' as const;
+export const ASK_SEMANTIC_PLAN_VERSION = '1.4.0' as const;
 
 const SpanSchema = z.object({
   start: z.number().int().nonnegative(),
@@ -31,6 +31,8 @@ export type SemanticTimeConstraint =
   | { kind: 'EXACT_DATE'; isoDate: string }
   | { kind: 'CALENDAR_PERIOD'; unit: 'WEEK' | 'MONTH' | 'YEAR'; offset: -1 | 0 | 1 }
   | { kind: 'COMPARE_YEARS'; baselineOffset: -1; targetOffset: 0 }
+  /** "Not X in over N units": older than N whole months/years before today (property timezone). */
+  | { kind: 'ELAPSED_WINDOW'; unit: 'MONTH' | 'YEAR'; count: number }
   | { kind: 'BEFORE_CLOSING' };
 
 export const SemanticTimeConstraintSchema: z.ZodType<SemanticTimeConstraint> = z.discriminatedUnion('kind', [
@@ -38,6 +40,7 @@ export const SemanticTimeConstraintSchema: z.ZodType<SemanticTimeConstraint> = z
   z.object({ kind: z.literal('EXACT_DATE'), isoDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).strict(),
   z.object({ kind: z.literal('CALENDAR_PERIOD'), unit: z.enum(['WEEK', 'MONTH', 'YEAR']), offset: z.union([z.literal(-1), z.literal(0), z.literal(1)]) }).strict(),
   z.object({ kind: z.literal('COMPARE_YEARS'), baselineOffset: z.literal(-1), targetOffset: z.literal(0) }).strict(),
+  z.object({ kind: z.literal('ELAPSED_WINDOW'), unit: z.enum(['MONTH', 'YEAR']), count: z.number().int().min(1).max(600) }).strict(),
   z.object({ kind: z.literal('BEFORE_CLOSING') }).strict(),
 ]);
 

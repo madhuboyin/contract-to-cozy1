@@ -582,7 +582,7 @@ export const ASK_RECOGNIZER_RETIREMENT_MANIFEST: readonly RecognizerInventoryEnt
       'DATA_POINT_DEFINITIONS',
       'QUERY_SHAPE_REGISTRIES',
     ],
-    liveItemCount: 228,
+    liveItemCount: 217,
     affectedDomains: [
       'domain.property_profile',
       'domain.inventory',
@@ -1054,6 +1054,16 @@ export const ASK_RETIRED_RECOGNIZER_FAMILIES: readonly RetiredRecognizerFamily[]
     successor: 'deterministicSemanticParser/cross-domain grammar rule + executor job query.inventory_item.field_absence over the registered absence fields (INVENTORY_ABSENCE_FIELD_POINT_IDS), vocabulary in the generated cross-domain lexicon (reviewed against ABSENCE_REQUIREMENT_REGISTRY aliases)',
     parityEvidence: 'Over 17,220 generated phrasings (4 leads x 5 nouns x 7 negations x 41 registry aliases/words x 3 tails), the legacy recognizer answered 14,880; the typed grammar answers 13,800 of them with the same field (0 field mismatches). The 1,080 it does not answer are all three value-question wordings ("did we install", "did i install", "cost when i bought") that only mean something as a value read; there are 0 legacy-only natural wordings. The grammar additionally answers 2,160 the legacy planner refused. Known differences: item columns are read through the visible-item filter (hidden items are no longer counted) and whitespace-only text counts as not recorded.',
     forbiddenTokens: ['shape: \'ABSENCE\'', 'absenceTarget'],
+  },
+  {
+    familyId: 'recognizer.retired.inventory_item_stale_service_shape8',
+    retiredOn: '2026-11-16',
+    formerSources: [
+      'src/services/ask/dataPoint/dataPointShapes789.ts (Shape 8 stale service: STALE_SERVICE planner, window regex, where-clause, runner, renderer; with it the generic inventory shape query and shapeWhere)',
+    ],
+    successor: 'cross-domain grammar rule + executor job query.inventory_item.service_gap over the registered last-service field, with the new ELAPSED_WINDOW time constraint (plan schema 1.4.0) and a bounded lexical window recognizer; vocabulary in the generated cross-domain lexicon',
+    parityEvidence: 'Over 17,680 generated phrasings (8 leads x 5 nouns x 15 verb forms x 17 windows, with and without a question mark) the legacy recognizer answered 10,880; the typed grammar answers 10,080 with an identical window (0 window mismatches) and 1,120 the legacy planner refused. The 800 it does not answer are "have not got serviced" (not a real phrasing) and the legacy quirk of reading "never serviced in the last six months" / "...in over a decade" as plain "never" because the window had no parseable quantity; the grammar refuses to guess those. Known differences: the window is judged on whole dates in the property timezone (the legacy used the current instant), items with no service date are a separate unknown population when a window is asked (the legacy folded them into the total), item columns are read through the visible-item filter, and the legacy 100-row cap is gone.',
+    forbiddenTokens: ['shape: \'STALE_SERVICE\'', 'STALE_SERVICE\''],
   },
 ]);
 

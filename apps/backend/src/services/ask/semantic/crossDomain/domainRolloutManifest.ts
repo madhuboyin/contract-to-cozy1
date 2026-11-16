@@ -148,7 +148,7 @@ const DOMAIN_SCOPE_METADATA: Readonly<Record<SemanticDomainId, DomainScopeMetada
     legacyDisposition: 'RETIRED_INTO_SEMANTIC_STACK',
   },
   'domain.inventory': {
-    supportedFamilies: ['inventory.relation_boolean', 'inventory.field_read', 'inventory.field_absence', 'inventory.room_scope', 'inventory.replacement_guidance', 'inventory.manual_receipt_coordination'],
+    supportedFamilies: ['inventory.relation_boolean', 'inventory.field_read', 'inventory.field_absence', 'inventory.service_gap', 'inventory.room_scope', 'inventory.replacement_guidance', 'inventory.manual_receipt_coordination'],
     excludedFamilies: ['open_ended_valuation_appraisal'],
     legacyDisposition: 'RETIRED_INTO_SEMANTIC_STACK',
   },
@@ -242,6 +242,7 @@ export const DOMAIN_ROLLOUT_MANIFEST: readonly DomainRolloutDefinition[] = Objec
       'query.inventory_item.relation_boolean',
       'query.inventory_item.field_read',
       'query.inventory_item.field_absence',
+      'query.inventory_item.service_gap',
     ],
     canonicalExecutorId: 'cross-domain-wave-executor',
   },

@@ -802,7 +802,7 @@ function executeNewStackFacet(
 
   // Field absence ("which appliances have no serial number recorded"): items whose registered column holds nothing. "Not recorded" is
   // reported as exactly that; it never claims the real-world value does not exist (FR-QUERY-4).
-  if (job === 'query.inventory_item.field_absence') {
+  if (job === 'query.inventory_item.field_absence' || job === 'query.inventory_item.service_gap') {
     const fieldId = facet.fields[0]?.fieldId ?? '';
     const point = DATA_POINT_BY_ID.get(INVENTORY_ABSENCE_FIELD_POINT_IDS[fieldId] ?? '');
     const blocked = (summary: string, extraRedacted: readonly string[] = []): CrossDomainFacetExecutionResult => ({
@@ -815,6 +815,86 @@ function executeNewStackFacet(
     const requiredRole: AskUserRole = point.audience === 'OWNER' ? 'OWNER' : point.audience === 'CONTRIBUTOR' ? 'EDITOR' : 'VIEWER';
     if (!canSeeRole(role, requiredRole)) return blocked(`The ${point.label.replace(/^The /, '').toLowerCase()} is only shown to the home’s ${requiredRole === 'OWNER' ? 'owner' : 'owner and contributors'}, so I can't check which items lack it.`, [fieldId]);
     if (!snapshot.inventoryFieldRecords) return blocked('I could not load your inventory details right now, so I will not say which items are missing a value.');
+
+    // Service gap ("not serviced in over a year" / "never serviced"): the last-service date against an elapsed window. Items with no
+    // service date at all are an UNKNOWN population when a window is asked (nothing proves they were left unserviced), and the
+    // confirmed gap is only what a recorded date proves.
+    if (job === 'query.inventory_item.service_gap') {
+      const window = facet.time?.kind === 'ELAPSED_WINDOW' ? facet.time : null;
+      const asOf = /^(\d{4})-(\d{2})-(\d{2})/.exec(snapshot.asOfDate);
+      if (facet.time && !window) return blocked('I could not read the time window in that question.');
+      if (!asOf) return blocked('I could not tell today’s date, so I will not judge how long ago items were serviced.');
+      const records = snapshot.inventoryFieldRecords.filter((record) => record.propertyId === snapshot.propertyId);
+      const dateOf = (value: unknown): string | null => {
+        if (value === null || value === undefined || value === '') return null;
+        const text = value instanceof Date ? value.toISOString() : String(value);
+        return /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(0, 10) : null;
+      };
+      let cutoff: string | null = null;
+      if (window) {
+        const cut = new Date(Date.UTC(Number(asOf[1]), Number(asOf[2]) - 1, Number(asOf[3])));
+        if (window.unit === 'YEAR') cut.setUTCFullYear(cut.getUTCFullYear() - window.count);
+        else cut.setUTCMonth(cut.getUTCMonth() - window.count);
+        cutoff = cut.toISOString().slice(0, 10);
+      }
+      const byName = (a: { name: string; id: string }, b: { name: string; id: string }) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
+      const undated = records.filter((record) => dateOf(record.values[point.field]) === null).sort(byName);
+      const confirmed = (cutoff
+        ? records.filter((record) => { const d = dateOf(record.values[point.field]); return d !== null && d < cutoff; })
+        : undated).sort(byName);
+      const unknown = cutoff ? undated : [];
+      const windowText = window ? `${window.count} ${window.unit === 'YEAR' ? 'year' : 'month'}${window.count === 1 ? '' : 's'}` : '';
+      const projection: SemanticReadReceipt['projection'] = facet.projection === 'COUNT' ? 'COUNT' : facet.projection === 'DETAIL' ? 'DETAIL' : 'LIST';
+      const named = (list: ReadonlyArray<{ name: string }>) => `${list.slice(0, 10).map((record) => record.name).join('; ')}${list.length > 10 ? `; and ${list.length - 10} more` : ''}`;
+      const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
+      const lines: string[] = [];
+      if (cutoff) {
+        lines.push(confirmed.length === 0
+          ? `Every item with a service date was serviced within ${windowText}.`
+          : projection === 'COUNT'
+            ? `${confirmed.length} of your items ${plural(confirmed.length, 'was', 'were')} last serviced more than ${windowText} ago.`
+            : `${named(confirmed)} ${plural(confirmed.length, 'was', 'were')} last serviced more than ${windowText} ago.`);
+        if (unknown.length > 0) lines.push(`${unknown.length} more ${plural(unknown.length, 'has', 'have')} no service date at all, so ${plural(unknown.length, 'it may', 'they may')} have been serviced without being recorded.`);
+      } else {
+        lines.push(confirmed.length === 0
+          ? 'Every item has a service date recorded.'
+          : projection === 'COUNT'
+            ? `${confirmed.length} of your items ${plural(confirmed.length, 'has', 'have')} no service recorded.`
+            : `${named(confirmed)} ${plural(confirmed.length, 'has', 'have')} no service recorded.`);
+        if (confirmed.length > 0) lines.push('“Not recorded” means nothing is saved for it yet, not that it was never serviced.');
+      }
+      const rows = confirmed.map((record) => ({ id: record.id, label: record.name }));
+      const summary = lines.join(' ');
+      const finalized = finalizeReceiptAndPresentation({
+        facet,
+        snapshot,
+        role,
+        projection,
+        operationAdapter: adapterId,
+        sourceType: 'InventoryItem',
+        predicateIds: ['predicate.inventory_item.service_gap'],
+        rows,
+        unknownCount: unknown.length,
+        title: cutoff
+          ? (confirmed.length === 0 ? 'Nothing is overdue for service' : `${confirmed.length} ${plural(confirmed.length, 'item', 'items')} not serviced in over ${windowText}`)
+          : (confirmed.length === 0 ? 'Every item has a service date' : `${confirmed.length} ${plural(confirmed.length, 'item has', 'items have')} no service recorded`),
+        summaryBody: summary,
+        variantId: 'variant.inventory_service_gap',
+      });
+      return {
+        facetId: facet.id,
+        owner,
+        status: 'EXECUTED',
+        summary,
+        recordIds: rows.map((r) => r.id),
+        rows: finalized.rows,
+        missingSlots: [],
+        redactedFieldIds,
+        receipt: finalized.receipt,
+        entailment: finalized.entailment,
+        presentationEquivalence: finalized.equivalence,
+      };
+    }
 
     const label = point.label.replace(/^The /, '').replace(/^When it was /, '').toLowerCase();
     const isMissing = (value: unknown): boolean => value === null || value === undefined || (point.family === 'text' && String(value).trim() === '');
@@ -2139,12 +2219,13 @@ export async function loadCrossDomainPropertySnapshot(
       'job.inventory.replacement_guidance',
       'query.inventory_item.field_read',
       'query.inventory_item.field_absence',
+      'query.inventory_item.service_gap',
       'query.warranty.filter',
       'job.risk.recall_review',
     )
   );
   const needWarranties = hasDomain('domain.warranties_coverage') || hasJob('query.warranty.filter');
-  const needInventoryFields = hasJob('query.inventory_item.field_absence');
+  const needInventoryFields = hasJob('query.inventory_item.field_absence', 'query.inventory_item.service_gap');
   const needDocuments = (
     hasDomain('domain.inventory')
     || hasDomain('domain.documents_records')

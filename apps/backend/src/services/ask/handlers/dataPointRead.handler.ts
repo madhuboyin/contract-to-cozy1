@@ -189,7 +189,7 @@ async function dataPointQueryResult(propertyId: string, role: string, plan: Quer
 
 const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 const fmtMoney = (v: number) => `$${v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-/** Shapes 7-9: change over tax years, a field not recorded / not serviced since, items with no warranty. Always a snapshot (never composable), as every computed answer is. */
+/** Shape 7: change over tax years (field absence, service gap and the warranty relation are typed-grammar jobs, FR-ONT-8). Always a snapshot (never composable), as every computed answer is. */
 async function shape789Result(propertyId: string, role: string, plan: Shape789Plan): Promise<AskOperationResult> {
   for (const id of shapePointIds(plan)) {
     const p = DATA_POINT_BY_ID.get(id);
@@ -197,7 +197,6 @@ async function shape789Result(propertyId: string, role: string, plan: Shape789Pl
   }
   const run = await runShape789(propertyId, plan);
   const lines: string[] = []; let title = ''; let limited = false; let evidenceLabel = 'Your inventory';
-  const names = (n: number) => run.rows.slice(0, 10).map((r) => r.label).join('; ') + (run.total > 10 ? `; and ${run.total - 10} more` : '');
   if (plan.shape === 'TIME_SERIES') {
     evidenceLabel = plan.label === 'total assessed value' ? 'Your property tax assessments' : 'Your property tax bills';
     const series = run.series ?? []; const known = series.filter((x) => x.value !== null) as Array<{ id: string; year: number; value: number }>;
@@ -214,14 +213,7 @@ async function shape789Result(propertyId: string, role: string, plan: Shape789Pl
     const sources = series.length ? series.map((x) => sourceRef((plan.entity) as CompositeSourceType, x.id)) : [sourceRef('Property', propertyId)];
     return snapshotResult(sources, 'TIME_SERIES', title, lines, limited, evidenceLabel);
   }
-  if (plan.shape === 'STALE_SERVICE') {
-    const never = run.neverServiced ?? 0;
-    title = run.total === 0 ? 'Nothing is overdue for service' : `${run.total} ${plural(run.total, 'item', 'items')} not serviced ${plan.cutoff ? `in over ${plan.windowText}` : 'ever'}`;
-    lines.push(run.total === 0 ? `Every item with a service date was serviced ${plan.cutoff ? `within ${plan.windowText}` : 'at some point'}.` : `${plan.count ? `${run.total} of your items` : names(run.total)} ${plan.cutoff ? `${plural(run.total, 'was', 'were')} last serviced more than ${plan.windowText} ago or ${plural(run.total, 'has', 'have')} no service recorded` : `${plural(run.total, 'has', 'have')} no service recorded`}.`);
-    if (plan.cutoff && never > 0) { limited = true; lines.push(`${never} of these ${plural(never, 'has', 'have')} no service date at all, so ${plural(never, 'it may', 'they may')} have been serviced without being recorded.`); }
-  }
-  const sources = run.rows.length ? run.rows.slice(0, 10).map((r) => sourceRef('InventoryItem', r.id)) : [sourceRef('Property', propertyId)];
-  return snapshotResult(sources, plan.shape, title, lines, limited, evidenceLabel);
+  throw new Error('unreachable: every remaining Shape 7-9 plan is handled above');
 }
 function snapshotResult(sources: ReturnType<typeof sourceRef>[], shape: string, title: string, lines: string[], limited: boolean, evidenceLabel: string): AskOperationResult {
   return {

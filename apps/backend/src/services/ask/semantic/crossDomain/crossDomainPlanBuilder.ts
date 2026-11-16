@@ -76,6 +76,16 @@ const CROSS_DOMAIN_LEXEME_SPECS: readonly CrossDomainLexemeSpec[] = Object.freez
   { role: 'FIELD', semanticId: 'field.inventory_item.last_serviced_on', canonicalLabel: 'last service date', reviewedAliases: ['last serviced', 'last service', 'serviced last', 'last serviced on', 'last maintained', 'last tuned up', 'last inspected'] },
   { role: 'POLARITY', semanticId: 'polarity.negative', canonicalLabel: 'lacking', reviewedAliases: ['lack', 'lacks', 'unrecorded', 'not recorded', 'not on file', 'not entered', 'not listed', 'not filled in'] },
   { role: 'STATUS', semanticId: 'status.recorded', canonicalLabel: 'recorded', reviewedAliases: ['on file', 'entered', 'listed', 'filled in'] },
+  // Service-gap vocabulary ("which appliances have I not serviced in over a year"). Quantities beyond a/an/one/two/three are digits
+  // or four/five/ten, the bounded set the retired Shape 8 stale-service recognizer accepted.
+  { role: 'STATUS', semanticId: 'status.serviced', canonicalLabel: 'serviced', reviewedAliases: [] },
+  { role: 'STATUS', semanticId: 'status.unserviced', canonicalLabel: 'unserviced', reviewedAliases: [] },
+  { role: 'STATUS', semanticId: 'status.never', canonicalLabel: 'never', reviewedAliases: [] },
+  { role: 'POLARITY', semanticId: 'polarity.negative', canonicalLabel: 'havent', reviewedAliases: ['hasnt', 'have not', 'has not'] },
+  { role: 'TIME', semanticId: 'time.window.unit_year', canonicalLabel: 'year', reviewedAliases: ['years'] },
+  { role: 'TIME', semanticId: 'time.window.unit_month', canonicalLabel: 'month', reviewedAliases: ['months'] },
+  { role: 'TIME', semanticId: 'time.window.quantity', canonicalLabel: 'four', reviewedAliases: ['five', 'ten'] },
+  { role: 'TIME', semanticId: 'time.window.modifier', canonicalLabel: 'over', reviewedAliases: ['more than', 'at least', 'the last', 'the past', 'last', 'past'] },
 
   // Categories & Statuses
   { role: 'CATEGORY', semanticId: 'category.maintenance.plumbing', canonicalLabel: 'plumbing', reviewedAliases: [] },
@@ -117,6 +127,26 @@ const CROSS_DOMAIN_LEXEME_SPECS: readonly CrossDomainLexemeSpec[] = Object.freez
   { role: 'JOB', semanticId: 'job.finance.own_rent_break_even', canonicalLabel: 'owning beats renting', reviewedAliases: ['owning', 'renting', 'own or rent'] },
   { role: 'JOB', semanticId: 'job.finance.refinance_break_even', canonicalLabel: 'refinancing break even', reviewedAliases: ['refinance break even', 'refinancing', 'refinance', 'break even'] },
 ]);
+
+/**
+ * Bounded lexical recognizer for "<modifier?> <quantity> <unit>" ("over a year", "more than 18 months", "the last 2 years"). It returns a
+ * semantic time annotation, never a route claim (FR-PLAN-7). A window needs an explicit quantity: "in the last year" alone is not one.
+ */
+const WINDOW_WORD_QUANTITY: Readonly<Record<string, number>> = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, ten: 10 };
+function extractElapsedWindow(tokens: readonly TokenSpan[]): SemanticTimeConstraint | null {
+  for (let i = 1; i < tokens.length; i += 1) {
+    const unitToken = tokens[i].normalized;
+    const unit = /^years?$/.test(unitToken) ? 'YEAR' : /^months?$/.test(unitToken) ? 'MONTH' : null;
+    if (!unit) continue;
+    const quantityToken = tokens[i - 1].normalized;
+    const count = /^\d+$/.test(quantityToken) ? Number(quantityToken) : WINDOW_WORD_QUANTITY[quantityToken];
+    if (!Number.isInteger(count) || count < 1) continue;
+    // The bounded range of the retired recognizer: up to 50 years or 600 months; anything larger is not a believable window.
+    if (unit === 'YEAR' ? count > 50 : count > 600) return null;
+    return { kind: 'ELAPSED_WINDOW', unit, count };
+  }
+  return null;
+}
 
 /** Registered absence-eligible inventory fields (the executor maps each to its catalogued data point). */
 const INVENTORY_ABSENCE_FIELD_SEMANTIC_IDS: readonly string[] = Object.freeze([
@@ -204,7 +234,7 @@ const CLOSED_CLASS_STOP_WORDS = new Set([
   'is', 'are', 'was', 'were', 'be', 'do', 'does', 'did', 'have', 'has', 'had', 'will', 'would', 'should', 'can', 'could',
   'in', 'on', 'at', 'of', 'to', 'for', 'with', 'from', 'by', 'about', 'before', 'after', 'within', 'until', 'whether',
   'what', 'whats', "what's", 'which', 'who', 'where', 'when', 'how', 'still', 'tell', 'provide', 'there', 'any', 'all', 'two', 'three', 'one',
-  'beats', 'affect', 'long',
+  'beats', 'affect', 'long', 'been',
 ]);
 
 interface TokenSpan extends SemanticSourceSpan {
@@ -565,6 +595,7 @@ function compileClauseSpecFromAnnotations(
     priorClaimFacetId?: string | null;
     resolvedSubjectHint?: string | null;
     matchedQuoteIds?: readonly string[];
+    elapsedWindow?: SemanticTimeConstraint | null;
   } = {},
 ): ClauseSpec | null {
   const has = (id: string) => sig.ids.has(id);
@@ -580,10 +611,34 @@ function compileClauseSpecFromAnnotations(
             ? 'EXISTS'
             : 'LIST';
 
+  // Service gap: "which appliances have I not serviced in over a year" / "have never been serviced". The window is an explicit
+  // quantity of months or years; "never"/"unserviced" mean no recorded service at all (time null). Items with no service date at all
+  // are a separate, unknown population when a window is asked: nothing proves they were left unserviced.
+  if (has('entity.inventory_item') && (has('status.serviced') || has('status.unserviced')) && !has('entity.warranty') && !has('entity.maintenance_task')) {
+    const never = has('status.never') || has('status.unserviced');
+    const window = options.elapsedWindow ?? null;
+    // An explicit window always wins over "never" ("never been serviced in over a year" asks about the window).
+    if ((never && !window) || ((has('polarity.negative') || never) && window)) {
+      return {
+        domainId: 'domain.inventory',
+        entityId: 'entity.inventory_item',
+        requestClass: 'DATA_QUERY',
+        jobMatch: 'query.inventory_item.service_gap',
+        projection: projection === 'COUNT' || projection === 'DETAIL' ? projection : 'LIST',
+        polarity: 'NEGATIVE',
+        relations: [],
+        where: null,
+        time: window ?? null,
+        fields: [{ fieldId: 'field.inventory_item.last_serviced_on' }],
+        requiredSlots: [],
+      };
+    }
+  }
+
   // Field absence: "which appliances have no serial number recorded". One inventory field, negative polarity, no relation target
   // or time window. The specific field wins over a generic one it contains ("replacement cost" over "cost"); two distinct absence
   // fields in one clause are ambiguous and are left unresolved rather than answering for one of them.
-  if (has('entity.inventory_item') && has('polarity.negative') && !has('entity.warranty') && !has('entity.maintenance_task') && !sig.firstId('time.')) {
+  if (has('entity.inventory_item') && has('polarity.negative') && !has('entity.warranty') && !has('entity.maintenance_task') && !sig.firstId('time.period.') && !options.elapsedWindow) {
     const present = INVENTORY_ABSENCE_FIELD_SEMANTIC_IDS.filter((fieldId) => has(fieldId));
     const specific = present.includes('field.inventory_item.replacement_cost')
       ? present.filter((fieldId) => fieldId !== 'field.inventory_item.purchase_cost')
@@ -1332,6 +1387,7 @@ export function parseCrossDomainSemanticRequest(
           priorClaimFacetId: claimFacetId,
           resolvedSubjectHint,
           matchedQuoteIds: clauseAnnotated.matchedQuoteIds,
+          elapsedWindow: extractElapsedWindow(clauseTokens),
         })
       : null;
 
