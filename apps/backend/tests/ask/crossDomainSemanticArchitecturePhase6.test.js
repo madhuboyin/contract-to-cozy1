@@ -257,11 +257,23 @@ test('Phase 6 end-to-end evaluation harness passes all sealed-proxy invariants a
   assert.equal(report.version, ASK_PHASE6_EVALUATION_VERSION);
   assert.equal(report.evaluationNature, 'SEALED_PROXY');
   assert.equal(report.isRealHomeownerTrafficDistribution, false);
+  assert.equal(report.corpusProvenance.corpusType, 'INTERNAL_DEVELOPER_PROXY');
+  assert.equal(report.corpusProvenance.independentlyAuthored, false);
+  assert.equal(report.corpusProvenance.heldOutFromImplementation, false);
+  assert.equal(report.providerEvaluationDisclosure.providerKind, 'OFFLINE_SIMULATOR');
+  assert.equal(report.providerEvaluationDisclosure.liveExternalModelEvaluated, false);
+  assert.equal(report.entryPathTelemetry.totalCases, PHASE6_SEALED_EVALUATION_CASES.length);
+  assert.ok(report.entryPathTelemetry.semanticEntryPromotedCount > 0);
+  assert.equal(
+    report.entryPathTelemetry.entryCapabilityResolvedCount,
+    report.entryPathTelemetry.entryCapabilityExecutedCount,
+  );
   assert.equal(report.sealedProxyInvariantsPassed, true);
   assert.equal(report.statisticalWilsonClaimStatus, 'INSUFFICIENT_INDEPENDENT_SAMPLES');
   assert.equal(report.passed, false);
   assert.deepEqual(report.failedDomains, []);
   assert.equal(report.failedStrata.length, 6);
+  assert.equal(report.riskStratifiedCalibration.calibrationEvaluationMode, 'LEAVE_ONE_OUT_CV');
   assert.equal(report.riskStratifiedCalibration.observedZeroErrorPassed, true);
   assert.equal(report.riskStratifiedCalibration.overallPassed, false);
   assert.equal(report.riskStratifiedCalibration.totalIncorrectHighConfidence, 0);
@@ -282,6 +294,8 @@ test('Phase 6 end-to-end evaluation harness passes all sealed-proxy invariants a
   assert.equal(report.frEval3Metrics.sixFacetCompletenessAndOverflowRate, 1);
   assert.equal(report.frEval3Metrics.conflictedPopulationProjectionAccuracy, 1);
   assert.equal(report.frEval3Metrics.replayQueryCountBounds.passed, true);
+  assert.equal(report.frEval3Metrics.replayQueryCountBounds.measuredFromRealPath, true);
+  assert.equal(report.frEval3Metrics.macroDomainLower95Summary.sufficientPerDomainSamplesFor90PctBound, false);
   assert.ok(report.frEval3Metrics.providerExpandedIncrementalCoverageRate > 0);
 
   // Verify FR-EVAL-1 separation of domain correctness vs language coverage
@@ -292,7 +306,7 @@ test('Phase 6 end-to-end evaluation harness passes all sealed-proxy invariants a
 
   // Verify §19 #22 requirement-to-evidence matrix and §22 openness
   assert.ok(PHASE6_SEALED_EVALUATION_CASES.length >= 25);
-  assert.ok(report.requirementToEvidenceMatrix.some((r) => r.requirementId === 'FR-EVAL-1..6' && r.status === 'SEALED_PROXY_VERIFIED'));
+  assert.ok(report.requirementToEvidenceMatrix.some((r) => r.requirementId === 'FR-EVAL-1..6' && r.status === 'DEVELOPER_PROXY_UNHELD'));
   assert.ok(report.requirementToEvidenceMatrix.some((r) => r.requirementId === '§22.1..7' && r.status === 'OWNER_DECISION_OPEN'));
 
   const summary = await buildPhase6CalibrationAndEvaluationSummary();
@@ -302,11 +316,16 @@ test('Phase 6 end-to-end evaluation harness passes all sealed-proxy invariants a
   assert.equal(summary.evaluationNature, 'SEALED_PROXY');
   assert.equal(summary.calibrationObservedZeroErrorPassed, true);
   assert.equal(summary.calibrationOverallPassed, false);
-  assert.equal(summary.passedGateCount, summary.totalGateCount - 1);
   assert.deepEqual(
     summary.report.frEval4ProductGates.filter((g) => !g.passed).map((g) => g.gateId),
-    ['GATE_WILSON_95_UPPER_BOUND_UNDER_1PCT'],
+    [
+      'GATE_END_TO_END_MACRO_RESOLVED_CI',
+      'GATE_WILSON_95_UPPER_BOUND_UNDER_1PCT',
+      'GATE_INDEPENDENT_HELD_OUT_PROVENANCE',
+      'GATE_LIVE_EXTERNAL_PROVIDER_EVALUATED',
+    ],
   );
+  assert.equal(summary.passedGateCount, summary.totalGateCount - 4);
 });
 
 test('Phase 6 review fixes: repeated span mapping, strict calibration bound, budget enforcement, strict domains, and production handler wiring', async () => {
@@ -734,6 +753,70 @@ test('Phase 6 review fixes: repeated span mapping, strict calibration bound, bud
       customEntityRead.parameters.providerOrchestration.reconciliationStatus,
       'PROVIDER_INCREMENTAL',
     );
+
+    // (g) Entry-path rescue: prompt routed by legacy cascade to REMOTE_FALLBACK GROUNDED_GUIDANCE
+    // is promoted at the real Ask entry boundary and executed cleanly through capabilityInvoke.
+    const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
+    const { resolveAskSemanticEntryDecision } = require('../../src/services/ask/semantic/semanticEntryDispatcher.ts');
+    const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
+
+    const fallbackParaphrase = 'show appliances lacking protection coverage';
+    const rawCascade = resolveAskRoutingCascade(fallbackParaphrase, { propertyId: 'prop-p6-1' });
+    assert.equal(rawCascade.operation.operationId, 'GROUNDED_GUIDANCE');
+    const entryDecision = resolveAskSemanticEntryDecision({
+      rawMessage: fallbackParaphrase,
+      routingStage: rawCascade.stage,
+      routingOperationId: rawCascade.operation.operationId,
+      requiresClarification: rawCascade.requiresClarification,
+      hasSemanticProvider: true,
+    });
+    assert.equal(entryDecision.shouldDispatchToSemanticEntry, true);
+
+    const invokedFallbackResult = await capabilityInvoke(
+      'GROUNDED_GUIDANCE',
+      {
+        userId: 'user-1',
+        propertyId: 'prop-p6-1',
+        sessionId: 'sess-entry-1',
+        executionId: 'exec-entry-1',
+        message: fallbackParaphrase,
+        launchContext: null,
+      },
+      {
+        propertyAccess: { allowed: true, role: 'OWNER', propertyId: 'prop-p6-1', userId: 'user-1' },
+        semanticProvider: new SealedOfflineStructuredProvider('NOMINAL'),
+        semanticProviderPolicy: approvedPolicy,
+        semanticEvaluationMode: 'DUAL_PRODUCER',
+      },
+    );
+    assert.equal(invokedFallbackResult.status, 'ANSWERED');
+    assert.equal(invokedFallbackResult.parameters.providerOrchestration.reconciliationStatus, 'PROVIDER_INCREMENTAL');
+    assert.match(JSON.stringify(invokedFallbackResult.blocks), /Water Heater/);
+
+    // (h) Calibration out-of-fold CV never reports 0.0000 in-sample ECE on a single observation
+    const singleObsCal = evaluateRiskStratifiedCalibration([
+      { caseId: 'only-one', stratum: 'WRITE_OR_CONSEQUENTIAL_ACTION', rawScore: 0.94, highConfidenceAdmitted: true, correct: true },
+    ]);
+    const writeSummary = singleObsCal.strata.find((s) => s.stratum === 'WRITE_OR_CONSEQUENTIAL_ACTION');
+    assert.equal(writeSummary.eceEvaluated, false);
+    assert.equal(writeSummary.expectedCalibrationError, null);
+    assert.equal(writeSummary.eceEvaluationMode, 'INSUFFICIENT_FOR_OUT_OF_FOLD');
+
+    const heldOutCal = evaluateRiskStratifiedCalibration(
+      [
+        { caseId: 'eval-1', stratum: 'WRITE_OR_CONSEQUENTIAL_ACTION', rawScore: 0.95, highConfidenceAdmitted: true, correct: false },
+      ],
+      {
+        calibrationFitObservations: [
+          { caseId: 'fit-1', stratum: 'WRITE_OR_CONSEQUENTIAL_ACTION', rawScore: 0.94, highConfidenceAdmitted: true, correct: true },
+        ],
+      },
+    );
+    const heldOutWrite = heldOutCal.strata.find((s) => s.stratum === 'WRITE_OR_CONSEQUENTIAL_ACTION');
+    assert.equal(heldOutWrite.eceEvaluated, true);
+    assert.equal(heldOutWrite.eceEvaluationMode, 'HELD_OUT_SPLIT');
+    assert.equal(heldOutWrite.expectedCalibrationError, 1);
+    assert.equal(heldOutCal.totalIncorrectHighConfidence, 1);
   } finally {
     propertyAccess.resolvePropertyAccess = origResolveAccess;
     for (const [model, orig] of origFindMany.entries()) prisma[model].findMany = orig;

@@ -680,7 +680,7 @@ export async function dataPointReadResult(
 }
 
 /** The data-point read capability, exported so it can be exercised directly. */
-export const handleDataPointRead: Parameters<typeof registerCapabilityHandler>[1] = async (envelope) => {
+export const handleDataPointRead: Parameters<typeof registerCapabilityHandler>[1] = async (envelope, deps) => {
   const requestedId = envelope.launchContext?.dataPointId;
   const forcedPoint = requestedId ? DATA_POINT_BY_ID.get(requestedId) : undefined;
   // A server-authored launch id that is no longer catalogued fails closed; it
@@ -692,6 +692,14 @@ export const handleDataPointRead: Parameters<typeof registerCapabilityHandler>[1
   // this caller's authorization. Any other model-chosen key is refused, never guessed: that would recreate the raw-predicate path FR-DATA-15 forbids.
   const hinted = applyLaunchHints(envelope.message, { entityRef: envelope.launchContext?.dataPointEntityRef, parameters: envelope.launchContext?.dataPointParameters });
   if (hinted.kind === 'UNSUPPORTED') return notice('DATA_POINT_PARAMETERS_UNSUPPORTED', 'data-point-parameters-unsupported', 'I need a simpler question', 'Ask for the recorded detail directly. Filtered and grouped questions use only reviewed query templates.');
-  return dataPointReadResult(envelope.userId, envelope.propertyId!, hinted.message, forcedPoint);
+  const semanticOptions: DataPointReadSemanticOptions | undefined =
+    deps && (deps.semanticProvider !== undefined || deps.semanticProviderPolicy !== undefined || deps.semanticEvaluationMode !== undefined)
+      ? {
+          ...(deps.semanticProvider !== undefined ? { semanticProvider: deps.semanticProvider } : {}),
+          ...(deps.semanticProviderPolicy !== undefined ? { semanticProviderPolicy: deps.semanticProviderPolicy } : {}),
+          ...(deps.semanticEvaluationMode !== undefined ? { evaluationMode: deps.semanticEvaluationMode } : {}),
+        }
+      : undefined;
+  return dataPointReadResult(envelope.userId, envelope.propertyId!, hinted.message, forcedPoint, semanticOptions);
 };
 registerCapabilityHandler('data-point-read.read', handleDataPointRead);

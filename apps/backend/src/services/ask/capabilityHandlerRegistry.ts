@@ -18,6 +18,11 @@ import {
 import { AskCapabilityHandlerMissingError, type CapabilityInvocationEnvelope } from './capabilityInvocation.contract';
 import { parseDeterministicSemanticRequest } from './semantic/deterministicSemanticParser';
 import { executePhase2aOnProperty } from './semantic/phase2a/phase2aSliceExecutor';
+import { resolveAskSemanticEntryDecision } from './semantic/semanticEntryDispatcher';
+import {
+  type SemanticProviderPolicy,
+  type SemanticUnderstandingProvider,
+} from './semantic/phase6/semanticProviderOrchestrator';
 
 // Ask Cozy Stage 3, Phase 1 (implementation plan §7; FRD §16-17). Replaces
 // askOrchestrator.service.ts's former domain-branching dispatch switch
@@ -49,6 +54,9 @@ export interface CapabilityInvocationDependencies {
   // check by fabricating this field with anything other than a real,
   // already-resolved PropertyAccess for the same userId/propertyId.
   propertyAccess?: PropertyAccess | null;
+  semanticProvider?: SemanticUnderstandingProvider | null;
+  semanticProviderPolicy?: SemanticProviderPolicy;
+  semanticEvaluationMode?: 'PRODUCTION_SHORT_CIRCUIT' | 'DUAL_PRODUCER';
 }
 
 export type CapabilityHandler = (
@@ -232,28 +240,25 @@ async function invokeGuarded(
     }
   }
 
-  // Phase 2A unified semantic plan boundary across QUERY, CAPABILITY, and COMMAND
-  // (HVAC_DECISION_START keeps its canonical decision-platform.hvac.start adapter)
-  if (
-    envelope.propertyId
-    && envelope.message
-    && (
-      operationId === 'DATA_POINT_READ'
-      || operationId === 'REPLACEMENT_GUIDANCE'
-      || operationId === 'MAINTENANCE_TASK_CREATE'
-    )
-  ) {
+  // Phase 2A + Cross-Domain Wave 1-5 + Phase 6 unified semantic entry dispatch
+  // (respecting explicit UI launch operations and maintaining property auth boundaries).
+  if (envelope.propertyId && envelope.message) {
     const phase2aPlan = parseDeterministicSemanticRequest(envelope.message);
     const phase2aJob = phase2aPlan.outcome === 'MATCH' ? phase2aPlan.facets[0]?.evidence.jobMatch : null;
+    const isExplicitForcedOperation = Boolean(envelope.launchContext?.operationId);
     const isPhase2aDispatch =
       phase2aPlan.outcome === 'BOUNDARY'
       || (operationId === 'DATA_POINT_READ' && phase2aJob === 'query.inventory_item.relation_boolean')
       || ((operationId === 'REPLACEMENT_GUIDANCE' || operationId === 'DATA_POINT_READ')
         && phase2aJob === 'job.inventory.replacement_guidance')
       || ((operationId === 'MAINTENANCE_TASK_CREATE' || operationId === 'DATA_POINT_READ')
-        && phase2aJob === 'job.maintenance.create');
+        && phase2aJob === 'job.maintenance.create')
+      || (!isExplicitForcedOperation
+        && (phase2aJob === 'job.maintenance.create'
+          || phase2aJob === 'job.inventory.replacement_guidance'
+          || phase2aJob === 'query.inventory_item.relation_boolean'));
 
-    if (isPhase2aDispatch) {
+    if (isPhase2aDispatch && (operationId !== 'DATA_POINT_READ' || deps.semanticEvaluationMode !== 'DUAL_PRODUCER')) {
       const phase2aExecution = await executePhase2aOnProperty({
         propertyId: envelope.propertyId,
         role: resolvedRole,
@@ -261,6 +266,29 @@ async function invokeGuarded(
         rawText: envelope.message,
       });
       return withDerivedCollectionDescriptors(phase2aExecution.operationResult);
+    }
+
+    if (!isExplicitForcedOperation && operationId === 'GROUNDED_GUIDANCE') {
+      const semanticDecision = resolveAskSemanticEntryDecision({
+        rawMessage: envelope.message,
+        routingStage: 'REMOTE_FALLBACK',
+        routingOperationId: operationId,
+        requiresClarification: false,
+        hasSemanticProvider: Boolean(
+          deps.semanticProvider
+          || deps.semanticProviderPolicy?.approvalStatus === 'APPROVED_FOR_STRUCTURED_PLANNING'
+          || process.env.ASK_SEMANTIC_PROVIDER_APPROVED === 'true',
+        ),
+      });
+      if (semanticDecision.shouldDispatchToSemanticEntry) {
+        const semanticReadHandler = registry.get('data-point-read.read');
+        if (semanticReadHandler) {
+          const semanticResult = await semanticReadHandler(envelope, deps);
+          if (semanticResult.reasonCode !== 'DATA_POINT_NOT_IDENTIFIED') {
+            return withDerivedCollectionDescriptors(semanticResult);
+          }
+        }
+      }
     }
   }
 

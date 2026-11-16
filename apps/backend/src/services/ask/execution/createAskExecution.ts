@@ -40,6 +40,8 @@ import { decomposeForComposition } from '../composition/decompose';
 import { recoverComposedTurn, resumeClarifiedComposedTurn, runComposedTurn } from '../composition/runComposedTurn';
 import { findPendingComposedParent } from '../composition/resumeClarification';
 import { GeminiUnderstandingProvider } from '../modelRouting/understandingProvider';
+import { resolveAskSemanticEntryDecision } from '../semantic/semanticEntryDispatcher';
+import { resolveDefaultSemanticProviderPolicy } from '../semantic/phase6/semanticProviderOrchestrator';
 import { planRuntimeUnderstanding } from '../modelRouting/runtimeUnderstanding';
 import { loadKnownNames } from '../privacy/knownNames';
 import { MODEL_PATH_RECOVERIES, RECOVERY_OUTCOMES, recoveryBlock, recoveryCodeForReason } from '../recovery/recoveryOutcomes';
@@ -565,6 +567,29 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       requiresClarification: true,
       entityResolution: null,
     };
+  }
+  // Unified Semantic Stack entry promotion (FR-UND-7 / §18): promote fallbacks, ambiguous legacy
+  // clarifications, safety boundaries, and Phase 2A/Wave 1-5 matches into DATA_POINT_READ's
+  // unified semantic pipeline so homeowner prompts are handled before legacy REMOTE_FALLBACK.
+  if (routingDecision.stage !== 'SAFETY') {
+    const defaultProviderPolicy = resolveDefaultSemanticProviderPolicy();
+    const semanticEntry = resolveAskSemanticEntryDecision({
+      rawMessage: routingMessage,
+      routingStage: routingDecision.stage,
+      routingOperationId: routingDecision.operation.operationId,
+      requiresClarification: routingDecision.requiresClarification,
+      forcedOperationId,
+      hasSemanticProvider: defaultProviderPolicy.approvalStatus === 'APPROVED_FOR_STRUCTURED_PLANNING',
+    });
+    if (semanticEntry.shouldDispatchToSemanticEntry) {
+      const semanticOp = getAskOperationDefinition('DATA_POINT_READ');
+      routingDecision = {
+        ...routingDecision,
+        operation: { ...semanticOp, confidence: 1 },
+        stage: routingDecision.stage === 'CLARIFICATION' ? 'DETERMINISTIC' : routingDecision.stage,
+        requiresClarification: false,
+      };
+    }
   }
   // The local classifier already had the concatenated prior+current message
   // to work with; only step in when it still found nothing confident

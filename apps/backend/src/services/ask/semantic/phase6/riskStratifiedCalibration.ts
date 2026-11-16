@@ -214,7 +214,9 @@ export interface StratumCalibrationSummary {
   readonly incorrectHighConfidenceCount: number;
   readonly incorrectHighConfidenceRate: number;
   readonly incorrectHighConfidenceUpper95Bound: number;
-  readonly expectedCalibrationError: number;
+  readonly expectedCalibrationError: number | null;
+  readonly eceEvaluated: boolean;
+  readonly eceEvaluationMode: 'HELD_OUT_SPLIT' | 'LEAVE_ONE_OUT_CV' | 'INSUFFICIENT_FOR_OUT_OF_FOLD';
   readonly pavAnchors: readonly (readonly [number, number])[];
   readonly observedZeroErrorPassed: boolean;
   readonly statisticalBoundPassed: boolean;
@@ -224,6 +226,7 @@ export interface StratumCalibrationSummary {
 export interface RiskStratifiedCalibrationReport {
   readonly version: string;
   readonly minRequiredIndependentSamplesAtZeroErrors: number;
+  readonly calibrationEvaluationMode: 'HELD_OUT_SPLIT' | 'LEAVE_ONE_OUT_CV';
   readonly observedZeroErrorPassed: boolean;
   readonly overallPassed: boolean;
   readonly totalObservations: number;
@@ -286,9 +289,18 @@ function interpolateAnchor(score: number, anchors: readonly (readonly [number, n
 /**
  * Calibrates confidence per §12 FR-UND-4 semantic risk stratum using Pool-Adjacent-Violators
  * empirical calibration and checks FR-EVAL-4 incorrect-high-confidence Wilson 95% upper bounds.
+ *
+ * Calibration fitting and ECE evaluation never reuse the same observation:
+ * - when `options.calibrationFitObservations` is provided, anchors are fit strictly on the split
+ *   and evaluated on `observations`;
+ * - otherwise, ECE is computed via leave-one-out out-of-fold cross-validation (`sampleCount >= 2`),
+ *   reporting `eceEvaluated: false` and `expectedCalibrationError: null` when fewer than 2 samples exist.
  */
 export function evaluateRiskStratifiedCalibration(
   observations: readonly CalibrationObservation[],
+  options: {
+    readonly calibrationFitObservations?: readonly CalibrationObservation[];
+  } = {},
 ): RiskStratifiedCalibrationReport {
   const orderedStrata: readonly SemanticRiskStratum[] = [
     'REVERSIBLE_PROPERTY_READ',
@@ -299,6 +311,7 @@ export function evaluateRiskStratifiedCalibration(
     'SAFETY_OR_RESTRICTED_BOUNDARY',
   ];
 
+  const hasDisjointFitSet = Array.isArray(options.calibrationFitObservations);
   const summaries: StratumCalibrationSummary[] = [];
   const failedStrata: SemanticRiskStratum[] = [];
 
@@ -313,20 +326,46 @@ export function evaluateRiskStratifiedCalibration(
     const incorrectHighRate = sampleCount > 0 ? Number((incorrectHigh / sampleCount).toFixed(4)) : 0;
     const upper95 = sampleCount > 0 ? wilson95Interval(incorrectHigh, sampleCount).upper : 1;
 
-    const pavAnchors = deriveStratumPavAnchors(stratumObs);
-    let eceSum = 0;
-    for (const obs of stratumObs) {
-      const calibrated = interpolateAnchor(obs.rawScore, pavAnchors);
-      eceSum += Math.abs(calibrated - (obs.correct ? 1 : 0));
+    const fitObs = hasDisjointFitSet
+      ? options.calibrationFitObservations!.filter((o) => o.stratum === stratum)
+      : stratumObs;
+    const pavAnchors = deriveStratumPavAnchors(fitObs);
+
+    let ece: number | null = null;
+    let eceEvaluated = false;
+    let eceEvaluationMode: StratumCalibrationSummary['eceEvaluationMode'] = 'INSUFFICIENT_FOR_OUT_OF_FOLD';
+
+    if (hasDisjointFitSet) {
+      if (sampleCount > 0 && fitObs.length > 0) {
+        let eceSum = 0;
+        for (const obs of stratumObs) {
+          const calibrated = interpolateAnchor(obs.rawScore, pavAnchors);
+          eceSum += Math.abs(calibrated - (obs.correct ? 1 : 0));
+        }
+        ece = Number((eceSum / sampleCount).toFixed(4));
+        eceEvaluated = true;
+        eceEvaluationMode = 'HELD_OUT_SPLIT';
+      }
+    } else if (sampleCount >= 2) {
+      let eceSum = 0;
+      for (let i = 0; i < stratumObs.length; i += 1) {
+        const foldTrain = stratumObs.filter((_, idx) => idx !== i);
+        const foldAnchors = deriveStratumPavAnchors(foldTrain);
+        const calibrated = interpolateAnchor(stratumObs[i].rawScore, foldAnchors);
+        eceSum += Math.abs(calibrated - (stratumObs[i].correct ? 1 : 0));
+      }
+      ece = Number((eceSum / sampleCount).toFixed(4));
+      eceEvaluated = true;
+      eceEvaluationMode = 'LEAVE_ONE_OUT_CV';
     }
-    const ece = sampleCount > 0 ? Number((eceSum / sampleCount).toFixed(4)) : 0;
 
     // FR-EVAL-4 strictly requires incorrect-high-confidence Wilson 95% upper bound < 1%
     // for every risk stratum (at 0 observed errors this mathematically requires n >= 381).
-    const observedZeroErrorPassed = sampleCount > 0 && incorrectHigh === 0 && ece <= 0.25;
+    const observedZeroErrorPassed = sampleCount > 0 && incorrectHigh === 0;
     const statisticalBoundPassed = sampleCount > 0 && upper95 < policy.maxAllowedIncorrectHighUpper95;
+    const ecePassed = eceEvaluated && ece !== null && ece <= 0.25;
 
-    const gatePassed = observedZeroErrorPassed && statisticalBoundPassed;
+    const gatePassed = observedZeroErrorPassed && ecePassed && statisticalBoundPassed;
 
     if (!gatePassed) {
       failedStrata.push(stratum);
@@ -344,6 +383,8 @@ export function evaluateRiskStratifiedCalibration(
       incorrectHighConfidenceRate: incorrectHighRate,
       incorrectHighConfidenceUpper95Bound: upper95,
       expectedCalibrationError: ece,
+      eceEvaluated,
+      eceEvaluationMode,
       pavAnchors,
       observedZeroErrorPassed,
       statisticalBoundPassed,
@@ -354,6 +395,7 @@ export function evaluateRiskStratifiedCalibration(
   return {
     version: ASK_PHASE6_CALIBRATION_VERSION,
     minRequiredIndependentSamplesAtZeroErrors: MIN_INDEPENDENT_SAMPLES_AT_ZERO_ERRORS,
+    calibrationEvaluationMode: hasDisjointFitSet ? 'HELD_OUT_SPLIT' : 'LEAVE_ONE_OUT_CV',
     observedZeroErrorPassed: summaries.every((s) => s.observedZeroErrorPassed),
     overallPassed: failedStrata.length === 0,
     totalObservations: observations.length,
