@@ -51,7 +51,7 @@ import { buildAuthorizationView } from '../composition/authorizationView';
 import { resolveSlotFollowUp } from '../composition/slotContext';
 import { extractSlots, sanitizeSlots } from '../composition/slots';
 import { homeHasItem } from '../composition/homeItems';
-import { declinedCompositionNote, slotRevalidationQuestion } from '../composition/notices';
+import { declinedCompositionNote, slotRevalidationQuestion, typedAnswerCoversWholeMessage } from '../composition/notices';
 import { resolvePropertyAccess } from '../../propertyAccess.service';
 import { resolveSuggestedActionSelection, type SuggestedActionResolution, type SuggestedActionRejectionReason } from '../suggestedActions/suggestedNextActionSelection';
 import { gateUncertifiedCommandPreview } from '../semantic/containment/commandPreviewAdmission';
@@ -824,7 +824,8 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     // FR-REC-2: a result that already is one of the recovery outcomes (an out-of-domain boundary, a missing record value) is counted under that outcome's own code.
     const recoveredAs = recoveryCodeForReason(result.reasonCode);
     if (recoveredAs) askRecoveryOutcomeTotal.inc({ code: recoveredAs });
-    if (declinedComposition && !routingDecision.requiresClarification && result.status !== 'NEEDS_CLARIFICATION') {
+    // A typed answer that already applied every part of the message needs no note: it would tell the homeowner a part was missed when it was not.
+    if (declinedComposition && !routingDecision.requiresClarification && result.status !== 'NEEDS_CLARIFICATION' && !typedAnswerCoversWholeMessage(result)) {
       result = { ...result, blocks: [...result.blocks, declinedCompositionNote(declinedComposition.reason, declinedComposition.clauseCount)] };
     }
     // Clarification-card contract (support/clarificationContract.ts): a card whose options repeat an action, or that has no stored clarification to be pressed against,

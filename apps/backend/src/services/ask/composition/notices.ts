@@ -15,3 +15,16 @@ export function slotRevalidationQuestion(reason: 'ITEM_NOT_FOUND' | 'PROPERTY_NO
     : { reasonCode: 'ASK_SLOT_PROPERTY_UNAVAILABLE', block: { type: 'SUMMARY' as const, id: 'slot-property-unavailable', title: 'Which home do you mean?', body: 'The home from your earlier question isn’t available to you right now, so I haven’t used it. Tell me which home and item you mean and I’ll answer.', tone: 'DEFAULT' as const, actions: [] } };
 }
 
+
+/**
+ * True when a typed-stack answer already covered the whole message, so the "part of your question isn't answered here" note would be false. The typed slice answers only when every word
+ * resolved (no unresolved spans) and carries a receipt; the cross-domain executor answers fully only with status ANSWERED and no overflow facets (a PARTIAL answer names its own gap).
+ * A message such as "kitchen appliances with no warranty and over 5 years old" splits into two clauses, one of which does not route alone, yet the typed plan applies all three conditions.
+ */
+export function typedAnswerCoversWholeMessage(result: { status?: string; parameters?: unknown }): boolean {
+  if (result.status !== 'ANSWERED') return false;
+  const parameters = (result.parameters ?? {}) as { semanticExecutionReceipt?: unknown; crossDomainExecution?: { status?: string; overflowFacets?: unknown[] } };
+  if (parameters.semanticExecutionReceipt) return true;
+  const crossDomain = parameters.crossDomainExecution;
+  return Boolean(crossDomain && crossDomain.status === 'ANSWERED' && (crossDomain.overflowFacets ?? []).length === 0);
+}
