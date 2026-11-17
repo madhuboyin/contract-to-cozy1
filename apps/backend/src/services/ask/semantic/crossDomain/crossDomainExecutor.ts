@@ -190,7 +190,10 @@ export interface CrossDomainSellerReadinessRecord {
   readonly id: string;
   readonly propertyId: string;
   readonly title: string;
-  readonly status: 'PENDING' | 'COMPLETED';
+  /** PENDING = open or committed to (`PURSUING`); COMPLETED = resolved; WAIVED = the homeowner decided to disclose rather than fix, so it is not "still to finish". */
+  readonly status: 'PENDING' | 'COMPLETED' | 'WAIVED';
+  readonly requirementClass?: string;
+  readonly category?: string;
 }
 
 export interface CrossDomainProjectRecord {
@@ -387,7 +390,7 @@ function finalizeReceiptAndPresentation(input: {
   readonly operationAdapter: string;
   readonly sourceType: string;
   readonly predicateIds: readonly string[];
-  readonly rows: ReadonlyArray<{ readonly id: string; readonly label: string; readonly subtitle?: string }>;
+  readonly rows: ReadonlyArray<{ readonly id: string; readonly label: string; readonly subtitle?: string; readonly groupKey?: string }>;
   readonly title: string;
   readonly summaryBody: string;
   readonly variantId: string;
@@ -401,7 +404,7 @@ function finalizeReceiptAndPresentation(input: {
   readonly blocks: readonly AskPresentationBlock[];
 } {
   const resolvedRecordIds = input.rows.map((r) => r.id);
-  const cleanRows = input.rows.map((r) => ({ id: r.id, label: humanizeEnumTokens(r.label), ...(r.subtitle ? { subtitle: humanizeEnumTokens(r.subtitle) } : {}) }));
+  const cleanRows = input.rows.map((r) => ({ id: r.id, label: humanizeEnumTokens(r.label), ...(r.subtitle ? { subtitle: humanizeEnumTokens(r.subtitle) } : {}), ...(r.groupKey ? { groupKey: r.groupKey } : {}) }));
   const cleanTitle = humanizeEnumTokens(input.title);
   const cleanSummary = humanizeEnumTokens(input.summaryBody);
   const unknownCount = input.unknownCount ?? 0;
@@ -435,7 +438,7 @@ function finalizeReceiptAndPresentation(input: {
     receipt,
     title: cleanTitle,
     summaryBody: renderedBody,
-    rows: input.projection === 'COUNT' ? [] : cleanRows.map((r) => ({ id: r.id, label: r.label, subtitle: r.subtitle })),
+    rows: input.projection === 'COUNT' ? [] : cleanRows.map((r) => ({ id: r.id, label: r.label, subtitle: r.subtitle, groupKey: r.groupKey })),
   });
 
   const entailment = verifySemanticReadReceiptEntailment({
@@ -693,22 +696,38 @@ function executeNewStackFacet(
     const categories = firstPredicateTargetCategorySet(facet.where);
     const metaByTaskId = new Map(snapshot.maintenanceTaskMeta.map((m) => [m.taskId, m.category]));
     const refLocalYmd = localYmdInTimeZone(snapshot.asOfDate, snapshot.timezone);
+    // A calendar-month constraint ("due next month") applies to every branch, including a category question ("plumbing tasks next month"); it used to be read
+    // only when no category was named, so the month was silently dropped there (FR-PLAN-5).
+    const monthWindow = facet.time?.kind === 'CALENDAR_PERIOD' && facet.time.unit === 'MONTH'
+      ? targetYearMonthInTimeZone(snapshot.asOfDate, facet.time.offset, snapshot.timezone)
+      : null;
+    const dueInWindow = (task: { nextDueDate?: string | Date | null }): boolean => {
+      if (!monthWindow) return true;
+      if (!task.nextDueDate) return false;
+      const dueParts = datePartsInTimeZone(task.nextDueDate as Date | string, snapshot.timezone);
+      return dueParts.year === monthWindow.year && dueParts.month === monthWindow.month;
+    };
     const matches = snapshot.maintenanceTasks.filter((task) => {
       if (task.propertyId !== snapshot.propertyId) return false;
       if (categories && categories.length > 0) {
         const taskCat = metaByTaskId.get(task.id) ?? 'GENERAL';
-        return categories.includes(taskCat) && (task.status === 'PENDING' || task.status === 'IN_PROGRESS');
+        return categories.includes(taskCat) && (task.status === 'PENDING' || task.status === 'IN_PROGRESS') && dueInWindow(task);
       }
-      if (facet.time?.kind === 'CALENDAR_PERIOD' && facet.time.unit === 'MONTH') {
-        if (task.status !== 'PENDING' || !task.nextDueDate) return false;
-        const targetYm = targetYearMonthInTimeZone(snapshot.asOfDate, facet.time.offset, snapshot.timezone);
-        const dueParts = datePartsInTimeZone(task.nextDueDate, snapshot.timezone);
-        return dueParts.year === targetYm.year && dueParts.month === targetYm.month;
+      if (monthWindow) {
+        return task.status === 'PENDING' && dueInWindow(task);
       }
       return task.status === 'PAST_DUE' || (task.status === 'PENDING' && Boolean(task.nextDueDate) && localYmdInTimeZone(task.nextDueDate, snapshot.timezone) < refLocalYmd);
     });
+    // The window is stated in the answer so the result can be audited against what "next month" meant.
+    const windowLabel = monthWindow
+      ? `${new Date(Date.UTC(monthWindow.year, monthWindow.month - 1, 1)).toLocaleString('en-US', { month: 'long', timeZone: 'UTC' })} ${monthWindow.year}`
+      : null;
     const rows = matches.map((m) => ({ id: m.id, label: m.title, subtitle: `Due ${m.nextDueDate}` }));
-    const summary = matches.length === 0 ? 'No matching maintenance tasks found.' : `${matches.length} maintenance task(s): ${matches.map((m) => m.title).join(', ')}.`;
+    const summary = windowLabel
+      ? (matches.length === 0
+        ? `No maintenance tasks are due in ${windowLabel} (the whole calendar month, in your home’s time zone).`
+        : `${matches.length} maintenance task(s) due in ${windowLabel} (the whole calendar month, in your home’s time zone): ${matches.map((m) => m.title).join(', ')}.`)
+      : (matches.length === 0 ? 'No matching maintenance tasks found.' : `${matches.length} maintenance task(s): ${matches.map((m) => m.title).join(', ')}.`);
     const predIds = evaluateWherePredicates(facet.where);
     const finalized = finalizeReceiptAndPresentation({
       facet,
@@ -1453,16 +1472,27 @@ function executeNewStackFacet(
       const status = missingSlots.length > 0 ? 'PARTIAL_MISSING_SLOTS' : 'EXECUTED';
       const formatSignedDollars = (cents: number): string =>
         cents < 0 ? `-$${(Math.abs(cents) / 100).toFixed(2)}` : `$${(cents / 100).toFixed(2)}`;
+      // The persisted outcome is a Sell/Hold/Rent analysis: HOLD keeps the home to live in, RENT keeps it and rents it OUT, SELL sells now. The raw token and the
+      // signed dollar figure mean nothing to a homeowner, so both are said in words, and the answer says what the analysis does and does not compare.
+      const winnerWords: Record<string, string> = {
+        SELL: 'your saved analysis favors selling now',
+        HOLD: 'your saved analysis favors keeping the home to live in',
+        RENT: 'your saved analysis favors keeping the home and renting it out',
+      };
+      const advantageWords = (cents: number): string => cents < 0
+        ? `renting it out beats keeping the home by $${(Math.abs(cents) / 100).toFixed(2)} over ${ownRentResult?.horizonYears} years`
+        : `keeping the home beats renting it out by $${(cents / 100).toFixed(2)} over ${ownRentResult?.horizonYears} years`;
       const persistedMeta = ownRentResult && (ownRentResult.sellHoldRentWinner || ownRentResult.ownAdvantageAtHorizonCents !== null)
         ? ` (${[
-            ownRentResult.sellHoldRentWinner ? `winner: ${ownRentResult.sellHoldRentWinner}` : null,
-            ownRentResult.ownAdvantageAtHorizonCents !== null
-              ? `net owning advantage ${formatSignedDollars(ownRentResult.ownAdvantageAtHorizonCents)}`
+            ownRentResult.sellHoldRentWinner
+              ? (winnerWords[ownRentResult.sellHoldRentWinner.toUpperCase()] ?? `saved analysis winner: ${ownRentResult.sellHoldRentWinner}`)
               : null,
+            ownRentResult.ownAdvantageAtHorizonCents !== null ? advantageWords(ownRentResult.ownAdvantageAtHorizonCents) : null,
           ].filter(Boolean).join('; ')})`
         : '';
+      const persistedScopeNote = ' This comes from your saved Sell/Hold/Rent analysis, which compares selling now, keeping the home to live in, and renting it out; it does not compare owning with renting a home as a tenant.';
 
-      const summary = ownRentResult === null
+      const baseSummary = ownRentResult === null
         ? `Cannot compute own-vs-rent break-even without missing required financial inputs: ${missingSlots.join(', ')}.`
         : ownRentResult.hasPersistedOutcome && !ownRentResult.breaksEvenWithinHorizon
           ? `Owning does not beat renting within your ${ownRentResult.horizonYears}-year horizon per persisted analysis${persistedMeta}.`
@@ -1473,12 +1503,16 @@ function executeNewStackFacet(
               : ownRentResult.breaksEvenWithinHorizon
                 ? `Owning beats renting starting in year ${ownRentResult.crossoverYear} (within your ${ownRentResult.horizonYears}-year horizon${ownRentResult.ownAdvantageAtHorizonCents !== null && ownRentResult.cumulativeRentAtHorizonCents !== null ? `; estimated net owning advantage ${formatSignedDollars(ownRentResult.ownAdvantageAtHorizonCents)} vs $${(ownRentResult.cumulativeRentAtHorizonCents / 100).toFixed(2)} cumulative rent` : ''}).`
                 : `Owning beats renting in year ${ownRentResult.crossoverYear}, which is beyond your ${ownRentResult.horizonYears}-year horizon.`;
+      // The note belongs only to the two branches that state the saved analysis' result; a persisted outcome that also had rent and home-value inputs is answered by
+      // the computed crossover model, whose figures do not come from the saved analysis.
+      const statesSavedAnalysis = Boolean(ownRentResult?.hasPersistedOutcome && (!ownRentResult.breaksEvenWithinHorizon || ownRentResult.crossoverYear === null));
+      const summary = statesSavedAnalysis ? `${baseSummary}${persistedScopeNote}` : baseSummary;
 
       const rows = status === 'EXECUTED'
         ? [{
             id: snapshot.propertyId,
             label: 'Own-vs-rent break-even analysis',
-            ...(ownRentResult?.crossoverYear !== null && ownRentResult?.crossoverYear !== undefined
+            ...(!ownRentResult?.hasPersistedOutcome && ownRentResult?.crossoverYear !== null && ownRentResult?.crossoverYear !== undefined
               ? { subtitle: `Crossover year ${ownRentResult.crossoverYear} (${ownRentResult.horizonYears}-year horizon)` }
               : {}),
           }]
@@ -1755,9 +1789,23 @@ function executeNewStackFacet(
   }
 
   if (job === 'job.seller.listing_readiness') {
-    const pending = snapshot.sellerReadinessItems.filter((s) => s.propertyId === snapshot.propertyId && s.status === 'PENDING');
-    const rows = pending.map((s) => ({ id: s.id, label: s.title }));
-    const summary = `${pending.length} seller readiness item(s) still pending before listing: ${pending.map((p) => p.title).join(', ')}.`;
+    const mine = snapshot.sellerReadinessItems.filter((s) => s.propertyId === snapshot.propertyId);
+    // Most urgent first: what blocks a sale, then what needs a professional, then what needs checking, then improvements and presentation.
+    const CLASS_ORDER = ['MATERIAL_BLOCKER', 'PROFESSIONAL_DECISION', 'VERIFICATION_NEEDED', 'OPTIONAL_IMPROVEMENT', 'PRESENTATION'];
+    const CLASS_LABEL: Record<string, string> = {
+      MATERIAL_BLOCKER: 'Could block a sale', PROFESSIONAL_DECISION: 'Needs a professional’s decision', VERIFICATION_NEEDED: 'Needs checking',
+      OPTIONAL_IMPROVEMENT: 'Optional improvements', PRESENTATION: 'Presentation',
+    };
+    const rank = (item: { requirementClass?: string }) => { const index = CLASS_ORDER.indexOf(item.requirementClass ?? ''); return index < 0 ? CLASS_ORDER.length : index; };
+    const pending = mine.filter((s) => s.status === 'PENDING').sort((a, b) => rank(a) - rank(b));
+    const waived = mine.filter((s) => s.status === 'WAIVED').length;
+    const rows = pending.map((s) => ({ id: s.id, label: s.title, groupKey: CLASS_LABEL[s.requirementClass ?? ''] ?? 'Other' }));
+    const counts = CLASS_ORDER.map((cls) => ({ cls, count: pending.filter((s) => s.requirementClass === cls).length })).filter((entry) => entry.count > 0);
+    const breakdown = counts.length > 0 ? ` ${counts.map((entry) => `${entry.count} ${CLASS_LABEL[entry.cls].toLowerCase()}`).join(', ')}.` : '';
+    const mostUrgent = pending.slice(0, 5).map((p) => p.title);
+    const summary = pending.length === 0
+      ? `No seller readiness items are still open before listing.${waived > 0 ? ` ${waived} waived item${waived === 1 ? ' is' : 's are'} not counted.` : ''}`
+      : `${pending.length} seller readiness item${pending.length === 1 ? ' is' : 's are'} still open before listing.${breakdown} Most urgent: ${mostUrgent.join(', ')}${pending.length > mostUrgent.length ? `, and ${pending.length - mostUrgent.length} more below` : ''}.${waived > 0 ? ` ${waived} waived item${waived === 1 ? ' is' : 's are'} not counted.` : ''}`;
     const finalized = finalizeReceiptAndPresentation({
       facet,
       snapshot,
@@ -2539,7 +2587,7 @@ export async function loadCrossDomainPropertySnapshot(
           select: {
             targetCloseDate: true,
             readinessItems: {
-              select: { id: true, title: true, status: true },
+              select: { id: true, title: true, status: true, requirementClass: true, category: true },
             },
           },
         })
@@ -2985,7 +3033,9 @@ export async function loadCrossDomainPropertySnapshot(
       id: s.id,
       propertyId,
       title: s.title,
-      status: String(s.status).toUpperCase() === 'RESOLVED' ? 'COMPLETED' : 'PENDING',
+      status: String(s.status).toUpperCase() === 'RESOLVED' ? 'COMPLETED' : String(s.status).toUpperCase() === 'WAIVED' ? 'WAIVED' : 'PENDING',
+      ...(s.requirementClass ? { requirementClass: String(s.requirementClass) } : {}),
+      ...(s.category ? { category: String(s.category) } : {}),
     })),
     projects: (projectRows as Array<any>).map((p) => ({
       id: p.id,
