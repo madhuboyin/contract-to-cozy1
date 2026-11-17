@@ -51,6 +51,7 @@ import { buildAuthorizationView } from '../composition/authorizationView';
 import { resolveSlotFollowUp } from '../composition/slotContext';
 import { extractSlots, sanitizeSlots } from '../composition/slots';
 import { homeHasItem } from '../composition/homeItems';
+import { relevantCandidates } from '../support/clarificationRelevance';
 import { declinedCompositionNote, slotRevalidationQuestion, typedAnswerCoversWholeMessage } from '../composition/notices';
 import { resolvePropertyAccess } from '../../propertyAccess.service';
 import { resolveSuggestedActionSelection, type SuggestedActionResolution, type SuggestedActionRejectionReason } from '../suggestedActions/suggestedNextActionSelection';
@@ -65,8 +66,11 @@ function stableSkillRoutingReasonCode(outcome: SkillRoutingOutcome): string | nu
 export function routingClarificationResult(
   decision: AskRoutingDecision,
   reasonCode: 'ASK_ROUTING_AMBIGUOUS' | 'ASK_SKILL_AMBIGUOUS' = 'ASK_ROUTING_AMBIGUOUS',
+  message?: string | null,
 ): AskOperationResult {
-  const candidates = decision.candidates.slice(0, 3);
+  // The goal question below is not filtered: its options are goals, not lookups. Otherwise an option the message shares no distinctive word with is not offered (support/clarificationRelevance.ts).
+  const upgradeGoalQuestion = decision.candidates.some((candidate) => candidate.reasonCodes?.includes(UPGRADE_OBJECTIVE_REASON));
+  const candidates = (upgradeGoalQuestion ? decision.candidates : relevantCandidates(message, decision.candidates)).slice(0, 3);
   // "Which upgrades are worth doing" without a goal: ask what the upgrades are for, with one option per goal.
   if (decision.candidates.some((candidate) => candidate.reasonCodes?.includes(UPGRADE_OBJECTIVE_REASON))) {
     const expires = new Date(Date.now() + 30 * 60 * 1000).toISOString();
@@ -81,6 +85,22 @@ export function routingClarificationResult(
       }],
       clarification: { version: 1, question: 'Worth doing for resale value, comfort or energy savings, or maintenance risk?', options, allowFreeText: true, expiresAt: expires },
       parameters: { clarification: { version: 1, candidateOperationIds: candidates.map((candidate) => candidate.operationId), expiresAt: expires } },
+      suggestions: [],
+    };
+  }
+  if (candidates.length === 1) {
+    // One related option is not a choice, and a card has no options or at least two: name it in the question and let the homeowner answer in words.
+    const expires = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    return {
+      status: 'NEEDS_CLARIFICATION',
+      reasonCode,
+      blocks: [{
+        type: 'SUMMARY', id: 'routing-clarification', title: 'What would you like to focus on?',
+        body: `This sounds like it is about “${clarificationLabelFor(candidates[0].operationId, decision.language)}”. Add one detail about what you want to know so I can use the right home record.`,
+        tone: 'DEFAULT', actions: [],
+      }],
+      clarification: { version: 1, question: 'What would you like to know?', options: [], allowFreeText: true, expiresAt: expires },
+      parameters: { clarification: { version: 1, candidateOperationIds: [candidates[0].operationId], expiresAt: expires } },
       suggestions: [],
     };
   }
@@ -763,6 +783,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
           skillRoutingDecision.outcome === 'AMBIGUOUS_SKILL' || skillRoutingDecision.outcome === 'AMBIGUOUS_OPERATION'
             ? 'ASK_SKILL_AMBIGUOUS'
             : 'ASK_ROUTING_AMBIGUOUS',
+          routingMessage,
         ))
         : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: executionPropertyId, operation, launchContext: effectiveLaunchContext, continuationCursor: followUp.continuationCursor, suppliedInput: followUp.suppliedInput, deferSemanticValidation: true }, skillTelemetryTrace),
       controls.executionTimeoutMs,

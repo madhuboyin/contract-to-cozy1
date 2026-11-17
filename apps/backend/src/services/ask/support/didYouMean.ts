@@ -5,6 +5,7 @@
 import { getAskOperationDefinition, isReadOnlyOperation, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
 import { isAskHonestNoAnswerResult } from '../askRemoteFallbackTypedClaims';
 import { clarificationLabelFor } from './clarificationLabels';
+import { relevantCandidates } from './clarificationRelevance';
 import type { AskRoutingDecision } from '../askRoutingCascade';
 import { ASK_DEFAULT_LANGUAGE, type AskLanguageCode } from '../askLanguageRegistry';
 
@@ -38,7 +39,7 @@ export function messageUsesCommandWording(message: string | null | undefined): b
 export function didYouMeanOptions(candidates: ReadonlyArray<{ operationId: AskOperationId; confidence: number }>, eligible: ReadonlySet<AskOperationId>, message?: string | null): AskOperationId[] {
   const allowWrites = messageUsesCommandWording(message);
   const seen = new Set<AskOperationId>();
-  const options: AskOperationId[] = [];
+  const pool: Array<{ operationId: AskOperationId }> = [];
   for (const candidate of [...candidates].sort((left, right) => right.confidence - left.confidence)) {
     const id = candidate.operationId;
     if (seen.has(id) || candidate.confidence < ASK_DID_YOU_MEAN_FLOOR || !eligible.has(id) || id === 'GROUNDED_GUIDANCE') continue;
@@ -46,15 +47,30 @@ export function didYouMeanOptions(candidates: ReadonlyArray<{ operationId: AskOp
     const definition = getAskOperationDefinition(id);
     if (definition.safetyClass.endsWith('_BOUNDARY')) continue;
     if (!allowWrites && !isReadOnlyOperation(id)) continue;
-    options.push(id);
-    if (options.length === ASK_DID_YOU_MEAN_LIMIT) break;
+    pool.push({ operationId: id });
   }
-  return options;
+  // Relevance gate (support/clarificationRelevance.ts): an option the message shares no distinctive word with is not offered; the limit applies to what is left.
+  return relevantCandidates(message, pool).slice(0, ASK_DID_YOU_MEAN_LIMIT).map((candidate) => candidate.operationId);
 }
 
 
 export function buildDidYouMeanResult(options: readonly AskOperationId[], language: AskLanguageCode = ASK_DEFAULT_LANGUAGE, now: Date = new Date()): AskOperationResult {
   const expiresAt = new Date(now.getTime() + EXPIRES_IN_MS).toISOString();
+  if (options.length === 1) {
+    // A card has no options (a question answered in words) or at least two (clarification contract), so one suggestion is named in the question instead of offered as a lone button.
+    return {
+      status: 'NEEDS_CLARIFICATION',
+      reasonCode: ASK_DID_YOU_MEAN_REASON,
+      blocks: [{
+        type: 'SUMMARY', id: 'did-you-mean', title: 'Did you mean one of these?',
+        body: `I couldn’t find an answer to that in your home record. Did you mean to ask: “${clarificationLabelFor(options[0], language)}”? If so, say it that way; otherwise say it another way.`,
+        tone: 'DEFAULT', actions: [],
+      }],
+      clarification: { version: 1, question: 'What would you like to know?', options: [], allowFreeText: true, expiresAt },
+      parameters: { clarification: { version: 1, candidateOperationIds: [...options], expiresAt } },
+      suggestions: [],
+    };
+  }
   return {
     status: 'NEEDS_CLARIFICATION',
     reasonCode: ASK_DID_YOU_MEAN_REASON,
