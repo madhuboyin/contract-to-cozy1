@@ -1,3 +1,4 @@
+import { EMERGENCY_BOUNDARY_BODY, EMERGENCY_BOUNDARY_TITLE } from '../../support/emergencyBoundary';
 import {
   buildSemanticReadReceipt,
   type SemanticReadReceipt,
@@ -2042,7 +2043,7 @@ export async function executeCrossDomainSnapshot(input: {
     return {
       status: 'BOUNDARY',
       rawText: input.rawText,
-      answer: 'Safety boundary triggered: seek immediate emergency help or professional assistance.',
+      answer: EMERGENCY_BOUNDARY_BODY,
       clarification: null,
       facetResults: [],
       overflowFacets: [],
@@ -3063,7 +3064,7 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
         {
           type: 'SUMMARY',
           id: 'cross-domain-safety-boundary',
-          title: 'Safety warning triggered',
+          title: EMERGENCY_BOUNDARY_TITLE,
           body: execution.answer,
           tone: 'CRITICAL',
           actions: [],

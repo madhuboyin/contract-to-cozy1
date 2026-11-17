@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { EMERGENCY_BOUNDARY_BODY, EMERGENCY_BOUNDARY_SUGGESTIONS, EMERGENCY_BOUNDARY_TITLE } from '../support/emergencyBoundary';
 import { HouseholdRole, MaintenanceTaskStatus } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
@@ -693,9 +694,9 @@ function emergencyResult(): AskOperationResult {
     status: 'BLOCKED',
     reasonCode: 'IMMEDIATE_SAFETY',
     blocks: [{
-      type: 'BOUNDARY', id: 'emergency-boundary', title: 'Treat this as an immediate safety issue', severity: 'EMERGENCY',
-      body: 'Leave the affected area if you can do so safely. Call 911 or your local emergency service and the appropriate utility emergency line from a safe location. Do not operate switches, appliances, flames, or vehicles near a suspected gas leak.',
-      suggestions: ['Follow instructions from emergency responders or the utility.', 'Do not wait for an app assessment when there may be immediate danger.'],
+      type: 'BOUNDARY', id: 'emergency-boundary', title: EMERGENCY_BOUNDARY_TITLE, severity: 'EMERGENCY',
+      body: EMERGENCY_BOUNDARY_BODY,
+      suggestions: [...EMERGENCY_BOUNDARY_SUGGESTIONS],
     }],
     suggestions: [],
   };
