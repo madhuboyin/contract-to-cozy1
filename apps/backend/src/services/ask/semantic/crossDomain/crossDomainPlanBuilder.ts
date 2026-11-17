@@ -1317,6 +1317,46 @@ function buildEmptyPlan(
   });
 }
 
+/**
+ * The product domain an entity word belongs to, for deciding whether an "or" separates two different questions. Generic words ("home" is an alias of the listing
+ * entity, rooms, items, tax) are deliberately absent: they appear in almost any question and say nothing about which domain was asked about.
+ */
+const DISJUNCTION_DOMAIN_FAMILY: Readonly<Record<string, string>> = Object.freeze({
+  'entity.claim': 'claim', 'entity.claim_document': 'claim',
+  'entity.project': 'project', 'entity.permit': 'project',
+  'entity.recall': 'recall', 'entity.contractor_quote': 'quote', 'entity.buyer_task': 'buyer', 'entity.maintenance_task': 'maintenance',
+  'entity.warranty': 'warranty', 'entity.insurance_policy': 'insurance', 'entity.inspection_finding': 'inspection', 'entity.environmental_risk': 'environment',
+});
+
+/**
+ * "open claims or pending permits": an "or" between parts that are about DIFFERENT domains is two questions, answered in separate sections. It used to stay one
+ * clause, the first domain's job was compiled and the other part was dropped without a word (a homeowner who asked about both could read "no permits" into a
+ * claims-only answer). An "or" inside one domain ("no warranty or older than 10 years", "kitchen or laundry room") is not split: it is a condition, not a question.
+ */
+function splitDisjunctionAcrossDomains(
+  clause: { text: string; start: number; end: number },
+  dynamicQuotes: readonly DynamicQuoteCandidate[],
+): Array<{ text: string; start: number; end: number }> {
+  if (!/\sor\s/i.test(clause.text)) return [clause];
+  const pieces: Array<{ text: string; start: number; end: number }> = [];
+  let cursor = 0;
+  for (const match of clause.text.matchAll(/\s+or\s+/gi)) {
+    const at = match.index ?? 0;
+    pieces.push({ text: clause.text.slice(cursor, at), start: clause.start + cursor, end: clause.start + at });
+    cursor = at + match[0].length;
+  }
+  pieces.push({ text: clause.text.slice(cursor), start: clause.start + cursor, end: clause.end });
+  if (pieces.some((piece) => piece.text.trim().length === 0)) return [clause];
+  const families = pieces.map((piece) => {
+    const annotated = annotateClauseWithDynamicQuotes(tokenizeClause(piece.text), dynamicQuotes);
+    return new Set(annotated.annotations.map((a) => DISJUNCTION_DOMAIN_FAMILY[a.lexeme.semanticId]).filter((family): family is string => Boolean(family)));
+  });
+  const everyPartHasADomain = families.every((set) => set.size > 0);
+  const seen = new Set<string>();
+  const pairwiseDifferent = families.every((set) => { const overlap = [...set].some((family) => seen.has(family)); set.forEach((family) => seen.add(family)); return !overlap; });
+  return everyPartHasADomain && pairwiseDifferent ? pieces.map((piece) => ({ ...piece, text: piece.text.trim() })) : [clause];
+}
+
 function splitCompoundClauses(rawText: string): {
   readonly subjectPrefix: string | null;
   readonly clauses: Array<{ text: string; start: number; end: number }>;
@@ -1440,7 +1480,11 @@ export function parseCrossDomainSemanticRequest(
   let claimFacetId: string | null = null;
   const itemAspectIds: string[] = [];
 
-  for (const [index, clause] of segmented.clauses.entries()) {
+  // An "or" between different domains is separate questions (see splitDisjunctionAcrossDomains).
+  const expandedClauses = segmented.clauses.flatMap((clause) => splitDisjunctionAcrossDomains(clause, dynamicQuotes));
+  const unsupportedClauses: Array<{ id: string; text: string; start: number; end: number }> = [];
+
+  for (const [index, clause] of expandedClauses.entries()) {
     const facetId = `facet-${index + 1}`;
     const clauseTokens = tokenizeClause(clause.text);
     const clauseAnnotated = annotateClauseWithDynamicQuotes(clauseTokens, dynamicQuotes);
@@ -1480,6 +1524,9 @@ export function parseCrossDomainSemanticRequest(
     }
 
     if (!spec) {
+      // In a question of several parts, a part that cannot be answered is named in the answer and the other parts are still answered (FR-PLAN-4/5); only when
+      // nothing in the message can be answered is the whole message not understood.
+      if (expandedClauses.length >= 2) { unsupportedClauses.push({ id: facetId, text: clause.text, start: clause.start, end: clause.end }); continue; }
       return {
         plan: buildEmptyPlan('NONE_FITS', rawText, [{ start: clause.start, end: clause.end, text: clause.text }]),
         clarification: null,
@@ -1509,6 +1556,18 @@ export function parseCrossDomainSemanticRequest(
     }
 
     builtFacets.push(toFacet(facetId, { start: clause.start, end: clause.end, text: clause.text }, spec));
+  }
+
+  if (builtFacets.length === 0 && unsupportedClauses.length > 0) {
+    return {
+      plan: buildEmptyPlan('NONE_FITS', rawText, unsupportedClauses.map((c) => ({ start: c.start, end: c.end, text: c.text }))),
+      clarification: null,
+      overflowFacets: [],
+      requiresUnambiguousCoordination: false,
+    };
+  }
+  for (const unsupported of unsupportedClauses) {
+    overflowFacets.push({ id: unsupported.id, sourceSpan: { start: unsupported.start, end: unsupported.end, text: unsupported.text }, label: unsupported.text, reasonCode: 'DOMAIN_NOT_SEARCHED' });
   }
 
   const plan = SemanticRequestPlanSchema.parse({

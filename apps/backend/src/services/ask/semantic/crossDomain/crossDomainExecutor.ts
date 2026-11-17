@@ -2246,9 +2246,8 @@ export async function executeCrossDomainSnapshot(input: {
   }
 
   const hasPartial = orderedResults.some((r) => r.status !== 'EXECUTED') || parsed.overflowFacets.length > 0;
-  const overflowNote = parsed.overflowFacets.length > 0
-    ? ` Overflow (${parsed.overflowFacets.map((o) => `${o.id}:${o.reasonCode}`).join(', ')}).`
-    : '';
+  // A part that was not answered is named in plain words, so the homeowner never reads a missing section as "nothing found" (FR-PLAN-5).
+  const overflowNote = parsed.overflowFacets.length > 0 ? ` ${notAnsweredNote(parsed.overflowFacets)}` : '';
 
   return {
     status: hasPartial ? 'PARTIAL' : 'ANSWERED',
@@ -3097,6 +3096,13 @@ export async function loadCrossDomainPropertySnapshot(
   };
 }
 
+/** A part of the question that was not answered, in plain words: a missing section must never read as "nothing found" (FR-PLAN-5). Empty when every part was answered. */
+function notAnsweredNote(overflowFacets: readonly PlanOverflowFacet[]): string {
+  if (overflowFacets.length === 0) return '';
+  const parts = overflowFacets.map((o) => `“${o.label.replace(/[?.!]+$/, '').trim()}”`);
+  return `I couldn’t answer ${parts.join(' or ')} here, so ${parts.length === 1 ? 'that part isn’t' : 'those parts aren’t'} included in this answer.`;
+}
+
 export function buildOperationResultFromCrossDomainExecution(execution: CrossDomainExecutionResult): AskOperationResult {
   if (execution.status === 'FORBIDDEN') {
     return {
@@ -3209,6 +3215,13 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
     // A single answered facet owns its complete, homeowner-facing presentation (its answer variant id, summary wording, rows with their
     // state badges, conflict/unknown boundary and a plain provenance line). The wrapper must not rebuild it with internal ids.
     blocks.push(...onlyFacet.blocks);
+    // The answered section owns its presentation, so the unanswered part is said on that section's summary instead of being left out of sight.
+    const note = notAnsweredNote(execution.overflowFacets);
+    const summaryIndex = blocks.findIndex((block) => block.type === 'SUMMARY');
+    if (note && summaryIndex >= 0) {
+      const summary = blocks[summaryIndex];
+      if (summary.type === 'SUMMARY') blocks[summaryIndex] = { ...summary, title: `${summary.title} (partly answered)`, body: `${summary.body} ${note}`, tone: 'CAUTION' };
+    }
   } else {
     blocks.push({
       type: 'SUMMARY',

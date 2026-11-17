@@ -296,7 +296,9 @@ test('six-facet budget executes 6 dependent facets cleanly and records DOMAIN_NO
   assert.equal(exec.status, 'PARTIAL');
   assert.equal(exec.facetResults.length, 6);
   assert.equal(exec.overflowFacets.length, 1);
-  assert.ok(exec.answer.includes('DOMAIN_NOT_SEARCHED'));
+  // The part beyond the budget is named in plain words (the structured record keeps its DOMAIN_NOT_SEARCHED code); it is never a developer string in the answer.
+  assert.match(exec.answer, /I couldn’t answer “saved items” here, so that part isn’t included in this answer\./);
+  assert.ok(!exec.answer.includes('DOMAIN_NOT_SEARCHED'));
 });
 
 test('fail-closed unresolved tokens, role redaction, unauthorized property access, and replay reauthorization work across waves', async () => {
