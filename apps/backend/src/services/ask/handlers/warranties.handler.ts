@@ -18,6 +18,7 @@ import { loadAskViewState } from './maintenance.handler';
 import { containsFilterContinuation } from '../askFollowUpContext';
 import { isOrderingId, orderingChips, orderingFromWords, withOrdering, type OrderingOption } from '../support/collectionOrdering';
 import { resolvePropertyPlanApplicabilityForItem } from '../../warrantyApplicability.service';
+import { parseRecallWarrantyAsk, recallsWithWarrantyResult, type LinkedWarrantyStatus } from './recallsWithWarranty';
 
 // Warranties capability slice, W-1 (FRD v1.124; ACUI Warranties certification). A deterministic record read: what the Home Record
 // says about this home's warranties. It reads the same property-scoped rows the Warranties route does
@@ -237,13 +238,13 @@ function warrantiesFromRecordsInner(input: {
     return {
       status: 'READY_WITH_LIMITATIONS', reasonCode: 'WARRANTY_UNAPPLIED_RECALL_CONDITION',
       blocks: [{
-        type: 'SUMMARY', id: 'warranty-no-match', title: 'I can’t combine recalls with warranties in one list yet',
-        headline: 'I can’t combine recalls and warranties in one list.',
+        type: 'SUMMARY', id: 'warranty-no-match', title: 'I couldn’t tell which warranty condition you mean with the recalls',
+        headline: 'I couldn’t tell which warranty condition you mean.',
         supportLine: 'No list is shown, so nothing here can be mistaken for the combined answer.',
-        body: 'Your question asks about recalls as well as warranties. I haven’t answered half of it as if it were the whole. Ask each part on its own and I’ll answer it.',
+        body: 'Your question mentions recalls as well as warranties, but I couldn’t tell whether you want items with or without an active warranty. I haven’t answered half of it as if it were the whole. Say which, for example “appliances with an open recall and no active warranty”.',
         tone: 'CAUTION', actions: [],
       }, BOUNDARY],
-      suggestions: ['Show appliances that have open recalls', 'Show appliances with no active warranty'],
+      suggestions: ['Show appliances with an open recall and no active warranty', 'Show appliances with an open recall and an active warranty'],
     };
   }
 
@@ -384,8 +385,46 @@ function warrantiesFromRecordsInner(input: {
   };
 }
 
+/**
+ * FR-PLAN-5 (live prompt #61): items with an OPEN recall match, split by whether an active warranty applies. A warranty applies to an item when it is linked by
+ * Warranty.inventoryItemId or a whole-home plan is marked COVERED for it; status is the Warranties page's own (`warrantyStatus`), so "active" means the same thing here.
+ */
+async function recallsWithWarrantyAnswer(propertyId: string, message: string): Promise<AskOperationResult | null> {
+  const ask = parseRecallWarrantyAsk(message);
+  if (!ask) return null;
+  const now = new Date();
+  const [items, recallMatches, applicability] = await Promise.all([
+    prisma.inventoryItem.findMany({ where: { propertyId }, select: { id: true, name: true, category: true } }),
+    prisma.recallMatch.findMany({ where: { propertyId, inventoryItemId: { not: null }, status: { in: ['OPEN', 'NEEDS_CONFIRMATION'] } }, select: { inventoryItemId: true, status: true } }),
+    prisma.warrantyApplicability.findMany({ where: { propertyId, status: 'COVERED', inventoryItemId: { not: null } }, select: { warrantyId: true, inventoryItemId: true } }),
+  ]);
+  const itemIds = items.map((item) => item.id);
+  const planWarrantyIds = [...new Set(applicability.map((row) => row.warrantyId))];
+  const warranties = await prisma.warranty.findMany({
+    where: { propertyId, OR: [{ inventoryItemId: { in: itemIds } }, ...(planWarrantyIds.length ? [{ id: { in: planWarrantyIds } }] : [])] },
+    select: { id: true, propertyId: true, providerName: true, category: true, coverageDetails: true, startDate: true, expiryDate: true, updatedAt: true, inventoryItemId: true },
+  });
+  const byId = new Map(warranties.map((warranty) => [warranty.id, warranty]));
+  const statuses = new Map<string, LinkedWarrantyStatus[]>();
+  const add = (itemId: string, warrantyId: string) => {
+    const warranty = byId.get(warrantyId);
+    if (!warranty) return;
+    statuses.set(itemId, [...(statuses.get(itemId) ?? []), warrantyStatus(warranty, propertyId, now).key]);
+  };
+  for (const warranty of warranties) if (warranty.inventoryItemId) add(warranty.inventoryItemId, warranty.id);
+  for (const row of applicability) if (row.inventoryItemId) add(row.inventoryItemId, row.warrantyId);
+  const idsWith = (status: string) => new Set(recallMatches.filter((match) => match.status === status && match.inventoryItemId).map((match) => match.inventoryItemId as string));
+  return recallsWithWarrantyResult({
+    ask, items, openRecallItemIds: idsWith('OPEN'), unconfirmedRecallItemIds: idsWith('NEEDS_CONFIRMATION'), warrantyStatusesByItem: statuses,
+  }, BOUNDARY);
+}
+
 async function warrantiesResult(userId: string, propertyId: string, message: string, priorViewState?: AskViewState | null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
+  if (!containsFilterContinuation(message)) {
+    const combined = await recallsWithWarrantyAnswer(propertyId, message);
+    if (combined) return combined;
+  }
   const canWrite = access.role !== HouseholdRole.VIEWER;
   // The same query the property-scoped Warranties route runs, plus the linked item and document count the answer shows.
   const rows = await prisma.warranty.findMany({

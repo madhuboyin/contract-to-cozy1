@@ -9,13 +9,13 @@ const { warrantiesFromRecords, WARRANTY_RECALL_CONDITION } = require('../../src/
 const record = { id: 'w1', propertyId: 'p1', providerName: 'Acme', category: 'APPLIANCE', coverageDetails: null, startDate: new Date('2024-01-01'), expiryDate: new Date('2030-01-01'), updatedAt: new Date('2026-09-01'), inventoryItem: null, documents: [] };
 const run = (message, records = [record]) => warrantiesFromRecords({ message, propertyId: 'p1', records, canWrite: true, ownedIds: new Set(), priorViewState: null });
 
-test('a warranty request that also names recalls is not answered as a warranty-only list', () => {
+test('a recall-and-warranty request whose warranty side is unclear is not answered as a warranty-only list', () => {
   for (const records of [[record], []]) {
-    const result = run('show appliances that have open recalls and no active warranty', records);
+    const result = run('show appliances with open recalls and some warranty thing', records);
     assert.equal(result.reasonCode, 'WARRANTY_UNAPPLIED_RECALL_CONDITION');
     assert.ok(!result.blocks.some((block) => block.type === 'GROUPED_LIST'), 'no list that could pass as the combined answer');
     assert.ok(result.blocks.some((block) => block.id === 'warranty-no-match' && /recalls/.test(block.title)));
-    assert.deepEqual(result.suggestions, ['Show appliances that have open recalls', 'Show appliances with no active warranty']);
+    assert.deepEqual(result.suggestions, ['Show appliances with an open recall and no active warranty', 'Show appliances with an open recall and an active warranty']);
   }
 });
 
