@@ -135,9 +135,19 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
  */
 export function maintenanceCalmCopy(counts: {
   overdueCount: number; dueSoonCount: number; openCount: number; unscheduledCount: number; hiddenCompletedCount: number;
+  /** FR-PLAN-5: a completed-only view is described by the completed list it shows, never by the open counts it does not show. */
+  completedOnlyCount?: number;
+  /** FR-PLAN-5: the homeowner asked for tasks with attached documents, and this read cannot check that, so the list is unfiltered and says so. */
+  unappliedDocumentFilter?: boolean;
 }): { headline: string; supportLine?: string } {
   const { overdueCount, dueSoonCount, openCount, unscheduledCount, hiddenCompletedCount } = counts;
   let headline: string;
+  if (counts.completedOnlyCount !== undefined) {
+    headline = counts.completedOnlyCount > 0 ? `${plural(counts.completedOnlyCount, 'completed task', 'completed tasks')} recorded.` : 'No completed maintenance tasks match.';
+    return counts.unappliedDocumentFilter
+      ? { headline, supportLine: 'I can’t check which tasks have attached invoices or documents, so this list is not filtered by that.' }
+      : { headline };
+  }
   if (overdueCount > 0 && dueSoonCount > 0) {
     headline = `${plural(overdueCount, 'task is', 'tasks are')} overdue, and ${dueSoonCount} more ${dueSoonCount === 1 ? 'is' : 'are'} due in the next 30 days.`;
   } else if (overdueCount > 0) {
@@ -987,6 +997,7 @@ export function buildMaintenanceStatusResult(input: {
   const overdueOnly = /\boverdue|past due\b/i.test(effectiveMessage);
   const dueSoonOnly = /\bdue soon|coming up|upcoming|what(?:'s| is) due\b/i.test(effectiveMessage);
   const highPriorityOnly = /\b(?:urgent|high priority|highest priority|priority tasks?)\b/i.test(effectiveMessage);
+  const asksForAttachedDocuments = /\b(?:attached|linked)\s+(?:invoices?|receipts?|documents?|records?|proof|evidence|paperwork)\b|\b(?:with|has|have|having)\s+(?:an?\s+)?(?:invoices?|receipts?|proof|evidence|paperwork)\b/i.test(effectiveMessage);
   const creationFocus = /\b(?:create|add|schedule|set up)\b.{0,30}\b(?:maintenance(?: task)?|tasks?)\b/i.test(effectiveMessage);
   const scopeTerms = maintenanceScopeTerms(effectiveMessage);
   const normalizedMessage = effectiveMessage.toLowerCase();
@@ -1101,7 +1112,9 @@ export function buildMaintenanceStatusResult(input: {
     title: creationFocus
       ? canManage ? 'Create the task in Maintenance' : 'A contributor or owner can create this task'
       : displayed
-        ? `${displayed} maintenance record${displayed === 1 ? '' : 's'} match this request`
+        ? asksForAttachedDocuments
+          ? `${displayed} maintenance record${displayed === 1 ? '' : 's'} shown, not filtered by attached documents`
+          : `${displayed} maintenance record${displayed === 1 ? '' : 's'} match this request`
         : totalTaskCount === 0
           ? 'No maintenance tasks are recorded for this home yet'
           : 'No maintenance tasks match these filters',
@@ -1121,9 +1134,13 @@ export function buildMaintenanceStatusResult(input: {
     ...(!creationFocus && displayed ? maintenanceCalmCopy({
       overdueCount, dueSoonCount, openCount: active.length, unscheduledCount,
       hiddenCompletedCount: showCompleted ? 0 : completed.length,
+      ...(showCompleted && !showOpen ? { completedOnlyCount: filteredCompleted.length, unappliedDocumentFilter: asksForAttachedDocuments } : {}),
     }) : {}),
     // IW-PRES-013: answer-first chips, from the same counts as the body above.
-    ...(!creationFocus && displayed ? { chips: [
+    ...(!creationFocus && displayed && showCompleted && !showOpen ? { chips: [
+      { label: `${filteredCompleted.length} completed`, tone: 'DEFAULT' as const },
+    ] } : {}),
+    ...(!creationFocus && displayed && !(showCompleted && !showOpen) ? { chips: [
       { label: `${overdueCount} overdue`, tone: overdueCount ? 'CRITICAL' as const : 'DEFAULT' as const },
       { label: `${dueSoonCount} due in 30 days`, tone: dueSoonCount ? 'CAUTION' as const : 'DEFAULT' as const },
       { label: `${active.length} open`, tone: 'DEFAULT' as const },

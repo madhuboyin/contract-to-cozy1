@@ -35,3 +35,17 @@ test('the supporting line is omitted when there is nothing to add, and notes com
     '3 open tasks have no due date. 2 completed tasks are hidden.',
   );
 });
+
+// FR-PLAN-5 (live prompt #63): "completed maintenance tasks that have attached invoices" showed "5 tasks are overdue" over a completed list and dropped the invoice condition.
+test('a completed-only view is headlined by the completed list, never by open or overdue counts', () => {
+  const copy = maintenanceCalmCopy(counts({ overdueCount: 5, openCount: 9, completedOnlyCount: 10 }));
+  assert.equal(copy.headline, '10 completed tasks recorded.');
+  assert.ok(!/overdue/.test(copy.headline));
+  assert.equal(copy.supportLine, undefined);
+  assert.equal(maintenanceCalmCopy(counts({ completedOnlyCount: 0 })).headline, 'No completed maintenance tasks match.');
+});
+
+test('an attached-invoice filter this read cannot apply is stated, not silently dropped', () => {
+  const copy = maintenanceCalmCopy(counts({ overdueCount: 5, openCount: 9, completedOnlyCount: 10, unappliedDocumentFilter: true }));
+  assert.match(copy.supportLine, /can’t check which tasks have attached invoices/);
+});
