@@ -7,6 +7,7 @@ import type { KnownName } from '../privacy/promptMinimizer';
 import { operationCoversClause, resolveClauseOperation, splitQuestionClauses, standalone, subjectOf } from '../support/alsoAnswer';
 import { parseTargetDate } from '../support/targetDate';
 import { COVERAGE_DECLARATIONS, coverageSkips } from './quantities';
+import { unappliedQualifier } from './unappliedQualifiers';
 import { MAX_ASK_CHILD_EXECUTIONS } from '../../../productFramework/ask/ask.contract';
 
 /** Understanding reliability FRD D4/Amendment A (FR-DEC-1): up to six facets are composed; more are never silently truncated. */
@@ -29,7 +30,9 @@ export interface ComposedClause {
 /** FR-DEC-4a: a part that was NOT run. It is named in the answer with the reason, never dropped and never guessed. */
 export interface ClarificationOption { operationId: AskOperationId; label: string }
 /** `NEEDS_CLARIFICATION` (FR-FACET-9b): the part is plausibly more than one thing, so it is asked about inline (one question, up to three options) beside the parts that were answered, instead of being dropped. */
-export interface DeferredClause { clause: string; reason: 'NOT_ROUTED' | 'LOW_CONFIDENCE' | 'NOT_ELIGIBLE' | 'NOT_COMPOSABLE' | 'OVER_LIMIT' | 'NEEDS_CLARIFICATION'; operationId: AskOperationId | null; options?: readonly ClarificationOption[];
+export interface DeferredClause { clause: string; reason: 'NOT_ROUTED' | 'LOW_CONFIDENCE' | 'NOT_ELIGIBLE' | 'NOT_COMPOSABLE' | 'OVER_LIMIT' | 'NEEDS_CLARIFICATION' | 'UNAPPLIED_QUALIFIER'; operationId: AskOperationId | null; options?: readonly ClarificationOption[];
+  /** `UNAPPLIED_QUALIFIER` (FR-PLAN-5): the homeowner's own words for the filter this part asked for and no operation could apply. */
+  qualifier?: string;
   /** The facet id a clarified part will carry when it runs, so facets that depend on it wait for the clarification (FR-FACET-9c) and run once it is resolved (FR-FACET-9d). */
   facetId?: string }
 
@@ -107,6 +110,13 @@ export function decomposeForComposition(message: string, options: DecomposeOptio
     const definition = getAskOperationDefinition(operationId);
     if (options.eligibleOperationIds && !options.eligibleOperationIds.has(requestedOperationId)) {
       refuse('CLAUSE_NOT_ELIGIBLE', `${resolved.operationId} is not available for this home.`); deferred.push({ clause: tail(clause), reason: 'NOT_ELIGIBLE', operationId: resolved.operationId }); continue;
+    }
+    // FR-PLAN-5: a part with an explicit qualifier its operation cannot apply is named as not answered, with the qualifier; it is never run as the unfiltered subset.
+    const gap = unappliedQualifier(operationId, clause);
+    if (gap) {
+      refuse('CLAUSE_NOT_COMPOSABLE', `“${part}” asks for “${gap.text}”, which ${resolved.operationId} cannot apply.`);
+      deferred.push({ clause: tail(clause), reason: 'UNAPPLIED_QUALIFIER', operationId: resolved.operationId, qualifier: gap.text });
+      continue;
     }
     // FR-FACET-5/6: a detail question with no item of its own is about the item the first part named ("what is the model number" -> "... for my water heater"), so every
     // facet reads the same resolved entity and the handler never has to guess.
