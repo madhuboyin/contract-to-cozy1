@@ -1,6 +1,7 @@
 // DATA_POINT_READ (reliability FRD D12, Phase 1b): "what is the serial number of my fridge", "when was my furnace installed", "what did I pay for my dryer".
 // A STANDARD, read-only fact read through the one allowlisted template in dataPoint/dataPointReader.ts. No side effects; a value that is not recorded is said plainly,
 // with the authorised way to add it, and never guessed (FR-REC-2 MISSING_RECORD_DATA).
+import { withUnappliedAmountComparison } from '../semantic/amountComparison';
 import { parseCompareSubjects, unresolvedCompareCopy } from '../support/unresolvedCompare';
 import { inDomainNotUnderstoodResult } from '../recovery/inDomainNotUnderstood';
 import { askUnderstandingCoverageGapTotal } from '../../../lib/metrics';
@@ -361,7 +362,7 @@ export async function dataPointReadResult(
         propertyAuthorized: true,
         rawText: message,
       });
-      return sliceExecution.operationResult;
+      return withUnappliedAmountComparison(sliceExecution.operationResult, message);
     }
 
     const crossDomainParsed = parseCrossDomainSemanticRequest(
@@ -404,7 +405,7 @@ export async function dataPointReadResult(
           || Boolean(crossDomainParsed.clarification)
         )
       ) {
-        return crossDomainExecution.operationResult;
+        return withUnappliedAmountComparison(crossDomainExecution.operationResult, message);
       }
     }
 
@@ -418,7 +419,7 @@ export async function dataPointReadResult(
         timeZone,
       });
       if (quoteCrossDomainExecution.execution.status !== 'NONE_FITS') {
-        return quoteCrossDomainExecution.operationResult;
+        return withUnappliedAmountComparison(quoteCrossDomainExecution.operationResult, message);
       }
     }
 
