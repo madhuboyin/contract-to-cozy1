@@ -5,6 +5,7 @@ import { clarifiedDocumentModeFrom, clarifiedQuoteIdsFrom, clarifiedReadingFrom 
 import type { NegativeOrReading } from '../semantic/deterministicSemanticParser';
 import { withUnappliedAmountComparison } from '../semantic/amountComparison';
 import { parseCompareSubjects, unresolvedCompareCopy } from '../support/unresolvedCompare';
+import { agreementRefusalCopy } from '../support/unmatchedWords';
 import { inDomainNotUnderstoodResult } from '../recovery/inDomainNotUnderstood';
 import { askUnderstandingCoverageGapTotal } from '../../../lib/metrics';
 import { sourceRef, type CompositeSourceType } from '../composition/sourceAuthorization';
@@ -487,7 +488,7 @@ export async function dataPointReadResult(
       });
       if (!queryAgreement || queryAgreement.outcome !== 'AGREE') {
         return deferredProviderFailure
-          ?? notice('DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED', 'data-point-semantic-agreement-required', 'I need a clearer question', 'I could not verify the target entity and projection independently, so I did not run this read.');
+          ?? notice('DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED', 'data-point-semantic-agreement-required', agreementRefusalCopy(message).title, agreementRefusalCopy(message).body);
       }
     }
     return dataPointQueryResult(propertyId, role, queryOutcome.plan, queryAgreement);
@@ -537,7 +538,7 @@ export async function dataPointReadResult(
     });
     if (!singlePointAgreement || singlePointAgreement.outcome !== 'AGREE') {
       return deferredProviderFailure
-        ?? notice('DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED', 'data-point-semantic-agreement-required', 'I need a clearer question', 'I could not verify the target entity and detail projection independently, so I did not run this read.');
+        ?? notice('DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED', 'data-point-semantic-agreement-required', agreementRefusalCopy(message).title, agreementRefusalCopy(message).body);
     }
   }
   if (!roleMayRead(role, point)) {
