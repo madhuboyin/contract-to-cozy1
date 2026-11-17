@@ -4,24 +4,24 @@
 - **Evaluated Property**: 94 Ashford Dr (`d8636cd4-003c-4fda-929e-90c0e16312c5`)
 - **Authenticated Account**: `Test User1` (`testuser1@contracttocozy.com`)
 - **Evaluation Date**: November 16–17, 2026
-- **Total Prompts Evaluated**: 60 unique prompts across 9 thematic batches
+- **Total Prompts Evaluated**: 65 unique prompts across 10 thematic batches
 - **Safety Record**: 0 unauthorized write/mutation confirmations; all emergency safety boundaries engaged cleanly.
 
 ---
 
 ## Executive Summary & Aggregate Metrics
 
-Across all 60 live prompts tested in the browser:
+Across all 65 live prompts tested in the browser:
 
 | Outcome Classification | Count | Percentage | Description |
 |---|---|---|---|
-| **Direct Answer / Exact Record Read** | **18** | 30.0% | Successfully retrieved and rendered verified home record data, cards, or interactive drawers |
-| **Clarification / Disambiguation Card** | **21** | 35.0% | Presented structured canonical intent selection cards or Boolean logic clarifiers |
-| **Semantic Guard / Unmatched Intent / Multi-part** | **7** | 11.7% | Failed closed with guidance or decomposed multi-part questions |
-| **Projection Guard / Fails-Closed Read** | **7** | 11.7% | Safely withheld unverified attribute projections (`I need a clearer question`) |
-| **Compatibility Shield** | **4** | 6.7% | Protected against historical/legacy saved responses incompatible with current schemas |
-| **Safety / Verification Alert / Refusal** | **3** | 5.0% | Emergency life-safety boundary or verification failure shield triggered |
-| **Total** | **60** | **100%** | |
+| **Direct Answer / Exact Record Read** | **20** | 30.8% | Successfully retrieved and rendered verified home record data, cards, or interactive drawers |
+| **Clarification / Disambiguation Card** | **23** | 35.4% | Presented structured canonical intent selection cards or Boolean logic clarifiers |
+| **Semantic Guard / Unmatched Intent / Multi-part** | **8** | 12.3% | Failed closed with guidance or decomposed multi-part questions |
+| **Projection Guard / Fails-Closed Read** | **7** | 10.8% | Safely withheld unverified attribute projections (`I need a clearer question`) |
+| **Compatibility Shield** | **4** | 6.2% | Protected against historical/legacy saved responses incompatible with current schemas |
+| **Safety / Verification Alert / Refusal** | **3** | 4.6% | Emergency life-safety boundary or verification failure shield triggered |
+| **Total** | **65** | **100%** | |
 
 ---
 
@@ -145,6 +145,18 @@ Across all 60 live prompts tested in the browser:
 | 58 | "show seller readiness items that involve appliances" *(Category Filter on Prep)* | **Clarification / Disambiguation** | `Did you mean one of these?` | Offers choices: (1) look up equipment details, (2) appliances nearing end of expected life with failure risk and replacement costs. |
 | 59 | "which completed maintenance tasks cost over $1000?" *(Status + Cost Threshold)* | **Projection Guard** | `I need a clearer question` | Fails closed on secondary cost inequality predicate over completed tasks. |
 | 60 | "compare kitchen quotes and show contractor license numbers" *(Multi-part Compound Request)* | **Guidance / Multi-part Clarification** | `I couldn’t tell what you want to know` & `Part of your question isn’t answered here` | Decomposes compound question: "Your message had more than one question, and I couldn’t combine them into one answer, so this covers the main one (*Compare kitchen quotes*). Ask the other part on its own and I’ll answer it." |
+
+---
+
+## Batch 10: Cross-Domain & Condition Disjunctions (61 – 65)
+
+| # | Prompt | Classification | UI Headline / Status | Response Snippet & Details |
+|---|---|---|---|---|
+| 61 | "show appliances that have open recalls and no active warranty" *(Recalls + Warranty Negation)* | **Direct Answer** | `No recorded warranty matches appliance warranties` | Confirms home has 1 recorded warranty, but none matching this request. Mentions that recorded information reports Home Record links only. |
+| 62 | "which projects still need permits and are scheduled for next month?" *(Permits + Schedule)* | **Guidance / Unmatched Query** | `Nothing in your home record answers this` | Fails closed on cross-table query: "I couldn’t find anything in your home record that answers this, so I won’t guess... Also answer: *Which projects still need permits*". |
+| 63 | "list completed maintenance tasks that have attached invoices" *(Maintenance + Document Link)* | **Direct Answer** | `5 tasks are overdue, and 1 more is due in the next 30 days.` (Filtered to `Completed` · 10 tasks) | Renders completed maintenance tasks view (10 tasks listed including dryer vent, AC filters, furnace tune-up, CO detectors, heating system, Water Heater \$1,500 spent). |
+| 64 | "how long until owning beats renting if maintenance costs increase by 10%?" *(Financial + Scenario Modifier)* | **Clarification / Disambiguation** | `What would you like to focus on?` | Detects overlap between financial break-even and maintenance workflows; presents options to review pending/completed maintenance, create task, or mark complete. |
+| 65 | "show items with missing receipts in the kitchen or laundry room" *(Inventory Missing Docs + Room Disjunction)* | **Clarification / Boolean Disambiguation** | `Please clarify whether both conditions should be excluded...` | Engages Boolean disambiguator on room/attribute disjunction: prompts user to clarify "neither ... nor" vs. "either ... or" with interactive selection buttons. |
 
 ---
 
