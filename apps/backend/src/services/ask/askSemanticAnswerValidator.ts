@@ -142,6 +142,21 @@ export function validateAskSemanticAnswerRelevance(input: {
       reasonCodes: [...verdict.reasonCodes],
     });
   }
+  // A typed semantic read (query/capability plan executed through the cross-domain stack) carries a receipt. When an independently parsed
+  // typed-grammar plan agrees with that receipt and its structural entailment passes, that IS the relevance evidence (FR-ANS-2: structure,
+  // not bag-of-words similarity). It applies at any routing stage, because promotion from a fallback is exactly how these reads arrive. A
+  // read that is not grounded this way falls through to the ordinary relevance check below, unchanged.
+  if (!input.provisionalRead && hasGroundedReadCheck(input.operationId)
+    && (input.result.parameters as { semanticExecutionReceipt?: unknown } | undefined)?.semanticExecutionReceipt) {
+    const verdict = groundedVerdictFor(input.operationId, input.question, input.result);
+    if (verdict.outcome === 'PASS') {
+      return finish({
+        outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
+        selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
+        reasonCodes: [...verdict.reasonCodes, 'TYPED_RECEIPT_GROUNDED'],
+      });
+    }
+  }
   const bypass = canonicalBypassDecision({ question: input.question, entityResolution: input.entityResolution, segmentationCertified: input.segmentationCertified });
   const contractAllowsBypass = canAnswerContractBypassRelevance(input.operationId);
   const canonicalShapeMatch = Boolean(TYPED_ANSWER_CONTRACTS[input.operationId]?.({ question: input.question, result: input.result }))

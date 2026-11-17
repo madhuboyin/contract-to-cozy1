@@ -59,7 +59,8 @@ export function groundedReadVerdict(question: string, result: AskOperationResult
       sawCompleteFacet = true;
       const expectedPredicate = facet.relations[0]?.predicateId;
       const agrees = receipt.data.facetId === facet.id
-        && receipt.data.projection === facet.projection
+        // The receipt vocabulary has no ANALYSIS; a capability analysis (own-vs-rent, replacement guidance) is recorded as a DETAIL read.
+        && receipt.data.projection === (facet.projection === 'ANALYSIS' ? 'DETAIL' : facet.projection)
         // The receipt must be about the same subject entity the question names (a tax-bill receipt never grounds an assessed-value question).
         && (!facet.subject || receipt.data.target.entityId === facet.subject.entityId)
         && (expectedPredicate === undefined || receipt.data.predicateIds.includes(expectedPredicate));

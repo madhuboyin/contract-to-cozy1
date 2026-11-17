@@ -505,6 +505,12 @@ export function authoritativeEvidenceState(
 export function isBoundaryAllowedForOperation(operationId: AskOperationId, boundaryId: string, result?: AskOperationResult): boolean {
   if (boundaryId === 'ask-audience-applicability') return true;
   if (boundaryId === 'ask-audience-presentation') return Boolean(result && householdRoleFromResult(result));
+  // A typed semantic read discloses conflicted/unknown records in a boundary note bound to its own receipt: the id must be exactly
+  // `<answerVariantId>-boundary` of the receipt the answer carries, so no other boundary can ride along.
+  if (operationId === 'DATA_POINT_READ' && result) {
+    const receipt = (result.parameters as { semanticExecutionReceipt?: { answerVariantId?: unknown } } | undefined)?.semanticExecutionReceipt;
+    if (receipt && typeof receipt.answerVariantId === 'string' && boundaryId === `${receipt.answerVariantId}-boundary`) return true;
+  }
   return OPERATION_BOUNDARIES[operationId]?.has(boundaryId) ?? false;
 }
 

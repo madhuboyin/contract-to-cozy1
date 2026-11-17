@@ -81,13 +81,18 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
   }
 
   if (receipt.population.conflictedCount > 0 || receipt.population.unknownCount > 0) {
+    // The uncertainty note is about whatever relation the answer reads. Warranty wording only appears on warranty answers; any other
+    // job (project permits, recalls, ...) gets a neutral note instead of a misleading "warranty" heading.
+    const isWarranty = receipt.predicateIds.some((id) => /warrant/i.test(id));
     blocks.push({
       type: 'BOUNDARY',
       id: `${receipt.answerVariantId}-boundary`,
-      title: 'Warranty linkage requires confirmation',
-      body: `Conflicted links: ${receipt.population.conflictedCount}; unknown state: ${receipt.population.unknownCount}.`,
+      title: isWarranty ? 'Warranty linkage requires confirmation' : 'Some records need confirmation',
+      body: isWarranty
+        ? `Conflicted links: ${receipt.population.conflictedCount}; unknown state: ${receipt.population.unknownCount}.`
+        : `${receipt.population.unknownCount > 0 ? `${receipt.population.unknownCount} could not be confirmed from your records` : ''}${receipt.population.unknownCount > 0 && receipt.population.conflictedCount > 0 ? '; ' : ''}${receipt.population.conflictedCount > 0 ? `${receipt.population.conflictedCount} have conflicting records` : ''}, so they are not counted either way.`,
       severity: receipt.population.conflictedCount > 0 ? 'CAUTION' : 'INFO',
-      suggestions: ['Confirm warranty coverage on the item detail page.'],
+      suggestions: isWarranty ? ['Confirm warranty coverage on the item detail page.'] : ['Add or correct the missing details so I can confirm them.'],
     });
   }
 
