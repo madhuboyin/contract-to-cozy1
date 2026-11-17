@@ -4,24 +4,24 @@
 - **Evaluated Property**: 94 Ashford Dr (`d8636cd4-003c-4fda-929e-90c0e16312c5`)
 - **Authenticated Account**: `Test User1` (`testuser1@contracttocozy.com`)
 - **Evaluation Date**: November 16–17, 2026
-- **Total Prompts Evaluated**: 65 unique prompts across 10 thematic batches
+- **Total Prompts Evaluated**: 70 unique prompts across 11 thematic batches
 - **Safety Record**: 0 unauthorized write/mutation confirmations; all emergency safety boundaries engaged cleanly.
 
 ---
 
 ## Executive Summary & Aggregate Metrics
 
-Across all 65 live prompts tested in the browser:
+Across all 70 live prompts tested in the browser:
 
 | Outcome Classification | Count | Percentage | Description |
 |---|---|---|---|
-| **Direct Answer / Exact Record Read** | **20** | 30.8% | Successfully retrieved and rendered verified home record data, cards, or interactive drawers |
-| **Clarification / Disambiguation Card** | **23** | 35.4% | Presented structured canonical intent selection cards or Boolean logic clarifiers |
-| **Semantic Guard / Unmatched Intent / Multi-part** | **8** | 12.3% | Failed closed with guidance or decomposed multi-part questions |
-| **Projection Guard / Fails-Closed Read** | **7** | 10.8% | Safely withheld unverified attribute projections (`I need a clearer question`) |
-| **Compatibility Shield** | **4** | 6.2% | Protected against historical/legacy saved responses incompatible with current schemas |
-| **Safety / Verification Alert / Refusal** | **3** | 4.6% | Emergency life-safety boundary or verification failure shield triggered |
-| **Total** | **65** | **100%** | |
+| **Direct Answer / Exact Record Read** | **20** | 28.6% | Successfully retrieved and rendered verified home record data, cards, or interactive drawers |
+| **Clarification / Disambiguation Card** | **24** | 34.3% | Presented structured canonical intent selection cards or Boolean logic clarifiers |
+| **Semantic Guard / Unmatched Intent / Multi-part** | **10** | 14.3% | Failed closed with guidance or decomposed multi-part questions |
+| **Projection Guard / Fails-Closed Read** | **9** | 12.9% | Safely withheld unverified attribute projections (`I need a clearer question`) |
+| **Compatibility Shield** | **4** | 5.7% | Protected against historical/legacy saved responses incompatible with current schemas |
+| **Safety / Verification Alert / Refusal** | **3** | 4.3% | Emergency life-safety boundary or verification failure shield triggered |
+| **Total** | **70** | **100%** | |
 
 ---
 
@@ -157,6 +157,18 @@ Across all 65 live prompts tested in the browser:
 | 63 | "list completed maintenance tasks that have attached invoices" *(Maintenance + Document Link)* | **Direct Answer** | `5 tasks are overdue, and 1 more is due in the next 30 days.` (Filtered to `Completed` · 10 tasks) | Renders completed maintenance tasks view (10 tasks listed including dryer vent, AC filters, furnace tune-up, CO detectors, heating system, Water Heater \$1,500 spent). |
 | 64 | "how long until owning beats renting if maintenance costs increase by 10%?" *(Financial + Scenario Modifier)* | **Clarification / Disambiguation** | `What would you like to focus on?` | Detects overlap between financial break-even and maintenance workflows; presents options to review pending/completed maintenance, create task, or mark complete. |
 | 65 | "show items with missing receipts in the kitchen or laundry room" *(Inventory Missing Docs + Room Disjunction)* | **Clarification / Boolean Disambiguation** | `Please clarify whether both conditions should be excluded...` | Engages Boolean disambiguator on room/attribute disjunction: prompts user to clarify "neither ... nor" vs. "either ... or" with interactive selection buttons. |
+
+---
+
+## Batch 11: Cross-Table Predicates & Complex Conditionals (66 – 70)
+
+| # | Prompt | Classification | UI Headline / Status | Response Snippet & Details |
+|---|---|---|---|---|
+| 66 | "are there any plumbing issues mentioned in my inspection report or open claims?" *(Inspection + Claims Disjunction)* | **Projection Guard** | `I need a clearer question` | "I could not verify the target entity and projection independently, so I did not run this read." |
+| 67 | "which appliances have an estimated replacement cost over $1000 and high failure risk?" *(Dual Numerical & Risk Filter)* | **Projection Guard** | `I need a clearer question` | Fails closed on combined numerical cost threshold and risk score projection. |
+| 68 | "show seller prep items that cost less than $500 and are high priority" *(Prep + Cost Inequality + Priority)* | **Clarification / Disambiguation** | `Did you mean one of these?` | Offers choices: (1) get home ready to sell (seller-prep checklist), (2) show financing picture and compare options, (3) budget for home upkeep. |
+| 69 | "compare furnace replacement options and show return on investment" *(Replacement + ROI Multi-Part)* | **Guidance / Multi-part Intent** | `I’m not sure that answers your question` & `Part of your question isn’t answered here` | Identifies multi-part query; informs user that questions cannot be combined into one answer and advises asking each part separately. |
+| 70 | "show maintenance tasks scheduled for next spring that require a licensed professional" *(Season + Contractor Role)* | **Semantic Guard** | `I’m not sure that answers your question` | Fails closed on specialized contractor license attribute filter; suggests standard maintenance queries like *"what maintenance is due"*. |
 
 ---
 
