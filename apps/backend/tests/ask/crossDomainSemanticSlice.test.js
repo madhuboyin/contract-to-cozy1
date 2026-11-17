@@ -27,7 +27,8 @@ test('Phase 2A registry subset covers inventory, warranty, maintenance, and room
   assert.equal(report.ok, true, `Registry completeness failed: ${report.missing.join(', ')}`);
   assert.ok(report.entityCount >= 4);
   assert.ok(report.fieldCount >= 14);
-  assert.equal(report.relationCount, 4);
+  // warranty, maintenance task, room, the inverse task-to-item link, and the item's own age ("older than N years").
+  assert.equal(report.relationCount, 5);
   assert.equal(report.capabilityCount, 2);
 });
 

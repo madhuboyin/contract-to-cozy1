@@ -45,7 +45,7 @@ test('service-gap phrasings parse to one registered job with an explicit elapsed
     // the plan is valid under the versioned contract, including the new window kind
     assert.equal(SemanticRequestPlanSchema.safeParse(parse(prompt)).success, true, prompt);
   }
-  assert.equal(ASK_SEMANTIC_PLAN_VERSION, '1.4.0');
+  assert.equal(ASK_SEMANTIC_PLAN_VERSION, '1.5.0');
 });
 
 test('a window needs an explicit quantity and a believable size; otherwise the meaning stays unresolved, never guessed', () => {

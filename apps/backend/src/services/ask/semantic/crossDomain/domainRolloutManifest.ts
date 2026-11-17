@@ -230,6 +230,7 @@ export const DOMAIN_ROLLOUT_MANIFEST: readonly DomainRolloutDefinition[] = Objec
       'relation.inventory_item.warranty',
       'relation.inventory_item.maintenance_task',
       'relation.inventory_item.room',
+      'relation.inventory_item.age',
       'relation.maintenance_task.inventory_item',
       'relation.maintenance_task.self',
       'relation.inventory_item.manual_document',

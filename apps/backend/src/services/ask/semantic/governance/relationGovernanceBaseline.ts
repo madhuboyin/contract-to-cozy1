@@ -25,6 +25,7 @@ export interface SemanticPredicateMeaningTag {
     | 'RECORD_LINK_NEGATIVE'
     | 'RECORD_LINK_UNKNOWN'
     | 'RECORD_LINK_CONFLICTED'
+    | 'ATTRIBUTE_THRESHOLD'
     | 'COVERAGE_SUFFICIENCY_DERIVED'
     | 'ACTIVE_PARENT_CHILD_MEMBERSHIP'
     | 'ROLE_VISIBLE_VERSION_CHAIN'
@@ -111,6 +112,16 @@ export const ASK_SEMANTIC_PREDICATE_MEANING_MANIFEST: readonly SemanticPredicate
     meaningVersion: 'inventory-item-room-links@1.0.0',
     direction: 'FORWARD',
     stateSemantics: 'RECORD_LINK_POSITIVE',
+    canonicalAdapterId: 'phase2a-slice-executor',
+    usage: 'READ',
+    canonicalParentPredicateId: null,
+  },
+  {
+    predicateId: 'predicate.inventory_item.older_than_years',
+    semanticRelationId: 'relation.inventory_item.age',
+    meaningVersion: 'inventory-item-age@1.0.0',
+    direction: 'FORWARD',
+    stateSemantics: 'ATTRIBUTE_THRESHOLD',
     canonicalAdapterId: 'phase2a-slice-executor',
     usage: 'READ',
     canonicalParentPredicateId: null,
@@ -1852,6 +1863,24 @@ export const ASK_TRAVERSABLE_RELATION_PATH_MANIFEST: readonly TraversableRelatio
     targetEntity: 'InventoryRoom',
     edges: ['InventoryItem.roomId -> InventoryRoom.id'],
     authoritativePropertyScopeParent: 'InventoryItem.propertyId && InventoryRoom.propertyId',
+    maxDepth: 1,
+    maxParentCardinality: DATA_POINT_ITEM_ROW_CAP,
+    maxChildCardinality: 1,
+    maxJoinedRows: DATA_POINT_ITEM_ROW_CAP,
+    cyclePolicy: 'FORBID',
+    filterPlacement: 'EVERY_NODE',
+    authorizationMode: 'INTERSECT_ALL_PARENTS',
+    minimumAudienceFloor: 'VIEWER',
+    boundedInRuntime: true,
+    auditFlags: [],
+  },
+  {
+    pathId: 'path.inventory_item.age',
+    semanticRelationId: 'relation.inventory_item.age',
+    sourceEntity: 'InventoryItem',
+    targetEntity: 'InventoryItem',
+    edges: ['InventoryItem.installedOn (attribute of the same row)'],
+    authoritativePropertyScopeParent: 'InventoryItem.propertyId',
     maxDepth: 1,
     maxParentCardinality: DATA_POINT_ITEM_ROW_CAP,
     maxChildCardinality: 1,

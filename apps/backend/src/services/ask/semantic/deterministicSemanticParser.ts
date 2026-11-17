@@ -16,6 +16,17 @@ interface SemanticPredicateAtom {
   predicateId: string;
   relationPathId: string;
   targetRecordId?: string | null;
+  thresholdYears?: number;
+}
+
+/** "older than 10 years" / "more than 10 years old": whole years only; never a bare number, and never a phrase that cannot be located in the text. */
+const AGE_PHRASE = /\b(?:older|more)\s+than\s+(\d{1,3})\s*(?:years?|yrs?)\b(?:\s+old)?/i;
+function findAgePhrase(raw: string): { years: number; span: SemanticSourceSpan } | null {
+  const match = AGE_PHRASE.exec(raw);
+  if (!match || match.index === undefined) return null;
+  const years = Number(match[1]);
+  if (!Number.isInteger(years) || years < 1 || years > 100) return null;
+  return { years, span: { start: match.index, end: match.index + match[0].length, text: match[0] } };
 }
 
 function escapeRegExp(value: string): string {
@@ -252,7 +263,8 @@ export function parseDeterministicSemanticRequest(
     end: entry.rawEnd,
     text: rawText.slice(entry.rawStart, entry.rawEnd),
   }));
-  const unresolvedSpans = unresolved(tokens, annotations, dynamicSpans);
+  const agePhrase = findAgePhrase(rawText);
+  const unresolvedSpans = unresolved(tokens, annotations, agePhrase ? [...dynamicSpans, agePhrase.span] : dynamicSpans);
   const facetId = `facet-${createHash('sha256').update(`${rawText}:0`).digest('hex').slice(0, 12)}`;
 
   // 0A. Phase 2A analysis capability: replacement guidance
@@ -333,21 +345,23 @@ export function parseDeterministicSemanticRequest(
 
   // 0C. Phase 2A multi-relation / Boolean coordination over inventory_item
   const hasEffectiveRoomRelation = Boolean(roomRelation) || matchedRooms.length > 0;
-  const relationCount = [warrantyRelation, maintenanceRelation, hasEffectiveRoomRelation].filter(Boolean).length;
+  const relationCount = [warrantyRelation, maintenanceRelation, hasEffectiveRoomRelation, agePhrase].filter(Boolean).length;
   const hasAnd = coordinatorAnnotations.some((annotation) => annotation.lexeme.semanticId === 'coordinator.and');
   const hasOr = coordinatorAnnotations.some((annotation) => annotation.lexeme.semanticId === 'coordinator.or');
   const hasNeitherNor = coordinatorAnnotations.some((annotation) => annotation.lexeme.semanticId === 'coordinator.neither')
     && coordinatorAnnotations.some((annotation) => annotation.lexeme.semanticId === 'coordinator.nor');
   const hasBooleanCoordinator = hasAnd || hasOr || hasNeitherNor;
-  if (inventorySubject && (relationCount >= 2 || (relationCount >= 1 && (maintenanceRelation || hasEffectiveRoomRelation || hasBooleanCoordinator)))) {
+  if (inventorySubject && (relationCount >= 2 || (relationCount >= 1 && (maintenanceRelation || hasEffectiveRoomRelation || agePhrase || hasBooleanCoordinator)))) {
     const projection = projectionAnnotation?.lexeme.semanticId === 'projection.count' ? 'COUNT'
       : projectionAnnotation?.lexeme.semanticId === 'projection.detail' ? 'DETAIL'
       : projectionAnnotation?.lexeme.semanticId === 'projection.exists' ? 'EXISTS' : 'LIST';
     const polarity = polarityAnnotation?.lexeme.semanticId === 'polarity.negative' ? 'NEGATIVE'
       : polarityAnnotation?.lexeme.semanticId === 'polarity.positive' ? 'POSITIVE' : 'UNKNOWN';
 
+    // An age condition ("older than 10 years") restates its own predicate, so "no warranty or older than 10 years" is not the ambiguous "no A or B" shape:
+    // the negation belongs to the first condition and the second stands on its own.
     let coordination = hasNeitherNor ? 'NEITHER_NOR' as const
-      : polarity === 'NEGATIVE' && hasOr ? 'AMBIGUOUS_NEGATIVE_OR' as const
+      : polarity === 'NEGATIVE' && hasOr && !agePhrase ? 'AMBIGUOUS_NEGATIVE_OR' as const
       : hasOr ? 'EITHER_OR' as const
       : hasAnd ? 'AND' as const
       : 'SINGLE' as const;
@@ -418,6 +432,14 @@ export function parseDeterministicSemanticRequest(
       } else {
         expressions.push(...roomAtoms);
       }
+    }
+
+    if (agePhrase) {
+      const predicateId = 'predicate.inventory_item.older_than_years';
+      const atom: SemanticPredicateAtom = { kind: 'PREDICATE', predicateId, relationPathId: 'path.inventory_item.age', thresholdYears: agePhrase.years };
+      // Negation never attaches to the age condition unless it is the only condition ("which appliances are not older than 10 years").
+      expressions.push(polarity === 'NEGATIVE' && relationCount === 1 ? { kind: 'NOT', operand: atom } : atom);
+      relations.push({ semanticRelationId: 'relation.inventory_item.age', predicateId, targetEntityId: 'entity.inventory_item' });
     }
 
     if (coordination === 'SINGLE' && expressions.length >= 2) {

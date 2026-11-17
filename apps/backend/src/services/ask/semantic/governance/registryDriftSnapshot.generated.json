@@ -142,6 +142,7 @@
         "field.item.tags"
       ],
       "supportedRelationIds": [
+        "relation.inventory_item.age",
         "relation.inventory_item.maintenance_task",
         "relation.inventory_item.room",
         "relation.inventory_item.warranty"
@@ -2041,6 +2042,7 @@
     "path.claim.checklist_item",
     "path.claim.claim_document",
     "path.claim.timeline_event",
+    "path.inventory_item.age",
     "path.inventory_item.maintenance_task",
     "path.inventory_item.room",
     "path.inventory_item.warranty",
@@ -2048,8 +2050,8 @@
     "path.sale_case.readiness_item"
   ],
   "lexicon": {
-    "lexemeCount": 492,
-    "digest": "c74c38a9ffa7696a80872cd765dc8e91b5bcae1be0ad2827ebde725195cd59fd"
+    "lexemeCount": 493,
+    "digest": "c5f8557fbc85c4159d1e6cdf92cf61b99fe0f91f4ee9272420276d145fab1b13"
   },
-  "digest": "52751c611aff82ecf64d9dd150aa1ed8457f1a3c2963088f203a3a7eafb09f9b"
+  "digest": "6f7b95f3e34844a8d5d2249b8894905d620be6fc8663de926bdc82aea1109089"
 }

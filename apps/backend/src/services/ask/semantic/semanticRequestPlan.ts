@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { findSemanticPredicateRegistration, findSemanticRelationConstraintRegistration } from './semanticRelationRegistry';
 
-export const ASK_SEMANTIC_PLAN_VERSION = '1.4.0' as const;
+export const ASK_SEMANTIC_PLAN_VERSION = '1.5.0' as const;
 
 const SpanSchema = z.object({
   start: z.number().int().nonnegative(),
@@ -22,6 +22,8 @@ export type SemanticWhereExpression =
       targetRecordId?: string | null;
       targetCategorySet?: string[];
       enumStatus?: string;
+      /** Whole years for an age comparison ("older than 10 years"); only a predicate registered as numeric uses it. */
+      thresholdYears?: number;
     }
   | { kind: 'AND' | 'OR'; operands: SemanticWhereExpression[] }
   | { kind: 'NOT'; operand: SemanticWhereExpression };
@@ -51,6 +53,7 @@ const RegisteredPredicateExpressionSchema = z.object({
   targetRecordId: z.string().min(1).nullable().optional(),
   targetCategorySet: z.array(z.string().min(1)).min(1).optional(),
   enumStatus: z.string().min(1).optional(),
+  thresholdYears: z.number().int().min(1).max(100).optional(),
 }).strict().superRefine((predicate, context) => {
   if (!findSemanticPredicateRegistration(predicate.predicateId, predicate.relationPathId)) {
     context.addIssue({ code: z.ZodIssueCode.custom, message: 'predicate and relation path must be registered together' });

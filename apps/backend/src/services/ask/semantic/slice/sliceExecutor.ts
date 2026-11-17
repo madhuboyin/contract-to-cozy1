@@ -204,11 +204,60 @@ function buildDynamicPlaceholderCandidates(
   return [...itemCandidates, ...roomCandidates];
 }
 
+/** How an item whose install date is not recorded is treated while evaluating an age condition: it is evaluated both ways, and an item whose result differs is unknown. */
+type AgeMode = 'RECORDED' | 'ASSUME_OLDER' | 'ASSUME_NOT_OLDER';
+
+/**
+ * Whether the item is older than `years` whole years on its recorded install date: strictly before the same calendar day `years` years before `asOfDate`.
+ * Null when no usable install date is recorded, so an item with no date is never counted as old or as not old.
+ */
+function isOlderThanYears(item: SliceInventoryItemRecord, years: number, asOfDate: string): boolean | null {
+  const installed = /^(\d{4})-(\d{2})-(\d{2})/.exec(item.installedOn ?? '');
+  const asOf = /^(\d{4})-(\d{2})-(\d{2})/.exec(asOfDate);
+  if (!installed || !asOf) return null;
+  const cutoff = `${String(Number(asOf[1]) - years).padStart(4, '0')}-${asOf[2]}-${asOf[3]}`;
+  return `${installed[1]}-${installed[2]}-${installed[3]}` < cutoff;
+}
+
+/** The condition tree in the homeowner's words, so an either-or answer says what each match satisfied instead of describing only the warranty half. */
+function describeWhere(expr: SemanticWhereExpression, snapshot: SlicePropertySnapshot, negated = false): string {
+  if (expr.kind === 'NOT') return describeWhere(expr.operand, snapshot, !negated);
+  if ('operands' in expr) {
+    const parts = expr.operands.map((operand) => describeWhere(operand, snapshot, negated));
+    // De Morgan: a negated AND is an OR of negations and the reverse; the words follow the structure that is actually evaluated.
+    const joinAsAnd = (expr.kind === 'AND') !== negated;
+    return parts.join(joinAsAnd ? ' and ' : ', or ');
+  }
+  const years = expr.thresholdYears;
+  switch (expr.predicateId) {
+    case 'predicate.inventory_item.has_no_warranty_record': return negated ? 'a warranty linked in your home record' : 'no warranty linked in your home record';
+    case 'predicate.inventory_item.has_warranty_record': return negated ? 'no warranty linked in your home record' : 'a warranty linked in your home record';
+    case 'predicate.inventory_item.warranty_state_unknown': return negated ? 'a known warranty state' : 'an unknown warranty state';
+    case 'predicate.inventory_item.has_due_maintenance': return negated ? 'no maintenance due' : 'maintenance due';
+    case 'predicate.inventory_item.has_no_due_maintenance': return negated ? 'maintenance due' : 'no maintenance due';
+    case 'predicate.inventory_item.has_overdue_maintenance': return negated ? 'no overdue maintenance' : 'overdue maintenance';
+    case 'predicate.inventory_item.in_room': {
+      const room = expr.targetRecordId ? snapshot.rooms.find((r) => r.id === expr.targetRecordId)?.name : null;
+      return `${negated ? 'not ' : ''}in ${room ?? 'a room'}`;
+    }
+    case 'predicate.inventory_item.older_than_years': return `${negated ? 'not ' : ''}older than ${years} ${years === 1 ? 'year' : 'years'} (by recorded install date)`;
+    default: return expr.predicateId;
+  }
+}
+
+function hasAgePredicate(expr: SemanticWhereExpression | null | undefined): boolean {
+  if (!expr) return false;
+  if (expr.kind === 'PREDICATE') return expr.predicateId === 'predicate.inventory_item.older_than_years';
+  if (expr.kind === 'NOT') return hasAgePredicate(expr.operand);
+  return expr.operands.some(hasAgePredicate);
+}
+
 function evaluateWherePredicate(
   expr: Extract<SemanticWhereExpression, { kind: 'PREDICATE' }>,
   item: SliceInventoryItemRecord,
   warranty: TransitionalWarrantyRead,
-  snapshot: SlicePropertySnapshot
+  snapshot: SlicePropertySnapshot,
+  ageMode: AgeMode = 'RECORDED'
 ): boolean {
   const linkedTasks = snapshot.maintenanceTasks.filter((task) => task.inventoryItemId === item.id);
   const dueTasks = linkedTasks.filter((task) => task.status !== 'COMPLETED');
@@ -233,6 +282,11 @@ function evaluateWherePredicate(
       return dueTasks.length === 0;
     case 'predicate.inventory_item.in_room':
       return expr.targetRecordId ? item.roomId === expr.targetRecordId : Boolean(item.roomId);
+    case 'predicate.inventory_item.older_than_years': {
+      if (!expr.thresholdYears) return false;
+      const older = isOlderThanYears(item, expr.thresholdYears, snapshot.asOfDate);
+      return older !== null ? older : ageMode === 'ASSUME_OLDER';
+    }
     default:
       return false;
   }
@@ -242,17 +296,18 @@ function evaluateWhereExpression(
   expr: SemanticWhereExpression,
   item: SliceInventoryItemRecord,
   warranty: TransitionalWarrantyRead,
-  snapshot: SlicePropertySnapshot
+  snapshot: SlicePropertySnapshot,
+  ageMode: AgeMode = 'RECORDED'
 ): boolean {
   switch (expr.kind) {
     case 'PREDICATE':
-      return evaluateWherePredicate(expr, item, warranty, snapshot);
+      return evaluateWherePredicate(expr, item, warranty, snapshot, ageMode);
     case 'NOT':
-      return !evaluateWhereExpression(expr.operand, item, warranty, snapshot);
+      return !evaluateWhereExpression(expr.operand, item, warranty, snapshot, ageMode);
     case 'AND':
-      return expr.operands.every((operand) => evaluateWhereExpression(operand, item, warranty, snapshot));
+      return expr.operands.every((operand) => evaluateWhereExpression(operand, item, warranty, snapshot, ageMode));
     case 'OR':
-      return expr.operands.some((operand) => evaluateWhereExpression(operand, item, warranty, snapshot));
+      return expr.operands.some((operand) => evaluateWhereExpression(operand, item, warranty, snapshot, ageMode));
   }
 }
 
@@ -712,7 +767,9 @@ function executeValidatedSlicePlan(input: {
       ? 'path.inventory_item.warranty'
       : rel.semanticRelationId === 'relation.inventory_item.maintenance_task'
         ? 'path.inventory_item.maintenance_task'
-        : 'path.inventory_item.room'
+        : rel.semanticRelationId === 'relation.inventory_item.age'
+          ? 'path.inventory_item.age'
+          : 'path.inventory_item.room'
   );
   const effectiveTraversalCheck = validateSiblingDepthOnePredicates(relationPathIds);
   if (!effectiveTraversalCheck.ok) {
@@ -742,16 +799,29 @@ function executeValidatedSlicePlan(input: {
     warranty: evaluateWarrantyState(item),
   }));
 
+  // An item with no recorded install date is evaluated as old and as not old; if the answer differs it depends on the missing date, so the item is unknown:
+  // not matched, and counted apart, never silently treated as "not old" (which would match "not older than 10 years" for every undated item).
+  const ageUnknownIds = new Set<string>();
+  const ageInPlay = hasAgePredicate(facet.where);
   const matched = facet.where
-    ? evaluated.filter(({ item, warranty }) => evaluateWhereExpression(facet.where!, item, warranty, snapshot))
+    ? evaluated.filter(({ item, warranty }) => {
+        if (ageInPlay && isOlderThanYears(item, 1, snapshot.asOfDate) === null) {
+          const ifOlder = evaluateWhereExpression(facet.where!, item, warranty, snapshot, 'ASSUME_OLDER');
+          const ifNot = evaluateWhereExpression(facet.where!, item, warranty, snapshot, 'ASSUME_NOT_OLDER');
+          if (ifOlder !== ifNot) { ageUnknownIds.add(item.id); return false; }
+          return ifOlder;
+        }
+        return evaluateWhereExpression(facet.where!, item, warranty, snapshot);
+      })
     : evaluated;
 
   const conflictedCount = facet.relations.some((r) => r.semanticRelationId === 'relation.inventory_item.warranty')
     ? evaluated.filter(({ warranty }) => warranty.state === 'CONFLICTED_LINKS').length
     : 0;
-  const unknownCount = facet.relations.some((r) => r.semanticRelationId === 'relation.inventory_item.warranty')
-    ? evaluated.filter(({ warranty }) => warranty.state === 'UNKNOWN').length
-    : 0;
+  const warrantyUnknownIds = facet.relations.some((r) => r.semanticRelationId === 'relation.inventory_item.warranty')
+    ? new Set(evaluated.filter(({ warranty }) => warranty.state === 'UNKNOWN').map(({ item }) => item.id))
+    : new Set<string>();
+  const unknownCount = new Set([...warrantyUnknownIds, ...ageUnknownIds]).size;
 
   const projection = facet.projection === 'COUNT' ? 'COUNT'
     : facet.projection === 'DETAIL' ? 'DETAIL'
@@ -825,7 +895,29 @@ function executeValidatedSlicePlan(input: {
   let summaryBody = projection === 'COUNT'
     ? `Confirmed count: ${matched.length} matching item${matched.length === 1 ? '' : 's'}.`
     : `Found ${matched.length} matching inventory item${matched.length === 1 ? '' : 's'}.`;
-  if (isWarrantyRelation) {
+  if (ageInPlay && facet.where) {
+    // A condition tree with an age comparison is described as a whole (warranty wording alone would call old items "unwarranted").
+    const n = matched.length;
+    const names = `${matched.slice(0, 10).map(({ item }) => item.name).join('; ')}${n > 10 ? `; and ${n - 10} more` : ''}`;
+    const condition = describeWhere(facet.where, snapshot);
+    const lines: string[] = [`Matching: ${condition}.`];
+    if (facet.projection === 'EXISTS') {
+      lines.push(n > 0 ? `Yes. ${n} ${plural(n, 'item matches', 'items match')}.` : ageUnknownIds.size > 0 ? 'Missing install dates could change the answer, so I cannot give a plain yes or no.' : 'No. No item matches.');
+    } else if (n === 0) {
+      lines.push('No inventory item is confirmed as matching.');
+    } else if (projection === 'COUNT') {
+      lines.push(`${n} of your items ${plural(n, 'matches', 'match')}.`);
+    } else {
+      lines.push(`${names} ${plural(n, 'matches', 'match')}.`);
+    }
+    if (ageUnknownIds.size > 0) lines.push(`${ageUnknownIds.size} ${plural(ageUnknownIds.size, 'item has', 'items have')} no install date recorded, so I couldn’t tell whether ${plural(ageUnknownIds.size, 'it matches', 'they match')} and ${plural(ageUnknownIds.size, 'it is', 'they are')} not counted either way.`);
+    if (warrantyUnknownIds.size > 0) lines.push(`${warrantyUnknownIds.size} ${plural(warrantyUnknownIds.size, 'item has', 'items have')} an unknown warranty state and ${plural(warrantyUnknownIds.size, 'is', 'are')} not counted either way.`);
+    if (facet.relations.some((r) => r.semanticRelationId === 'relation.inventory_item.warranty')) lines.push('Warranty conditions describe links recorded for each item; they do not decide whether warranty terms cover the item.');
+    summaryBody = lines.join(' ');
+    title = facet.projection === 'EXISTS'
+      ? (n > 0 ? `Yes, ${plural(n, 'one item matches', `${n} items match`)}` : 'No item is confirmed as matching')
+      : projection === 'COUNT' ? `${n} ${plural(n, 'item matches', 'items match')}` : n === 0 ? 'No items confirmed as matching' : 'Items that match your question';
+  } else if (isWarrantyRelation) {
     // FR-QUERY-3/7 wording: a linked record is not proof of coverage, absence of a link is not proof there is none, and conflicted
     // or unknown records are named separately instead of being added to the confirmed answer.
     const negative = facet.polarity === 'NEGATIVE';

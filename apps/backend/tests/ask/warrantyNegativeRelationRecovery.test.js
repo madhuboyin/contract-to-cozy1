@@ -22,7 +22,7 @@ function semanticWarrantyResult(question, projection) {
     suggestions: [],
     parameters: {
       semanticExecutionReceipt: {
-        schemaVersion: '1.0.0', planVersion: '1.4.0', facetId: agreement.facet.id,
+        schemaVersion: '1.0.0', planVersion: '1.5.0', facetId: agreement.facet.id,
         requestClass: 'DATA_QUERY', target: { entityId: 'entity.inventory_item', operationAdapter: 'phase2a-slice-executor' },
         projection, predicateIds: [agreement.facet.relations[0].predicateId], resolvedRecordIds: ['item-1', 'item-2'],
         population: { confirmedCount: count, conflictedCount: 0, unknownCount: 0, totalMatchCount: count, displayedCount: projection === 'COUNT' ? 0 : count, truncated: projection === 'COUNT' },

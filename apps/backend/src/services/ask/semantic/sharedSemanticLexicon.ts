@@ -80,6 +80,7 @@ const BASIC_READ_REGISTRY_LEXEMES: readonly RegistryLexeme[] = [
   { role: 'RELATION', semanticId: 'relation.inventory_item.warranty', canonicalLabel: 'warranty', reviewedAliases: ['warranties', 'warranty record', 'warranty records'] },
   { role: 'RELATION', semanticId: 'relation.inventory_item.maintenance_task', canonicalLabel: 'due maintenance', reviewedAliases: ['maintenance due', 'overdue maintenance', 'maintenance schedule', 'maintenance task', 'maintenance tasks'] },
   { role: 'RELATION', semanticId: 'relation.inventory_item.room', canonicalLabel: 'in room', reviewedAliases: ['room', 'located in'] },
+  { role: 'RELATION', semanticId: 'relation.inventory_item.age', canonicalLabel: 'older than', reviewedAliases: [] },
 
   // Jobs
   { role: 'JOB', semanticId: 'job.saved_results.lookup', canonicalLabel: 'saved results', reviewedAliases: ['saved analyses', 'bookmarked results'] },

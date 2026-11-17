@@ -67,6 +67,23 @@ export const ASK_SEMANTIC_RELATION_REGISTRY: readonly SemanticRelationRegistrati
     ],
   },
   {
+    // "older than N years": an attribute of the item itself (its recorded install date), not a link to another record. It is registered as a path with the item as
+    // both ends so it can sit in a WHERE tree beside warranty, maintenance and room conditions and be OR'd or AND'd with them.
+    semanticRelationId: 'relation.inventory_item.age',
+    meaningVersion: 'inventory-item-age@1.0.0',
+    sourceEntityId: 'entity.inventory_item',
+    targetEntityId: 'entity.inventory_item',
+    relationPathId: 'path.inventory_item.age',
+    canonicalAdapterId: 'phase2a-slice-executor',
+    canonicalStoragePath: 'InventoryItem.installedOn',
+    cardinality: 'ONE_TO_ONE',
+    maximumTraversalDepth: 1,
+    cyclePolicy: 'FORBID',
+    predicateIds: [
+      'predicate.inventory_item.older_than_years',
+    ],
+  },
+  {
     semanticRelationId: 'relation.maintenance_task.inventory_item',
     meaningVersion: 'maintenance-task-inventory-links@1.0.0',
     sourceEntityId: 'entity.maintenance_task',
