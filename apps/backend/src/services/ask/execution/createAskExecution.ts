@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { enforceClarificationContract } from '../support/clarificationContract';
 import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
@@ -61,7 +62,7 @@ function stableSkillRoutingReasonCode(outcome: SkillRoutingOutcome): string | nu
   return null;
 }
 
-function routingClarificationResult(
+export function routingClarificationResult(
   decision: AskRoutingDecision,
   reasonCode: 'ASK_ROUTING_AMBIGUOUS' | 'ASK_SKILL_AMBIGUOUS' = 'ASK_ROUTING_AMBIGUOUS',
 ): AskOperationResult {
@@ -826,6 +827,13 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     if (declinedComposition && !routingDecision.requiresClarification && result.status !== 'NEEDS_CLARIFICATION') {
       result = { ...result, blocks: [...result.blocks, declinedCompositionNote(declinedComposition.reason, declinedComposition.clauseCount)] };
     }
+    // Clarification-card contract (support/clarificationContract.ts): a card whose options repeat an action, or that has no stored clarification to be pressed against,
+    // is repaired here (free-text question) instead of being shown as buttons that do nothing or fail.
+    const clarificationContract = enforceClarificationContract(result);
+    if (clarificationContract.violations.length > 0) {
+      logger.warn({ executionId: execution.id, operationId: operation.operationId, reasonCode: result.reasonCode, violations: clarificationContract.violations }, '[ASK-CLARIFICATION] card repaired to satisfy the contract');
+    }
+    result = clarificationContract.result;
     const completedAt = terminalStatus(result.status) ? new Date() : undefined;
     const saved = await prisma.askExecution.update({
       where: { id: execution.id },
