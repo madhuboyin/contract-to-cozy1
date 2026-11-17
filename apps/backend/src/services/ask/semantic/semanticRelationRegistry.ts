@@ -167,12 +167,13 @@ export const ASK_SEMANTIC_RELATION_REGISTRY: readonly SemanticRelationRegistrati
     targetEntityId: 'entity.claim',
     relationPathId: 'path.claim.self',
     canonicalAdapterId: 'cross-domain-wave-executor',
-    canonicalStoragePath: 'Claim.status',
+    canonicalStoragePath: 'Claim.status, Claim.type',
     cardinality: 'ONE_TO_ONE',
     maximumTraversalDepth: 1,
     cyclePolicy: 'FORBID',
     predicateIds: [
       'predicate.claim.has_status',
+      'predicate.claim.has_type',
     ],
   },
   {

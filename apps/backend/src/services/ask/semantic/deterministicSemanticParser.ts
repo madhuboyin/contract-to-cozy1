@@ -20,11 +20,12 @@ interface SemanticPredicateAtom {
 }
 
 /** "older than 10 years" / "more than 10 years old": whole years only; never a bare number, and never a phrase that cannot be located in the text. */
-const AGE_PHRASE = /\b(?:older|more)\s+than\s+(\d{1,3})\s*(?:years?|yrs?)\b(?:\s+old)?/i;
+// "over 5 years old" counts, but a bare "over 5 years" does not: without "old" it is a duration, not an age ("over 2 years since the last service").
+const AGE_PHRASE = /\b(?:older|more)\s+than\s+(\d{1,3})\s*(?:years?|yrs?)\b(?:\s+old)?|\bover\s+(\d{1,3})\s*(?:years?|yrs?)\s+old\b/i;
 function findAgePhrase(raw: string): { years: number; span: SemanticSourceSpan } | null {
   const match = AGE_PHRASE.exec(raw);
   if (!match || match.index === undefined) return null;
-  const years = Number(match[1]);
+  const years = Number(match[1] ?? match[2]);
   if (!Number.isInteger(years) || years < 1 || years > 100) return null;
   return { years, span: { start: match.index, end: match.index + match[0].length, text: match[0] } };
 }

@@ -111,6 +111,11 @@ const CROSS_DOMAIN_LEXEME_SPECS: readonly CrossDomainLexemeSpec[] = Object.freez
   { role: 'RELATION', semanticId: 'relation.inventory_item.manual_document', canonicalLabel: 'manual', reviewedAliases: ['manuals', 'owner manual'] },
   { role: 'RELATION', semanticId: 'relation.inventory_item.receipt_document', canonicalLabel: 'receipt', reviewedAliases: ['receipts', 'purchase receipt'] },
   { role: 'RELATION', semanticId: 'relation.claim.named_water_damage', canonicalLabel: 'water damage', reviewedAliases: ['water-damage'] },
+  // Claim types (Claim.type): each word names the type a claim was filed under. Only words that are unambiguous next to "claims" are listed.
+  { role: 'RELATION', semanticId: 'relation.claim.type.fire_smoke', canonicalLabel: 'fire', reviewedAliases: ['smoke', 'fire damage', 'smoke damage'] },
+  { role: 'RELATION', semanticId: 'relation.claim.type.storm_wind_hail', canonicalLabel: 'storm', reviewedAliases: ['hail', 'wind', 'storm damage', 'hail damage'] },
+  { role: 'RELATION', semanticId: 'relation.claim.type.theft_vandalism', canonicalLabel: 'theft', reviewedAliases: ['vandalism', 'burglary'] },
+  { role: 'RELATION', semanticId: 'relation.claim.type.liability', canonicalLabel: 'liability', reviewedAliases: [] },
   { role: 'RELATION', semanticId: 'relation.claim.claim_document', canonicalLabel: 'claim documents', reviewedAliases: [] },
 
   // Projections
@@ -234,12 +239,21 @@ export function verifyCrossDomainProtectionLexemeSeparation(): {
 }
 
 /** Closed-class grammatical function words ONLY — zero domain nouns, ops, or entities. */
+/** Claim.type values a claim-type word stands for (Claim.type enum: WATER_DAMAGE, FIRE_SMOKE, STORM_WIND_HAIL, THEFT_VANDALISM, LIABILITY, ...). */
+const CLAIM_TYPE_LEXEMES: ReadonlyArray<readonly [string, string]> = [
+  ['relation.claim.named_water_damage', 'WATER_DAMAGE'],
+  ['relation.claim.type.fire_smoke', 'FIRE_SMOKE'],
+  ['relation.claim.type.storm_wind_hail', 'STORM_WIND_HAIL'],
+  ['relation.claim.type.theft_vandalism', 'THEFT_VANDALISM'],
+  ['relation.claim.type.liability', 'LIABILITY'],
+];
+
 const CLOSED_CLASS_STOP_WORDS = new Set([
   'a', 'an', 'the', 'my', 'our', 'your', 'i', 'me', 'it', 'we', 'this', 'that', 'these', 'those',
   'is', 'are', 'was', 'were', 'be', 'do', 'does', 'did', 'have', 'has', 'had', 'will', 'would', 'should', 'can', 'could',
   'in', 'on', 'at', 'of', 'to', 'for', 'with', 'from', 'by', 'about', 'before', 'after', 'within', 'until', 'whether',
   'what', 'whats', "what's", 'which', 'who', 'where', 'when', 'how', 'still', 'tell', 'provide', 'there', 'any', 'all', 'two', 'three', 'one',
-  'beats', 'affect', 'long', 'been',
+  'beats', 'affect', 'long', 'been', 'related',
 ]);
 
 interface TokenSpan extends SemanticSourceSpan {
@@ -531,7 +545,15 @@ const EMERGENCY_SAFETY_PATTERNS: readonly RegExp[] = [
   /\bsmell(?:s|ing)?\s+(?:like\s+)?gas\b/i,
   /\bgas\s+leak\b/i,
   /\bcarbon\s+monoxide\b/i,
-  /\b(?:smoke|fire|sparks?|electrical\s+fire|arcing)\b/i,
+  /\b(?:sparks?|electrical\s+fire|arcing)\b/i,
+  // Fire and smoke are emergencies only when they describe something happening. The bare words used to be emergencies on their own, so "show open fire claims" or a
+  // smoke-detector maintenance question was answered with the emergency card.
+  /\b(?:on|there'?s\s+a|there\s+is\s+a|caught|catching)\s+fire\b/i,
+  /\bfire\s+(?:right\s+now|now|is\s+spreading|spreading|in\s+(?:my|the|our)\s+(?:house|home|kitchen|basement|attic|garage|walls?|roof))\b/i,
+  /\bsmell(?:s|ing)?\s+(?:like\s+)?(?:smoke|burning)\b/i,
+  /\bsmoke\s+(?:is\s+)?(?:coming|pouring|filling|billowing|rising)\b/i,
+  /\b(?:house|home|building|kitchen|garage)\s+(?:is\s+)?filling\s+with\s+smoke\b/i,
+  /\bsmoke\s+(?:alarm|detector)s?\s+(?:is\s+|are\s+)?(?:going\s+off|sounding|blaring)\b/i,
   /\bflood(?:ing)?\s+(?:right\s+now|basement)\b/i,
 ];
 
@@ -811,8 +833,19 @@ function compileClauseSpecFromAnnotations(
     };
   }
 
-  // Open claims
-  if (has('entity.claim') && has('status.open')) {
+  // Claims by status and/or type ("open claims", "open claims related to water damage", "water damage claims"). The claim type used to be recognised as a word
+  // and then ignored, so "show open claims for water damage" listed every open claim as if the type had been applied.
+  const claimTypes = CLAIM_TYPE_LEXEMES.filter(([semanticId]) => has(semanticId)).map(([, claimType]) => claimType);
+  if (has('entity.claim') && !has('entity.claim_document') && (has('status.open') || claimTypes.length > 0)) {
+    const atoms = [
+      ...(has('status.open') ? [{ kind: 'PREDICATE' as const, predicateId: 'predicate.claim.has_status', relationPathId: 'path.claim.self', enumStatus: 'OPEN' }] : []),
+      // The claim type is carried in `enumStatus` (the plan's one string-valued predicate parameter); the predicate id says it is a type.
+      ...[...new Set(claimTypes)].map((claimType) => ({ kind: 'PREDICATE' as const, predicateId: 'predicate.claim.has_type', relationPathId: 'path.claim.self', enumStatus: claimType })),
+    ];
+    const typeAtoms = atoms.filter((atom) => atom.predicateId === 'predicate.claim.has_type');
+    const statusAtoms = atoms.filter((atom) => atom.predicateId === 'predicate.claim.has_status');
+    const typeExpr = typeAtoms.length > 1 ? { kind: 'OR' as const, operands: typeAtoms } : typeAtoms[0];
+    const parts = [...statusAtoms, ...(typeExpr ? [typeExpr] : [])];
     return {
       domainId: 'domain.claims',
       entityId: 'entity.claim',
@@ -820,8 +853,8 @@ function compileClauseSpecFromAnnotations(
       jobMatch: 'query.claim.filter',
       projection: 'LIST',
       polarity: 'POSITIVE',
-      relations: [{ semanticRelationId: 'relation.claim.self', predicateId: 'predicate.claim.has_status', targetEntityId: 'entity.claim' }],
-      where: { kind: 'PREDICATE', predicateId: 'predicate.claim.has_status', relationPathId: 'path.claim.self', enumStatus: 'OPEN' },
+      relations: atoms.map((atom) => ({ semanticRelationId: 'relation.claim.self', predicateId: atom.predicateId, targetEntityId: 'entity.claim' })),
+      where: parts.length > 1 ? { kind: 'AND', operands: parts } : parts[0],
       time: null,
       fields: [{ fieldId: 'field.claim.title' }, { fieldId: 'field.claim.status' }],
       requiredSlots: [],

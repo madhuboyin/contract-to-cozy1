@@ -114,3 +114,14 @@ test('the live prompt through the real handler answers from the home record, not
   assert.match(text, /older than 10 years \(by recorded install date\)/);
   assert.ok(!/neither/i.test(text));
 });
+
+// ---- "over N years old" (live composite prompt: "which kitchen appliances have no warranty and are over 5 years old?")
+test('"over N years old" is an age; a bare "over N years" is a duration and is not', () => {
+  const whereOf = (m) => parseDeterministicSemanticRequest(m).facets[0]?.where;
+  const years = (w) => atoms(w).find((a) => a.predicateId === AGE)?.thresholdYears;
+  assert.equal(years(whereOf('which appliances are over 5 years old')), 5);
+  assert.equal(years(whereOf('which appliances have no warranty and are over 5 years old')), 5);
+  assert.notEqual(parseDeterministicSemanticRequest('which appliances are over 5 years').outcome, 'MATCH', 'without "old" it is not an age');
+  const items = [item('older', 'Older', '2020-01-01'), item('newer', 'Newer', '2024-01-01')];
+  assert.deepEqual(run('which appliances are over 5 years old', items).activeEntityIds, ['older']);
+});

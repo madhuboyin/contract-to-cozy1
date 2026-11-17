@@ -98,6 +98,8 @@ export interface CrossDomainClaimRecord {
   readonly slug: string;
   readonly status: 'OPEN' | 'CLOSED' | 'UNDER_REVIEW';
   readonly requiredDocumentTypes: readonly string[];
+  /** Claim.type (WATER_DAMAGE, FIRE_SMOKE, STORM_WIND_HAIL, THEFT_VANDALISM, LIABILITY, ...). Absent only on fixtures; a stored claim always has one. */
+  readonly claimType?: string;
 }
 
 export interface CrossDomainDocumentRecord {
@@ -1190,9 +1192,33 @@ function executeNewStackFacet(
   }
 
   if (job === 'query.claim.filter') {
-    const openClaims = snapshot.claims.filter((c) => c.propertyId === snapshot.propertyId && c.status === 'OPEN');
+    // The plan's own conditions are applied: status (open) and/or claim type. This branch used to ignore `facet.where` and always listed open claims.
+    const atoms: Array<Extract<SemanticWhereExpression, { kind: 'PREDICATE' }>> = [];
+    const collect = (expr: SemanticWhereExpression | null | undefined): void => {
+      if (!expr) return;
+      if (expr.kind === 'PREDICATE') atoms.push(expr);
+      else if (expr.kind === 'NOT') collect(expr.operand);
+      else expr.operands.forEach(collect);
+    };
+    collect(facet.where);
+    const wantsOpen = atoms.some((atom) => atom.predicateId === 'predicate.claim.has_status' && atom.enumStatus === 'OPEN');
+    const wantedTypes = [...new Set(atoms.filter((atom) => atom.predicateId === 'predicate.claim.has_type').map((atom) => String(atom.enumStatus)))];
+    const inProperty = snapshot.claims.filter((c) => c.propertyId === snapshot.propertyId);
+    const matchesStatus = (c: CrossDomainClaimRecord) => !wantsOpen || c.status === 'OPEN';
+    const untyped = wantedTypes.length > 0 ? inProperty.filter((c) => matchesStatus(c) && !c.claimType) : [];
+    const openClaims = inProperty.filter((c) => matchesStatus(c) && (wantedTypes.length === 0 || (c.claimType !== undefined && wantedTypes.includes(c.claimType))));
+    const CLAIM_TYPE_WORDS: Record<string, string> = {
+      WATER_DAMAGE: 'water damage', FIRE_SMOKE: 'fire or smoke', STORM_WIND_HAIL: 'storm, wind or hail', THEFT_VANDALISM: 'theft or vandalism', LIABILITY: 'liability',
+    };
+    const typeWords = wantedTypes.map((claimType) => CLAIM_TYPE_WORDS[claimType] ?? claimType.toLowerCase().replace(/_/g, ' ')).join(' or ');
+    const kind = `${wantsOpen ? 'open ' : ''}${typeWords ? `${typeWords} ` : ''}claim`;
     const rows = openClaims.map((c) => ({ id: c.id, label: c.title, subtitle: c.status }));
-    const summary = `${openClaims.length} open claim(s): ${openClaims.map((c) => c.title).join(', ')}.`;
+    const summary = wantedTypes.length === 0
+      ? `${openClaims.length} open claim(s): ${openClaims.map((c) => c.title).join(', ')}.`
+      : openClaims.length === 0
+        ? `No ${kind}s are recorded (by the type each claim was filed under).`
+        : `${openClaims.length} ${kind}${openClaims.length === 1 ? '' : 's'} (by the type each claim was filed under): ${openClaims.map((c) => c.title).join(', ')}.`;
+    const summaryWithNote = untyped.length > 0 ? `${summary} ${untyped.length} claim${untyped.length === 1 ? ' has' : 's have'} no recorded type and ${untyped.length === 1 ? 'is' : 'are'} not counted.` : summary;
     const finalized = finalizeReceiptAndPresentation({
       facet,
       snapshot,
@@ -1200,17 +1226,17 @@ function executeNewStackFacet(
       projection: 'LIST',
       operationAdapter: adapterId,
       sourceType: 'Claim',
-      predicateIds: ['predicate.claim.has_status'],
+      predicateIds: facet.relations.length > 0 ? [...new Set(facet.relations.map((r) => r.predicateId))] : ['predicate.claim.has_status'],
       rows,
-      title: 'Open claims',
-      summaryBody: summary,
+      title: wantedTypes.length === 0 ? 'Open claims' : `${kind.charAt(0).toUpperCase()}${kind.slice(1)}s`,
+      summaryBody: summaryWithNote,
       variantId: 'variant.open_claims',
     });
     return {
       facetId: facet.id,
       owner,
       status: 'EXECUTED',
-      summary,
+      summary: summaryWithNote,
       recordIds: rows.map((r) => r.id),
       rows: finalized.rows,
       missingSlots: [],
@@ -2524,6 +2550,7 @@ export async function loadCrossDomainPropertySnapshot(
             propertyId: true,
             title: true,
             status: true,
+            type: true,
             documents: {
               select: { id: true, claimId: true, documentId: true, type: true },
             },
@@ -2771,6 +2798,7 @@ export async function loadCrossDomainPropertySnapshot(
       slug: claim.title.toLowerCase().replace(/[^a-z0-9]+/g, '_'),
       status: mapClaimStatus(String(claim.status)),
       requiredDocumentTypes: reqTypes,
+      ...(claim.type ? { claimType: String(claim.type) } : {}),
     };
   });
 

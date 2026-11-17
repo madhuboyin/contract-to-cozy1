@@ -25,7 +25,7 @@ export interface SemanticPredicateMeaningTag {
     | 'RECORD_LINK_NEGATIVE'
     | 'RECORD_LINK_UNKNOWN'
     | 'RECORD_LINK_CONFLICTED'
-    | 'ATTRIBUTE_THRESHOLD'
+    | 'ATTRIBUTE_FILTER'
     | 'COVERAGE_SUFFICIENCY_DERIVED'
     | 'ACTIVE_PARENT_CHILD_MEMBERSHIP'
     | 'ROLE_VISIBLE_VERSION_CHAIN'
@@ -121,7 +121,7 @@ export const ASK_SEMANTIC_PREDICATE_MEANING_MANIFEST: readonly SemanticPredicate
     semanticRelationId: 'relation.inventory_item.age',
     meaningVersion: 'inventory-item-age@1.0.0',
     direction: 'FORWARD',
-    stateSemantics: 'ATTRIBUTE_THRESHOLD',
+    stateSemantics: 'ATTRIBUTE_FILTER',
     canonicalAdapterId: 'phase2a-slice-executor',
     usage: 'READ',
     canonicalParentPredicateId: null,
@@ -262,6 +262,16 @@ export const ASK_SEMANTIC_PREDICATE_MEANING_MANIFEST: readonly SemanticPredicate
     meaningVersion: 'claim-status-filters@1.0.0',
     direction: 'FORWARD',
     stateSemantics: 'RECORD_LINK_POSITIVE',
+    canonicalAdapterId: 'cross-domain-wave-executor',
+    usage: 'READ',
+    canonicalParentPredicateId: null,
+  },
+  {
+    predicateId: 'predicate.claim.has_type',
+    semanticRelationId: 'relation.claim.self',
+    meaningVersion: 'claim-status-filters@1.0.0',
+    direction: 'FORWARD',
+    stateSemantics: 'ATTRIBUTE_FILTER',
     canonicalAdapterId: 'cross-domain-wave-executor',
     usage: 'READ',
     canonicalParentPredicateId: null,
