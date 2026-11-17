@@ -388,10 +388,20 @@ export async function dataPointReadResult(
         rawText: message,
         timeZone,
       });
+      // The typed stack answers only what it can execute. A plan whose every facet has no enabled owner (a job family no rollout registers,
+      // e.g. a single named-item field read) executed nothing and must not become the answer: the audited single-value reader below, still
+      // gated by typed-grammar agreement, answers it. Clarifications, boundaries and any executed facet are returned as before.
+      const typedStackExecutedNothing = crossDomainExecution.execution.status === 'PARTIAL'
+        && !crossDomainParsed.clarification
+        && crossDomainExecution.execution.facetResults.length > 0
+        && crossDomainExecution.execution.facetResults.every((facet) => facet.status === 'UNRESOLVED' && facet.owner.owner === 'UNRESOLVED');
       if (
-        crossDomainExecution.execution.status !== 'NONE_FITS'
-        || crossDomainParsed.plan.outcome === 'MATCH'
-        || Boolean(crossDomainParsed.clarification)
+        !typedStackExecutedNothing
+        && (
+          crossDomainExecution.execution.status !== 'NONE_FITS'
+          || crossDomainParsed.plan.outcome === 'MATCH'
+          || Boolean(crossDomainParsed.clarification)
+        )
       ) {
         return crossDomainExecution.operationResult;
       }

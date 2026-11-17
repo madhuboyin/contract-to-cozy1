@@ -11,7 +11,7 @@ Contract to Cozy (C2C) is a property management platform connecting homeowners w
 This is the `apps/` directory of a monorepo with three applications:
 
 - **`backend/`** — Express.js REST API (port 8080)
-- **`frontend/`** — Next.js 14 app-router frontend (port 3000)
+- **`frontend/`** — Next.js app-router frontend (port 3000)
 - **`workers/`** — BullMQ background job processors
 
 Supporting directories at the repo root (`../`):
@@ -49,7 +49,7 @@ cd apps/workers && npm run build   # tsc → dist/
 
 ### Lint
 ```bash
-cd apps/frontend && npm run lint   # next lint (ESLint 9)
+cd apps/frontend && npm run lint   # eslint .
 ```
 
 ### Tests
@@ -63,7 +63,7 @@ tests/security/  # Security tests
 ### Database
 ```bash
 cd apps/backend && npx prisma generate        # Regenerate Prisma client after schema changes
-cd apps/backend && npx prisma migrate dev      # Create/apply migrations
+cd apps/backend && npx prisma db push          # Apply schema changes (no migration scripts; see root CLAUDE.md)
 cd apps/backend && npx prisma db seed          # Seed database
 cd apps/backend && npx prisma studio           # Visual DB browser
 ```
@@ -82,9 +82,9 @@ make deploy-pi        # Deploy to Raspberry Pi k3s cluster
 **Pattern:** Routes → Controllers → Services → Prisma ORM
 
 - **Entry point:** `src/index.ts` — Express app with all route mounting
-- **Routes (52 files):** `src/routes/` — Define endpoints with middleware chains. Some feature routes live in colocated directories (`src/community/`, `src/sellerPrep/`, `src/localUpdates/`, `src/homeRenovationAdvisor/`, `src/refinanceRadar/`, `src/neighborhoodIntelligence/`)
-- **Controllers (41 files):** `src/controllers/` — Request handling and response formatting
-- **Services (77+ files):** `src/services/` — Business logic and Prisma queries
+- **Routes:** `src/routes/` — Define endpoints with middleware chains. Some feature routes live in colocated directories (`src/community/`, `src/sellerPrep/`, `src/localUpdates/`, `src/homeRenovationAdvisor/`, `src/refinanceRadar/`, `src/neighborhoodIntelligence/`)
+- **Controllers:** `src/controllers/` — Request handling and response formatting
+- **Services:** `src/services/` — Business logic and Prisma queries
 - **Middleware:** `src/middleware/` — `auth.middleware` (JWT verification + profile attachment), `validate.middleware` (Zod schema validation), `rateLimiter.middleware`, `propertyAuth.middleware` (property-level access control)
 - **Validators:** `src/utils/validators.ts` for core schemas; `src/validators/` for per-feature Zod schemas (e.g. `inventory.validators.ts`, `narrative.validators.ts`). Applied via `validateBody(schema)` middleware.
 - **Modules:** `src/modules/gazette/` — Self-contained feature module with its own controllers, services, routes, validators, mappers, and DTOs. New complex features may follow this pattern.
@@ -98,7 +98,7 @@ make deploy-pi        # Deploy to Raspberry Pi k3s cluster
 
 ### Frontend (`apps/frontend/`)
 
-**Framework:** Next.js 14 with App Router
+**Framework:** Next.js with App Router
 
 - **Route groups:** `(auth)/` for login/register, `(dashboard)/` for authenticated pages (dashboard, guidance, savings, tools)
 - **Path alias:** `@/*` maps to `./src/*`
@@ -107,7 +107,6 @@ make deploy-pi        # Deploy to Raspberry Pi k3s cluster
 - **State:** TanStack React Query v5 for server state (5min stale time, 10min cache)
 - **UI:** Radix UI primitives + Tailwind CSS. Components in `src/components/ui/`; feature-specific components colocated in `src/components/<feature>/`
 - **Types:** `src/types/index.ts` (~37KB) — All shared TypeScript interfaces
-- **Adapters:** `src/adapters/` — Orchestration adapter (`orchestration.adapter.ts`) and feature-specific adapters
 - **Store:** `src/store/` — Client-side state (separate from React Query server state)
 - **Features:** `src/features/` — Self-contained feature slices (guidance, tools)
 - **Content:** `src/content/` — Static content and copy

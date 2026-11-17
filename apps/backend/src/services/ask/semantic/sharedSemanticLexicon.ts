@@ -62,7 +62,7 @@ const BASIC_READ_REGISTRY_LEXEMES: readonly RegistryLexeme[] = [
   { role: 'FIELD', semanticId: 'field.inventory_item.replacement_cost', canonicalLabel: 'replacement cost', reviewedAliases: ['cost to replace', 'replacement estimate'] },
   { role: 'FIELD', semanticId: 'field.inventory_item.serial_number', canonicalLabel: 'serial number', reviewedAliases: ['serial'] },
   { role: 'FIELD', semanticId: 'field.inventory_item.model_number', canonicalLabel: 'model number', reviewedAliases: ['model'] },
-  { role: 'FIELD', semanticId: 'field.inventory_item.installed_on', canonicalLabel: 'install date', reviewedAliases: ['installed on', 'installation date', 'when was installed', 'how old'] },
+  { role: 'FIELD', semanticId: 'field.inventory_item.installed_on', canonicalLabel: 'install date', reviewedAliases: ['installed on', 'installation date', 'when was installed', 'how old', 'installed', 'installation'] },
   { role: 'FIELD', semanticId: 'field.property.year_built', canonicalLabel: 'year built', reviewedAliases: ['built year', 'when was built'] },
   { role: 'FIELD', semanticId: 'field.property.living_area', canonicalLabel: 'living area', reviewedAliases: ['square footage', 'sq ft', 'square feet'] },
   { role: 'FIELD', semanticId: 'field.property.roof_replacement_year', canonicalLabel: 'roof replacement year', reviewedAliases: ['roof age', 'when was roof replaced'] },

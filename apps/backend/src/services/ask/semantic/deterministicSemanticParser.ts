@@ -155,7 +155,10 @@ function annotate(raw: string, tokens: readonly SemanticSourceSpan[]): Annotatio
       annotations.push({ start: token.start, end: token.end, text: raw.slice(token.start, token.end), lexeme: best[0].lexeme });
     }
   }
-  return annotations;
+  // A projection phrase that begins INSIDE an earlier, longer entity/field phrase is part of that phrase, not a projection
+  // ("serial number of my fridge": "number of" must not make this a COUNT). Longest-phrase-wins across roles.
+  return annotations.filter((candidate) => candidate.lexeme.role !== 'PROJECTION'
+    || !annotations.some((other) => other.lexeme.role !== 'PROJECTION' && other.start < candidate.start && other.end > candidate.start));
 }
 
 function unresolved(
