@@ -87,6 +87,9 @@ const ITEM_TERMS: ReadonlyArray<{ label: string; test: RegExp; terms: readonly s
 export type WarrantyFocus = { expiring: boolean; expired: boolean; category: string | null; categoryLabel: string | null; item: { label: string; terms: readonly string[] } | null };
 
 /** What this question asks about, from its own words. Nothing is remembered between questions (refinements are W-2). */
+/** FR-PLAN-5: the homeowner also named a recall, which this read has no relation for. */
+export const WARRANTY_RECALL_CONDITION = /\brecall(?:s|ed)?\b/i;
+
 export function warrantyFocus(message: string): WarrantyFocus {
   const category = CATEGORY_TERMS.find((entry) => entry.test.test(message)) ?? null;
   const item = ITEM_TERMS.find((entry) => entry.test.test(message)) ?? null;
@@ -226,6 +229,23 @@ function warrantiesFromRecordsInner(input: {
   const conflictedIds = input.conflictedIds ?? new Set<string>();
   const now = input.now ?? new Date();
   const addAction = { id: 'add-warranty', label: 'Add a warranty', interactionType: 'START_WORKFLOW' as const, message: WARRANTY_ADD_MESSAGE, operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' as const };
+
+  // FR-PLAN-5: a request that also asks about recalls ("appliances with open recalls and no active warranty") is not a warranty question this read can answer.
+  // Answering only the warranty half and calling it the answer is the silent partial interpretation the FRD forbids, so it says what it cannot combine
+  // and offers each half, which each route correctly on their own.
+  if (WARRANTY_RECALL_CONDITION.test(message) && !containsFilterContinuation(message)) {
+    return {
+      status: 'READY_WITH_LIMITATIONS', reasonCode: 'WARRANTY_UNAPPLIED_RECALL_CONDITION',
+      blocks: [{
+        type: 'SUMMARY', id: 'warranty-no-match', title: 'I can’t combine recalls with warranties in one list yet',
+        headline: 'I can’t combine recalls and warranties in one list.',
+        supportLine: 'No list is shown, so nothing here can be mistaken for the combined answer.',
+        body: 'Your question asks about recalls as well as warranties. I haven’t answered half of it as if it were the whole. Ask each part on its own and I’ll answer it.',
+        tone: 'CAUTION', actions: [],
+      }, BOUNDARY],
+      suggestions: ['Show appliances that have open recalls', 'Show appliances with no active warranty'],
+    };
+  }
 
   if (records.length === 0) {
     return {
