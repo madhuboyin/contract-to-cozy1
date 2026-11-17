@@ -223,9 +223,19 @@ function isOlderThanYears(item: SliceInventoryItemRecord, years: number, asOfDat
 function describeWhere(expr: SemanticWhereExpression, snapshot: SlicePropertySnapshot, negated = false): string {
   if (expr.kind === 'NOT') return describeWhere(expr.operand, snapshot, !negated);
   if ('operands' in expr) {
-    const parts = expr.operands.map((operand) => describeWhere(operand, snapshot, negated));
+    // A list of rooms reads as one place phrase: "in Kitchen or Laundry Room".
+    if (!negated && expr.kind === 'OR' && expr.operands.every((o) => o.kind === 'PREDICATE' && o.predicateId === 'predicate.inventory_item.in_room' && o.targetRecordId)) {
+      const names = expr.operands.map((o) => (o.kind === 'PREDICATE' ? snapshot.rooms.find((r) => r.id === o.targetRecordId)?.name : null) ?? 'a room');
+      return `in ${names.join(' or ')}`;
+    }
     // De Morgan: a negated AND is an OR of negations and the reverse; the words follow the structure that is actually evaluated.
     const joinAsAnd = (expr.kind === 'AND') !== negated;
+    // A group joined differently from its parent is parenthesised so "A and (B or C)" is never read as "(A and B) or C".
+    const parts = expr.operands.map((operand) => {
+      const text = describeWhere(operand, snapshot, negated);
+      const childJoinsAsAnd = 'operands' in operand ? (operand.kind === 'AND') !== negated : joinAsAnd;
+      return 'operands' in operand && childJoinsAsAnd !== joinAsAnd && !text.startsWith('in ') ? `(${text})` : text;
+    });
     return parts.join(joinAsAnd ? ' and ' : ', or ');
   }
   const years = expr.thresholdYears;
@@ -895,8 +905,9 @@ function executeValidatedSlicePlan(input: {
   let summaryBody = projection === 'COUNT'
     ? `Confirmed count: ${matched.length} matching item${matched.length === 1 ? '' : 's'}.`
     : `Found ${matched.length} matching inventory item${matched.length === 1 ? '' : 's'}.`;
-  if (ageInPlay && facet.where) {
-    // A condition tree with an age comparison is described as a whole (warranty wording alone would call old items "unwarranted").
+  if ((ageInPlay || facet.relations.length > 1) && facet.where) {
+    // A condition tree with more than one condition is described as a whole: warranty wording alone would call old items "unwarranted" and would not say that the
+    // answer was also limited to certain rooms.
     const n = matched.length;
     const names = `${matched.slice(0, 10).map(({ item }) => item.name).join('; ')}${n > 10 ? `; and ${n - 10} more` : ''}`;
     const condition = describeWhere(facet.where, snapshot);

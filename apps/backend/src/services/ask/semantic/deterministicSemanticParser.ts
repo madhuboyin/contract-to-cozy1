@@ -367,6 +367,7 @@ export function parseDeterministicSemanticRequest(
       : 'SINGLE' as const;
 
     const expressions: SemanticWhereExpression[] = [];
+    let roomListGrouped = 0;
     const relations: Array<{ semanticRelationId: string; predicateId: string; targetEntityId: string }> = [];
     const isOverdue = timeAnnotation?.lexeme.semanticId === 'time.maintenance.overdue';
     const queryTime: SemanticTimeConstraint | null = isOverdue
@@ -411,21 +412,18 @@ export function parseDeterministicSemanticRequest(
         : [{ kind: 'PREDICATE', predicateId, relationPathId: 'path.inventory_item.room' }];
       relations.push({ semanticRelationId: 'relation.inventory_item.room', predicateId, targetEntityId: 'entity.room' });
 
-      if (roomAtoms.length >= 2 && (warrantyRelation || maintenanceRelation)) {
-        const roomCoordination = hasNeitherNor ? 'NEITHER_NOR' as const
-          : polarity === 'NEGATIVE' && hasOr ? 'AMBIGUOUS_NEGATIVE_OR' as const
-          : hasOr ? 'EITHER_OR' as const
-          : 'AND' as const;
-        const assembledRooms = assembleSemanticBooleanExpression({ coordination: roomCoordination, predicates: roomAtoms });
-        if (assembledRooms.outcome === 'CLARIFY') {
-          return SemanticRequestPlanSchema.parse({ ...base, outcome: 'BOUNDARY', facets: [], unresolvedSpans });
-        }
-        if (assembledRooms.outcome === 'ASSEMBLED') {
-          expressions.push(assembledRooms.expression);
-        }
-        coordination = hasAnd ? 'AND' : 'EITHER_OR';
+      if (roomAtoms.length >= 2 && (warrantyRelation || maintenanceRelation || agePhrase)) {
+        // A list of rooms ("in the kitchen or laundry room", or "kitchen and laundry room") is ONE positive group of places, inclusive whatever the other
+        // conditions' polarity says ("MISSING receipts in the kitchen or laundry room": the negation belongs to the receipts, not to the rooms). The group is
+        // then combined with the other conditions below. It used to be asked as a "neither/either" question, and where it was not, the top-level join was
+        // switched to OR, so "has a warranty in the kitchen or basement" returned every item.
+        const assembledRooms = assembleSemanticBooleanExpression({ coordination: 'EITHER_OR', predicates: roomAtoms });
+        if (assembledRooms.outcome === 'ASSEMBLED') expressions.push(assembledRooms.expression);
+        roomListGrouped = roomAtoms.length;
       } else if (roomAtoms.length === 1) {
+        // "no warranty in the kitchen": the negation belongs to the warranty. A room is negated only when it is the only condition ("items not in the kitchen").
         const shouldNegateRoom = polarity === 'NEGATIVE'
+          && relationCount === 1
           && coordination !== 'NEITHER_NOR'
           && coordination !== 'AMBIGUOUS_NEGATIVE_OR';
         expressions.push(shouldNegateRoom ? { kind: 'NOT', operand: roomAtoms[0] } : roomAtoms[0]);
@@ -442,16 +440,28 @@ export function parseDeterministicSemanticRequest(
       relations.push({ semanticRelationId: 'relation.inventory_item.age', predicateId, targetEntityId: 'entity.inventory_item' });
     }
 
+    if (roomListGrouped > 0) {
+      // The "or" words between the rooms belong to the room list; only an "or" beyond them coordinates the conditions (and then a negated "no A or B" is still the
+      // ambiguous shape). Otherwise the conditions are all required: "no warranty in the kitchen or basement" is no warranty AND in either room.
+      const orWords = coordinatorAnnotations.filter((annotation) => annotation.lexeme.semanticId === 'coordinator.or').length;
+      const orBeyondRooms = orWords > roomListGrouped - 1;
+      coordination = hasNeitherNor ? 'NEITHER_NOR'
+        : orBeyondRooms ? (polarity === 'NEGATIVE' && !agePhrase ? 'AMBIGUOUS_NEGATIVE_OR' : 'EITHER_OR')
+        : expressions.length >= 2 ? 'AND' : 'SINGLE';
+    }
+
     if (coordination === 'SINGLE' && expressions.length >= 2) {
       coordination = 'AND';
     }
 
     const assembled = assembleSemanticBooleanExpression({ coordination, predicates: expressions });
-    if (assembled.outcome === 'CLARIFY') {
-      return SemanticRequestPlanSchema.parse({ ...base, outcome: 'BOUNDARY', facets: [], unresolvedSpans });
-    }
+    // Words that were not understood are reported as such BEFORE any question about the words that were: asking "neither or either?" about half a sentence
+    // whose other half was dropped is the partial interpretation FR-PLAN-5 forbids (live prompt #15 asked it about rooms while "receipts" was not understood).
     if (unresolvedSpans.length > 0) {
       return SemanticRequestPlanSchema.parse({ ...base, outcome: 'NONE_FITS', facets: [], unresolvedSpans });
+    }
+    if (assembled.outcome === 'CLARIFY') {
+      return SemanticRequestPlanSchema.parse({ ...base, outcome: 'BOUNDARY', facets: [], unresolvedSpans });
     }
     if (assembled.outcome === 'ASSEMBLED') {
       return SemanticRequestPlanSchema.parse({
