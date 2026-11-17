@@ -1,7 +1,7 @@
 // DATA_POINT_READ (reliability FRD D12, Phase 1b): "what is the serial number of my fridge", "when was my furnace installed", "what did I pay for my dryer".
 // A STANDARD, read-only fact read through the one allowlisted template in dataPoint/dataPointReader.ts. No side effects; a value that is not recorded is said plainly,
 // with the authorised way to add it, and never guessed (FR-REC-2 MISSING_RECORD_DATA).
-import { clarifiedReadingFrom } from '../support/clarificationContract';
+import { clarifiedDocumentModeFrom, clarifiedQuoteIdsFrom, clarifiedReadingFrom } from '../support/clarificationContract';
 import type { NegativeOrReading } from '../semantic/deterministicSemanticParser';
 import { withUnappliedAmountComparison } from '../semantic/amountComparison';
 import { parseCompareSubjects, unresolvedCompareCopy } from '../support/unresolvedCompare';
@@ -214,6 +214,9 @@ export interface DataPointReadSemanticOptions {
   readonly evaluationMode?: 'PRODUCTION_SHORT_CIRCUIT' | 'DUAL_PRODUCER';
   /** The homeowner's answer to a "no A or B" question (a typed clarification option), re-applied to this same message. */
   readonly coordinationReading?: NegativeOrReading;
+  /** Typed clarification choices (stored server-side, never from the client): which reading of "no manual or receipt", or which two quotes to compare. */
+  readonly documentMode?: 'EITHER_MISSING' | 'BOTH_MISSING';
+  readonly boundQuoteIds?: readonly [string, string];
 }
 
 function attachOrchestrationParameters(
@@ -372,9 +375,16 @@ export async function dataPointReadResult(
       return withUnappliedAmountComparison(sliceExecution.operationResult, message);
     }
 
+    // The typed choices a homeowner made on a clarification card are re-applied to this same message at every cross-domain parse and execution below.
+    const chosen = {
+      ...(options?.documentMode ? { documentMode: options.documentMode } : {}),
+      ...(options?.boundQuoteIds ? { boundQuoteIds: options.boundQuoteIds } : {}),
+    };
     const crossDomainParsed = parseCrossDomainSemanticRequest(
       message,
-      authorizedProviderContext ? { dynamicQuotes: authorizedProviderContext.dynamicQuotes } : undefined,
+      authorizedProviderContext || Object.keys(chosen).length > 0
+        ? { ...(authorizedProviderContext ? { dynamicQuotes: authorizedProviderContext.dynamicQuotes } : {}), ...chosen }
+        : undefined,
     );
     const isCompleteDeterministicCrossDomain =
       !crossDomainParsed.clarification
@@ -396,6 +406,7 @@ export async function dataPointReadResult(
         propertyAuthorized: true,
         rawText: message,
         timeZone,
+        ...chosen,
       });
       // The typed stack answers only what it can execute. A plan whose every facet has no enabled owner (a job family no rollout registers,
       // e.g. a single named-item field read) executed nothing and must not become the answer: the audited single-value reader below, still
@@ -424,6 +435,7 @@ export async function dataPointReadResult(
         propertyAuthorized: true,
         rawText: message,
         timeZone,
+        ...chosen,
       });
       if (quoteCrossDomainExecution.execution.status !== 'NONE_FITS') {
         return withUnappliedAmountComparison(quoteCrossDomainExecution.operationResult, message);
@@ -609,13 +621,17 @@ export const handleDataPointRead: Parameters<typeof registerCapabilityHandler>[1
   if (hinted.kind === 'UNSUPPORTED') return notice('DATA_POINT_PARAMETERS_UNSUPPORTED', 'data-point-parameters-unsupported', 'I need a simpler question', 'Ask for the recorded detail directly. Filtered and grouped questions use only reviewed query templates.');
   // A typed clarification option chosen by the homeowner (supplied by the server from the stored option, never by the client): validated against the closed set of readings.
   const coordinationReading: NegativeOrReading | undefined = clarifiedReadingFrom(envelope.suppliedInput);
+  const documentMode = clarifiedDocumentModeFrom(envelope.suppliedInput);
+  const boundQuoteIds = clarifiedQuoteIdsFrom(envelope.suppliedInput);
   const semanticOptions: DataPointReadSemanticOptions | undefined =
-    (deps && (deps.semanticProvider !== undefined || deps.semanticProviderPolicy !== undefined || deps.semanticEvaluationMode !== undefined)) || coordinationReading
+    (deps && (deps.semanticProvider !== undefined || deps.semanticProviderPolicy !== undefined || deps.semanticEvaluationMode !== undefined)) || coordinationReading || documentMode || boundQuoteIds
       ? {
           ...(deps?.semanticProvider !== undefined ? { semanticProvider: deps.semanticProvider } : {}),
           ...(deps?.semanticProviderPolicy !== undefined ? { semanticProviderPolicy: deps.semanticProviderPolicy } : {}),
           ...(deps?.semanticEvaluationMode !== undefined ? { evaluationMode: deps.semanticEvaluationMode } : {}),
           ...(coordinationReading ? { coordinationReading } : {}),
+          ...(documentMode ? { documentMode } : {}),
+          ...(boundQuoteIds ? { boundQuoteIds } : {}),
         }
       : undefined;
   return dataPointReadResult(envelope.userId, envelope.propertyId!, hinted.message, forcedPoint, semanticOptions);

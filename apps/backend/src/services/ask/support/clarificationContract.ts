@@ -18,8 +18,43 @@ import type { AskOperationResult } from '../askOperationRegistry';
  */
 export const ClarificationOptionPayloadSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('BOOLEAN_READING'), reading: z.enum(['EITHER_OR', 'NEITHER_NOR']) }).strict(),
+  // "no manual or receipt": at least one of the two is missing, or both are. Its own kind because "either" here means "no manual, or no receipt" (the negation applies to both),
+  // which is not the asymmetric EITHER_OR of BOOLEAN_READING ("no warranty, or maintenance due").
+  z.object({ kind: z.literal('DOCUMENT_MISSING'), mode: z.enum(['EITHER_MISSING', 'BOTH_MISSING']) }).strict(),
+  // "which two quotes?": the two chosen, as ids. They are resolved against the property's own quotes when the comparison runs, so an id that is not this home's resolves to nothing.
+  z.object({ kind: z.literal('QUOTE_PAIR'), quoteIds: z.tuple([z.string().trim().min(1).max(128), z.string().trim().min(1).max(128)]) }).strict(),
 ]);
 export type ClarificationOptionPayload = z.infer<typeof ClarificationOptionPayloadSchema>;
+
+/** What the operation receives for a typed option: the server turns the stored payload into supplied input; the client never supplies it. */
+export function suppliedInputFromPayload(payload: ClarificationOptionPayload | null): Record<string, unknown> | undefined {
+  if (!payload) return undefined;
+  switch (payload.kind) {
+    case 'BOOLEAN_READING': return { clarifiedReading: payload.reading };
+    case 'DOCUMENT_MISSING': return { clarifiedDocumentMode: payload.mode };
+    case 'QUOTE_PAIR': return { clarifiedQuoteIds: [...payload.quoteIds] };
+  }
+}
+
+export function clarifiedDocumentModeFrom(suppliedInput: unknown): 'EITHER_MISSING' | 'BOTH_MISSING' | undefined {
+  const value = (suppliedInput as { clarifiedDocumentMode?: unknown } | null | undefined)?.clarifiedDocumentMode;
+  return value === 'EITHER_MISSING' || value === 'BOTH_MISSING' ? value : undefined;
+}
+
+export function clarifiedQuoteIdsFrom(suppliedInput: unknown): [string, string] | undefined {
+  const value = (suppliedInput as { clarifiedQuoteIds?: unknown } | null | undefined)?.clarifiedQuoteIds;
+  const parsed = z.tuple([z.string().trim().min(1).max(128), z.string().trim().min(1).max(128)]).safeParse(value);
+  return parsed.success && parsed.data[0] !== parsed.data[1] ? parsed.data : undefined;
+}
+
+/** A question with no buttons, answered in the user's own words. The stored clarification is written with the card so an answer can be accepted. */
+export function buildFreeTextClarification(input: { readonly question: string; readonly operationId: string; readonly expiresInMs?: number }): { clarification: AskClarification; parameters: { clarification: { version: number; expiresAt: string; candidateOperationIds: string[] } } } {
+  const expiresAt = new Date(Date.now() + (input.expiresInMs ?? 30 * 60 * 1000)).toISOString();
+  return {
+    clarification: { version: 1, question: input.question, options: [], allowFreeText: true, expiresAt },
+    parameters: { clarification: { version: 1, expiresAt, candidateOperationIds: [input.operationId] } },
+  };
+}
 
 /** The reading a homeowner chose, from an envelope's supplied input (put there by the server from the stored option): one of the closed set, or undefined. */
 export function clarifiedReadingFrom(suppliedInput: unknown): 'EITHER_OR' | 'NEITHER_NOR' | undefined {

@@ -1,3 +1,5 @@
+import { buildFreeTextClarification, buildPayloadClarification } from '../../support/clarificationContract';
+import type { AskClarification } from '../../../../productFramework/ask/ask.contract';
 import { EMERGENCY_BOUNDARY_BODY, EMERGENCY_BOUNDARY_TITLE } from '../../support/emergencyBoundary';
 import {
   buildSemanticReadReceipt,
@@ -42,6 +44,7 @@ import {
   mayNeedDynamicQuoteResolution,
   parseCrossDomainSemanticRequest,
   type CrossDomainClarification,
+  type CrossDomainClarificationCandidate,
   type DynamicQuoteCandidate,
   type PlanOverflowFacet,
 } from './crossDomainPlanBuilder';
@@ -760,11 +763,22 @@ function executeNewStackFacet(
     };
   }
 
-  // Wave 1/4: Neither manual nor receipt
+  // Wave 1/4: missing manual and/or receipt. The plan's own conditions are evaluated: "neither a manual nor a receipt" (both missing) and "missing a manual or a receipt"
+  // (at least one missing). The branch used to filter on "both missing" whatever the plan said.
   if (job === 'query.inventory_item.relation_boolean' && facet.relations.some((r) => r.semanticRelationId === 'relation.inventory_item.manual_document')) {
-    const matches = visibleItems.filter((item) => !item.manualDocumentId && !item.receiptDocumentId);
+    const documentHeld = (item: { manualDocumentId?: string | null; receiptDocumentId?: string | null }, predicateId: string) => (predicateId === 'predicate.inventory_item.has_manual_record' ? Boolean(item.manualDocumentId) : Boolean(item.receiptDocumentId));
+    const evaluateDocuments = (expr: SemanticWhereExpression | null | undefined, item: { manualDocumentId?: string | null; receiptDocumentId?: string | null }): boolean => {
+      if (!expr) return !item.manualDocumentId && !item.receiptDocumentId;
+      if (expr.kind === 'PREDICATE') return documentHeld(item, expr.predicateId);
+      if (expr.kind === 'NOT') return !evaluateDocuments(expr.operand, item);
+      return expr.kind === 'AND' ? expr.operands.every((operand) => evaluateDocuments(operand, item)) : expr.operands.some((operand) => evaluateDocuments(operand, item));
+    };
+    const eitherMissing = facet.where?.kind === 'OR';
+    const matches = visibleItems.filter((item) => evaluateDocuments(facet.where, item));
     const rows = matches.map((m) => ({ id: m.id, label: m.name }));
-    const summary = `${matches.length} inventory item(s) have neither a manual nor a receipt: ${matches.map((m) => m.name).join(', ')}.`;
+    const summary = eitherMissing
+      ? `${matches.length} inventory item(s) are missing a manual, a receipt, or both: ${matches.map((m) => m.name).join(', ')}.`
+      : `${matches.length} inventory item(s) have neither a manual nor a receipt: ${matches.map((m) => m.name).join(', ')}.`;
     const finalized = finalizeReceiptAndPresentation({
       facet,
       snapshot,
@@ -774,7 +788,7 @@ function executeNewStackFacet(
       sourceType: 'InventoryItem',
       predicateIds: evaluateWherePredicates(facet.where),
       rows,
-      title: 'Items without manual or receipt',
+      title: eitherMissing ? 'Items missing a manual or a receipt' : 'Items without manual or receipt',
       summaryBody: summary,
       variantId: 'variant.inventory_missing_docs',
     });
@@ -2102,6 +2116,9 @@ export async function executeCrossDomainSnapshot(input: {
   readonly enabledDomains?: ReadonlySet<SemanticDomainId>;
   readonly allowLegacyFallback?: boolean;
   readonly planOverride?: SemanticRequestPlan;
+  /** A typed clarification choice, re-applied to this same message (see the clarification cards): which reading of "no manual or receipt", or which two quotes. */
+  readonly documentMode?: 'EITHER_MISSING' | 'BOTH_MISSING';
+  readonly boundQuoteIds?: readonly [string, string];
 }): Promise<CrossDomainExecutionResult> {
   if (!input.propertyAuthorized) {
     return {
@@ -2125,6 +2142,8 @@ export async function executeCrossDomainSnapshot(input: {
       }
     : parseCrossDomainSemanticRequest(input.rawText, {
         dynamicQuotes: toDynamicQuoteCandidates(input.snapshot),
+        ...(input.documentMode ? { documentMode: input.documentMode } : {}),
+        ...(input.boundQuoteIds ? { boundQuoteIds: input.boundQuoteIds } : {}),
       });
   if (parsed.clarification) {
     return {
@@ -3096,6 +3115,47 @@ export async function loadCrossDomainPropertySnapshot(
   };
 }
 
+const CLARIFICATION_OPERATION = 'DATA_POINT_READ';
+
+/**
+ * The card for a cross-domain clarification. Each button carries a typed choice that is re-applied to the original message (see support/clarificationContract.ts): "no manual or
+ * receipt" is the two readings (at least one missing / both missing); a choice of three quotes is the three pairs; anything else (more candidates than a card can hold as pairs,
+ * or a card that would violate the contract, such as two pairs that read the same) is a plain question answered in the homeowner's own words. This used to be no card at all.
+ */
+function crossDomainClarificationCard(clarification: CrossDomainClarification): { clarification: AskClarification; parameters: Record<string, unknown> } {
+  if (clarification.reasonCode === 'AMBIGUOUS_NEGATIVE_COORDINATION') {
+    return buildPayloadClarification({
+      question: 'Your question can be read two ways. Which do you mean?',
+      options: [
+        { operationId: CLARIFICATION_OPERATION, label: 'Items missing a manual or a receipt (at least one)', payload: { kind: 'DOCUMENT_MISSING', mode: 'EITHER_MISSING' } },
+        { operationId: CLARIFICATION_OPERATION, label: 'Items missing both a manual and a receipt', payload: { kind: 'DOCUMENT_MISSING', mode: 'BOTH_MISSING' } },
+      ],
+    });
+  }
+  if (clarification.reasonCode === 'AMBIGUOUS_QUOTE_SELECTION') {
+    const candidates = clarification.candidateRecords ?? [];
+    const amount = (candidate: CrossDomainClarificationCandidate) => (candidate.subtitle ? candidate.subtitle.split(' · ')[0] : '');
+    const named = (candidate: CrossDomainClarificationCandidate) => `${candidate.label}${amount(candidate) ? ` (${amount(candidate)})` : ''}`;
+    if (candidates.length === 3) {
+      try {
+        const pairs: Array<readonly [CrossDomainClarificationCandidate, CrossDomainClarificationCandidate]> = [[candidates[0], candidates[1]], [candidates[0], candidates[2]], [candidates[1], candidates[2]]];
+        return buildPayloadClarification({
+          question: clarification.question,
+          options: pairs.map(([first, second]) => ({
+            operationId: CLARIFICATION_OPERATION,
+            label: `${named(first)} vs ${named(second)}`.slice(0, 160),
+            payload: { kind: 'QUOTE_PAIR' as const, quoteIds: [first.id, second.id] as [string, string] },
+          })),
+        });
+      } catch {
+        // Two pairs that read the same (the same contractor and amount twice): not a choice the homeowner can tell apart, so they name the two instead.
+      }
+    }
+    return buildFreeTextClarification({ question: `${clarification.question} Tell me the two contractors, for example “${candidates[0]?.label ?? 'Acme'} and ${candidates[1]?.label ?? 'Bravo'}”.`, operationId: CLARIFICATION_OPERATION });
+  }
+  return buildFreeTextClarification({ question: clarification.question, operationId: CLARIFICATION_OPERATION });
+}
+
 /** A part of the question that was not answered, in plain words: a missing section must never read as "nothing found" (FR-PLAN-5). Empty when every part was answered. */
 function notAnsweredNote(overflowFacets: readonly PlanOverflowFacet[]): string {
   if (overflowFacets.length === 0) return '';
@@ -3124,12 +3184,13 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
   }
 
   if (execution.status === 'CLARIFY' && execution.clarification) {
+    const card = crossDomainClarificationCard(execution.clarification);
     const blocks: AskPresentationBlock[] = [
       {
         type: 'SUMMARY',
         id: 'cross-domain-clarification-required',
         title: 'Please clarify what you mean',
-        body: `${execution.clarification.question} (${execution.clarification.options.join(' vs ')})`,
+        body: card.clarification.question,
         tone: 'CAUTION',
         actions: [],
       },
@@ -3161,9 +3222,11 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
       reasonCode: execution.clarification.reasonCode,
       blocks,
       suggestions: [],
+      clarification: card.clarification,
+      // The stored clarification is the card's (what a press is checked against); the raw cross-domain clarification stays inside crossDomainExecution.
       parameters: {
         crossDomainExecution: execution,
-        clarification: execution.clarification,
+        ...card.parameters,
       },
     };
   }
@@ -3392,13 +3455,18 @@ export async function executeCrossDomainOnProperty(input: {
   readonly timeZone?: string;
   readonly snapshotOverride?: CrossDomainPropertySnapshot;
   readonly planOverride?: SemanticRequestPlan;
+  readonly documentMode?: 'EITHER_MISSING' | 'BOTH_MISSING';
+  readonly boundQuoteIds?: readonly [string, string];
 }): Promise<{
   readonly execution: CrossDomainExecutionResult;
   readonly operationResult: AskOperationResult;
   readonly snapshot: CrossDomainPropertySnapshot;
 }> {
   const activePlan = input.planOverride ?? null;
-  const parsed = activePlan ? null : parseCrossDomainSemanticRequest(input.rawText);
+  const parsed = activePlan ? null : parseCrossDomainSemanticRequest(input.rawText, {
+    ...(input.documentMode ? { documentMode: input.documentMode } : {}),
+    ...(input.boundQuoteIds ? { boundQuoteIds: input.boundQuoteIds } : {}),
+  });
   const snapshot = input.snapshotOverride
     ?? (activePlan && activePlan.outcome === 'MATCH'
       ? await loadCrossDomainPropertySnapshot(
@@ -3431,6 +3499,8 @@ export async function executeCrossDomainOnProperty(input: {
     role: normalizeCrossDomainRole(input.role),
     propertyAuthorized: input.propertyAuthorized,
     planOverride: activePlan ?? undefined,
+    ...(input.documentMode ? { documentMode: input.documentMode } : {}),
+    ...(input.boundQuoteIds ? { boundQuoteIds: input.boundQuoteIds } : {}),
   });
   return {
     execution,

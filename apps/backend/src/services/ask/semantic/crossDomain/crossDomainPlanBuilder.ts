@@ -514,7 +514,6 @@ export interface CrossDomainClarificationCandidate {
 export interface CrossDomainClarification {
   readonly reasonCode:
     | 'AMBIGUOUS_NEGATIVE_COORDINATION'
-    | 'UNRESOLVED_FOLLOW_UP_INPUT'
     | 'AMBIGUOUS_QUOTE_SELECTION';
   readonly question: string;
   readonly options: readonly string[];
@@ -625,6 +624,7 @@ function compileClauseSpecFromAnnotations(
     priorClaimFacetId?: string | null;
     resolvedSubjectHint?: string | null;
     matchedQuoteIds?: readonly string[];
+    documentMode?: 'EITHER_MISSING' | 'BOTH_MISSING';
     elapsedWindow?: SemanticTimeConstraint | null;
     clauseWords?: ReadonlySet<string>;
   } = {},
@@ -765,6 +765,33 @@ function compileClauseSpecFromAnnotations(
       },
       time: { kind: 'DUE_STATUS', status: 'OVERDUE' },
       fields: [{ fieldId: 'field.maintenance_task.title' }, { fieldId: 'field.maintenance_task.next_due_date' }],
+      requiredSlots: [],
+    };
+  }
+
+  // "No manual or receipt", once the homeowner has said which reading they meant (see the Row 9 question). Either: no manual, or no receipt (at least one is missing).
+  // Both: no manual and no receipt. Each is explicit negations, so a missing document is never confused with an unknown one.
+  if (
+    options.documentMode
+    && has('polarity.negative') && has('coordinator.or') && !has('coordinator.neither')
+    && has('relation.inventory_item.manual_document') && has('relation.inventory_item.receipt_document')
+  ) {
+    const noManual = { kind: 'NOT' as const, operand: { kind: 'PREDICATE' as const, predicateId: 'predicate.inventory_item.has_manual_record', relationPathId: 'path.inventory_item.manual_document' } };
+    const noReceipt = { kind: 'NOT' as const, operand: { kind: 'PREDICATE' as const, predicateId: 'predicate.inventory_item.has_receipt_record', relationPathId: 'path.inventory_item.receipt_document' } };
+    return {
+      domainId: 'domain.inventory',
+      entityId: 'entity.inventory_item',
+      requestClass: 'DATA_QUERY',
+      jobMatch: 'query.inventory_item.relation_boolean',
+      projection: projection === 'COUNT' ? 'COUNT' : 'LIST',
+      polarity: 'NEGATIVE',
+      relations: [
+        { semanticRelationId: 'relation.inventory_item.manual_document', predicateId: 'predicate.inventory_item.has_manual_record', targetEntityId: 'entity.property_record' },
+        { semanticRelationId: 'relation.inventory_item.receipt_document', predicateId: 'predicate.inventory_item.has_receipt_record', targetEntityId: 'entity.property_record' },
+      ],
+      where: options.documentMode === 'EITHER_MISSING' ? { kind: 'OR', operands: [noManual, noReceipt] } : { kind: 'AND', operands: [noManual, noReceipt] },
+      time: null,
+      fields: [{ fieldId: 'field.inventory_item.name' }],
       requiredSlots: [],
     };
   }
@@ -1426,7 +1453,13 @@ function splitCompoundClauses(rawText: string): {
  */
 export function parseCrossDomainSemanticRequest(
   rawText: string,
-  options?: { readonly dynamicQuotes?: readonly DynamicQuoteCandidate[] },
+  options?: {
+    readonly dynamicQuotes?: readonly DynamicQuoteCandidate[];
+    /** The homeowner's answer to "no manual or receipt": at least one is missing, or both are (a typed clarification option). */
+    readonly documentMode?: 'EITHER_MISSING' | 'BOTH_MISSING';
+    /** The two quotes the homeowner chose to compare (a typed clarification option); resolved against the property's own quotes when the comparison runs. */
+    readonly boundQuoteIds?: readonly [string, string];
+  },
 ): CrossDomainParseResult {
   const trimmed = rawText.trim();
   if (!trimmed) {
@@ -1460,6 +1493,7 @@ export function parseCrossDomainSemanticRequest(
     && !wholeSignals.ids.has('coordinator.neither')
     && wholeSignals.ids.has('relation.inventory_item.manual_document')
     && wholeSignals.ids.has('relation.inventory_item.receipt_document')
+    && !options?.documentMode
   ) {
     return {
       plan: buildEmptyPlan('NONE_FITS', rawText),
@@ -1497,7 +1531,9 @@ export function parseCrossDomainSemanticRequest(
       ? compileClauseSpecFromAnnotations(clauseSignals, {
           priorClaimFacetId: claimFacetId,
           resolvedSubjectHint,
-          matchedQuoteIds: clauseAnnotated.matchedQuoteIds,
+          // The pair the homeowner chose replaces the names matched in the text (it was asked because the text did not pick two).
+          matchedQuoteIds: options?.boundQuoteIds ? [...options.boundQuoteIds] : clauseAnnotated.matchedQuoteIds,
+          documentMode: options?.documentMode,
           elapsedWindow: extractElapsedWindow(clauseTokens),
           clauseWords: new Set(clauseTokens.map((token) => token.normalized)),
         })

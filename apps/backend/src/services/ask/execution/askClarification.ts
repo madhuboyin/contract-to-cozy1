@@ -1,7 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
-import { resolveClarificationChoice } from '../support/clarificationContract';
+import { resolveClarificationChoice, suppliedInputFromPayload } from '../support/clarificationContract';
 import { recordAskCapabilityLifecycle } from '../askCapabilityLifecycle';
 import { finalizeRecoveryActions, restartAfterExpiryCandidates } from '../suggestedActions/recoveryCandidates';
 import { prisma } from '../../../lib/prisma';
@@ -167,8 +167,8 @@ async function submitAskClarificationCore(userId: string, executionId: string, i
     const rawResult = await withAskTimeout(
       executeOperation({
         userId, sessionId: execution.sessionId, executionId: execution.id, message: clarifiedMessage, propertyId: clarifiedPropertyId, operation, deferSemanticValidation: true,
-        // The typed reading the homeowner chose, from the stored option (BOOLEAN_READING): the operation re-applies it to the original message.
-        ...(choice.payload?.kind === 'BOOLEAN_READING' ? { suppliedInput: { clarifiedReading: choice.payload.reading } } : {}),
+        // The typed choice the homeowner made, from the stored option: the operation re-applies it to the original message.
+        ...(suppliedInputFromPayload(choice.payload) ? { suppliedInput: suppliedInputFromPayload(choice.payload) } : {}),
       }),
       controls.executionTimeoutMs,
     );

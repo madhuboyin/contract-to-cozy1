@@ -755,7 +755,10 @@ test('production dataPointReadResult loads live manual/receipt links, canonical 
     const liveAmbiguousQuotes = await dataPointReadResult('user-1', 'prop-ny-1', 'compare these two kitchen contractor quotes');
     assert.equal(liveAmbiguousQuotes.status, 'NEEDS_CLARIFICATION');
     assert.equal(liveAmbiguousQuotes.reasonCode, 'AMBIGUOUS_QUOTE_SELECTION');
-    assert.equal(liveAmbiguousQuotes.parameters.clarification.candidateRecords.length, 3);
+    // The raw cross-domain clarification stays inside crossDomainExecution; parameters.clarification is now the CARD's stored clarification (what a press is checked against).
+    assert.equal(liveAmbiguousQuotes.parameters.crossDomainExecution.clarification.candidateRecords.length, 3);
+    assert.equal(liveAmbiguousQuotes.clarification.options.length, 3, 'three quotes: the three pairs, as buttons');
+    assert.ok(liveAmbiguousQuotes.parameters.clarification.candidateOptions.every((o) => o.payload.kind === 'QUOTE_PAIR'));
 
     const liveNamedQuotes = await dataPointReadResult('user-1', 'prop-ny-1', 'compare Harbor and Northside');
     assert.equal(liveNamedQuotes.status, 'ANSWERED');

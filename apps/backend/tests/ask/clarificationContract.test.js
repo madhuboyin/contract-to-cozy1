@@ -82,9 +82,7 @@ test('PRODUCER did-you-mean and free-text clarifications satisfy the contract', 
 });
 
 // Known violators. This list may only SHRINK: fixing one makes its assertion fail until the entry is removed, and a new violation fails outright.
-const KNOWN_DEFECTS = {
-  crossDomainNegativeOrCard: ['NEEDS_CLARIFICATION_WITHOUT_CARD'],
-};
+const KNOWN_DEFECTS = {};
 
 test('PRODUCER slice "no A or B" card (F1, rebuilt): satisfies the contract, with two typed readings in plain words', () => {
   const r = executeSemanticSlice({ rawText: 'which appliances have no warranty or due maintenance', snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT, auth: SLICE_OWNER_AUTH }).operationResult;
@@ -114,11 +112,16 @@ test('PRODUCER slice card with a shape it cannot label safely asks a plain free-
   }
 });
 
-test('PRODUCER cross-domain "no manual or receipt" clarification (F2): the known defect, exactly', async () => {
+test('PRODUCER cross-domain clarifications (F2, rebuilt): "no manual or receipt" is a real card that satisfies the contract', async () => {
   const execution = await X.executeCrossDomainSnapshot({ rawText: 'which appliances have no manual or receipt', snapshot: buildSeededCrossDomainSnapshot(), role: 'OWNER', propertyAuthorized: true });
   const r = X.buildOperationResultFromCrossDomainExecution(execution);
   assert.equal(r.status, 'NEEDS_CLARIFICATION');
-  assert.deepEqual([...new Set(codes(r))].sort(), [...KNOWN_DEFECTS.crossDomainNegativeOrCard].sort());
+  assert.deepEqual(codes(r), [], 'a question always carries a card, and the card satisfies the contract');
+  assert.equal(r.clarification.options.length, 2);
+});
+
+test('there are no known card defects left: the list is empty and may not grow', () => {
+  assert.deepEqual(KNOWN_DEFECTS, {});
 });
 
 // A new file that builds cards must be audited here before it can land.
