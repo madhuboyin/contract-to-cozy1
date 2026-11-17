@@ -95,6 +95,17 @@ export function humanizePresentationText(text: string): string {
   return text.replace(REGISTERED_TOKEN_PATTERN, (match) => REGISTERED_PRESENTATION_TOKEN_LABELS[match] ?? match);
 }
 
+/**
+ * FR-ANS-6 shared rendering boundary: any bare SCREAMING_SNAKE enum token left in authored copy (a status, a requirement type) is
+ * rendered as plain words. User-recorded identifiers with digits and hyphens (serial and model codes) are not enum tokens and are
+ * left untouched.
+ */
+const ENUM_TOKEN_IN_COPY = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g;
+export function humanizeEnumTokensInCopy(text: string): string {
+  if (!text) return text;
+  return humanizePresentationText(text).replace(ENUM_TOKEN_IN_COPY, (token) => humanizePresentationToken(token));
+}
+
 export function humanizeAskBlockPresentation(block: AskPresentationBlock): AskPresentationBlock {
   const clone = { ...block } as Record<string, unknown>;
   if (typeof clone.title === 'string') {

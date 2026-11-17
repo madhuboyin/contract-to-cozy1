@@ -265,13 +265,13 @@ test('Phase 2A protects dynamic property entities, hides restricted items as mis
   assert.equal(cycleDetected.ok, false);
   assert.equal(cycleDetected.reason, 'TRAVERSAL_CYCLE_DETECTED');
 
-  // 4. Production Ask handler & capability registry wiring (before planShape789 + across QUERY/CAPABILITY/COMMAND)
+  // 4. Production Ask handler & capability registry wiring (across QUERY/CAPABILITY/COMMAND)
   const handlerSource = fs.readFileSync(
     path.join(__dirname, '../../src/services/ask/handlers/dataPointRead.handler.ts'),
     'utf8'
   );
   assert.ok(handlerSource.includes('executeSliceOnProperty'));
-  assert.ok(handlerSource.indexOf('executeSliceOnProperty') < handlerSource.indexOf('planShape789(message)'));
+  assert.ok(handlerSource.indexOf('executeSliceOnProperty') < handlerSource.indexOf('executeCrossDomainOnProperty'));
 
   const capabilityRegistrySource = fs.readFileSync(
     path.join(__dirname, '../../src/services/ask/capabilityHandlerRegistry.ts'),

@@ -40,6 +40,9 @@ test('out-of-domain and generic-only messages are not claimed as in-domain', () 
   assert.equal(inDomainNotUnderstoodResult('what is the weather in paris'), null);
   assert.equal(inDomainNotUnderstoodResult('tell me about my home'), null);
   assert.equal(inDomainNotUnderstoodResult('things'), null);
+  // A bare tax/assessment word is also used for income tax and other non-home topics, so it is not verified home-subject evidence.
+  assert.equal(inDomainNotUnderstoodResult('prepare and file my itemized IRS tax return deductions for depreciation'), null);
+  assert.equal(inDomainNotUnderstoodResult('what is my tax situation'), null);
   assert.equal(inDomainNotUnderstoodResult(''), null);
 });
 

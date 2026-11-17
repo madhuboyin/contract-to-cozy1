@@ -18,7 +18,6 @@ import {
 } from '../legacyGrammarAgreement';
 import { planDataPointQuery } from '../../dataPoint/dataPointQueryPlan';
 import { resolveDataPoint } from '../../dataPoint/dataPointCatalogue';
-import { planShape789 } from '../../dataPoint/dataPointShapes789';
 import {
   ASK_BASIC_READ_FAMILY_MANIFEST_VERSION,
   SELECTED_BASIC_READ_FAMILIES,

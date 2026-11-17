@@ -815,14 +815,49 @@ function executeValidatedSlicePlan(input: {
         };
       });
 
-  const title = projection === 'COUNT'
+  const isWarrantyRelation = facet.relations.some((r) => r.semanticRelationId === 'relation.inventory_item.warranty');
+  const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
+  let title = projection === 'COUNT'
     ? `${matched.length} matching inventory items`
     : matched.length === 1 && projection === 'DETAIL'
       ? `${matched[0].item.name} details`
       : 'Inventory results';
-  const summaryBody = projection === 'COUNT'
+  let summaryBody = projection === 'COUNT'
     ? `Confirmed count: ${matched.length} matching item${matched.length === 1 ? '' : 's'}.`
     : `Found ${matched.length} matching inventory item${matched.length === 1 ? '' : 's'}.`;
+  if (isWarrantyRelation) {
+    // FR-QUERY-3/7 wording: a linked record is not proof of coverage, absence of a link is not proof there is none, and conflicted
+    // or unknown records are named separately instead of being added to the confirmed answer.
+    const negative = facet.polarity === 'NEGATIVE';
+    const linkPhrase = negative ? 'no warranty linked in your home record' : 'a warranty linked in your home record';
+    const n = matched.length;
+    const names = `${matched.slice(0, 10).map(({ item }) => item.name).join('; ')}${n > 10 ? `; and ${n - 10} more` : ''}`;
+    const lines: string[] = [];
+    if (facet.projection === 'EXISTS') {
+      lines.push(n > 0
+        ? `Yes. ${n} ${plural(n, 'item has', 'items have')} ${linkPhrase}.`
+        : conflictedCount > 0 || unknownCount > 0
+          ? 'The recorded conflicts or unknown states could change the answer, so I cannot give a plain yes or no.'
+          : `No. No item has ${linkPhrase}.`);
+    } else if (n === 0) {
+      lines.push(`No inventory item is confirmed as having ${linkPhrase}.`);
+    } else if (projection === 'COUNT') {
+      lines.push(`${n} of your items ${plural(n, 'has', 'have')} ${linkPhrase}.`);
+    } else {
+      lines.push(`${names} ${plural(n, 'has', 'have')} ${linkPhrase}.`);
+    }
+    if (conflictedCount > 0) lines.push(`${conflictedCount} ${plural(conflictedCount, 'item has', 'items have')} conflicting warranty links and ${plural(conflictedCount, 'is', 'are')} shown separately from the confirmed count.`);
+    if (unknownCount > 0) lines.push(`${unknownCount} ${plural(unknownCount, 'item has', 'items have')} an unknown warranty state and ${plural(unknownCount, 'is', 'are')} not counted either way.`);
+    lines.push(negative
+      ? 'This describes links recorded for each item; it does not decide whether warranty terms cover the item.'
+      : 'A linked record does not by itself establish that warranty terms cover the item.');
+    summaryBody = lines.join(' ');
+    title = facet.projection === 'EXISTS'
+      ? (n > 0 ? `Yes, ${plural(n, 'one item has', `${n} items have`)} ${negative ? 'no linked warranty record' : 'a linked warranty record'}` : negative ? 'No item is confirmed without a linked warranty record' : 'No item is confirmed with a linked warranty record')
+      : projection === 'COUNT'
+        ? `${n} ${plural(n, 'item has', 'items have')} ${negative ? 'no linked warranty record' : 'a linked warranty record'}`
+        : negative ? 'Items without a linked warranty record' : 'Items with a linked warranty record';
+  }
 
   const blocks = buildSliceRichPresentation({
     receipt,

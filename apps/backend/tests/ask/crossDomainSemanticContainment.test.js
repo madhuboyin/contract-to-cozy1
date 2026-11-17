@@ -183,7 +183,6 @@ test('unsupported questions remain unmatched rather than selecting a nearby oper
 });
 
 test('the warranty relation has one producer: the typed grammar owns every phrasing the retired legacy recognizer answered', () => {
-  const { planShape789 } = require('../../src/services/ask/dataPoint/dataPointShapes789.ts');
   const expected = [
     ['how many appliances have no warranty?', 'NEGATIVE', 'COUNT'],
     ['provide details of appliances without warranty', 'NEGATIVE', 'DETAIL'],
@@ -196,7 +195,6 @@ test('the warranty relation has one producer: the typed grammar owns every phras
     assert.equal(facet.relations[0].semanticRelationId, 'relation.inventory_item.warranty', prompt);
     assert.equal(facet.polarity, polarity, prompt);
     assert.equal(facet.projection, projection, prompt);
-    assert.equal(planShape789(prompt), null, `${prompt}: no legacy recognizer may also claim this`);
   }
 });
 

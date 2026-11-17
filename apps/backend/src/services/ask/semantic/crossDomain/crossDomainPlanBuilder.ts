@@ -78,6 +78,11 @@ const CROSS_DOMAIN_LEXEME_SPECS: readonly CrossDomainLexemeSpec[] = Object.freez
   { role: 'STATUS', semanticId: 'status.recorded', canonicalLabel: 'recorded', reviewedAliases: ['on file', 'entered', 'listed', 'filled in'] },
   // Service-gap vocabulary ("which appliances have I not serviced in over a year"). Quantities beyond a/an/one/two/three are digits
   // or four/five/ten, the bounded set the retired Shape 8 stale-service recognizer accepted.
+  // Change-over-time vocabulary for the tax series ("how has my property tax changed", "is my tax bill going up"). The retired Shape 7
+  // recognizer owned these words; subjects come from the shared tax entities plus the aliases below.
+  { role: 'ENTITY', semanticId: 'entity.tax_bill', canonicalLabel: 'tax bill', reviewedAliases: ['tax', 'taxes', 'property tax bill'] },
+  { role: 'ENTITY', semanticId: 'entity.tax_assessment', canonicalLabel: 'tax assessment', reviewedAliases: ['assessed', 'assessment', 'assessments', 'property assessment', 'total assessed value', 'assessed value'] },
+  { role: 'PROJECTION', semanticId: 'projection.timeline', canonicalLabel: 'over time', reviewedAliases: ['change', 'changed', 'changes', 'changing', 'trend', 'trends', 'trended', 'over the years', 'year over year', 'going up', 'going down', 'gone up', 'gone down', 'risen', 'rising', 'increase', 'increased', 'increases', 'increasing', 'decrease', 'decreased', 'decreases', 'decreasing', 'dropped', 'history', 'history of'] },
   { role: 'STATUS', semanticId: 'status.serviced', canonicalLabel: 'serviced', reviewedAliases: [] },
   { role: 'STATUS', semanticId: 'status.unserviced', canonicalLabel: 'unserviced', reviewedAliases: [] },
   { role: 'STATUS', semanticId: 'status.never', canonicalLabel: 'never', reviewedAliases: [] },
@@ -596,6 +601,7 @@ function compileClauseSpecFromAnnotations(
     resolvedSubjectHint?: string | null;
     matchedQuoteIds?: readonly string[];
     elapsedWindow?: SemanticTimeConstraint | null;
+    clauseWords?: ReadonlySet<string>;
   } = {},
 ): ClauseSpec | null {
   const has = (id: string) => sig.ids.has(id);
@@ -877,6 +883,31 @@ function compileClauseSpecFromAnnotations(
       fields: [{ fieldId: 'field.home_event.actual_cost' }],
       requiredSlots: [],
     };
+  }
+
+  // Change over time ("how has my property tax changed", "is my assessed value going up"): the tax series on record, oldest first.
+  // An assessment word wins unless the homeowner also says "bill" ("tax assessment" is the assessment); a bare "tax" is the bill.
+  // Comparing two periods ("compare ... to last year") stays with the compare rule below.
+  if (has('projection.timeline') && !has('projection.compare') && !has('time.period.last_year') && !has('time.period.this_year')) {
+    const assessed = has('entity.tax_assessment');
+    const billWord = Boolean(options.clauseWords?.has('bill') || options.clauseWords?.has('bills'));
+    const bill = has('entity.tax_bill');
+    const subject = assessed && !billWord ? 'ASSESSED_VALUE' : bill && !assessed ? 'TAX_BILL' : null;
+    if (subject) {
+      return {
+        domainId: 'domain.ownership_costs_finance',
+        entityId: subject === 'ASSESSED_VALUE' ? 'entity.property_tax_assessment' : 'entity.property_tax_bill',
+        requestClass: 'DATA_QUERY',
+        jobMatch: 'query.property_tax.change_over_time',
+        projection: 'TIMELINE',
+        polarity: 'POSITIVE',
+        relations: [],
+        where: null,
+        time: null,
+        fields: [{ fieldId: subject === 'ASSESSED_VALUE' ? 'field.tax_assessment.total_assessed_value' : 'field.tax_bill.tax_amount' }],
+        requiredSlots: [],
+      };
+    }
   }
 
   // Compare tax bill years
@@ -1388,6 +1419,7 @@ export function parseCrossDomainSemanticRequest(
           resolvedSubjectHint,
           matchedQuoteIds: clauseAnnotated.matchedQuoteIds,
           elapsedWindow: extractElapsedWindow(clauseTokens),
+          clauseWords: new Set(clauseTokens.map((token) => token.normalized)),
         })
       : null;
 

@@ -5,7 +5,6 @@ require('ts-node/register/transpile-only');
 const { parseCrossDomainSemanticRequest } = require('../../src/services/ask/semantic/crossDomain/crossDomainPlanBuilder.ts');
 const { executeCrossDomainSnapshot, buildOperationResultFromCrossDomainExecution } = require('../../src/services/ask/semantic/crossDomain/crossDomainExecutor.ts');
 const { buildSeededCrossDomainSnapshot } = require('../../src/services/ask/semantic/crossDomain/index.ts');
-const { planShape789 } = require('../../src/services/ask/dataPoint/dataPointShapes789.ts');
 const { groundedReadVerdict } = require('../../src/services/ask/support/provisionalRead.ts');
 const { SemanticRequestPlanSchema, ASK_SEMANTIC_PLAN_VERSION } = require('../../src/services/ask/semantic/semanticRequestPlan.ts');
 
@@ -123,8 +122,8 @@ test('a service-gap answer is grounded by an independently parsed plan and a rec
   assert.equal(groundedReadVerdict(question, forged).outcome, 'FAIL');
 });
 
-test('the legacy stale-service recognizer is gone (FR-ONT-8)', () => {
-  for (const prompt of ['Which appliances have I not serviced in over a year?', 'Which appliances have never been serviced?', 'how many items havent been serviced in over 2 years']) {
-    assert.equal(planShape789(prompt), null, prompt);
-  }
+test('the legacy recognizer module is gone and cannot return (FR-ONT-8 forbidden-token guard)', () => {
+  const { validateRetiredRecognizerFamilies } = require('../../src/services/ask/semantic/governance/recognizerRetirementManifest.ts');
+  assert.deepEqual(validateRetiredRecognizerFamilies(), []);
+  assert.equal(require('node:fs').existsSync(require('node:path').join(__dirname, '../../src/services/ask/dataPoint/dataPointShapes789.ts')), false);
 });

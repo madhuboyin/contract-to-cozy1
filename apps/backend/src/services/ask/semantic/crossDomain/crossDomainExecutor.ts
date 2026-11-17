@@ -7,7 +7,7 @@ import {
   type SemanticReceiptEntailmentVerdict,
 } from '../semanticReceiptEntailment';
 import { ASK_SEMANTIC_PLAN_VERSION, type SemanticFacet, type SemanticRequestPlan, type SemanticWhereExpression } from '../semanticRequestPlan';
-import { type SemanticDomainId } from '../governance/semanticOntologyBaseline';
+import { ASK_SEMANTIC_DOMAINS, type SemanticDomainId } from '../governance/semanticOntologyBaseline';
 import {
   buildSliceRichPresentation,
   verifyRichPresentationPopulationEquivalence,
@@ -15,6 +15,8 @@ import {
 } from '../slice/richPresentationAdapter';
 import { prisma } from '../../../../lib/prisma';
 import { DATA_POINT_BY_ID } from '../../dataPoint/dataPointCatalogue';
+import { humanizeEnumTokensInCopy, humanizePresentationToken } from '../containment/presentationHumanizer';
+import { TIME_SERIES_REGISTRY } from '../../dataPoint/queryShapeRegistries';
 import { visibleInventoryItemWhere } from '../../../riskAssetApplicability';
 import { type DynamicPlaceholderEntityCandidate } from '../slice/placeholderSpanMap';
 import { type AskPresentationBlock } from '../../../../productFramework/ask/ask.contract';
@@ -224,6 +226,20 @@ export const INVENTORY_ABSENCE_FIELD_POINT_IDS: Readonly<Record<string, string>>
   'field.inventory_item.last_serviced_on': 'item.lastServicedOn',
 });
 
+/** One tax year of a registered time series (active, non-superseded record). `value` is dollars, null when no amount is recorded. */
+export interface CrossDomainTaxSeriesRow {
+  readonly id: string;
+  readonly propertyId: string;
+  readonly taxYear: number;
+  readonly value: number | null;
+}
+
+/** Registered tax series: semantic field id -> declared time series (the declaration owns entity, column, ordering and period cap). */
+export const TAX_SERIES_FIELD_POINT_IDS: Readonly<Record<string, string>> = Object.freeze({
+  'field.tax_bill.tax_amount': 'taxBill.amount',
+  'field.tax_assessment.total_assessed_value': 'taxAssessment.totalAssessedValue',
+});
+
 export interface CrossDomainSavedResultRecord {
   readonly id: string;
   readonly propertyId: string;
@@ -239,6 +255,8 @@ export interface CrossDomainPropertySnapshot extends SlicePropertySnapshot {
   readonly extendedItems: readonly CrossDomainExtendedItemRecord[];
   /** Present only when the plan needs field-absence reads (`query.inventory_item.field_absence`). */
   readonly inventoryFieldRecords?: readonly CrossDomainInventoryFieldRecord[];
+  /** Present only when the plan needs `query.property_tax.change_over_time`; keyed by declared time-series data point id, oldest year first. */
+  readonly taxSeries?: Readonly<Record<string, readonly CrossDomainTaxSeriesRow[]>>;
   readonly warranties: readonly CrossDomainWarrantyRecord[];
   readonly maintenanceTaskMeta: readonly CrossDomainExtendedMaintenanceTaskMeta[];
   readonly insurancePolicies: readonly CrossDomainInsurancePolicyRecord[];
@@ -276,6 +294,8 @@ export interface CrossDomainFacetExecutionResult {
   readonly receipt: SemanticReadReceipt | null;
   readonly entailment: SemanticReceiptEntailmentVerdict | null;
   readonly presentationEquivalence: SliceRichPresentationEquivalenceReport | null;
+  /** This facet's own homeowner-facing blocks (summary, list, boundary, evidence), already free of internal identifiers. */
+  readonly blocks?: readonly AskPresentationBlock[];
   readonly metrics?: Readonly<Record<string, number | string | boolean | null>>;
 }
 
@@ -352,6 +372,8 @@ function weekWindowYmd(referenceDate: string, timeZone: string): { startYmd: str
   };
 }
 
+const humanizeEnumTokens = humanizeEnumTokensInCopy;
+
 function finalizeReceiptAndPresentation(input: {
   readonly facet: SemanticFacet;
   readonly snapshot: CrossDomainPropertySnapshot;
@@ -371,15 +393,19 @@ function finalizeReceiptAndPresentation(input: {
   readonly entailment: SemanticReceiptEntailmentVerdict;
   readonly equivalence: SliceRichPresentationEquivalenceReport;
   readonly rows: ReadonlyArray<{ readonly id: string; readonly label: string; readonly subtitle?: string }>;
+  readonly blocks: readonly AskPresentationBlock[];
 } {
   const resolvedRecordIds = input.rows.map((r) => r.id);
+  const cleanRows = input.rows.map((r) => ({ id: r.id, label: humanizeEnumTokens(r.label), ...(r.subtitle ? { subtitle: humanizeEnumTokens(r.subtitle) } : {}) }));
+  const cleanTitle = humanizeEnumTokens(input.title);
+  const cleanSummary = humanizeEnumTokens(input.summaryBody);
   const unknownCount = input.unknownCount ?? 0;
   const conflictedCount = input.conflictedCount ?? 0;
   const confirmedCount = resolvedRecordIds.length;
   const displayedCount = input.projection === 'COUNT' ? 0 : resolvedRecordIds.length;
-  const renderedBody = input.projection === 'COUNT' && !new RegExp(`\\b${confirmedCount}\\b`).test(input.summaryBody)
-    ? `${confirmedCount} ${input.summaryBody}`
-    : input.summaryBody;
+  const renderedBody = input.projection === 'COUNT' && !new RegExp(`\\b${confirmedCount}\\b`).test(cleanSummary)
+    ? `${confirmedCount} ${cleanSummary}`
+    : cleanSummary;
 
   const receipt = buildSemanticReadReceipt({
     facetId: input.facet.id,
@@ -402,9 +428,9 @@ function finalizeReceiptAndPresentation(input: {
 
   const blocks = buildSliceRichPresentation({
     receipt,
-    title: input.title,
+    title: cleanTitle,
     summaryBody: renderedBody,
-    rows: input.projection === 'COUNT' ? [] : input.rows.map((r) => ({ id: r.id, label: r.label, subtitle: r.subtitle })),
+    rows: input.projection === 'COUNT' ? [] : cleanRows.map((r) => ({ id: r.id, label: r.label, subtitle: r.subtitle })),
   });
 
   const entailment = verifySemanticReadReceiptEntailment({
@@ -424,7 +450,7 @@ function finalizeReceiptAndPresentation(input: {
     throw new Error(`Wave presentation equivalence failed (${input.facet.evidence.jobMatch}): ${equivalence.reasons.join(', ')}`);
   }
 
-  return { receipt, entailment, equivalence, rows: input.rows };
+  return { receipt, entailment, equivalence, rows: cleanRows, blocks };
 }
 
 /**
@@ -704,6 +730,7 @@ function executeNewStackFacet(
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
     };
   }
 
@@ -737,6 +764,7 @@ function executeNewStackFacet(
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
     };
   }
 
@@ -797,6 +825,79 @@ function executeNewStackFacet(
       receipt: sub.receipt,
       entailment: sub.entailment,
       presentationEquivalence: sub.presentationEquivalence,
+      blocks: sub.operationResult.blocks,
+    };
+  }
+
+  // Change over time ("how has my property tax changed"): the declared time series, one active record per tax year, oldest first.
+  if (job === 'query.property_tax.change_over_time') {
+    const fieldId = facet.fields[0]?.fieldId ?? '';
+    const pointId = TAX_SERIES_FIELD_POINT_IDS[fieldId] ?? '';
+    const point = DATA_POINT_BY_ID.get(pointId);
+    const blocked = (summary: string, extraRedacted: readonly string[] = []): CrossDomainFacetExecutionResult => ({
+      facetId: facet.id, owner, status: 'BLOCKED', summary, recordIds: [], missingSlots: [],
+      redactedFieldIds: [...redactedFieldIds, ...extraRedacted], receipt: null, entailment: null, presentationEquivalence: null,
+    });
+    if (!point) return blocked('That tax history is not one I can show yet.');
+    const requiredRole: AskUserRole = point.audience === 'OWNER' ? 'OWNER' : point.audience === 'CONTRIBUTOR' ? 'EDITOR' : 'VIEWER';
+    if (!canSeeRole(role, requiredRole)) return blocked(`${point.label} is only shown to the home’s ${requiredRole === 'OWNER' ? 'owner' : 'owner and contributors'}, so I can't show how it changed.`, [fieldId]);
+    const rawSeries = snapshot.taxSeries?.[pointId];
+    if (!rawSeries) return blocked('I could not load your tax history right now, so I will not say how it changed.');
+
+    const label = pointId === 'taxAssessment.totalAssessedValue' ? 'total assessed value' : 'property tax bill';
+    const money = (v: number) => `$${v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+    const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
+    const series = rawSeries.filter((row) => row.propertyId === snapshot.propertyId).sort((a, b) => a.taxYear - b.taxYear || a.id.localeCompare(b.id));
+    const known = series.filter((row): row is CrossDomainTaxSeriesRow & { value: number } => row.value !== null);
+    const lines: string[] = [];
+    let title: string;
+    if (series.length === 0) {
+      title = `No ${label} history recorded`;
+      lines.push(`I don’t have any active ${label} records for this home, so there is no change to show.`);
+    } else if (known.length < 2) {
+      title = `Only ${known.length === 1 ? 'one' : 'no'} ${label} on record`;
+      lines.push(`I have ${series.length} tax ${plural(series.length, 'year', 'years')} on record${known.length === 1 ? `: ${known[0].taxYear} was ${money(known[0].value)}` : ' with no amount'}. I need at least two years with an amount to show a change.`);
+    } else {
+      const first = known[0];
+      const last = known[known.length - 1];
+      const diff = last.value - first.value;
+      const pct = first.value ? (diff / first.value) * 100 : null;
+      title = `${label[0].toUpperCase()}${label.slice(1)}: ${diff === 0 ? 'unchanged' : diff > 0 ? 'up' : 'down'} since ${first.taxYear}`;
+      lines.push(`${known.map((row, i) => `${row.taxYear}: ${money(row.value)}${i ? ` (${row.value - known[i - 1].value >= 0 ? '+' : '−'}${money(Math.abs(row.value - known[i - 1].value))})` : ''}`).join('; ')}.`);
+      lines.push(`From ${first.taxYear} to ${last.taxYear} it ${diff === 0 ? 'did not change' : `${diff > 0 ? 'rose' : 'fell'} by ${money(Math.abs(diff))}${pct === null ? '' : ` (${Math.abs(pct).toFixed(1)}%)`}`}.`);
+      if (known.length < series.length) lines.push(`${series.length - known.length} ${plural(series.length - known.length, 'year has', 'years have')} no amount recorded and ${plural(series.length - known.length, 'is', 'are')} left out.`);
+      lines.push('Based on the active tax records on file, one per tax year.');
+    }
+    // Years with no recorded amount are an unknown population, never folded into the change.
+    const rows = known.map((row) => ({ id: row.id, label: String(row.taxYear), subtitle: money(row.value) }));
+    const summary = lines.join(' ');
+    const finalized = finalizeReceiptAndPresentation({
+      facet,
+      snapshot,
+      role,
+      projection: 'TIMELINE',
+      operationAdapter: adapterId,
+      sourceType: pointId === 'taxAssessment.totalAssessedValue' ? 'PropertyTaxAssessmentRecord' : 'PropertyTaxBillRecord',
+      predicateIds: ['predicate.property_tax.history'],
+      rows,
+      unknownCount: series.length - known.length,
+      title,
+      summaryBody: summary,
+      variantId: 'variant.property_tax_history',
+    });
+    return {
+      facetId: facet.id,
+      owner,
+      status: 'EXECUTED',
+      summary,
+      recordIds: rows.map((r) => r.id),
+      rows: finalized.rows,
+      missingSlots: [],
+      redactedFieldIds,
+      receipt: finalized.receipt,
+      entailment: finalized.entailment,
+      presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
     };
   }
 
@@ -893,6 +994,7 @@ function executeNewStackFacet(
         receipt: finalized.receipt,
         entailment: finalized.entailment,
         presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
       };
     }
 
@@ -938,6 +1040,7 @@ function executeNewStackFacet(
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
     };
   }
 
@@ -979,6 +1082,7 @@ function executeNewStackFacet(
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
     };
   }
 
@@ -1014,6 +1118,7 @@ function executeNewStackFacet(
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
     };
   }
 
@@ -1052,6 +1157,7 @@ function executeNewStackFacet(
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
     };
   }
 
@@ -1084,6 +1190,7 @@ function executeNewStackFacet(
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
     };
   }
 
@@ -1114,7 +1221,7 @@ function executeNewStackFacet(
         );
         for (const reqType of claim.requiredDocumentTypes) {
           if (!linkedTypes.has(reqType)) {
-            missingRows.push({ id: `${claim.id}:${reqType}`, label: `${claim.title}: missing ${reqType}` });
+            missingRows.push({ id: `${claim.id}:${reqType}`, label: `${claim.title}: missing ${humanizePresentationToken(reqType)}` });
           }
         }
       }
@@ -1144,6 +1251,7 @@ function executeNewStackFacet(
         receipt: finalized.receipt,
         entailment: finalized.entailment,
         presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
       };
     }
 
@@ -1177,6 +1285,7 @@ function executeNewStackFacet(
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
     };
   }
 
@@ -1195,7 +1304,7 @@ function executeNewStackFacet(
     if (restricted) redactedFieldIds.push('field.home_event.actual_cost');
     const summary = restricted
       ? 'Financial repair spend redacted for VIEWER role.'
-      : `Total repair spend in ${targetYear} (${snapshot.timezone}): $${(totalCents / 100).toFixed(2)} across ${events.length} repair event(s).`;
+      : `Total repair spend in ${targetYear}: $${(totalCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} across ${events.length} ${events.length === 1 ? 'repair' : 'repairs'}.`;
     const rows = events.map((e) => ({ id: e.id, label: e.title }));
     const finalized = finalizeReceiptAndPresentation({
       facet,
@@ -1222,6 +1331,7 @@ function executeNewStackFacet(
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
       metrics: { totalRepairSpendCents: restricted ? null : totalCents, targetYear },
     };
   }
@@ -1262,6 +1372,7 @@ function executeNewStackFacet(
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
       metrics: { deltaCents },
     };
   }
@@ -1295,6 +1406,7 @@ function executeNewStackFacet(
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
     };
   }
 
@@ -1377,6 +1489,7 @@ function executeNewStackFacet(
         receipt: finalized.receipt,
         entailment: finalized.entailment,
         presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
         metrics: ownRentResult
           ? {
               monthlyRentCents: slots!.monthlyRentCents,
@@ -1451,6 +1564,7 @@ function executeNewStackFacet(
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
       metrics: status === 'EXECUTED' && refiResult
         ? {
             currentRateBps: slots!.currentRateBps,
@@ -1496,6 +1610,7 @@ function executeNewStackFacet(
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
     };
   }
 
@@ -1536,6 +1651,7 @@ function executeNewStackFacet(
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
       metrics: { sourceAvailable, freshness },
     };
   }
@@ -1569,6 +1685,7 @@ function executeNewStackFacet(
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
     };
   }
 
@@ -1606,6 +1723,7 @@ function executeNewStackFacet(
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
     };
   }
 
@@ -1638,6 +1756,7 @@ function executeNewStackFacet(
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
     };
   }
 
@@ -1693,6 +1812,7 @@ function executeNewStackFacet(
       receipt,
       entailment,
       presentationEquivalence: equivalence,
+      blocks,
       metrics: { confirmedNeedsCount, unknownCount },
     };
   }
@@ -1759,6 +1879,7 @@ function executeNewStackFacet(
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
       metrics: {
         deltaCents: delta,
         candidateCount: matchingQuotes.length,
@@ -1807,6 +1928,7 @@ function executeNewStackFacet(
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
     };
   }
 
@@ -2226,6 +2348,7 @@ export async function loadCrossDomainPropertySnapshot(
   );
   const needWarranties = hasDomain('domain.warranties_coverage') || hasJob('query.warranty.filter');
   const needInventoryFields = hasJob('query.inventory_item.field_absence', 'query.inventory_item.service_gap');
+  const needTaxSeries = hasJob('query.property_tax.change_over_time');
   const needDocuments = (
     hasDomain('domain.inventory')
     || hasDomain('domain.documents_records')
@@ -2282,6 +2405,7 @@ export async function loadCrossDomainPropertySnapshot(
     refinanceScenarioRow,
     refinanceOppRow,
     inventoryFieldRows,
+    taxSeriesRows,
   ] = await Promise.all([
     slicePromise,
     typeof prismaAny.property?.findUnique === 'function'
@@ -2472,6 +2596,27 @@ export async function loadCrossDomainPropertySnapshot(
             ...Object.fromEntries(Object.values(INVENTORY_ABSENCE_FIELD_POINT_IDS).map((pointId) => [DATA_POINT_BY_ID.get(pointId)!.field, true])),
           },
         })
+      : Promise.resolve(null),
+    needTaxSeries
+      ? Promise.all(TIME_SERIES_REGISTRY.map(async (declaration) => {
+          const delegateName = declaration.historyEntity === 'PropertyTaxBillRecord' ? 'propertyTaxBillRecord' : 'propertyTaxAssessmentRecord';
+          const delegate = prismaAny[delegateName];
+          const column = DATA_POINT_BY_ID.get(declaration.dataPointId)!.field;
+          if (typeof delegate?.findMany !== 'function') return [declaration.dataPointId, null] as const;
+          // Declared ordering and dedup: the latest `maxPeriods` active, non-superseded records, one per tax year, oldest first.
+          const rows: Array<any> = await delegate.findMany({
+            where: { propertyId, status: 'ACTIVE', supersededById: null },
+            select: { id: true, propertyId: true, taxYear: true, [column]: true },
+            orderBy: [{ taxYear: 'desc' }, { id: 'asc' }],
+            take: declaration.maxPeriods,
+          });
+          return [declaration.dataPointId, rows.reverse().map((row) => ({
+            id: String(row.id),
+            propertyId: String(row.propertyId ?? propertyId),
+            taxYear: Number(row.taxYear),
+            value: row[column] === null || row[column] === undefined ? null : typeof row[column] === 'object' && 'toNumber' in row[column] ? (row[column] as { toNumber(): number }).toNumber() : Number(row[column]),
+          }))] as const;
+        })).then((entries) => Object.fromEntries(entries.filter(([, rows]) => rows !== null)))
       : Promise.resolve(null),
   ]);
 
@@ -2700,6 +2845,7 @@ export async function loadCrossDomainPropertySnapshot(
     timezone: propertyTimezone,
     closingDateIso,
     extendedItems,
+    ...(taxSeriesRows ? { taxSeries: taxSeriesRows as Record<string, CrossDomainTaxSeriesRow[]> } : {}),
     ...(inventoryFieldRows ? {
       inventoryFieldRecords: (inventoryFieldRows as Array<any>).map((row) => ({
         id: String(row.id),
@@ -2889,7 +3035,7 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
               id: candidate.id,
               title: candidate.label,
               ...(candidate.subtitle ? { description: candidate.subtitle } : {}),
-              meta: ['domain.projects_quotes_vendors'],
+              meta: [] as string[],
             })),
           },
         ],
@@ -2948,62 +3094,57 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
   }
 
   const primaryReceipt = execution.facetResults.find((f) => f.receipt !== null)?.receipt ?? null;
-  const blocks: AskPresentationBlock[] = [
-    {
+  const domainTitle = (domainId: string): string => ASK_SEMANTIC_DOMAINS.find((domain) => domain.domainId === domainId)?.title ?? 'Your home record';
+  const blocks: AskPresentationBlock[] = [];
+
+  const onlyFacet = execution.facetResults.length === 1 ? execution.facetResults[0] : null;
+  if (onlyFacet?.blocks && onlyFacet.blocks.length > 0) {
+    // A single answered facet owns its complete, homeowner-facing presentation (its answer variant id, summary wording, rows with their
+    // state badges, conflict/unknown boundary and a plain provenance line). The wrapper must not rebuild it with internal ids.
+    blocks.push(...onlyFacet.blocks);
+  } else {
+    blocks.push({
       type: 'SUMMARY',
-      // Preserve the receipt's declared answer variant at the final Ask
-      // boundary. The provisional delivery gate verifies this identity;
-      // replacing it with a generic cross-domain id made otherwise valid
-      // warranty COUNT/DETAIL answers fail entailment and get withheld.
+      // Preserve the receipt's declared answer variant at the final Ask boundary. The provisional delivery gate verifies this identity.
       id: primaryReceipt?.answerVariantId ?? 'cross-domain-summary',
-      title: execution.facetResults.length > 1 ? 'Cross-domain answer' : 'Property answer',
-      body: execution.answer,
+      title: execution.facetResults.length > 1 ? 'Your answers' : 'Your answer',
+      body: humanizeEnumTokens(execution.answer),
       tone: execution.status === 'PARTIAL' ? 'CAUTION' : 'DEFAULT',
       actions: [],
-    },
-  ];
-
-  const listSections = execution.facetResults
-    .filter((f) => f.recordIds.length > 0 && f.receipt && f.receipt.projection !== 'COUNT')
-    .map((facetResult) => {
-      const rowById = new Map((facetResult.rows ?? []).map((row) => [row.id, row]));
-      return {
-        id: `section-${facetResult.facetId}`,
-        title: facetResult.owner.domainId,
-        count: facetResult.recordIds.length,
-        items: facetResult.recordIds.map((id) => {
-          const row = rowById.get(id);
-          return {
-            id,
-            title: row?.label && row.label.trim().length > 0 ? row.label : id,
-            ...(row?.subtitle ? { description: row.subtitle } : {}),
-            meta: [facetResult.owner.adapterId],
-          };
-        }),
-      };
     });
-
-  if (listSections.length > 0) {
+    const listSections = execution.facetResults
+      .filter((f) => f.recordIds.length > 0 && f.receipt && f.receipt.projection !== 'COUNT')
+      .map((facetResult) => {
+        const rowById = new Map((facetResult.rows ?? []).map((row) => [row.id, row]));
+        return {
+          id: `section-${facetResult.facetId}`,
+          title: domainTitle(facetResult.owner.domainId),
+          count: facetResult.recordIds.length,
+          items: facetResult.recordIds.map((id) => {
+            const row = rowById.get(id);
+            return {
+              id,
+              title: row?.label && row.label.trim().length > 0 ? row.label : 'Record',
+              ...(row?.subtitle ? { description: row.subtitle } : {}),
+              meta: [] as string[],
+            };
+          }),
+        };
+      });
+    if (listSections.length > 0) {
+      blocks.push({ type: 'GROUPED_LIST', id: 'cross-domain-grouped-list', title: 'Matched records', sections: listSections, actions: [], filters: [] });
+    }
     blocks.push({
-      type: 'GROUPED_LIST',
-      id: 'cross-domain-grouped-list',
-      title: 'Matched records',
-      sections: listSections,
-      actions: [],
-      filters: [],
+      type: 'EVIDENCE',
+      id: 'cross-domain-evidence',
+      title: 'Where this comes from',
+      items: execution.facetResults.map((facetResult) => ({
+        label: 'Your home record',
+        source: domainTitle(facetResult.owner.domainId),
+        observedAt: facetResult.receipt?.provenance.observedAt ?? new Date().toISOString(),
+      })),
     });
   }
-
-  blocks.push({
-    type: 'EVIDENCE',
-    id: 'cross-domain-evidence',
-    title: 'Semantic execution provenance',
-    items: execution.facetResults.map((facetResult) => ({
-      label: facetResult.owner.adapterId,
-      source: facetResult.owner.domainId,
-      observedAt: facetResult.receipt?.provenance.observedAt ?? new Date().toISOString(),
-    })),
-  });
 
   return {
     status: execution.status === 'PARTIAL' ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',

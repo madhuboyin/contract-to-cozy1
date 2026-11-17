@@ -178,7 +178,7 @@ const DOMAIN_SCOPE_METADATA: Readonly<Record<SemanticDomainId, DomainScopeMetada
     legacyDisposition: 'RETIRED_INTO_SEMANTIC_STACK',
   },
   'domain.ownership_costs_finance': {
-    supportedFamilies: ['finance.repair_spend_aggregate', 'finance.tax_bill_yoy_compare', 'finance.unpaid_tax_bills', 'finance.own_rent_break_even', 'finance.refinance_break_even'],
+    supportedFamilies: ['finance.repair_spend_aggregate', 'finance.tax_bill_yoy_compare', 'finance.tax_change_over_time', 'finance.unpaid_tax_bills', 'finance.own_rent_break_even', 'finance.refinance_break_even'],
     excludedFamilies: ['personalized_tax_filing_advice'],
     legacyDisposition: 'RETIRED_INTO_SEMANTIC_STACK',
   },
@@ -272,6 +272,7 @@ export const DOMAIN_ROLLOUT_MANIFEST: readonly DomainRolloutDefinition[] = Objec
     registeredJobIds: [
       'query.home_event.repair_spend_aggregate',
       'query.property_tax_bill.compare_years',
+      'query.property_tax.change_over_time',
       'query.property_tax_bill.unpaid',
       'job.finance.own_rent_break_even',
       'job.finance.refinance_break_even',

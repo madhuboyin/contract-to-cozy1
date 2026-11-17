@@ -1,6 +1,6 @@
 import type { AskPresentationBlock } from '../../../../productFramework/ask/ask.contract';
 import type { SemanticReadReceipt } from '../semanticExecutionReceipt';
-import { humanizePresentationText, humanizePresentationToken } from '../containment/presentationHumanizer';
+import { humanizeEnumTokensInCopy, humanizePresentationText, humanizePresentationToken } from '../containment/presentationHumanizer';
 
 export interface SlicePresentationRow {
   readonly id: string;
@@ -38,8 +38,8 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
     {
       type: 'SUMMARY',
       id: receipt.answerVariantId,
-      title: humanizePresentationText(input.title),
-      body: humanizePresentationText(input.summaryBody),
+      title: humanizeEnumTokensInCopy(input.title),
+      body: humanizeEnumTokensInCopy(input.summaryBody),
       tone: receipt.population.conflictedCount > 0 ? 'CAUTION' : 'DEFAULT',
       actions: [],
     },
@@ -57,7 +57,7 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
     blocks.push({
       type: 'GROUPED_LIST',
       id: `${receipt.answerVariantId}-list`,
-      title: humanizePresentationText(input.title),
+      title: humanizeEnumTokensInCopy(input.title),
       description: `Showing ${rows.length} of ${receipt.population.totalMatchCount} confirmed matches`,
       sections: [...grouped.entries()].map(([groupTitle, groupRows], index) => ({
         id: `${receipt.answerVariantId}-section-${index + 1}`,
@@ -65,9 +65,9 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
         count: groupRows.length,
         items: groupRows.map((row) => ({
           id: row.id,
-          title: row.label,
+          title: humanizeEnumTokensInCopy(row.label),
           meta: [],
-          subtitle: row.subtitle ? humanizePresentationText(row.subtitle) : undefined,
+          subtitle: row.subtitle ? humanizeEnumTokensInCopy(row.subtitle) : undefined,
           badge: row.stateCode
             ? humanizePresentationToken(row.stateCode)
             : row.badgeLabel
@@ -91,14 +91,16 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
     });
   }
 
+  // Provenance shown to the homeowner names the record set in plain words. Predicate and adapter ids stay in the receipt (audit
+  // evidence), never in answer copy (FR-ANS-6).
   blocks.push({
     type: 'EVIDENCE',
     id: `${receipt.answerVariantId}-evidence`,
-    title: 'Grounded semantic evidence',
+    title: 'Where this comes from',
     items: [
       {
-        label: `Predicates: ${receipt.predicateIds.join(', ')}`,
-        source: receipt.provenance.sourceType,
+        label: 'Your home record',
+        source: humanizePresentationToken(receipt.provenance.sourceType),
         observedAt: receipt.provenance.observedAt,
       },
     ],
@@ -164,7 +166,8 @@ export function verifyRichPresentationPopulationEquivalence(
   const evidence = blocks.find((block) => block.type === 'EVIDENCE');
   if (!evidence || evidence.type !== 'EVIDENCE') {
     reasons.push('missing_evidence_block');
-  } else if (!evidence.items.some((item) => item.source === receipt.provenance.sourceType)) {
+  } else if (!evidence.items.some((item) => item.source === receipt.provenance.sourceType || item.source === humanizePresentationToken(receipt.provenance.sourceType))) {
+    // The audit identity stays in the receipt; the rendered evidence names the same record set in plain words (FR-ANS-6).
     reasons.push('provenance_source_mismatch');
   }
 

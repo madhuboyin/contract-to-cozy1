@@ -573,7 +573,6 @@ export const ASK_RECOGNIZER_RETIREMENT_MANIFEST: readonly RecognizerInventoryEnt
       'src/services/ask/dataPoint/dataPointQueryPlan.ts',
       'src/services/ask/dataPoint/dataPointQueryRunner.ts',
       'src/services/ask/dataPoint/dataPointReader.ts',
-      'src/services/ask/dataPoint/dataPointShapes789.ts',
       'src/services/ask/dataPoint/queryShapeRegistries.ts',
     ],
     exportedSymbols: [
@@ -582,7 +581,7 @@ export const ASK_RECOGNIZER_RETIREMENT_MANIFEST: readonly RecognizerInventoryEnt
       'DATA_POINT_DEFINITIONS',
       'QUERY_SHAPE_REGISTRIES',
     ],
-    liveItemCount: 217,
+    liveItemCount: 203,
     affectedDomains: [
       'domain.property_profile',
       'domain.inventory',
@@ -1064,6 +1063,18 @@ export const ASK_RETIRED_RECOGNIZER_FAMILIES: readonly RetiredRecognizerFamily[]
     successor: 'cross-domain grammar rule + executor job query.inventory_item.service_gap over the registered last-service field, with the new ELAPSED_WINDOW time constraint (plan schema 1.4.0) and a bounded lexical window recognizer; vocabulary in the generated cross-domain lexicon',
     parityEvidence: 'Over 17,680 generated phrasings (8 leads x 5 nouns x 15 verb forms x 17 windows, with and without a question mark) the legacy recognizer answered 10,880; the typed grammar answers 10,080 with an identical window (0 window mismatches) and 1,120 the legacy planner refused. The 800 it does not answer are "have not got serviced" (not a real phrasing) and the legacy quirk of reading "never serviced in the last six months" / "...in over a decade" as plain "never" because the window had no parseable quantity; the grammar refuses to guess those. Known differences: the window is judged on whole dates in the property timezone (the legacy used the current instant), items with no service date are a separate unknown population when a window is asked (the legacy folded them into the total), item columns are read through the visible-item filter, and the legacy 100-row cap is gone.',
     forbiddenTokens: ['shape: \'STALE_SERVICE\'', 'STALE_SERVICE\''],
+  },
+  {
+    familyId: 'recognizer.retired.property_tax_time_series_shape7',
+    retiredOn: '2026-11-16',
+    formerSources: [
+      'src/services/ask/dataPoint/dataPointShapes789.ts (the whole module: the Shape 7 TIME_SERIES planner and its change-over-time regex, runShape789, shapePointIds)',
+      'src/services/ask/handlers/dataPointRead.handler.ts (shape789Result renderer and the planShape789 call site)',
+      'src/services/ask/dataPoint/dataPointQueryPlan.ts, support/provisionalRead.ts and the legacy-vs-grammar comparison (their planShape789 / SHAPE_789 producer hooks)',
+    ],
+    successor: 'cross-domain grammar rule + executor job query.property_tax.change_over_time (projection TIMELINE) over the declared time series (TIME_SERIES_REGISTRY: entity, column, ordering, supersession exclusion and period cap), vocabulary in the generated cross-domain lexicon',
+    parityEvidence: 'Over 1,128 generated phrasings (8 leads x 7 subjects x 10 change verbs, with and without a question mark, plus 8 fixed rows) the legacy recognizer answered 961; the typed grammar answers 959 of them with the identical subject (tax bill vs assessed value; 0 subject mismatches). The other 2 are "compare my property tax to last year", which the existing two-period compare job already owned in production because the cross-domain executor runs before the legacy path. All 959 reach the semantic entry (CROSS_DOMAIN_PLAN_MATCH) identically before and after deletion. The answer wording is preserved; years with no recorded amount are now an unknown population in the receipt. This is the last Shape 7-9 recognizer; the module is deleted.',
+    forbiddenTokens: ['planShape789', 'runShape789', 'shapePointIds', 'shape: \'TIME_SERIES\''],
   },
 ]);
 

@@ -6,7 +6,6 @@ import { resolveAskRoutingCascade } from '../../askRoutingCascade';
 import { loadAskHandlerManifest, validateAskRuntimeRegistration } from '../../askRuntimeBootstrap';
 import { resolveDataPoint } from '../../dataPoint/dataPointCatalogue';
 import { planDataPointQuery } from '../../dataPoint/dataPointQueryPlan';
-import { planShape789 } from '../../dataPoint/dataPointShapes789';
 import { executeOperationCore } from '../../execution/executeOperation';
 import { ASK_ARTIFACT_TYPE_REGISTRY } from '../../governance/askArtifactTypeRegistry';
 import { ASK_SAVED_TYPE_READERS } from '../../saved/savedTypeReaders';
@@ -1421,7 +1420,6 @@ export async function runEndToEndEvaluation(options: {
     // relation, polarity, projection, material filters, and required slots (FR-EVAL-3 #29).
     legacyVsGrammarTotal += 1;
     const legacyOp = resolveAskOperation(c.prompt);
-    const shapePlan = planShape789(c.prompt);
     const queryPlanOutcome = planDataPointQuery(c.prompt, new Date('2026-11-15T00:00:00Z'), 'America/New_York');
     const pointMatch = resolveDataPoint(c.prompt);
     const detFacet = parseDeterministicSemanticRequest(c.prompt);
@@ -1448,7 +1446,6 @@ export async function runEndToEndEvaluation(options: {
       const comparison = evaluateLegacyVsSemanticGrammarAgreement({
         prompt: c.prompt,
         legacyOperationId: legacyOp.operationId,
-        legacyShapePlan: shapePlan,
         legacyQueryEntity: queryPlanOutcome.kind === 'PLAN' ? queryPlanOutcome.plan.template.entity : null,
         legacyQueryProjection: queryPlanOutcome.kind === 'PLAN'
           ? (queryPlanOutcome.plan.shape === 'AGGREGATE' && queryPlanOutcome.plan.aggregate?.fn === 'COUNT'

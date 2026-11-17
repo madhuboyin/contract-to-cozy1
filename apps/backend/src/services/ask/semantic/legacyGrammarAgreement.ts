@@ -1,4 +1,3 @@
-import type { Shape789Plan } from '../dataPoint/dataPointShapes789';
 import { parseDeterministicSemanticRequest } from './deterministicSemanticParser';
 import type { SemanticFacet, SemanticRequestPlan } from './semanticRequestPlan';
 
@@ -125,7 +124,6 @@ export function savedResultsGrammarAgreement(
 export interface LegacySemanticComparisonInput {
   readonly prompt: string;
   readonly legacyOperationId: string;
-  readonly legacyShapePlan?: Shape789Plan | null;
   readonly legacyQueryEntity?: string | null;
   readonly legacyQueryProjection?: 'DETAIL' | 'LIST' | 'COUNT' | 'EXISTS' | null;
   readonly legacyPointEntity?: string | null;
@@ -144,7 +142,7 @@ export interface LegacySemanticComparisonInput {
 
 export interface LegacySemanticComparisonOutcome {
   readonly status: 'AGREED' | 'DISAGREED_COLLISION' | 'GRAMMAR_EXPANDED' | 'BOTH_UNMATCHED';
-  readonly matchedLegacyProducer: 'SHAPE_789' | 'QUERY_PLAN' | 'DATA_POINT' | 'OPERATION_ROUTER' | 'NONE';
+  readonly matchedLegacyProducer: 'QUERY_PLAN' | 'DATA_POINT' | 'OPERATION_ROUTER' | 'NONE';
   readonly dimensionsCompared: readonly string[];
   readonly mismatches: readonly string[];
   readonly reasonCode: string;
@@ -323,9 +321,7 @@ export function evaluateLegacyVsSemanticGrammarAgreement(
   input: LegacySemanticComparisonInput,
 ): LegacySemanticComparisonOutcome {
   const matchedLegacyProducer: LegacySemanticComparisonOutcome['matchedLegacyProducer'] =
-    input.legacyShapePlan
-      ? 'SHAPE_789'
-      : input.legacyQueryEntity
+    input.legacyQueryEntity
         ? 'QUERY_PLAN'
         : input.legacyPointEntity
           ? 'DATA_POINT'
@@ -365,16 +361,7 @@ export function evaluateLegacyVsSemanticGrammarAgreement(
   const normalizedDomain = canonicalAgreementDomain(input.typedDomainId);
   const normalizedSubjects = input.typedSubjectEntityIds.map(canonicalAgreementSubject);
 
-  if (matchedLegacyProducer === 'SHAPE_789' && input.legacyShapePlan) {
-    // The warranty-relation shape was retired (FR-ONT-8): the typed grammar is its sole producer, so only the
-    // time-series, absence and stale-service shapes remain as legacy SHAPE_789 candidates.
-    if (normalizedDomain && normalizedDomain !== 'domain.ownership_costs_finance') {
-      mismatches.push(`domain:${input.typedDomainId}!==domain.ownership_costs_finance`);
-    }
-    if (input.typedProjection && input.typedProjection !== 'TIMELINE') {
-      mismatches.push(`projection:${input.typedProjection}!==TIMELINE`);
-    }
-    } else if (matchedLegacyProducer === 'QUERY_PLAN' || matchedLegacyProducer === 'DATA_POINT') {
+  if (matchedLegacyProducer === 'QUERY_PLAN' || matchedLegacyProducer === 'DATA_POINT') {
     const prismaEntity = input.legacyQueryEntity ?? input.legacyPointEntity ?? '';
     const expectedSubject = PRISMA_ENTITY_TO_BASIC_READ_SUBJECT[prismaEntity];
     const expectedDomains = ENTITY_TO_EXPECTED_DOMAINS[prismaEntity] ?? [];

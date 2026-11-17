@@ -11,7 +11,6 @@ const {
 const { buildSeededCrossDomainSnapshot } = require('../../src/services/ask/semantic/crossDomain/index.ts');
 const { ABSENCE_REQUIREMENT_REGISTRY } = require('../../src/services/ask/dataPoint/queryShapeRegistries.ts');
 const { DATA_POINT_BY_ID } = require('../../src/services/ask/dataPoint/dataPointCatalogue.ts');
-const { planShape789 } = require('../../src/services/ask/dataPoint/dataPointShapes789.ts');
 
 const JOB = 'query.inventory_item.field_absence';
 const parse = (prompt) => parseCrossDomainSemanticRequest(prompt).plan;
@@ -137,22 +136,8 @@ test('every natural phrasing built from the absence registry vocabulary resolves
   assert.ok(checked >= 30);
 });
 
-test('the legacy absence recognizer is gone: the shape planner no longer claims these questions (FR-ONT-8)', () => {
-  for (const prompt of ['Which appliances have no serial number recorded?', 'How many appliances are missing a purchase date?', 'Which items have no model number on file?', 'Which items have no replacement cost recorded?']) {
-    assert.equal(planShape789(prompt), null, prompt);
-  }
-});
-
-test('a field-absence answer is grounded by an independently parsed grammar plan, and a forged receipt is withheld (provisional-read gate)', async () => {
-  const { groundedReadVerdict } = require('../../src/services/ask/support/provisionalRead.ts');
-  const question = 'Which appliances have no serial number recorded?';
-  const operationResult = buildOperationResultFromCrossDomainExecution(await run(question));
-  assert.ok(operationResult.parameters.semanticExecutionReceipt, 'the executor must attach its typed receipt');
-  assert.equal(groundedReadVerdict(question, operationResult).outcome, 'PASS');
-
-  // The same receipt cannot ground a different question (projection and facet come from the question's own grammar plan).
-  assert.equal(groundedReadVerdict('how many appliances have no serial number recorded', operationResult).outcome, 'FAIL');
-  const forged = structuredClone(operationResult);
-  forged.parameters.semanticExecutionReceipt.population.confirmedCount = 99;
-  assert.equal(groundedReadVerdict(question, forged).outcome, 'FAIL');
+test('the legacy recognizer module is gone and cannot return (FR-ONT-8 forbidden-token guard)', () => {
+  const { validateRetiredRecognizerFamilies } = require('../../src/services/ask/semantic/governance/recognizerRetirementManifest.ts');
+  assert.deepEqual(validateRetiredRecognizerFamilies(), []);
+  assert.equal(require('node:fs').existsSync(require('node:path').join(__dirname, '../../src/services/ask/dataPoint/dataPointShapes789.ts')), false);
 });

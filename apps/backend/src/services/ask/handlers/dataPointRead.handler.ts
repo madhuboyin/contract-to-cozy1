@@ -16,7 +16,6 @@ import { prisma } from '../../../lib/prisma';
 import { safeTimezone } from '../support/propertyContext';
 import { runDataPointQuery } from '../dataPoint/dataPointQueryRunner';
 import { applyLaunchHints } from '../dataPoint/dataPointLaunchHints';
-import { planShape789, runShape789, shapePointIds, type Shape789Plan } from '../dataPoint/dataPointShapes789';
 import { dataPointReadGrammarAgreement, type LegacyGrammarAgreement } from '../semantic/legacyGrammarAgreement';
 import { buildSemanticReadReceipt } from '../semantic/semanticExecutionReceipt';
 import { verifySemanticReadReceiptEntailment } from '../semantic/semanticReceiptEntailment';
@@ -186,46 +185,6 @@ async function dataPointQueryResult(propertyId: string, role: string, plan: Quer
   return queryResult;
 }
 
-
-const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
-const fmtMoney = (v: number) => `$${v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-/** Shape 7: change over tax years (field absence, service gap and the warranty relation are typed-grammar jobs, FR-ONT-8). Always a snapshot (never composable), as every computed answer is. */
-async function shape789Result(propertyId: string, role: string, plan: Shape789Plan): Promise<AskOperationResult> {
-  for (const id of shapePointIds(plan)) {
-    const p = DATA_POINT_BY_ID.get(id);
-    if (p && !roleMayRead(role, p)) { const copy = audienceFloorCopy(p.audience); return notice('DATA_POINT_RESTRICTED', 'data-point-restricted', copy.title, `${p.label} is only shown to ${copy.who}, so I can't answer this for you. Ask the home’s owner if you need it.`); }
-  }
-  const run = await runShape789(propertyId, plan);
-  const lines: string[] = []; let title = ''; let limited = false; let evidenceLabel = 'Your inventory';
-  if (plan.shape === 'TIME_SERIES') {
-    evidenceLabel = plan.label === 'total assessed value' ? 'Your property tax assessments' : 'Your property tax bills';
-    const series = run.series ?? []; const known = series.filter((x) => x.value !== null) as Array<{ id: string; year: number; value: number }>;
-    if (!series.length) { title = `No ${plan.label} history recorded`; lines.push(`I don’t have any active ${plan.label} records for this home, so there is no change to show.`); }
-    else if (known.length < 2) { limited = true; title = `Only ${known.length === 1 ? 'one' : 'no'} ${plan.label} on record`; lines.push(`I have ${series.length} tax ${plural(series.length, 'year', 'years')} on record${known.length === 1 ? `: ${known[0].year} was ${fmtMoney(known[0].value)}` : ' with no amount'}. I need at least two years with an amount to show a change.`); }
-    else {
-      const first = known[0]; const last = known[known.length - 1]; const diff = last.value - first.value; const pct = first.value ? (diff / first.value) * 100 : null;
-      title = `${plan.label[0].toUpperCase()}${plan.label.slice(1)}: ${diff === 0 ? 'unchanged' : diff > 0 ? 'up' : 'down'} since ${first.year}`;
-      lines.push(`${known.map((x, i) => `${x.year}: ${fmtMoney(x.value)}${i ? ` (${x.value - known[i - 1].value >= 0 ? '+' : '−'}${fmtMoney(Math.abs(x.value - known[i - 1].value))})` : ''}`).join('; ')}.`);
-      lines.push(`From ${first.year} to ${last.year} it ${diff === 0 ? 'did not change' : `${diff > 0 ? 'rose' : 'fell'} by ${fmtMoney(Math.abs(diff))}${pct === null ? '' : ` (${Math.abs(pct).toFixed(1)}%)`}`}.`);
-      if (known.length < series.length) { limited = true; lines.push(`${series.length - known.length} ${plural(series.length - known.length, 'year has', 'years have')} no amount recorded and ${plural(series.length - known.length, 'is', 'are')} left out.`); }
-      lines.push('Based on the active tax records on file, one per tax year.');
-    }
-    const sources = series.length ? series.map((x) => sourceRef((plan.entity) as CompositeSourceType, x.id)) : [sourceRef('Property', propertyId)];
-    return snapshotResult(sources, 'TIME_SERIES', title, lines, limited, evidenceLabel);
-  }
-  throw new Error('unreachable: every remaining Shape 7-9 plan is handled above');
-}
-function snapshotResult(sources: ReturnType<typeof sourceRef>[], shape: string, title: string, lines: string[], limited: boolean, evidenceLabel: string): AskOperationResult {
-  return {
-    status: limited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: limited ? 'DATA_POINT_QUERY_PARTIAL' : undefined,
-    parameters: { sources, dataPointQuery: { snapshot: true, shape, template: 'shape789', asOf: new Date().toISOString() } },
-    blocks: [
-      { type: 'SUMMARY', id: 'data-point-query-summary', title, body: lines.join(' '), tone: limited ? 'CAUTION' : 'DEFAULT', actions: [] },
-      { type: 'EVIDENCE', id: 'data-point-evidence', title: 'Where this comes from', items: [{ label: evidenceLabel, source: evidenceLabel, observedAt: new Date().toISOString() }] },
-    ] as AskPresentationBlock[],
-    suggestions: [],
-  };
-}
 
 /** One summary for a multi-part question: each facet's own answer (value, limitation or notice) in order, with the union of their sources, so no facet is silently dropped. */
 function mergeFacetResults(results: AskOperationResult[]): AskOperationResult {
@@ -478,10 +437,6 @@ export async function dataPointReadResult(
       }
     }
 
-    const shapePlan = planShape789(message);
-    if (shapePlan) {
-      return shape789Result(propertyId, role, shapePlan);
-    }
   }
   // A multi-part question ("what is my deductible and when does my insurance policy expire") has several facets: each is read through the ordinary single-point path and all are answered in one summary.
   if (!forcedPoint && queryOutcome.kind === 'NONE') {

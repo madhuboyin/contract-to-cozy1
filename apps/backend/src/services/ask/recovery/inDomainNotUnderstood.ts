@@ -40,7 +40,7 @@ const AREAS: readonly RecoveryArea[] = Object.freeze([
 ]);
 
 /** Subject words too generic to prove the message is about a specific part of the home. */
-const WEAK_SUBJECT_PHRASES: ReadonlySet<string> = new Set(['thing', 'things', 'home', 'house', 'sell', 'bill', 'bills', 'property']);
+const WEAK_SUBJECT_PHRASES: ReadonlySet<string> = new Set(['thing', 'things', 'home', 'house', 'sell', 'bill', 'bills', 'property', 'tax', 'taxes', 'assessed', 'assessment', 'assessments']);
 const SUBJECT_ROLES: ReadonlySet<string> = new Set(['ENTITY', 'FIELD', 'RELATION', 'CATEGORY']);
 
 export interface InDomainNotUnderstoodAssessment {

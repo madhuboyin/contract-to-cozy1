@@ -6,7 +6,6 @@ import type { AskOperationId, AskOperationResult } from '../askOperationRegistry
 import { matchesOperationAnswerContract } from '../answerContract/operationAnswerContract';
 import { ALTERNATE_POINT, isSingleWarrantyFact, resolveDataPoint, resolveDataPointsMulti } from '../dataPoint/dataPointCatalogue';
 import { planDataPointQuery } from '../dataPoint/dataPointQueryPlan';
-import { planShape789 } from '../dataPoint/dataPointShapes789';
 import { parseDeterministicSemanticRequest } from '../semantic/deterministicSemanticParser';
 import { parseCrossDomainSemanticRequest } from '../semantic/crossDomain/crossDomainPlanBuilder';
 import { SemanticReadReceiptSchema } from '../semantic/semanticExecutionReceipt';
@@ -61,6 +60,8 @@ export function groundedReadVerdict(question: string, result: AskOperationResult
       const expectedPredicate = facet.relations[0]?.predicateId;
       const agrees = receipt.data.facetId === facet.id
         && receipt.data.projection === facet.projection
+        // The receipt must be about the same subject entity the question names (a tax-bill receipt never grounds an assessed-value question).
+        && (!facet.subject || receipt.data.target.entityId === facet.subject.entityId)
         && (expectedPredicate === undefined || receipt.data.predicateIds.includes(expectedPredicate));
       if (!agrees) { planMismatch = true; continue; }
       const entailment = verifySemanticReadReceiptEntailment(result);
@@ -74,7 +75,7 @@ export function groundedReadVerdict(question: string, result: AskOperationResult
   if (parameters.dataPointQuery?.template) {
     const template = parameters.dataPointQuery.template;
     const plan = planDataPointQuery(question);
-    const planned = template === 'shape789' ? planShape789(question) !== null : plan.kind === 'PLAN' && plan.plan.template.id === template;
+    const planned = plan.kind === 'PLAN' && plan.plan.template.id === template;
     return planned ? { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] } : { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'QUESTION_DOES_NOT_PLAN_TO_THIS_QUERY'] };
   }
   // 3. an honest limitation: it states no value, so it can only be a reason, a question back, or a boundary

@@ -1063,12 +1063,11 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "DATA_POINT_READ",
   "confidence": 0.93,
   "order": 79,
-  "hash": "15c4aa5587b8680f",
+  "hash": "c4c55b94d065dcdb",
   "condition": "isDataPointComputedQuery(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "../homeRecordsAccess.ts:visibleRecordWhere",
    "askOperationRegistry.ts:explicitCapabilityPattern",
-   "dataPoint/dataPointCatalogue.ts:DATA_POINT_BY_ID",
    "dataPoint/dataPointQueryPlan.ts:NUMBER_WORDS",
    "dataPoint/dataPointQueryPlan.ts:OPEN_CLAIM_STATES",
    "dataPoint/dataPointQueryPlan.ts:QUERY_MAX_LIMIT",
@@ -1093,19 +1092,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
    "dataPoint/dataPointQueryPlan.ts:validZone",
    "dataPoint/dataPointQueryPlan.ts:withinRange",
    "dataPoint/dataPointQueryPlan.ts:zonedMidnightUtc",
-   "dataPoint/dataPointQueryPlan.ts:zonedParts",
-   "dataPoint/dataPointShapes789.ts:LEAD",
-   "dataPoint/dataPointShapes789.ts:norm",
-   "dataPoint/dataPointShapes789.ts:planShape789",
-   "dataPoint/dataPointShapes789.ts:point",
-   "dataPoint/queryShapeRegistries.ts:ABSENCE_REQUIREMENT_REGISTRY",
-   "dataPoint/queryShapeRegistries.ts:CROSS_ENTITY_RELATION_REGISTRY",
-   "dataPoint/queryShapeRegistries.ts:TIME_SERIES_REGISTRY",
-   "dataPoint/queryShapeRegistries.ts:TIME_SERIES_REGISTRY",
-   "dataPoint/queryShapeRegistries.ts:queryShapesEnabled",
-   "dataPoint/queryShapeRegistries.ts:validateAbsence",
-   "dataPoint/queryShapeRegistries.ts:validateCrossEntity",
-   "dataPoint/queryShapeRegistries.ts:validateTimeSeries"
+   "dataPoint/dataPointQueryPlan.ts:zonedParts"
   ]
  },
  {
@@ -1977,7 +1964,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "DATA_POINT_READ",
   "confidence": 0.9,
   "order": 148,
-  "hash": "1c3070f71d1e8954",
+  "hash": "8755c57dc545f558",
   "condition": "(dataPointQuestionPattern.test(message) && (resolveDataPoint(message) || resolveDataPointsMulti(message).length >= 2)) || isDataPointQuer...",
   "references": [
    "../homeRecordsAccess.ts:visibleRecordWhere",
@@ -1986,7 +1973,6 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
    "dataPoint/dataPointCatalogue.ts:BUYER_TASK_POINTS",
    "dataPoint/dataPointCatalogue.ts:CLAIM_CHILD_POINTS",
    "dataPoint/dataPointCatalogue.ts:CLAIM_POINTS",
-   "dataPoint/dataPointCatalogue.ts:DATA_POINT_BY_ID",
    "dataPoint/dataPointCatalogue.ts:DATA_POINT_DEFINITIONS",
    "dataPoint/dataPointCatalogue.ts:INVENTORY_POINTS",
    "dataPoint/dataPointCatalogue.ts:OTHER_DOMAINS",
@@ -2027,19 +2013,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
    "dataPoint/dataPointQueryPlan.ts:validZone",
    "dataPoint/dataPointQueryPlan.ts:withinRange",
    "dataPoint/dataPointQueryPlan.ts:zonedMidnightUtc",
-   "dataPoint/dataPointQueryPlan.ts:zonedParts",
-   "dataPoint/dataPointShapes789.ts:LEAD",
-   "dataPoint/dataPointShapes789.ts:norm",
-   "dataPoint/dataPointShapes789.ts:planShape789",
-   "dataPoint/dataPointShapes789.ts:point",
-   "dataPoint/queryShapeRegistries.ts:ABSENCE_REQUIREMENT_REGISTRY",
-   "dataPoint/queryShapeRegistries.ts:CROSS_ENTITY_RELATION_REGISTRY",
-   "dataPoint/queryShapeRegistries.ts:TIME_SERIES_REGISTRY",
-   "dataPoint/queryShapeRegistries.ts:TIME_SERIES_REGISTRY",
-   "dataPoint/queryShapeRegistries.ts:queryShapesEnabled",
-   "dataPoint/queryShapeRegistries.ts:validateAbsence",
-   "dataPoint/queryShapeRegistries.ts:validateCrossEntity",
-   "dataPoint/queryShapeRegistries.ts:validateTimeSeries"
+   "dataPoint/dataPointQueryPlan.ts:zonedParts"
   ]
  },
  {
