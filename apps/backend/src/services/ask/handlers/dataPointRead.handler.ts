@@ -1,6 +1,7 @@
 // DATA_POINT_READ (reliability FRD D12, Phase 1b): "what is the serial number of my fridge", "when was my furnace installed", "what did I pay for my dryer".
 // A STANDARD, read-only fact read through the one allowlisted template in dataPoint/dataPointReader.ts. No side effects; a value that is not recorded is said plainly,
 // with the authorised way to add it, and never guessed (FR-REC-2 MISSING_RECORD_DATA).
+import { parseCompareSubjects, unresolvedCompareCopy } from '../support/unresolvedCompare';
 import { inDomainNotUnderstoodResult } from '../recovery/inDomainNotUnderstood';
 import { askUnderstandingCoverageGapTotal } from '../../../lib/metrics';
 import { sourceRef, type CompositeSourceType } from '../composition/sourceAuthorization';
@@ -499,6 +500,12 @@ export async function dataPointReadResult(
     if (inDomainRecovery) {
       askUnderstandingCoverageGapTotal.inc({ kind: 'IN_DOMAIN_NOT_UNDERSTOOD', area: String(inDomainRecovery.parameters?.recoveryArea ?? 'unknown') });
       return inDomainRecovery;
+    }
+    // A compare request naming two things nothing recognised is answered as that, not with a data-point example about something never asked (live prompt #20).
+    const compareSubjects = !forcedPoint ? parseCompareSubjects(message) : null;
+    if (compareSubjects) {
+      const copy = unresolvedCompareCopy(compareSubjects);
+      return notice('COMPARE_SUBJECTS_NOT_RECOGNIZED', 'data-point-unidentified', copy.title, copy.body);
     }
     return notice('DATA_POINT_NOT_IDENTIFIED', 'data-point-unidentified', 'Which detail do you mean?', 'Tell me the detail and the item, for example “the serial number of my refrigerator” or “when my furnace was installed”.');
   }

@@ -6,7 +6,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "EMERGENCY_BOUNDARY",
   "confidence": 1,
   "order": 0,
-  "hash": "8e398ebb8174738a",
+  "hash": "4ef718f223f66acc",
   "condition": "emergencyPattern.test(message) || activeEmergencyPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:activeEmergencyPattern",
@@ -40,10 +40,11 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "OUT_OF_SCOPE_BOUNDARY",
   "confidence": 0.99,
   "order": 3,
-  "hash": "386675a372005e93",
-  "condition": "outOfScopePattern.test(message)",
+  "hash": "9b19c23ae78d1484",
+  "condition": "outOfScopePattern.test(message) || taxFilingRequestPattern.test(message)",
   "references": [
-   "askOperationRegistry.ts:outOfScopePattern"
+   "askOperationRegistry.ts:outOfScopePattern",
+   "askOperationRegistry.ts:taxFilingRequestPattern"
   ]
  },
  {

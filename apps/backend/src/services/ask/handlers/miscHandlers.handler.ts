@@ -11,7 +11,7 @@ import { type AskCaptureRequest, type AskPresentationBlock, type CreateAskExecut
 import { askModelDurationSeconds, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal } from '../../../lib/metrics';
 import { PropertyMaintenanceTaskService } from '../../PropertyMaintenanceTask.service';
 import { answerGroundedAsk } from '../../groundedAsk.service';
-import { resolveAskOperation, type AskOperationResult } from '../askOperationRegistry';
+import { isTaxFilingRequest, resolveAskOperation, type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import type { CapabilityInvocationEnvelope } from '../capabilityInvocation.contract';
 import { evaluateFeatureContext } from '../../../modules/propertyContext/application/evaluateFeatureContext';
@@ -702,6 +702,20 @@ function emergencyResult(): AskOperationResult {
   };
 }
 
+// Live prompt #19: a request to prepare or file a tax return got a menu of unrelated record views. It is said plainly instead, and only things Ask really does are offered.
+function taxFilingBoundaryResult(): AskOperationResult {
+  return {
+    status: 'OUT_OF_SCOPE',
+    reasonCode: 'TAX_PREPARATION_NOT_SUPPORTED',
+    blocks: [{
+      type: 'BOUNDARY', id: 'out-of-scope-boundary', title: 'I can’t prepare or file tax returns', severity: 'INFO',
+      body: 'Ask can’t prepare or file a tax return, or tell you what you can deduct on one; that needs a tax professional. I can pull together the records of your home that you can share with them.',
+      suggestions: ['Export my home records', 'Show my home improvement costs', 'Should I appeal my property tax assessment?'],
+    }],
+    suggestions: [],
+  };
+}
+
 function outOfScopeResult(): AskOperationResult {
   return {
     status: 'OUT_OF_SCOPE',
@@ -935,7 +949,7 @@ registerCapabilityHandler('boundary.emergency', async () => emergencyResult());
 
 registerCapabilityHandler('boundary.unsafe-restricted', async () => unsafeRestrictedResult());
 
-registerCapabilityHandler('boundary.out-of-scope', async () => outOfScopeResult());
+registerCapabilityHandler('boundary.out-of-scope', async (envelope) => (isTaxFilingRequest(envelope.message ?? '') ? taxFilingBoundaryResult() : outOfScopeResult()));
 
 // External review [P1]: `envelope.suppliedInput` was declared on
 // CapabilityInvocationEnvelope but never read anywhere in the normal

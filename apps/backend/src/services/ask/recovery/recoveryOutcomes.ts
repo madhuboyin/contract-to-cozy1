@@ -60,6 +60,7 @@ export function recoveryBlock(code: RecoveryCode): AskPresentationBlock {
  */
 const REASON_ALIASES: Readonly<Record<string, RecoveryCode>> = Object.freeze({
   NOT_HOMEOWNER_DOMAIN: 'OUT_OF_DOMAIN',
+  TAX_PREPARATION_NOT_SUPPORTED: 'OUT_OF_DOMAIN',
   DATA_POINT_NOT_RECORDED: 'MISSING_RECORD_DATA', DATA_POINT_NO_INVENTORY: 'MISSING_RECORD_DATA', DATA_POINT_PARTIAL: 'MISSING_RECORD_DATA', DATA_POINT_QUERY_PARTIAL: 'MISSING_RECORD_DATA',
 });
 export function recoveryCodeForReason(reasonCode: string | null | undefined): RecoveryCode | null {
