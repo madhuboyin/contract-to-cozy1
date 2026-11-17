@@ -62,6 +62,8 @@ export interface CrossDomainExtendedItemRecord {
   readonly receiptDocumentId: string | null;
   readonly roomId: string | null;
   readonly isHidden?: boolean;
+  /** Recorded model number; an item without one cannot be matched against a recall. */
+  readonly modelNumber?: string | null;
 }
 
 export interface CrossDomainWarrantyRecord {
@@ -83,6 +85,8 @@ export interface CrossDomainInsurancePolicyRecord {
   readonly carrierName: string;
   readonly policyNumber: string;
   readonly deductibleCents: number;
+  /** False when no deductible is recorded on the policy (the cents above is then a placeholder 0, never a $0 deductible). Absent means recorded. */
+  readonly deductibleRecorded?: boolean;
   readonly annualPremiumCents: number;
   readonly expiryDate: string;
 }
@@ -1131,8 +1135,12 @@ function executeNewStackFacet(
     const summary = restricted
       ? 'Insurance deductible requires EDITOR or OWNER role (redacted).'
       : policies.length === 0
-        ? 'No insurance policies recorded.'
-        : `Insurance deductible: $${(policies[0].deductibleCents / 100).toFixed(2)} (${policies[0].carrierName}).`;
+        ? 'No insurance policy is recorded for this home, so no deductible can be determined.'
+        : policies.length === 1
+          ? (policies[0].deductibleRecorded === false
+            ? `A ${policies[0].carrierName} policy is recorded, but no deductible is recorded on it, so I can’t tell you the amount.`
+            : `Insurance deductible: $${(policies[0].deductibleCents / 100).toFixed(2)} (${policies[0].carrierName}).`)
+          : `Deductibles by policy: ${policies.map((p) => `${p.carrierName} ${p.deductibleRecorded === false ? 'not recorded' : `$${(p.deductibleCents / 100).toFixed(2)}`}`).join('; ')}.`;
     const finalized = finalizeReceiptAndPresentation({
       facet,
       snapshot,
@@ -1226,7 +1234,18 @@ function executeNewStackFacet(
           }
         }
       }
-      const summary = missingRows.length === 0 ? 'No missing claim documents.' : `${missingRows.length} missing claim document requirement(s): ${missingRows.map((r) => r.label).join(', ')}.`;
+      // A claim that lists no required documents cannot be "missing" any: it was not checked. Saying "no missing documents" over such claims would read as
+      // "everything required is present", which nothing here established.
+      const claimsWithRequirements = authorizedClaims.filter((claim) => claim.requiredDocumentTypes.length > 0).length;
+      const unchecked = authorizedClaims.length - claimsWithRequirements;
+      const uncheckedNote = unchecked > 0 && claimsWithRequirements > 0 ? ` ${unchecked} other claim${unchecked === 1 ? ' lists' : 's list'} no required documents, so ${unchecked === 1 ? 'it was' : 'they were'} not checked.` : '';
+      const summary = missingRows.length > 0
+        ? `${missingRows.length} missing claim document requirement(s): ${missingRows.map((r) => r.label).join(', ')}.${uncheckedNote}`
+        : authorizedClaims.length === 0
+          ? 'No claims are recorded, so there are no claim documents to check.'
+          : claimsWithRequirements === 0
+            ? `${authorizedClaims.length} claim${authorizedClaims.length === 1 ? ' is' : 's are'} recorded, but ${authorizedClaims.length === 1 ? 'it lists no' : 'none of them lists any'} required documents, so I can’t tell whether anything is missing.`
+            : `Nothing is missing: every required document type listed for ${claimsWithRequirements} claim${claimsWithRequirements === 1 ? '' : 's'} has a linked document.${uncheckedNote}`;
       const finalized = finalizeReceiptAndPresentation({
         facet,
         snapshot,
@@ -1585,7 +1604,14 @@ function executeNewStackFacet(
     const visibleItemIds = new Set(visibleItems.map((i) => i.id));
     const matches = snapshot.recalls.filter((r) => r.propertyId === snapshot.propertyId && visibleItemIds.has(r.affectedInventoryItemId));
     const rows = matches.map((m) => ({ id: m.id, label: m.title, subtitle: `Item ${m.affectedInventoryItemId}` }));
-    const summary = matches.length === 0 ? 'No recalls affect visible inventory items.' : `${matches.length} active recall(s): ${matches.map((m) => m.title).join(', ')}.`;
+    // "None found" is only as strong as the data it was matched on: an item with no model number recorded cannot be matched to a recall, and a match list
+    // is not a guarantee that no recall exists. So the answer says what was checked and what could not be.
+    const unmatchable = visibleItems.filter((item) => !item.modelNumber).length;
+    const summary = matches.length > 0
+      ? `${matches.length} recall match(es) to review: ${matches.map((m) => m.title).join(', ')}.`
+      : visibleItems.length === 0
+        ? 'No inventory items are recorded, so there is nothing to check recalls against.'
+        : `No open recall matches are recorded for your ${visibleItems.length} item${visibleItems.length === 1 ? '' : 's'}.${unmatchable > 0 ? ` ${unmatchable} of them ${unmatchable === 1 ? 'has' : 'have'} no model number recorded, so ${unmatchable === 1 ? 'it' : 'they'} can’t be matched against recalls.` : ''} This reflects the recall matches already found for this home, not a guarantee that no recall exists.`;
     const finalized = finalizeReceiptAndPresentation({
       facet,
       snapshot,
@@ -2657,6 +2683,7 @@ export async function loadCrossDomainPropertySnapshot(
       id: item.id,
       propertyId: item.propertyId,
       name: item.name,
+      modelNumber: item.modelNumber ?? null,
       category: (['APPLIANCE', 'HVAC', 'PLUMBING', 'ELECTRICAL'].includes(item.category.toUpperCase())
         ? item.category.toUpperCase()
         : 'OTHER') as CrossDomainExtendedItemRecord['category'],
@@ -2881,6 +2908,7 @@ export async function loadCrossDomainPropertySnapshot(
       carrierName: p.carrierName,
       policyNumber: p.policyNumber,
       deductibleCents: typeof p.deductibleCents === 'number' ? p.deductibleCents : toCents(p.deductibleAmount),
+      deductibleRecorded: typeof p.deductibleCents === 'number' || (p.deductibleAmount !== null && p.deductibleAmount !== undefined),
       annualPremiumCents: toCents(p.premiumAmount),
       expiryDate: p.expiryDate ? new Date(p.expiryDate).toISOString().slice(0, 10) : '',
     })),
