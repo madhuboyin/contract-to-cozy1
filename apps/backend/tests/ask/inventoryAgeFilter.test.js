@@ -27,7 +27,9 @@ test('the other shapes: age alone, "and", "neither … nor", "not older than"; t
   assert.equal(where('which appliances are older than 10 years').predicateId, AGE);
   assert.equal(where('which appliances have no warranty and are older than 10 years').kind, 'AND');
   const neither = where('which appliances have neither a warranty nor are older than 10 years');
-  assert.deepEqual(neither.operands.map((o) => o.kind), ['NOT', 'NOT']);
+  // "neither" is built from explicit negations: "has no warranty record" (never NOT of "has a warranty", which would count unknown and conflicted states) and NOT older than N.
+  assert.deepEqual(neither.operands.map((o) => o.kind), ['PREDICATE', 'NOT']);
+  assert.equal(neither.operands[0].predicateId, 'predicate.inventory_item.has_no_warranty_record');
   assert.equal(where('which appliances are not older than 10 years').kind, 'NOT');
   assert.equal(parseDeterministicSemanticRequest('which appliances have no warranty or due maintenance').outcome, 'BOUNDARY', 'a bare "no A or B" is still asked');
   assert.equal(parseDeterministicSemanticRequest('how old is my roof').facets[0].evidence.jobMatch, 'query.property.fact_detail');

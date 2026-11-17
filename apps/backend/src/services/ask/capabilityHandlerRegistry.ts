@@ -1,3 +1,4 @@
+import { clarifiedReadingFrom } from './support/clarificationContract';
 import { withDerivedCollectionDescriptors } from './support/collectionDescriptor';
 import type { HouseholdRole } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
@@ -243,7 +244,10 @@ async function invokeGuarded(
   // Phase 2A + Cross-Domain Wave 1-5 + Phase 6 unified semantic entry dispatch
   // (respecting explicit UI launch operations and maintaining property auth boundaries).
   if (envelope.propertyId && envelope.message) {
-    const slicePlan = parseDeterministicSemanticRequest(envelope.message);
+    // The reading the homeowner chose for a "no A or B" question (a typed clarification option) is applied to this same message here too: this dispatch parses it before the
+    // handler does, and without the reading it would see the ambiguity again and re-ask.
+    const coordinationReading = clarifiedReadingFrom(envelope.suppliedInput);
+    const slicePlan = parseDeterministicSemanticRequest(envelope.message, coordinationReading ? { coordinationReading } : undefined);
     const sliceJob = slicePlan.outcome === 'MATCH' ? slicePlan.facets[0]?.evidence.jobMatch : null;
     const isExplicitForcedOperation = Boolean(envelope.launchContext?.operationId);
     const isSliceDispatch =
@@ -264,6 +268,7 @@ async function invokeGuarded(
         role: resolvedRole,
         propertyAuthorized: true,
         rawText: envelope.message,
+        ...(coordinationReading ? { coordinationReading } : {}),
       });
       return withDerivedCollectionDescriptors(sliceExecution.operationResult);
     }

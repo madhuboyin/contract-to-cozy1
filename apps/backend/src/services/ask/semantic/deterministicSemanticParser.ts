@@ -30,6 +30,8 @@ function findAgePhrase(raw: string): { years: number; span: SemanticSourceSpan }
   return { years, span: { start: match.index, end: match.index + match[0].length, text: match[0] } };
 }
 
+export type NegativeOrReading = 'EITHER_OR' | 'NEITHER_NOR';
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -229,7 +231,14 @@ const FIELD_OWNER_ENTITY: Readonly<Record<string, string>> = Object.freeze({
 
 export function parseDeterministicSemanticRequest(
   rawText: string,
-  options?: { readonly dynamicEntities?: readonly DynamicPlaceholderEntityCandidate[] }
+  options?: {
+    readonly dynamicEntities?: readonly DynamicPlaceholderEntityCandidate[];
+    /**
+     * The homeowner's answer to the "no A or B" question (see describeNegativeOrAmbiguity): EITHER_OR is "no A, or B" (the negation belongs to the first condition and
+     * the second stands on its own), NEITHER_NOR is "neither A nor B". Without it a bare "no A or B" is the ambiguous shape and is asked, never guessed.
+     */
+    readonly coordinationReading?: NegativeOrReading;
+  }
 ): SemanticRequestPlan {
   const { normalized, tokens } = normalizedWithOffsets(rawText);
   const envelope = buildSemanticTextEnvelope(rawText, {
@@ -377,10 +386,19 @@ export function parseDeterministicSemanticRequest(
         ? { kind: 'DUE_STATUS', status: 'DUE' }
         : null;
 
+    // The homeowner answered the "no A or B" question: apply their reading to the same message. Under EITHER_OR the negation belongs to the condition named first.
+    const ambiguousNegativeOr = coordination === 'AMBIGUOUS_NEGATIVE_OR';
+    if (ambiguousNegativeOr && options?.coordinationReading) coordination = options.coordinationReading;
+    const eitherAfterNegation = ambiguousNegativeOr && options?.coordinationReading === 'EITHER_OR';
+    const firstOperand: 'warranty' | 'maintenance' | null = warrantyRelation && maintenanceRelation ? (warrantyRelation.start < maintenanceRelation.start ? 'warranty' : 'maintenance') : null;
+    const negatedHere = (operand: 'warranty' | 'maintenance') => polarity === 'NEGATIVE' && (!eitherAfterNegation || firstOperand === null || firstOperand === operand);
+
     if (warrantyRelation) {
+      // "Neither a warranty nor …" is "no warranty record AND …". It used to negate "has a warranty", which counted an unknown or conflicted warranty state as "no
+      // warranty"; those states are never counted either way.
       const predicateId = coordination === 'NEITHER_NOR'
-        ? 'predicate.inventory_item.has_warranty_record'
-        : polarity === 'NEGATIVE' ? 'predicate.inventory_item.has_no_warranty_record'
+        ? 'predicate.inventory_item.has_no_warranty_record'
+        : negatedHere('warranty') ? 'predicate.inventory_item.has_no_warranty_record'
         : polarity === 'POSITIVE' ? 'predicate.inventory_item.has_warranty_record'
         : 'predicate.inventory_item.warranty_state_unknown';
       expressions.push({ kind: 'PREDICATE', predicateId, relationPathId: 'path.inventory_item.warranty' });
@@ -390,14 +408,12 @@ export function parseDeterministicSemanticRequest(
       const predicateId = isOverdue
         ? 'predicate.inventory_item.has_overdue_maintenance'
         : coordination === 'NEITHER_NOR'
-          ? 'predicate.inventory_item.has_due_maintenance'
-          : polarity === 'NEGATIVE' ? 'predicate.inventory_item.has_no_due_maintenance'
+          ? 'predicate.inventory_item.has_no_due_maintenance'
+          : negatedHere('maintenance') ? 'predicate.inventory_item.has_no_due_maintenance'
           : 'predicate.inventory_item.has_due_maintenance';
       const atom: SemanticPredicateAtom = { kind: 'PREDICATE', predicateId, relationPathId: 'path.inventory_item.maintenance_task' };
       const shouldNegateAtom = isOverdue
-        && polarity === 'NEGATIVE'
-        && coordination !== 'NEITHER_NOR'
-        && coordination !== 'AMBIGUOUS_NEGATIVE_OR';
+        && (coordination === 'NEITHER_NOR' || (negatedHere('maintenance') && coordination !== 'AMBIGUOUS_NEGATIVE_OR'));
       expressions.push(shouldNegateAtom ? { kind: 'NOT', operand: atom } : atom);
       relations.push({ semanticRelationId: 'relation.inventory_item.maintenance_task', predicateId, targetEntityId: 'entity.maintenance_task' });
     }
@@ -419,14 +435,13 @@ export function parseDeterministicSemanticRequest(
         // then combined with the other conditions below. It used to be asked as a "neither/either" question, and where it was not, the top-level join was
         // switched to OR, so "has a warranty in the kitchen or basement" returned every item.
         const assembledRooms = assembleSemanticBooleanExpression({ coordination: 'EITHER_OR', predicates: roomAtoms });
-        if (assembledRooms.outcome === 'ASSEMBLED') expressions.push(assembledRooms.expression);
+        // Under "neither … nor" the whole room list is excluded; negated here because "neither" is built as an AND of explicit negations (see below).
+        if (assembledRooms.outcome === 'ASSEMBLED') expressions.push(coordination === 'NEITHER_NOR' ? { kind: 'NOT', operand: assembledRooms.expression } : assembledRooms.expression);
         roomListGrouped = roomAtoms.length;
       } else if (roomAtoms.length === 1) {
         // "no warranty in the kitchen": the negation belongs to the warranty. A room is negated only when it is the only condition ("items not in the kitchen").
-        const shouldNegateRoom = polarity === 'NEGATIVE'
-          && relationCount === 1
-          && coordination !== 'NEITHER_NOR'
-          && coordination !== 'AMBIGUOUS_NEGATIVE_OR';
+        const shouldNegateRoom = coordination === 'NEITHER_NOR'
+          || (polarity === 'NEGATIVE' && relationCount === 1 && coordination !== 'AMBIGUOUS_NEGATIVE_OR');
         expressions.push(shouldNegateRoom ? { kind: 'NOT', operand: roomAtoms[0] } : roomAtoms[0]);
       } else {
         expressions.push(...roomAtoms);
@@ -437,7 +452,7 @@ export function parseDeterministicSemanticRequest(
       const predicateId = 'predicate.inventory_item.older_than_years';
       const atom: SemanticPredicateAtom = { kind: 'PREDICATE', predicateId, relationPathId: 'path.inventory_item.age', thresholdYears: agePhrase.years };
       // Negation never attaches to the age condition unless it is the only condition ("which appliances are not older than 10 years").
-      expressions.push(polarity === 'NEGATIVE' && relationCount === 1 ? { kind: 'NOT', operand: atom } : atom);
+      expressions.push(coordination === 'NEITHER_NOR' || (polarity === 'NEGATIVE' && relationCount === 1) ? { kind: 'NOT', operand: atom } : atom);
       relations.push({ semanticRelationId: 'relation.inventory_item.age', predicateId, targetEntityId: 'entity.inventory_item' });
     }
 
@@ -446,10 +461,14 @@ export function parseDeterministicSemanticRequest(
       // ambiguous shape). Otherwise the conditions are all required: "no warranty in the kitchen or basement" is no warranty AND in either room.
       const orWords = coordinatorAnnotations.filter((annotation) => annotation.lexeme.semanticId === 'coordinator.or').length;
       const orBeyondRooms = orWords > roomListGrouped - 1;
-      coordination = hasNeitherNor ? 'NEITHER_NOR'
+      coordination = hasNeitherNor || coordination === 'NEITHER_NOR' ? 'NEITHER_NOR'
         : orBeyondRooms ? (polarity === 'NEGATIVE' && !agePhrase ? 'AMBIGUOUS_NEGATIVE_OR' : 'EITHER_OR')
         : expressions.length >= 2 ? 'AND' : 'SINGLE';
     }
+
+    // "Neither A nor B" is every condition excluded, built from explicit negations above (a "has no …" predicate, or NOT of a positive one), so the assembler must not
+    // negate them again.
+    if (coordination === 'NEITHER_NOR') coordination = expressions.length >= 2 ? 'AND' : 'SINGLE';
 
     if (coordination === 'SINGLE' && expressions.length >= 2) {
       coordination = 'AND';
@@ -787,4 +806,24 @@ export function extractSemanticFollowUpDelta(
   const outcome = unresolvedSpans.length > 0 || !hasAnySemanticChange ? 'UNRESOLVED' : 'APPLICABLE';
 
   return { outcome, unresolvedSpans, projection, polarity, time, relations, where };
+}
+
+
+/**
+ * The two conditions of a bare "no A or B" over warranty and maintenance, in the order the homeowner named them, or null when the question is any other shape. It is the
+ * one thing a card needs to say what the two readings are in plain words ("items with no warranty and no maintenance due") instead of fixed text.
+ */
+export function describeNegativeOrAmbiguity(rawText: string): { readonly operands: readonly ['warranty' | 'maintenance', 'warranty' | 'maintenance'] } | null {
+  const { normalized, tokens } = normalizedWithOffsets(rawText);
+  if (!tokens.length) return null;
+  const annotations = annotate(rawText, tokens);
+  const warranty = annotations.find((annotation) => annotation.lexeme.semanticId === 'relation.inventory_item.warranty');
+  const maintenance = annotations.find((annotation) => annotation.lexeme.semanticId === 'relation.inventory_item.maintenance_task');
+  const coordinators = annotations.filter((annotation) => annotation.lexeme.role === 'COORDINATOR');
+  const negative = annotations.some((annotation) => annotation.lexeme.semanticId === 'polarity.negative');
+  const hasOr = coordinators.some((annotation) => annotation.lexeme.semanticId === 'coordinator.or');
+  const neither = coordinators.some((annotation) => annotation.lexeme.semanticId === 'coordinator.neither');
+  void normalized;
+  if (!warranty || !maintenance || !negative || !hasOr || neither || findAgePhrase(rawText)) return null;
+  return { operands: warranty.start < maintenance.start ? ['warranty', 'maintenance'] : ['maintenance', 'warranty'] };
 }

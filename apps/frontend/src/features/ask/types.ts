@@ -512,7 +512,8 @@ export type AskSessionChange = { title: string } | { pinned: boolean } | { archi
 export interface AskClarification {
   version: number;
   question: string;
-  options: Array<{ operationId: string; label: string }>;
+  /** `optionId` names the button when two options run the same operation (their typed payloads differ and stay on the server); the press sends it, not the operation id. */
+  options: Array<{ operationId: string; label: string; optionId?: string }>;
   allowFreeText: boolean;
   expiresAt: string;
 }
@@ -521,6 +522,7 @@ export interface SubmitAskClarificationPayload {
   clarificationVersion: number;
   idempotencyKey: string;
   operationId?: string;
+  optionId?: string;
   answer?: string;
 }
 

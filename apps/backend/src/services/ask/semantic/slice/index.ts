@@ -368,8 +368,9 @@ export function verifySliceInvariants(): SliceInvariantReport {
     auth: SLICE_OWNER_AUTH,
   });
   checkAnswered('boolean_neither_nor', boolNeither);
-  if (JSON.stringify(boolNeither.activeEntityIds) !== JSON.stringify(['item-dishwasher', 'item-sump-pump'])) {
-    reasons.push('boolean_neither_nor:expected_dishwasher_and_sump_pump');
+  // The Sump Pump's warranty links conflict: it is not confirmed as having a warranty or as having none, so "neither a warranty nor due maintenance" does not count it.
+  if (JSON.stringify(boolNeither.activeEntityIds) !== JSON.stringify(['item-dishwasher'])) {
+    reasons.push('boolean_neither_nor:expected_dishwasher_only');
   }
 
   const guidance = executeSemanticSlice({

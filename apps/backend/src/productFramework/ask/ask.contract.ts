@@ -1344,6 +1344,9 @@ export const AskClarificationSchema = z.object({
   options: z.array(z.object({
     operationId: z.string().trim().min(1).max(120),
     label: z.string().trim().min(1).max(160),
+    // Names the option when pressed. Two options may run the same operation with different typed payloads (the payload stays on the server: the client sends only this
+    // id, and the server looks the payload up), so the operation id alone does not identify a button.
+    optionId: z.string().trim().min(1).max(80).optional(),
   })).max(3),
   allowFreeText: z.boolean(),
   expiresAt: z.string().datetime(),
@@ -1353,8 +1356,9 @@ export const SubmitAskClarificationSchema = z.object({
   clarificationVersion: z.number().int().positive(),
   idempotencyKey: z.string().trim().min(8).max(128),
   operationId: z.string().trim().min(1).max(120).optional(),
+  optionId: z.string().trim().min(1).max(80).optional(),
   answer: z.string().trim().min(1).max(1000).optional(),
-}).strict().refine((value) => Boolean(value.operationId || value.answer), {
+}).strict().refine((value) => Boolean(value.operationId || value.optionId || value.answer), {
   message: 'Choose an option or add a clarification.',
 });
 

@@ -121,7 +121,9 @@ test('Phase 2A vertical slice evaluates Boolean AND / EITHER_OR / NEITHER_NOR an
     auth: SLICE_OWNER_AUTH,
   });
   assert.equal(neitherNorResult.status, 'ANSWERED');
-  assert.deepEqual([...neitherNorResult.activeEntityIds].sort(), ['item-dishwasher', 'item-sump-pump']);
+  // "Neither a warranty nor …" is "no warranty record AND no due maintenance". The Sump Pump's warranty links conflict, so it is neither confirmed as having a warranty nor as
+  // having none and is not counted either way (as in every other warranty answer); it was matched before because "neither" negated "has a warranty".
+  assert.deepEqual([...neitherNorResult.activeEntityIds].sort(), ['item-dishwasher']);
 
   const ambiguousNegativeOr = executeSemanticSlice({
     rawText: 'which appliances do not have warranty or due maintenance',

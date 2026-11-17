@@ -1,9 +1,11 @@
+import { buildPayloadClarification } from '../../support/clarificationContract';
+import type { AskClarification } from '../../../../productFramework/ask/ask.contract';
 import { prisma } from '../../../../lib/prisma';
 import { AskConfirmationSchema } from '../../../../productFramework/ask/ask.contract';
 import { visibleInventoryItemWhere } from '../../../riskAssetApplicability';
 import type { AskOperationResult } from '../../askOperationRegistry';
 import type { AskEntityResolutionResult } from '../../askEntityResolution';
-import { extractSemanticFollowUpDelta, parseDeterministicSemanticRequest } from '../deterministicSemanticParser';
+import { describeNegativeOrAmbiguity, extractSemanticFollowUpDelta, parseDeterministicSemanticRequest, type NegativeOrReading } from '../deterministicSemanticParser';
 import { ASK_SEMANTIC_RELATION_REGISTRY } from '../semanticRelationRegistry';
 import { SemanticRequestPlanSchema, type SemanticRequestPlan, type SemanticWhereExpression } from '../semanticRequestPlan';
 import { resolvePropertyEntityReference, type PropertyEntityCandidate, type PropertyEntityResolution } from '../propertyEntityResolver';
@@ -381,13 +383,15 @@ export function executeSemanticSlice(input: {
   readonly auth: SliceAuthorizationContext;
   readonly filterEntityIds?: readonly string[];
   readonly planOverride?: SemanticRequestPlan;
+  /** The homeowner's answer to the "no A or B" question, applied to this same message (see parseDeterministicSemanticRequest). */
+  readonly coordinationReading?: NegativeOrReading;
 }): SliceExecutionResult {
   const { rawText, snapshot, auth } = input;
   const dynamicEntities = buildDynamicPlaceholderCandidates(snapshot, auth);
   const envelope = buildSemanticTextEnvelope(rawText, { dynamicEntities });
   const spanRoundTripOk = verifyPlaceholderSpanMapRoundTrip(envelope).ok;
   const plan = SemanticRequestPlanSchema.parse(
-    input.planOverride ?? parseDeterministicSemanticRequest(rawText, { dynamicEntities }),
+    input.planOverride ?? parseDeterministicSemanticRequest(rawText, { dynamicEntities, ...(input.coordinationReading ? { coordinationReading: input.coordinationReading } : {}) }),
   );
   return executeValidatedSlicePlan({
     rawText,
@@ -400,6 +404,35 @@ export function executeSemanticSlice(input: {
   });
 }
 
+/** The two conditions of a "no A or B" question in plain words: "no X" for the one the negation applies to, "X" for the one that stands on its own. */
+const NO_PHRASE = { warranty: 'no warranty', maintenance: 'no maintenance due' } as const;
+const HAS_PHRASE = { warranty: 'a warranty', maintenance: 'maintenance due' } as const;
+
+/**
+ * The card for a bare "no A or B" (FR-PLAN-5: a question with two readings is asked, never guessed). Each button is a typed reading of the SAME message, with a plain label
+ * built from the two conditions ("Items with no warranty, and items with maintenance due" / "Items with no warranty and no maintenance due"); pressing one re-runs the
+ * data-point read with that reading, and the payload stays on the server. A question whose shape cannot be labelled safely (a room is also named, or the conditions are not
+ * warranty and maintenance) is asked as a plain free-text question, with no buttons that could mislabel it.
+ */
+function negativeOrCard(envelope: SemanticTextEnvelope): { clarification: AskClarification; parameters: Record<string, unknown> } {
+  const described = envelope.spanMap.some((entry) => entry.kind === 'ROOM') ? null : describeNegativeOrAmbiguity(envelope.rawText);
+  if (!described) {
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    return {
+      clarification: { version: 1, question: 'Your question can be read more than one way. Tell me which conditions you want, for example “no warranty and no maintenance due”.', options: [], allowFreeText: true, expiresAt },
+      parameters: { clarification: { version: 1, expiresAt, candidateOperationIds: ['DATA_POINT_READ'] } },
+    };
+  }
+  const [first, second] = described.operands;
+  return buildPayloadClarification({
+    question: 'Your question can be read two ways. Which do you mean?',
+    options: [
+      { operationId: 'DATA_POINT_READ', label: `Items with ${NO_PHRASE[first]}, and items with ${HAS_PHRASE[second]}`, payload: { kind: 'BOOLEAN_READING', reading: 'EITHER_OR' } },
+      { operationId: 'DATA_POINT_READ', label: `Items with ${NO_PHRASE[first]} and ${NO_PHRASE[second]}`, payload: { kind: 'BOOLEAN_READING', reading: 'NEITHER_NOR' } },
+    ],
+  });
+}
+
 function buildNonExecutableResult(input: {
   readonly envelope: SemanticTextEnvelope;
   readonly spanRoundTripOk: boolean;
@@ -407,25 +440,16 @@ function buildNonExecutableResult(input: {
 }): SliceExecutionResult {
   const { envelope, spanRoundTripOk, plan } = input;
   const isBoundary = plan.outcome === 'BOUNDARY';
+  const card = isBoundary ? negativeOrCard(envelope) : null;
   const operationResult: AskOperationResult = {
     status: isBoundary ? 'NEEDS_CLARIFICATION' : 'OUT_OF_SCOPE',
     reasonCode: isBoundary ? 'ASK_AMBIGUOUS_NEGATIVE_COORDINATION' : 'ASK_OUT_OF_SCOPE',
     blocks: [],
     suggestions: [],
-    parameters: { retryable: false, actions: [], operationId: 'INVENTORY_ITEMS_READ' },
+    // The typed read that runs the chosen reading is the data-point read; the card's stored clarification (written by the card builder) is what a press is checked against.
+    parameters: { retryable: false, actions: [], operationId: 'DATA_POINT_READ', ...(card?.parameters ?? {}) },
     confirmation: null,
-    clarification: isBoundary
-      ? {
-          version: 1,
-          question: 'Please clarify whether both conditions should be excluded ("neither ... nor") or at least one applies ("either ... or").',
-          options: [
-            { operationId: 'INVENTORY_ITEMS_READ', label: 'Neither warranty nor due maintenance' },
-            { operationId: 'INVENTORY_ITEMS_READ', label: 'Either warranty or due maintenance' },
-          ],
-          allowFreeText: false,
-          expiresAt: new Date(Date.now() + 3600_000).toISOString(),
-        }
-      : null,
+    clarification: card?.clarification ?? null,
   };
   return {
     status: isBoundary ? 'NEEDS_CLARIFICATION' : 'OUT_OF_SCOPE',
@@ -1203,10 +1227,12 @@ export async function executeSliceOnProperty(input: {
   readonly propertyAuthorized: boolean;
   readonly rawText: string;
   readonly restrictedItemIds?: readonly string[];
+  readonly coordinationReading?: NegativeOrReading;
 }): Promise<SliceExecutionResult> {
   const snapshot = await loadSlicePropertySnapshot(input.propertyId);
   return executeSemanticSlice({
     rawText: input.rawText,
+    ...(input.coordinationReading ? { coordinationReading: input.coordinationReading } : {}),
     snapshot,
     auth: {
       propertyId: input.propertyId,

@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { resolveClarificationChoice } from '../support/clarificationContract';
 import { recordAskCapabilityLifecycle } from '../askCapabilityLifecycle';
 import { finalizeRecoveryActions, restartAfterExpiryCandidates } from '../suggestedActions/recoveryCandidates';
 import { prisma } from '../../../lib/prisma';
@@ -75,7 +76,16 @@ async function submitAskClarificationCore(userId: string, executionId: string, i
   const candidateOperationIds = Array.isArray(savedClarification.candidateOperationIds)
     ? savedClarification.candidateOperationIds.filter((value): value is string => typeof value === 'string')
     : [];
-  if (input.operationId && !candidateOperationIds.includes(input.operationId)) {
+  // What the press means is decided here, from the stored clarification only: a typed option is found by its option id (its payload is the server's, never the client's), and
+  // a plain operation-id press is refused when typed options share that operation, because it would not say which one was meant.
+  const choice = resolveClarificationChoice(savedClarification, { operationId: input.operationId, optionId: input.optionId });
+  if (!choice.ok) {
+    const error = new Error('The selected clarification option is invalid.');
+    (error as Error & { code?: string }).code = 'ASK_CLARIFICATION_INVALID_OPTION';
+    throw error;
+  }
+  const selectedOperationId = choice.operationId ?? undefined;
+  if (selectedOperationId && !candidateOperationIds.includes(selectedOperationId)) {
     const error = new Error('The selected clarification option is invalid.');
     (error as Error & { code?: string }).code = 'ASK_CLARIFICATION_INVALID_OPTION';
     throw error;
@@ -99,7 +109,10 @@ async function submitAskClarificationCore(userId: string, executionId: string, i
       eligibleOperationIds: clarificationEligibleOperationIds,
       propertyId: clarifiedPropertyId,
     });
-  if (input.operationId && !clarificationEligibleOperationIds.includes(input.operationId as AskOperationId)) {
+  // A typed option was authored by the server for the operation this very turn already ran, so re-running that operation with the chosen reading grants nothing new; the
+  // audience-discoverability list is for operations the homeowner picks, and does not list the internal data-point read for an owner-occupied home.
+  const serverAuthoredRerun = Boolean(choice.payload) && selectedOperationId === execution.operationId;
+  if (selectedOperationId && !serverAuthoredRerun && !clarificationEligibleOperationIds.includes(selectedOperationId as AskOperationId)) {
     const error = new Error('That home workflow is no longer available for the selected home and household role. Choose another option or ask again.');
     (error as Error & { code?: string }).code = 'ASK_CLARIFICATION_OPTION_UNAVAILABLE';
     throw error;
@@ -107,8 +120,8 @@ async function submitAskClarificationCore(userId: string, executionId: string, i
   let operation: AskOperationResolution;
   if (safetyDecision.stage === 'SAFETY') {
     operation = safetyDecision.operation;
-  } else if (input.operationId) {
-    operation = { ...getAskOperationDefinition(input.operationId as AskOperationId), confidence: 1 };
+  } else if (selectedOperationId) {
+    operation = { ...getAskOperationDefinition(selectedOperationId as AskOperationId), confidence: 1 };
   } else if (candidateOperationIds.length === 1) {
     operation = { ...getAskOperationDefinition(candidateOperationIds[0] as AskOperationId), confidence: 1 };
   } else {
@@ -152,7 +165,11 @@ async function submitAskClarificationCore(userId: string, executionId: string, i
   }
   try {
     const rawResult = await withAskTimeout(
-      executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: clarifiedMessage, propertyId: clarifiedPropertyId, operation, deferSemanticValidation: true }),
+      executeOperation({
+        userId, sessionId: execution.sessionId, executionId: execution.id, message: clarifiedMessage, propertyId: clarifiedPropertyId, operation, deferSemanticValidation: true,
+        // The typed reading the homeowner chose, from the stored option (BOOLEAN_READING): the operation re-applies it to the original message.
+        ...(choice.payload?.kind === 'BOOLEAN_READING' ? { suppliedInput: { clarifiedReading: choice.payload.reading } } : {}),
+      }),
       controls.executionTimeoutMs,
     );
     const presentedResult = operationDefinition.executionMode === 'DETERMINISTIC'
@@ -165,7 +182,7 @@ async function submitAskClarificationCore(userId: string, executionId: string, i
       propertyId: clarifiedPropertyId,
       semanticEnabled: controls.semanticResponseValidatorEnabled,
       recoveryAttempted: true,
-      operationConfirmedByUser: Boolean(input.operationId),
+      operationConfirmedByUser: Boolean(selectedOperationId),
     });
     const result = validation.result;
     recordAskAnswerTrustMetrics(operation.operationId, validation);

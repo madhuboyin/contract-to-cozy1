@@ -1,6 +1,8 @@
 // DATA_POINT_READ (reliability FRD D12, Phase 1b): "what is the serial number of my fridge", "when was my furnace installed", "what did I pay for my dryer".
 // A STANDARD, read-only fact read through the one allowlisted template in dataPoint/dataPointReader.ts. No side effects; a value that is not recorded is said plainly,
 // with the authorised way to add it, and never guessed (FR-REC-2 MISSING_RECORD_DATA).
+import { clarifiedReadingFrom } from '../support/clarificationContract';
+import type { NegativeOrReading } from '../semantic/deterministicSemanticParser';
 import { withUnappliedAmountComparison } from '../semantic/amountComparison';
 import { parseCompareSubjects, unresolvedCompareCopy } from '../support/unresolvedCompare';
 import { inDomainNotUnderstoodResult } from '../recovery/inDomainNotUnderstood';
@@ -210,6 +212,8 @@ export interface DataPointReadSemanticOptions {
   readonly semanticProvider?: SemanticUnderstandingProvider | null;
   readonly semanticProviderPolicy?: SemanticProviderPolicy;
   readonly evaluationMode?: 'PRODUCTION_SHORT_CIRCUIT' | 'DUAL_PRODUCER';
+  /** The homeowner's answer to a "no A or B" question (a typed clarification option), re-applied to this same message. */
+  readonly coordinationReading?: NegativeOrReading;
 }
 
 function attachOrchestrationParameters(
@@ -347,7 +351,9 @@ export async function dataPointReadResult(
 
     const slicePlan = parseDeterministicSemanticRequest(
       message,
-      authorizedProviderContext ? { dynamicEntities: authorizedProviderContext.dynamicEntities } : undefined,
+      authorizedProviderContext || options?.coordinationReading
+        ? { ...(authorizedProviderContext ? { dynamicEntities: authorizedProviderContext.dynamicEntities } : {}), ...(options?.coordinationReading ? { coordinationReading: options.coordinationReading } : {}) }
+        : undefined,
     );
     const sliceJob = slicePlan.outcome === 'MATCH' ? slicePlan.facets[0]?.evidence.jobMatch : null;
     if (
@@ -361,6 +367,7 @@ export async function dataPointReadResult(
         role,
         propertyAuthorized: true,
         rawText: message,
+        ...(options?.coordinationReading ? { coordinationReading: options.coordinationReading } : {}),
       });
       return withUnappliedAmountComparison(sliceExecution.operationResult, message);
     }
@@ -600,12 +607,15 @@ export const handleDataPointRead: Parameters<typeof registerCapabilityHandler>[1
   // this caller's authorization. Any other model-chosen key is refused, never guessed: that would recreate the raw-predicate path FR-DATA-15 forbids.
   const hinted = applyLaunchHints(envelope.message, { entityRef: envelope.launchContext?.dataPointEntityRef, parameters: envelope.launchContext?.dataPointParameters });
   if (hinted.kind === 'UNSUPPORTED') return notice('DATA_POINT_PARAMETERS_UNSUPPORTED', 'data-point-parameters-unsupported', 'I need a simpler question', 'Ask for the recorded detail directly. Filtered and grouped questions use only reviewed query templates.');
+  // A typed clarification option chosen by the homeowner (supplied by the server from the stored option, never by the client): validated against the closed set of readings.
+  const coordinationReading: NegativeOrReading | undefined = clarifiedReadingFrom(envelope.suppliedInput);
   const semanticOptions: DataPointReadSemanticOptions | undefined =
-    deps && (deps.semanticProvider !== undefined || deps.semanticProviderPolicy !== undefined || deps.semanticEvaluationMode !== undefined)
+    (deps && (deps.semanticProvider !== undefined || deps.semanticProviderPolicy !== undefined || deps.semanticEvaluationMode !== undefined)) || coordinationReading
       ? {
-          ...(deps.semanticProvider !== undefined ? { semanticProvider: deps.semanticProvider } : {}),
-          ...(deps.semanticProviderPolicy !== undefined ? { semanticProviderPolicy: deps.semanticProviderPolicy } : {}),
-          ...(deps.semanticEvaluationMode !== undefined ? { evaluationMode: deps.semanticEvaluationMode } : {}),
+          ...(deps?.semanticProvider !== undefined ? { semanticProvider: deps.semanticProvider } : {}),
+          ...(deps?.semanticProviderPolicy !== undefined ? { semanticProviderPolicy: deps.semanticProviderPolicy } : {}),
+          ...(deps?.semanticEvaluationMode !== undefined ? { evaluationMode: deps.semanticEvaluationMode } : {}),
+          ...(coordinationReading ? { coordinationReading } : {}),
         }
       : undefined;
   return dataPointReadResult(envelope.userId, envelope.propertyId!, hinted.message, forcedPoint, semanticOptions);

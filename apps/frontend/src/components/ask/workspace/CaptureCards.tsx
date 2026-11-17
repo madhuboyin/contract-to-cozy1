@@ -120,14 +120,16 @@ export function ClarificationCard({ executionId, clarification, onCompleted, aut
   const [idempotencyKey] = useState(newId);
   const expired = new Date(clarification.expiresAt) <= new Date();
 
-  const submitClarification = async (operationId?: string) => {
-    if (saving || expired || (!operationId && !answer.trim())) return;
+  // A press sends the option's own id when it has one (two options may run the same operation with different typed payloads, which stay on the server); a plain option
+  // sends its operation id as before.
+  const submitClarification = async (option?: { operationId: string; optionId?: string }) => {
+    if (saving || expired || (!option && !answer.trim())) return;
     setSaving(true); setError(null);
     try {
       const response = await api.submitAskClarification(executionId, {
         clarificationVersion: clarification.version,
         idempotencyKey,
-        ...(operationId ? { operationId } : { answer: answer.trim() }),
+        ...(option ? (option.optionId ? { optionId: option.optionId } : { operationId: option.operationId }) : { answer: answer.trim() }),
       });
       if (!response.success || !response.data) throw new Error(response.message || 'Could not apply that clarification.');
       onCompleted(response.data);
@@ -141,7 +143,7 @@ export function ClarificationCard({ executionId, clarification, onCompleted, aut
       <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-800">One detail needed</p>
       <h3 className="mt-1 font-semibold text-slate-950">{clarification.question}</h3>
       <div className="mt-4 flex flex-wrap gap-2">
-        {clarification.options.map((option) => <button key={option.operationId} type="button" disabled={saving || expired} onClick={() => void submitClarification(option.operationId)} className="min-h-11 rounded-xl border border-indigo-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:border-indigo-400 disabled:opacity-50">{option.label}</button>)}
+        {clarification.options.map((option) => <button key={option.optionId ?? option.operationId} type="button" disabled={saving || expired} onClick={() => void submitClarification(option)} className="min-h-11 rounded-xl border border-indigo-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:border-indigo-400 disabled:opacity-50">{option.label}</button>)}
       </div>
       {clarification.allowFreeText && <form className="mt-4 flex flex-col gap-2 sm:flex-row" onSubmit={(event) => { event.preventDefault(); void submitClarification(); }}><input id={`ask-clarification-${executionId}`} name="clarificationDetail" value={answer} onChange={(event) => setAnswer(event.target.value)} maxLength={500} disabled={saving || expired} placeholder="Or add a specific detail…" aria-label="Clarification detail" className="min-h-11 flex-1 rounded-xl border border-indigo-200 bg-white px-3 text-sm text-slate-900" /><button type="submit" disabled={saving || expired || !answer.trim()} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Continuing…' : 'Continue'}</button></form>}
       {expired && <p className="mt-3 text-sm text-amber-700">This clarification expired. Ask the question again to use current records.</p>}
