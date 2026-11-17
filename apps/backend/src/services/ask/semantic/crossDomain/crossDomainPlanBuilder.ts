@@ -550,10 +550,13 @@ const EMERGENCY_SAFETY_PATTERNS: readonly RegExp[] = [
   // smoke-detector maintenance question was answered with the emergency card.
   /\b(?:on|there'?s\s+a|there\s+is\s+a|caught|catching)\s+fire\b/i,
   /\bfire\s+(?:right\s+now|now|is\s+spreading|spreading|in\s+(?:my|the|our)\s+(?:house|home|kitchen|basement|attic|garage|walls?|roof))\b/i,
-  /\bsmell(?:s|ing)?\s+(?:like\s+)?(?:smoke|burning)\b/i,
+  /\bsmell(?:s|ing)?\s+(?:something\s+)?(?:like\s+)?(?:smoke|burning|burnt)\b/i,
   /\bsmoke\s+(?:is\s+)?(?:coming|pouring|filling|billowing|rising)\b/i,
   /\b(?:house|home|building|kitchen|garage)\s+(?:is\s+)?filling\s+with\s+smoke\b/i,
-  /\bsmoke\s+(?:alarm|detector)s?\s+(?:is\s+|are\s+)?(?:going\s+off|sounding|blaring)\b/i,
+  /\b(?:smoke\s+|fire\s+|carbon\s+monoxide\s+|co\s+)?(?:alarm|detector)s?\s+(?:is\s+|are\s+)?(?:going\s+off|sounding|blaring)\b/i,
+  /\bsomething\s+(?:is\s+)?burning\b/i,
+  /\b(?:filling|filled|full)\s+(?:up\s+)?(?:with|of)\s+smoke\b/i,
+  /\b(?:there\s+(?:are|is)|(?:i|we)\s+(?:can\s+)?(?:see|saw))\s+(?:the\s+)?flames?\b|\bflames?\s+(?:coming|shooting|spreading|visible)\b/i,
   /\bflood(?:ing)?\s+(?:right\s+now|basement)\b/i,
 ];
 

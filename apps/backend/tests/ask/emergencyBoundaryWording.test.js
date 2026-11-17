@@ -11,7 +11,7 @@ const { buildSeededCrossDomainSnapshot } = require('../../src/services/ask/seman
 // Live prompt #18 ("my furnace smells like gas") got "seek immediate emergency help or professional assistance": no instruction, no mention of leaving.
 test('the emergency wording says what to do now: leave, no switches/flames/phone inside, call from outside, no troubleshooting', () => {
   assert.match(EMERGENCY_BOUNDARY_BODY, /Leave the home right away/);
-  assert.match(EMERGENCY_BOUNDARY_BODY, /Do not turn lights or appliances on or off, use a flame, or use a phone inside/);
+  assert.match(EMERGENCY_BOUNDARY_BODY, /do not use switches, lights, appliances or other electrical devices, do not use a flame, and do not use a phone/);
   assert.match(EMERGENCY_BOUNDARY_BODY, /From outside/);
   assert.match(EMERGENCY_BOUNDARY_BODY, /911/);
   assert.match(EMERGENCY_BOUNDARY_BODY, /gas utility/);

@@ -3,7 +3,8 @@
 export const EMERGENCY_BOUNDARY_TITLE = 'Treat this as an immediate safety issue';
 
 export const EMERGENCY_BOUNDARY_BODY =
-  'Leave the home right away if you can do so safely, and take everyone with you. Do not turn lights or appliances on or off, use a flame, or use a phone inside, and do not start a vehicle in an attached garage. '
+  'Leave the home right away if you can do so safely, and take everyone with you. While you are inside or near the building, do not use switches, lights, appliances or other electrical devices, do not use a flame, and do not use a phone. '
+  + 'Do not start a vehicle or use a garage-door opener in an attached garage. '
   + 'From outside and away from the building, call 911 or your local emergency number, and your gas utility’s emergency line if you smelled gas. '
   + 'Do not try to find or fix the cause yourself, and do not go back in until responders say it is safe.';
 

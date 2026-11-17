@@ -6,7 +6,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "EMERGENCY_BOUNDARY",
   "confidence": 1,
   "order": 0,
-  "hash": "4ef718f223f66acc",
+  "hash": "8a832b641ebd9e55",
   "condition": "emergencyPattern.test(message) || activeEmergencyPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:activeEmergencyPattern",
