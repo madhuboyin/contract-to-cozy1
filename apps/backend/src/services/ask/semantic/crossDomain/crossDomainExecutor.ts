@@ -3464,6 +3464,11 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
 
   const primaryReceipt = execution.facetResults.find((f) => f.receipt !== null)?.receipt ?? null;
   const domainTitle = (domainId: string): string => ASK_SEMANTIC_DOMAINS.find((domain) => domain.domainId === domainId)?.title ?? 'Your home record';
+  const facetTitle = (facetResult: CrossDomainFacetExecutionResult): string => {
+    if (facetResult.jobMatch?.startsWith('query.claim.')) return 'Claims';
+    if (facetResult.jobMatch?.startsWith('query.permit.')) return 'Permits';
+    return domainTitle(facetResult.owner.domainId);
+  };
   const blocks: AskPresentationBlock[] = [];
 
   const onlyFacet = execution.facetResults.length === 1 ? execution.facetResults[0] : null;
@@ -3479,11 +3484,19 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
       if (summary.type === 'SUMMARY') blocks[summaryIndex] = { ...summary, title: `${summary.title} (partly answered)`, body: `${summary.body} ${note}`, tone: 'CAUTION' };
     }
   } else {
+    const answerDomains = [...new Set(execution.facetResults.map(facetTitle))];
+    const answerTitle = answerDomains.length === 1
+      ? answerDomains[0]
+      : answerDomains.length === 2
+        ? `${answerDomains[0]} and ${answerDomains[1]}`
+        : answerDomains.length > 2
+          ? `${answerDomains.slice(0, -1).join(', ')}, and ${answerDomains.at(-1)}`
+          : execution.facetResults.length > 1 ? 'Home record results' : 'Home record result';
     blocks.push({
       type: 'SUMMARY',
       // Preserve the receipt's declared answer variant at the final Ask boundary. The provisional delivery gate verifies this identity.
       id: primaryReceipt?.answerVariantId ?? 'cross-domain-summary',
-      title: execution.facetResults.length > 1 ? 'Your answers' : 'Your answer',
+      title: answerTitle,
       body: humanizeEnumTokens(execution.answer),
       tone: execution.status === 'PARTIAL' ? 'CAUTION' : 'DEFAULT',
       actions: [],
@@ -3494,7 +3507,7 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
         const rowById = new Map((facetResult.rows ?? []).map((row) => [row.id, row]));
         return {
           id: `section-${facetResult.facetId}`,
-          title: domainTitle(facetResult.owner.domainId),
+          title: facetTitle(facetResult),
           count: facetResult.recordIds.length,
           items: facetResult.recordIds.map((id) => {
             const row = rowById.get(id);
@@ -3508,7 +3521,15 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
         };
       });
     if (listSections.length > 0) {
-      blocks.push({ type: 'GROUPED_LIST', id: 'cross-domain-grouped-list', title: 'Matched records', sections: listSections, actions: [], filters: [] });
+      blocks.push({
+        type: 'GROUPED_LIST',
+        id: 'cross-domain-grouped-list',
+        title: 'Matching home records',
+        sections: listSections,
+        actions: [],
+        filters: [],
+        listDensity: 'DENSE',
+      });
     }
     blocks.push({
       type: 'EVIDENCE',

@@ -40,6 +40,7 @@ describe('isCalmAdopter', () => {
     expect(isCalmAdopter(execution([summary(), { type: 'GROUPED_LIST', id: 'maintenance-groups' }]))).toBe(true);
     expect(isCalmAdopter(execution([summary(), { type: 'GROUPED_LIST', id: 'inventory-results' }]))).toBe(true);
     expect(isCalmAdopter(execution([summary(), { type: 'GROUPED_LIST', id: 'warranty-results' }]))).toBe(true);
+    expect(isCalmAdopter(execution([summary(), { type: 'GROUPED_LIST', id: 'cross-domain-grouped-list' }]))).toBe(true);
     expect(isCalmAdopter(execution([summary(), { type: 'PRIORITY_LIST', id: 'home-actions-priority-list' }]))).toBe(true);
     // The Property Summary's warranties section is one part of a larger answer, not the adopted warranty answer.
     expect(isCalmAdopter(execution([summary(), { type: 'GROUPED_LIST', id: 'property-warranties' }]))).toBe(false);

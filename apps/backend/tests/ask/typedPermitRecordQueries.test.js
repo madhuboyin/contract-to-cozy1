@@ -79,11 +79,15 @@ test('no permits recorded says so without claiming nothing was permitted; none o
 });
 
 test('open claims or pending permits answers both parts', async () => {
-  const { execution, summary } = await ask('Are there any open claims or pending permits for this home?');
+  const { execution, result, summary } = await ask('Are there any open claims or pending permits for this home?');
   assert.deepEqual(execution.facetResults.map((f) => f.owner.owner === 'UNRESOLVED'), [false, false]);
   assert.match(summary, /open claim\(s\)/);
   assert.match(summary, /3 open permit\(s\)/);
   assert.doesNotMatch(summary, /couldn’t answer/);
+  assert.equal(result.blocks[0].title, 'Claims and Permits');
+  const records = result.blocks.find((block) => block.type === 'GROUPED_LIST');
+  assert.equal(records.title, 'Matching home records');
+  assert.equal(records.listDensity, 'DENSE');
 });
 
 test('what the rule cannot answer is named, not dropped; a bare permits question and the project question keep their routes', async () => {
