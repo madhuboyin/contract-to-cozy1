@@ -1,6 +1,8 @@
 # Ask Cozy — Actionable Result Enrichment FRD
 
-**Status:** Draft v1.4 for owner review
+**Status:** Draft v1.5 for owner review
+
+**v1.5 amendment (2026-11-18):** Applies the fifth review: destination-to-entity-type support is declared on the operation definition (`supportedActionEntityTypes`), the single metadata source the validator reads, with handler-local target lists derived from it or tested for equality.
 
 **v1.4 amendment (2026-11-18):** Applies the fourth review: registry rows declare an explicit `effect` (`READ` | `MUTATION`) validated against destination metadata; single-use is defined as one durable write, consistent with existing confirm idempotency; an entity-type mismatch is `BOOT_FATAL`; and warranty date overlap is decided as inclusive.
 
@@ -132,7 +134,24 @@ Startup consumes only `BOOT_FATAL` issues. The architecture inventory reports al
 - a `MUTATION` action whose destination is not a registered, confirmation-gated command;
 - a `READ` action whose destination is a mutating operation;
 - an `effect` declaration that contradicts the destination's `ASK_OPERATION_DEFINITIONS` / domain-command metadata;
-- a destination operation that does not support the row's entity type (the row could never execute correctly).
+- a destination operation that does not declare support for the row's entity type, or declares no `supportedActionEntityTypes` at all (the row could never execute correctly).
+
+### 4.1 Entity-type support metadata
+
+**[verified]** `AskOperationDefinition` (`askOperationRegistry.ts` ~463) has no supported-entity-type field, and the domain-command registry holds one nominal type per command. That is insufficient for multi-target operations: `CAPTURE_EVIDENCE_CONFIRM` is registered as `HOME_EVENT_EVIDENCE` (`askDomainCommandRegistry.ts` ~345) but its handler accepts `HOME_EVENT`, `INVENTORY_ITEM`, `WARRANTY` and `WORK_ITEM` (`homeRecordWrites.handler.ts` ~590, `EVIDENCE_ATTACH_TARGET_TYPES`). A validator reading the nominal type would wrongly reject the planned inventory and warranty attach rows.
+
+The single authoritative source is a new field on the operation definition:
+
+```ts
+supportedActionEntityTypes: readonly AskActionEntityType[];
+```
+
+- The enrichment validator reads **only** this field.
+- Multi-target operations declare every supported launch-context entity type.
+- Handler-local target lists derive from the same declaration, or a test asserts equality. The registry never imports a handler-local constant (that would reverse the dependency and add a drift point).
+- Missing or mismatched support is `BOOT_FATAL`.
+- Regression test: `CAPTURE_EVIDENCE_CONFIRM` accepts `INVENTORY_ITEM` and `WARRANTY` and rejects an unsupported type.
+- Only operations targeted by a registry row need the declaration in v1; adding it elsewhere is deferred.
 
 `effect` is declared explicitly because it states the behavior the action promises; it is never inferred from the action id or label. Read, analysis and inline-detail actions (`READ`) are not subject to the confirmation-gating check.
 
