@@ -28,6 +28,49 @@ import { propertyContextCapturesTotal } from '../../../lib/metrics';
 import { resolvePropertyAccess, ROLE_RANK } from '../../../services/propertyAccess.service';
 import { PropertyContextAccessDeniedError } from './getPropertyContext';
 import { assertCanonicalWarrantyScope } from '../../../services/warrantyCanonicalModel';
+import {
+  classifyWarrantyCoverage,
+  warrantyCreateLockText,
+  warrantyOverrideFingerprint,
+  type ExistingWarrantyRecord,
+  type WarrantyCoverageClassification,
+} from './warrantyCoverageMatch';
+
+/** Raised when an identical warranty is already recorded for the same target (Actionable Result Enrichment FRD §5.2). Nothing is written. */
+export class WarrantyAlreadyRecordedError extends Error {
+  readonly code = 'ASK_CONFIRMATION_CONFLICT';
+  constructor(readonly existingWarrantyId: string) {
+    super('This warranty is already recorded for this item, so nothing was added. Start Record warranty again to review the current coverage.');
+  }
+}
+
+/** Raised when equivalent or conflicting coverage exists and the reviewed, single-use override no longer matches it. Nothing is written. */
+export class WarrantyCoverageChangedError extends Error {
+  readonly code = 'ASK_CONFIRMATION_CONFLICT';
+  constructor() {
+    super('Coverage already recorded for this item overlaps this warranty or changed since you reviewed it, so nothing was added. Start Record warranty again to review the current coverage.');
+  }
+}
+
+type WarrantyDb = Pick<Prisma.TransactionClient, 'warranty'>;
+
+/**
+ * Every existing warranty on ONE target (an inventory item, or the property-wide target when no item), classified against a candidate. Used by the
+ * Ask review step (to choose the review surface) and again inside the write transaction (the authoritative check).
+ */
+export async function findWarrantyCoverage(
+  db: WarrantyDb,
+  propertyId: string,
+  inventoryItemId: string | null,
+  candidate: { providerName: string; policyNumber?: string | null; category: string; scopeKind: string; startDate: Date; expiryDate: Date },
+): Promise<WarrantyCoverageClassification> {
+  const rows = await db.warranty.findMany({
+    where: { propertyId, inventoryItemId },
+    select: { id: true, providerName: true, policyNumber: true, category: true, scopeKind: true, startDate: true, expiryDate: true, updatedAt: true },
+  });
+  const existing: ExistingWarrantyRecord[] = rows.map((row) => ({ ...row, category: String(row.category), scopeKind: String(row.scopeKind) }));
+  return classifyWarrantyCoverage(candidate, existing);
+}
 
 const captureWarrantyInputSchema = z.object({
   providerName: z.string().trim().min(1).max(160),
@@ -40,6 +83,8 @@ const captureWarrantyInputSchema = z.object({
   startDate: z.string().datetime(),
   expiryDate: z.string().datetime(),
   sourceExecutionId: z.string().trim().min(1),
+  /** The single-use override fingerprint stored with this execution at review time. Never client-supplied. */
+  overrideFingerprint: z.string().trim().min(1).nullable().optional(),
 });
 
 export type CaptureWarrantyInput = z.infer<typeof captureWarrantyInputSchema>;
@@ -59,30 +104,7 @@ export async function captureWarranty(
   const scopeKind = assertCanonicalWarrantyScope({ ...input, propertyId });
 
   try {
-    const warranty = await prisma.$transaction(async (tx) => {
-      const property = await tx.property.findUnique({ where: { id: propertyId }, select: { homeownerProfileId: true } });
-      if (!property) throw new Error('Property not found.');
-      if (input.inventoryItemId) {
-        const item = await tx.inventoryItem.findFirst({ where: { id: input.inventoryItemId, propertyId }, select: { id: true } });
-        if (!item) throw new Error('Warranty inventory item does not belong to this property.');
-      }
-      return tx.warranty.create({
-        data: {
-          homeownerProfileId: property.homeownerProfileId,
-          propertyId,
-          providerName: input.providerName,
-          category: input.category,
-          scopeKind,
-          inventoryItemId: input.inventoryItemId ?? null,
-          policyNumber: input.policyNumber ?? null,
-          coverageDetails: input.coverageDetails ?? null,
-          cost: input.cost != null ? new Prisma.Decimal(input.cost) : null,
-          startDate,
-          expiryDate,
-          sourceExecutionId: input.sourceExecutionId,
-        },
-      });
-    });
+    const warranty = await prisma.$transaction((tx) => recordWarrantyInTransaction(tx, { propertyId, userId, input, scopeKind, startDate, expiryDate }));
     propertyContextCapturesTotal.inc({ scope: 'WARRANTY', fact_key: 'warranty', outcome: 'success' });
     return warranty;
   } catch (error) {
@@ -101,4 +123,57 @@ export async function captureWarranty(
     propertyContextCapturesTotal.inc({ scope: 'WARRANTY', fact_key: 'warranty', outcome: 'error' });
     throw error;
   }
+}
+
+/**
+ * The authoritative create (FRD §5.4). Order matters:
+ *  1. take the transaction-scoped advisory lock for this target, so two concurrent executions serialize without a semantic unique index;
+ *  2. return the row this same execution already wrote (a safe retry), before any duplicate check could mistake it for a duplicate;
+ *  3. re-check the property and item;
+ *  4. re-run the COMPLETE duplicate / conflict query and classify every current match;
+ *  5. block an exact duplicate; require a matching single-use fingerprint for an equivalent or conflicting record; otherwise create.
+ */
+export async function recordWarrantyInTransaction(
+  tx: Prisma.TransactionClient,
+  ctx: { propertyId: string; userId: string; input: CaptureWarrantyInput; scopeKind: WarrantyScopeKind; startDate: Date; expiryDate: Date },
+) {
+  const { propertyId, userId, input, scopeKind, startDate, expiryDate } = ctx;
+  const inventoryItemId = input.inventoryItemId ?? null;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${warrantyCreateLockText(propertyId, inventoryItemId)}, 0))`;
+
+  const already = await tx.warranty.findFirst({ where: { propertyId, sourceExecutionId: input.sourceExecutionId } });
+  if (already) return already;
+
+  const property = await tx.property.findUnique({ where: { id: propertyId }, select: { homeownerProfileId: true } });
+  if (!property) throw new Error('Property not found.');
+  if (inventoryItemId) {
+    const item = await tx.inventoryItem.findFirst({ where: { id: inventoryItemId, propertyId }, select: { id: true } });
+    if (!item) throw new Error('Warranty inventory item does not belong to this property.');
+  }
+
+  const coverage = await findWarrantyCoverage(tx, propertyId, inventoryItemId, {
+    providerName: input.providerName, policyNumber: input.policyNumber ?? null, category: input.category, scopeKind, startDate, expiryDate,
+  });
+  if (coverage.outcome === 'EXACT_DUPLICATE') throw new WarrantyAlreadyRecordedError(coverage.matches[0].id);
+  if (coverage.outcome !== 'NO_MATCH') {
+    const current = warrantyOverrideFingerprint({ executionId: input.sourceExecutionId, userId, propertyId, inventoryItemId, matches: coverage.matches });
+    if (!input.overrideFingerprint || input.overrideFingerprint !== current) throw new WarrantyCoverageChangedError();
+  }
+
+  return tx.warranty.create({
+    data: {
+      homeownerProfileId: property.homeownerProfileId,
+      propertyId,
+      providerName: input.providerName,
+      category: input.category,
+      scopeKind,
+      inventoryItemId,
+      policyNumber: input.policyNumber ?? null,
+      coverageDetails: input.coverageDetails ?? null,
+      cost: input.cost != null ? new Prisma.Decimal(input.cost) : null,
+      startDate,
+      expiryDate,
+      sourceExecutionId: input.sourceExecutionId,
+    },
+  });
 }

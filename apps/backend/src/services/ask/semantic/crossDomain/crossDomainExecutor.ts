@@ -313,7 +313,7 @@ export interface CrossDomainFacetExecutionResult {
   readonly status: 'EXECUTED' | 'PARTIAL_MISSING_SLOTS' | 'UNRESOLVED' | 'BLOCKED';
   readonly summary: string;
   readonly recordIds: readonly string[];
-  readonly rows?: ReadonlyArray<{ readonly id: string; readonly label: string; readonly subtitle?: string }>;
+  readonly rows?: ReadonlyArray<{ readonly id: string; readonly label: string; readonly subtitle?: string; readonly entityType?: string; readonly actions?: ReadonlyArray<Record<string, unknown>> }>;
   readonly missingSlots: readonly string[];
   readonly redactedFieldIds: readonly string[];
   readonly receipt: SemanticReadReceipt | null;
@@ -988,6 +988,8 @@ function executeNewStackFacet(
             id: item.id,
             label: item.title,
             ...(item.description ? { subtitle: item.description } : {}),
+            // The governed next step the slice chose for this row survives the compound assembly (Action Enrichment FRD).
+            ...(item.entityType && item.actions && item.actions.length > 0 ? { entityType: item.entityType, actions: item.actions as ReadonlyArray<Record<string, unknown>> } : {}),
           })),
         )
       : [];
@@ -3543,9 +3545,9 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
               title: row?.label && row.label.trim().length > 0 ? row.label : 'Record',
               ...(row?.subtitle ? { description: row.subtitle } : {}),
               ...(row?.subtitle ? { status: row.subtitle } : {}),
-              ...(entityType ? { entityType } : {}),
+              ...(row?.entityType ? { entityType: row.entityType } : entityType ? { entityType } : {}),
               meta: row?.subtitle ? [row.subtitle] : [] as string[],
-              actions: [],
+              actions: (row?.actions ?? []) as never[],
             };
           }),
         };

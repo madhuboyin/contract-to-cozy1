@@ -285,3 +285,44 @@ test('the inventory list renders its declared START_WORKFLOW block action as a b
   expect(invoke).toHaveBeenCalledWith(addAction);
   expect(screen.getByRole('link', { name: /Open home inventory/ })).toBeInTheDocument();
 });
+
+// Actionable Result Enrichment FRD FR-ACT-4: a governed row action shows inline on the first five rows that carry it; the rest keep it in the inline detail.
+const recordWarranty = { id: 'record-warranty-item', label: 'Record warranty', message: 'Record a warranty in my home record.', style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'CAPTURE_WARRANTY_CONFIRM' };
+function blockWithEnrichedRows(count: number, withActionEvery = 1): typeof block {
+  const template = block.sections[0].items[0];
+  const items = Array.from({ length: count }, (_, index) => ({
+    ...template, id: `enriched-${index}`, title: `Appliance ${index}`, entityType: 'INVENTORY_ITEM',
+    ...(index % withActionEvery === 0 ? { actions: [recordWarranty] } : { actions: [] }),
+  }));
+  return { ...block, sections: [{ ...block.sections[0], count, items }] };
+}
+
+test('Record warranty shows inline on a row and dispatches the exact item identity with the declared operation', () => {
+  const enriched = blockWithEnrichedRows(1);
+  const onAction = jest.fn();
+  render(<InventoryResultList block={enriched} propertyId="home" onAction={onAction} onFilter={() => {}} onPage={() => {}} onAccessLost={() => {}} link={(_, label) => label} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Record warranty' }));
+  expect(onAction).toHaveBeenCalledWith('INVENTORY_ITEM', 'enriched-0', 'Record a warranty in my home record.', 'CAPTURE_WARRANTY_CONFIRM', 'MUTATE_RECORD');
+});
+
+test('only the first five rows carrying the action show it inline, counted over rows that carry it', () => {
+  // Rows 0, 2, 4, ... carry the action; the rows between them do not and never use up a slot.
+  const enriched = blockWithEnrichedRows(14, 2);
+  render(<InventoryResultList block={enriched} propertyId="home" onAction={jest.fn()} onFilter={() => {}} onPage={() => {}} onAccessLost={() => {}} link={(_, label) => label} />);
+  expect(screen.queryAllByRole('button', { name: 'Record warranty' })).toHaveLength(5);
+});
+
+test('a row without governed actions shows no Record warranty control', () => {
+  const plain = blockWithEnrichedRows(3, 99);
+  render(<InventoryResultList block={{ ...plain, sections: [{ ...plain.sections[0], items: plain.sections[0].items.map((entry, index) => (index === 0 ? { ...entry, actions: [recordWarranty] } : { ...entry, actions: [] })) }] }} propertyId="home" onAction={jest.fn()} onFilter={() => {}} onPage={() => {}} onAccessLost={() => {}} link={(_, label) => label} />);
+  expect(screen.queryAllByRole('button', { name: 'Record warranty' })).toHaveLength(1);
+});
+
+test('Review replacement shows inline as a read launch for that exact appliance', () => {
+  const review = { id: 'review-replacement-item', label: 'Review replacement', message: 'Should I repair or replace Water heater?', style: 'SECONDARY' as const, interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'REPLACEMENT_GUIDANCE' };
+  const aging = { ...block, sections: [{ ...block.sections[0], items: [{ ...block.sections[0].items[0], entityType: 'INVENTORY_ITEM', actions: [review] }] }] } as typeof block;
+  const onAction = jest.fn();
+  render(<InventoryResultList block={aging} propertyId="home" onAction={onAction} onFilter={() => {}} onPage={() => {}} onAccessLost={() => {}} link={(_, label) => label} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Review replacement' }));
+  expect(onAction).toHaveBeenCalledWith('INVENTORY_ITEM', 'item-0', 'Should I repair or replace Water heater?', 'REPLACEMENT_GUIDANCE', 'CONVERSATION_CONTINUE');
+});

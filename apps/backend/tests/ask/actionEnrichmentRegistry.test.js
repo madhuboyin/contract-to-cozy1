@@ -10,22 +10,31 @@ const { validateAskRuntimeRegistration, loadAskHandlerManifest } = require('../.
 
 const row = (overrides = {}) => ({
   id: 'row-1', sourceOperationId: 'DATA_POINT_READ', predicateState: 'warranty:absent', entityType: 'INVENTORY_ITEM',
-  actionId: 'record-warranty-item', label: 'Record warranty', destinationOperationId: 'CAPTURE_WARRANTY_CONFIRM', effect: 'MUTATION', placement: 'INLINE',
+  actionId: 'record-warranty-item', label: 'Record warranty', message: 'Record a warranty in my home record.', destinationOperationId: 'CAPTURE_WARRANTY_CONFIRM', effect: 'MUTATION', placement: 'INLINE',
   ...overrides,
 });
 const codes = (entries, presentations) => registry.validateActionEnrichmentRegistry(entries, presentations).map((issue) => `${issue.severity}:${issue.code}`);
 
-test('the shipped registry has no issues of either severity (step 1 declares no rows)', () => {
+test('the shipped registry has no issues of either severity', () => {
   assert.deepEqual(registry.validateActionEnrichmentRegistry(), []);
-  assert.equal(registry.ACTION_ENRICHMENT_REGISTRY.length, 0);
+  assert.ok(registry.ACTION_ENRICHMENT_REGISTRY.length > 0);
 });
 
-test('a well-formed mutation row validates cleanly; a read destination with no entity-type declaration does not', () => {
+test('every shipped row\'s canned message equals the destination handler\'s declared-action message (no drift)', () => {
+  const { WARRANTY_ADD_MESSAGE } = require('../../src/services/ask/handlers/homeRecordWrites.handler');
+  for (const entry of registry.ACTION_ENRICHMENT_REGISTRY.filter((row) => row.destinationOperationId === 'CAPTURE_WARRANTY_CONFIRM')) {
+    assert.equal(entry.message, WARRANTY_ADD_MESSAGE);
+  }
+});
+
+test('a well-formed mutation row and a declared read row validate cleanly; a read destination with no entity-type declaration does not', () => {
   assert.deepEqual(codes([row()]), []);
-  // REPLACEMENT_GUIDANCE is a read; it declares the entity type it accepts like any other destination would.
-  const read = row({ id: 'row-2', actionId: 'review-replacement', destinationOperationId: 'REPLACEMENT_GUIDANCE', effect: 'READ' });
-  const withType = registry.validateActionEnrichmentRegistry([read]).map((issue) => issue.code);
-  assert.deepEqual(withType, ['ENTITY_TYPE_UNSUPPORTED'], 'a destination with no supportedActionEntityTypes declaration is fatal, even for a read');
+  // REPLACEMENT_GUIDANCE is a Viewer-accessible read that declares the entity type it accepts.
+  const read = row({ id: 'row-2', actionId: 'review-replacement', message: 'Should I repair or replace {item}?', destinationOperationId: 'REPLACEMENT_GUIDANCE', effect: 'READ' });
+  assert.deepEqual(registry.validateActionEnrichmentRegistry([read]).map((issue) => issue.code), []);
+  // A read destination that declares nothing is fatal, even though it is not a write.
+  const undeclared = row({ id: 'row-3', actionId: 'show-status', destinationOperationId: 'MAINTENANCE_STATUS', effect: 'READ' });
+  assert.deepEqual(registry.validateActionEnrichmentRegistry([undeclared]).map((issue) => issue.code), ['ENTITY_TYPE_UNSUPPORTED']);
 });
 
 test('structural defects are BOOT_FATAL', () => {
@@ -68,9 +77,11 @@ test('the trust allowlist is generated from the registry', () => {
   const generated = registry.actionEnrichmentAllowedActionIds([row(), row({ id: 'r2', actionId: 'second' }), row({ id: 'r3', sourceOperationId: 'WARRANTY_LOOKUP' })]);
   assert.deepEqual([...generated.get('DATA_POINT_READ')].sort(), ['record-warranty-item', 'second']);
   assert.deepEqual([...generated.get('WARRANTY_LOOKUP')], ['record-warranty-item']);
-  // With no rows declared, the trust policy still strips an undeclared action id exactly as before.
-  const action = { id: 'record-warranty-item', label: 'Record warranty', interactionType: 'START_WORKFLOW', message: 'x', operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' };
-  assert.equal(isAskActionApplicable({ action, operationId: 'DATA_POINT_READ', householdRole: 'OWNER', authoritativeSourceAvailable: true }), false);
+  // The shipped row's id is declared for its source operation, so the trust policy keeps it; an undeclared id is still stripped.
+  const action = { id: 'record-warranty-item', label: 'Record warranty', interactionType: 'MUTATE_RECORD', message: 'Record a warranty in my home record.', operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'SECONDARY' };
+  assert.equal(isAskActionApplicable({ action, operationId: 'DATA_POINT_READ', householdRole: 'OWNER', authoritativeSourceAvailable: true }), true);
+  assert.equal(isAskActionApplicable({ action: { ...action, id: 'record-warranty-undeclared' }, operationId: 'DATA_POINT_READ', householdRole: 'OWNER', authoritativeSourceAvailable: true }), false);
+  assert.equal(isAskActionApplicable({ action, operationId: 'WARRANTY_LOOKUP', householdRole: 'OWNER', authoritativeSourceAvailable: true }), false, 'declared only for its own source operation');
 });
 
 test('startup registration reports no enrichment issues and overflow copy is the product constant', () => {

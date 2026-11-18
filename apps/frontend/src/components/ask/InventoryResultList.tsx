@@ -18,6 +18,10 @@ export type InventoryAskItem = Block['sections'][number]['items'][number];
 type Item = InventoryAskItem;
 const COMPLETE_MISSING_DETAILS_ACTION_ID = 'complete-missing-details';
 const REVIEW_COVERAGE_ACTION_ID = 'review-coverage-information';
+// Governed row actions chosen by the server's action-enrichment registry. At most this many rows per result block show the action inline, counted
+// in rendered order over rows that carry it; every other row keeps it in its inline detail (Actionable Result Enrichment FRD FR-ACT-4).
+const ENRICHMENT_ROW_ACTION_IDS: ReadonlySet<string> = new Set(['record-warranty-item', 'review-replacement-item']);
+const ENRICHMENT_INLINE_ROW_LIMIT = 5;
 
 function errorStatus(error: unknown): number | null {
   return error && typeof error === 'object' && typeof (error as { status?: unknown }).status === 'number'
@@ -174,6 +178,9 @@ export function InventoryResultList({ block, propertyId, disabled, onAction, onF
   // ACUI I-1 (FRD v1.121): inside an adopted calm answer the first workflow action ("Add an item") is the one dominant step and the
   // full-inventory link is quiet text. The list's own copy of that link exists for the calm answer only.
   const calm = useCalmAnswer();
+  const inlineEnrichedRowIds = new Set(
+    block.sections.flatMap((section) => section.items).filter((entry) => (entry.actions ?? []).some((action) => ENRICHMENT_ROW_ACTION_IDS.has(action.id))).slice(0, ENRICHMENT_INLINE_ROW_LIMIT).map((entry) => entry.id),
+  );
   const primaryActionId = calm ? block.actions.find((action) => action.interactionType === 'START_WORKFLOW')?.id ?? null : null;
   const listActions = block.actions.filter((action) => calm || action.id !== 'open-inventory-list');
   const [localDetailItemId, setLocalDetailItemId] = useState<string | null>(null);
@@ -224,7 +231,7 @@ export function InventoryResultList({ block, propertyId, disabled, onAction, onF
             <tbody className="block divide-y divide-slate-200 bg-white md:table-row-group">
           {section.items.slice(0, controls ? visible : section.items.length).map((item) => {
             const selected = controls?.view.selectedTaskId === item.id;
-            const directActions = (item.actions ?? []).filter((action) => action.id === COMPLETE_MISSING_DETAILS_ACTION_ID || action.id === REVIEW_COVERAGE_ACTION_ID);
+            const directActions = (item.actions ?? []).filter((action) => action.id === COMPLETE_MISSING_DETAILS_ACTION_ID || action.id === REVIEW_COVERAGE_ACTION_ID || (ENRICHMENT_ROW_ACTION_IDS.has(action.id) && inlineEnrichedRowIds.has(item.id)));
             const canEdit = Boolean(onAction && item.actions !== undefined);
             return <tr key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('block p-3 outline-offset-2 md:table-row md:p-0', selected && 'bg-teal-50')}>
               <th scope="row" className="block md:table-cell md:px-3 md:py-3 md:align-top">

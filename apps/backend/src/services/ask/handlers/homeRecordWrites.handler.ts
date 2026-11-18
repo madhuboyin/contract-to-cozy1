@@ -544,7 +544,7 @@ export function warrantyUpdateCaptureRequest(row: WarrantyEditorRow, entered?: R
 // Phase 3 add slice: start a user-initiated warranty add. Returns the empty form; submitting it resumes through
 // the existing CAPTURE_WARRANTY_EDIT path (validation, ISO date normalisation, confirmation card) and confirming
 // writes through the existing confirmCaptureWarranty / captureWarranty writer.
-export async function warrantyAddResult(userId: string, propertyId: string, sourceExecutionId: string | null): Promise<AskOperationResult> {
+export async function warrantyAddResult(userId: string, propertyId: string, sourceExecutionId: string | null, itemId: string | null = null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   if (access.role === HouseholdRole.VIEWER) {
     return {
@@ -553,12 +553,21 @@ export async function warrantyAddResult(userId: string, propertyId: string, sour
       suggestions: [],
     };
   }
-  const contextVersion = createHash('sha256').update(`warranty-add:${propertyId}`).digest('hex');
+  // Item-targeted launch: the item is re-read here (never trusted from the client) and its id is kept only in the server-stored parameters.
+  const item = itemId ? await prisma.inventoryItem.findFirst({ where: { id: itemId, propertyId }, select: { id: true, name: true } }) : null;
+  if (itemId && !item) {
+    return {
+      status: 'BLOCKED', reasonCode: 'WARRANTY_ITEM_NOT_FOUND',
+      blocks: [{ type: 'SUMMARY', id: 'warranty-add-item-missing', title: 'This item is no longer available', body: 'It may have been removed. Nothing has changed.', tone: 'CAUTION', actions: [] }],
+      suggestions: [],
+    };
+  }
+  const contextVersion = createHash('sha256').update(`warranty-add:${propertyId}:${item?.id ?? 'PROPERTY'}`).digest('hex');
   return {
     status: 'NEEDS_CONTEXT', reasonCode: 'WARRANTY_ADD_INPUT_REQUIRED', contextVersion,
-    parameters: { captureOrigin: USER_ADD_ORIGIN, sourceExecutionId },
+    parameters: { captureOrigin: USER_ADD_ORIGIN, sourceExecutionId, ...(item ? { inventoryItemId: item.id, inventoryItemName: item.name } : {}) },
     blocks: [{ type: 'SUMMARY', id: 'warranty-add-input', title: 'Record warranty', body: 'Nothing has been saved yet. Enter the details, then review them before the warranty is added.', tone: 'DEFAULT', actions: [] }],
-    captureRequests: [warrantyAddCaptureRequest(contextVersion)],
+    captureRequests: [warrantyAddCaptureRequest(contextVersion, item ? { itemName: item.name } : undefined)],
     suggestions: [],
   };
 }

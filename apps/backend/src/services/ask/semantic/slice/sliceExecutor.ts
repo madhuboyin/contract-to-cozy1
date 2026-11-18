@@ -13,6 +13,8 @@ import { classifyTransitionalWarrantyLinks, type TransitionalWarrantyRead } from
 import { buildSemanticReadReceipt, type SemanticReadReceipt } from '../semanticExecutionReceipt';
 import { verifySemanticReadReceiptEntailment, type SemanticReceiptEntailmentVerdict } from '../semanticReceiptEntailment';
 import { gateUncertifiedCommandPreview } from '../containment/commandPreviewAdmission';
+import { enrichRowActions } from '../../actionEnrichment/actionEnrichmentRows';
+import { actionEnrichmentOverflowCopy } from '../../actionEnrichment/actionEnrichmentRegistry';
 import {
   buildSemanticTextEnvelope,
   verifyPlaceholderSpanMapRoundTrip,
@@ -270,6 +272,14 @@ function hasAgePredicate(expr: SemanticWhereExpression | null | undefined): bool
   if (expr.kind === 'PREDICATE') return expr.predicateId === 'predicate.inventory_item.older_than_years';
   if (expr.kind === 'NOT') return hasAgePredicate(expr.operand);
   return expr.operands.some(hasAgePredicate);
+}
+
+/** Whole-year thresholds of the age predicates the homeowner asked for POSITIVELY ("older than N years"); one under a NOT is a different question and is not returned. */
+function positiveAgeThresholds(expr: SemanticWhereExpression | null | undefined, negated = false): number[] {
+  if (!expr) return [];
+  if (expr.kind === 'PREDICATE') return expr.predicateId === 'predicate.inventory_item.older_than_years' && !negated && expr.thresholdYears ? [expr.thresholdYears] : [];
+  if (expr.kind === 'NOT') return positiveAgeThresholds(expr.operand, !negated);
+  return expr.operands.flatMap((operand) => positiveAgeThresholds(operand, negated));
 }
 
 function evaluateWherePredicate(
@@ -953,6 +963,33 @@ function executeValidatedSlicePlan(input: {
       });
 
   const isWarrantyRelation = facet.relations.some((r) => r.semanticRelationId === 'relation.inventory_item.warranty');
+  // Action Enrichment FRD: each row whose warranty state establishes "no linked warranty recorded" gets the governed next step, decided per row by the
+  // registry. A row in another state (explicit no coverage, unknown, conflicted) gets none, and a viewer gets no write action.
+  // An aging row (installed longer ago than the age the homeowner asked about, with a recorded install date) is also offered "Review replacement".
+  const askedAges = positiveAgeThresholds(facet.where);
+  const youngestAskedAge = askedAges.length > 0 ? Math.min(...askedAges) : null;
+  const enrichment = (isWarrantyRelation || youngestAskedAge !== null) && projection !== 'COUNT'
+    ? enrichRowActions({
+      sourceOperationId: 'DATA_POINT_READ',
+      role: auth.role,
+      presentation: 'INVENTORY_RESULT_LIST',
+      rows: matched.map(({ item, warranty }) => ({
+        id: item.id,
+        label: item.name,
+        entityType: 'INVENTORY_ITEM',
+        states: [
+          ...(isWarrantyRelation ? [`warranty:${warranty.state}`] : []),
+          ...(youngestAskedAge !== null && isOlderThanYears(item, youngestAskedAge, snapshot.asOfDate) === true ? ['age:OLDER_THAN_ASKED'] : []),
+        ],
+      })),
+    })
+    : null;
+  const presentedRows: SlicePresentationRow[] = enrichment
+    ? rows.map((row) => {
+      const actions = enrichment.actionsByRowId.get(row.id);
+      return actions ? { ...row, entityType: 'INVENTORY_ITEM', actions } : row;
+    })
+    : rows;
   const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
   let title = projection === 'COUNT'
     ? `${matched.length} matching inventory items`
@@ -1023,7 +1060,8 @@ function executeValidatedSlicePlan(input: {
     receipt,
     title,
     summaryBody,
-    rows,
+    rows: presentedRows,
+    ...(enrichment && enrichment.overflowCount > 0 ? { overflowNote: actionEnrichmentOverflowCopy(enrichment.overflowCount) } : {}),
     // Semantic inventory reads are still ordinary inventory records. Giving
     // them the canonical list identity enables the existing compact table and
     // live item-detail disclosure instead of the generic label-only cards.

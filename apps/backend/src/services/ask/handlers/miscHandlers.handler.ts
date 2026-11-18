@@ -1043,8 +1043,9 @@ registerCapabilityHandler('capture.warranty.confirm', async (envelope) => {
   const declaredAddAction = envelope.launchContext?.operationId === 'CAPTURE_WARRANTY_CONFIRM'
     && envelope.launchContext.surface !== 'ASK_REFRESH'
     && envelope.message === WARRANTY_ADD_MESSAGE;
+  const itemId = envelope.launchContext?.entityType === 'INVENTORY_ITEM' && typeof envelope.launchContext.entityId === 'string' ? envelope.launchContext.entityId : null;
   return declaredAddAction
-    ? warrantyAddResult(envelope.userId, envelope.propertyId!, envelope.launchContext?.sourceExecutionId ?? null)
+    ? warrantyAddResult(envelope.userId, envelope.propertyId!, envelope.launchContext?.sourceExecutionId ?? null, itemId)
     : captureNotDirectlyRoutableResult('warranty');
 });
 

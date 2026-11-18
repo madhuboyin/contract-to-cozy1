@@ -2,6 +2,7 @@
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
 import { recordAskCapabilityLifecycle } from '../askCapabilityLifecycle';
+import { reviewWarrantyCoverageForEdit } from './warrantyCoverageReview';
 import { readStoredSuggestedNextActions } from '../suggestedActions/suggestedNextAction.contract';
 import { getCaptureDefinitionForFact } from '../../../modules/propertyContext/catalog/captureRegistry';
 import { PROPERTY_AREA_CAPTURE_SCOPES, type PropertyAreaCaptureScope } from '../../../modules/propertyContext/catalog/featureRequirementRegistry';
@@ -2571,11 +2572,16 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
       capturedContextVersion = storedContextVersion;
       canonicalOwner = 'AskCaptureCandidateEdit';
     } else {
-    const edited = execution.operationId === 'CAPTURE_FACT_CONFIRM'
+    const editedBase = execution.operationId === 'CAPTURE_FACT_CONFIRM'
       ? editCaptureFactCandidate(execution.parametersJson, execution.message, storedContextVersion, input.answer, new Date())
       : execution.operationId === 'CAPTURE_EVENT_CONFIRM'
         ? editCaptureEventCandidate(execution.parametersJson, execution.message, storedContextVersion, input.answer, new Date())
         : editCaptureWarrantyCandidate(execution.parametersJson, execution.message, storedContextVersion, input.answer, new Date());
+    // Actionable Result Enrichment FRD §5.2: a submitted warranty is checked against the coverage already recorded for the same target before
+    // the review is shown (exact duplicate: terminal result; overlap: "Record anyway"; otherwise unchanged).
+    const edited = editedBase && execution.operationId === 'CAPTURE_WARRANTY_CONFIRM'
+      ? await reviewWarrantyCoverageForEdit({ execution, userId, edited: editedBase })
+      : editedBase;
     if (!edited) {
       const error = new Error('Enter a valid value for this field.');
       (error as Error & { code?: string }).code = 'ASK_CAPTURE_VALIDATION_ERROR';

@@ -1,6 +1,8 @@
 # Ask Cozy — Actionable Result Enrichment FRD
 
-**Status:** Draft v1.7 — build steps 1 and 2 implemented; steps 3-5 not started
+**Status:** Draft v1.8 — build steps 1-5 implemented for the v1 rows below; not browser-verified; owner decisions listed in section 13
+
+**v1.8 amendment (2026-11-18):** Records build steps 3-5: the warranty coverage guard (shared normalization, classification, advisory lock, single-use override), the item-targeted "Record warranty" slice with the non-confirming duplicate result, per-row enrichment wired into the semantic inventory presentation and the compound assembly, the first read row ("Review replacement"), and the rows deferred with reasons.
 
 **v1.7 amendment (2026-11-18):** Records build step 2, the "Record warranty" label migration, including what was deliberately left unchanged.
 
@@ -326,3 +328,43 @@ Not verified: browser behaviour (nothing is rendered yet); the first-step claim 
 - Tests, fixtures and E2E specs updated to the new label and message. Test names that said "Add a warranty" now say "Record warranty".
 - **Not changed (decision needed):** three desktop, non-Ask surfaces still say "Add a warranty": `coverage/[itemId]/page.tsx`, `HomeRecordsClient.tsx` (a generic "Add a warranty, receipt, inspection report…" sentence) and `SellerPrepEntryFlowGate.tsx`. They are outside the Ask action this FRD governs and may mean something other than recording existing coverage, so they were left for an owner ruling. Historical FRD entries were not rewritten.
 - Executed: the seven warranty-add tests in `correctionHandlersRuntime.test.js`, `provisionalWarranty`, `warrantyLookupCapabilitySlice` (one routing failure, "What does my HVAC warranty cover?", is present without this change), `skillGovernanceExceptions`, the enrichment registry test, backend typecheck, and the frontend warranty tests. Two `calmWarrantyAnswer.test.tsx` failures and five `correctionHandlersRuntime.test.js` failures (inventory and room routing, Add item) exist without this change. Playwright E2E specs were edited but **not run**; nothing here is browser-verified.
+
+**Step 3 (2026-11-18), warranty coverage guard:**
+
+- `modules/propertyContext/application/warrantyCoverageMatch.ts` (pure): `normalizeProvider`, `normalizePolicyNumber`, inclusive `warrantyDateRangesOverlap`, `classifyWarrantyCoverage` (precedence: exact duplicate, overlapping conflict, equivalent, no match; two different policy numbers with the same provider, category and scope are no match), `warrantyOverrideFingerprint`, `warrantyCreateLockText` (`PROPERTY` sentinel).
+- `captureWarranty.ts`: the create now runs in `recordWarrantyInTransaction`: advisory lock (`pg_advisory_xact_lock(hashtextextended(text, 0))`) first; a same-execution retry returns the original row before any duplicate check; the property and item are re-checked; the complete duplicate/conflict query is re-run and every current match classified; an exact duplicate throws `WarrantyAlreadyRecordedError`; equivalent or conflicting coverage needs the stored fingerprint to equal the freshly computed one, otherwise `WarrantyCoverageChangedError`. Both errors carry `ASK_CONFIRMATION_CONFLICT`, so the existing confirmation engine ends the execution in its terminal "This changed before it could be confirmed" result (no engine change, FR re-arm deferred).
+- `execution/warrantyCoverageReview.ts`, called from the capture edit path in `askCapture.ts` before the review is shown: no match leaves the review unchanged; an exact duplicate returns a terminal `ANSWERED` result (`WARRANTY_ALREADY_RECORDED`) with a summary and the existing warranty in the standard `warranty-results` block, no confirmation, no capture request and no server action; equivalent or overlapping coverage relabels the confirmation "Record anyway", shows the existing coverage and stores the fingerprint server-side in the execution parameters.
+- `CAPTURE_WARRANTY_CONFIRM` now allows `GROUPED_LIST` (the duplicate block).
+- Tests: `warrantyCoverageGuard.test.js` (19), `warrantyCoverageReview.test.js` (6).
+
+**Step 4 (2026-11-18), item-level Record warranty and row enrichment:**
+
+- Launch: a row action carrying `entityType: INVENTORY_ITEM` and the row id reaches `warrantyAddResult`, which re-reads the item (never trusted from the client), keeps `inventoryItemId` and `inventoryItemName` only in server-stored parameters, drops the whole-home plan coverage type from the form, and names the appliance in the form question and as an "Appliance" field on the review. The confirm handler passes `inventoryItemId`, `ITEM_SPECIFIC` scope and the stored fingerprint to the writer.
+- `actionEnrichment/actionEnrichmentRows.ts`: `enrichRowActions` is per row, reads the destination operation's own role floor, chooses at most one action per row (first declared match), counts the inline limit over eligible rows only, and returns an overflow count where the presentation cannot host rows in a detail surface.
+- `richPresentationAdapter.ts` carries an optional `entityType` and `actions` per row and an overflow note; `sliceExecutor.ts` (the semantic inventory read) emits row states and calls the enrichment; `crossDomainExecutor.ts` passes a facet row's actions through the multi-facet compound assembly.
+- `InventoryResultList.tsx` shows the governed action inline for the first five rows that carry one and leaves the rest in the inline detail.
+- Registry row: `warranty:NO_LINK_RECORDED` on an inventory item gives "Record warranty". It is **not** offered for `EXPLICIT_NO_COVERAGE` (the homeowner said there is none; recording one would create a conflicting link), `UNKNOWN` or `CONFLICTED_LINKS`.
+- Tests: `actionEnrichmentRows.test.js` (13), frontend `inventoryResultContinuity.test.tsx` (4 added).
+
+**Step 5 (2026-11-18), remaining rows:**
+
+- Implemented: "Review replacement" (`REPLACEMENT_GUIDANCE`, effect `READ`, Viewer-accessible, `{item}` in the message) on a row older than an age the homeowner asked about positively ("older than N years"; a NOT-ed age gives none). `REPLACEMENT_GUIDANCE` now declares `supportedActionEntityTypes: INVENTORY_ITEM`. Caveat: this operation is `READ` for confirmation purposes but persists a `ReplaceRepairAnalysis` (and decision threads for an HVAC item); it is derived or bookkeeping state, not a homeowner record change.
+- **Deferred, with reasons (each is a registry row plus a presentation wiring when picked up):**
+  - *Attach document* (`CAPTURE_EVIDENCE_CONFIRM`): the operation needs a file already uploaded client-side (`documentId`), which a row action cannot start; the inline detail already hosts the upload control. Needs an upload-start design.
+  - *Mark maintenance complete / Reschedule* (`MAINTENANCE_TASK_COMPLETE` / `MAINTENANCE_TASK_UPDATE`): semantic maintenance rows render through the maintenance list with its own action handling and no declared `supportedActionEntityTypes`; the dedicated Maintenance result already offers these. Needs the list's direct-action handling and the task launch contract confirmed.
+  - *Record permit* (`PERMIT_TRACKER_COMMAND`), *Recall confirm/dismiss* (`RECALL_MATCH_UPDATE`), *Open claim* detail, *Seller-readiness item action*: each is rendered by its own list component and handler with its own governed actions; none passes through the shared inventory presentation, so each needs its own row wiring and entity-type declaration.
+  - *Add missing inventory details*: the dedicated inventory read already offers `complete-missing-details`; the semantic slice has no per-row "missing field" state to key on yet.
+  - *Set reminder*: remains not eligible (no generic operation).
+
+**Verification actually performed (not browser-verified):** backend typecheck; the new registry, rows, guard and review tests; the existing import-graph guardrail (no cycle) and startup/inventory/runtime suites, whose pre-existing failures are unchanged; frontend jest for the inventory list. The advisory lock is exercised only against a **simulated serialized store**, not a real PostgreSQL concurrent transaction; Playwright was not run; the compound multi-facet pass-through is code-traced and typechecked, not exercised end to end.
+
+## 13. Decisions for the owner
+
+1. **Desktop "Add a warranty" copy:** rename the three non-Ask surfaces (`coverage/[itemId]/page.tsx`, `HomeRecordsClient.tsx`, `SellerPrepEntryFlowGate.tsx`) too, or leave them?
+2. **Terminal conflict vs re-arm:** v1 ends a changed-coverage confirmation in the existing terminal conflict result (start Record warranty again). Accept, or build a governed re-arm in the confirmation engine?
+3. **Appliance as a "fixed form field":** the capture form has no read-only field type, so the appliance is named in the form question and shown as a fixed "Appliance" field on the review card. Accept, or add a read-only capture field type?
+4. **Explicit "no coverage" items:** they are not offered Record warranty (it would create a conflicting link). Should they instead be offered a "Change coverage status" step, or stay as is?
+5. **Property-wide Record warranty from Ask today:** the existing form creates only `HOME_WARRANTY_PLAN` warranties, because any other category needs an inventory item and the form never supplied one (the writer rejects it). Fix by guiding a non-plan category to an item pick, or leave plan-only?
+6. **Deferred rows (section 12):** which to build next, in what order?
+7. **Review replacement's persistence:** accept the persisted `ReplaceRepairAnalysis` as acceptable for a `READ` row, or require a non-persisting variant for list launches?
+8. **Real concurrency test:** the advisory lock was tested against a simulated store. Add a real-PostgreSQL concurrency test (needs a test database), or accept?

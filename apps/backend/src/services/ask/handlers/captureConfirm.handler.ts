@@ -1,7 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
-import { AskCaptureAttribution, Prisma, PropertyFactSourceType, WarrantyCategory } from '@prisma/client';
+import { AskCaptureAttribution, Prisma, PropertyFactSourceType, WarrantyCategory, WarrantyScopeKind } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type ConfirmCapabilityResult } from '../confirmCapabilityHandlerRegistry';
@@ -269,12 +269,15 @@ async function confirmCaptureWarranty(ctx: ConfirmCapabilityContext): Promise<Co
     warranty = await captureWarranty(execution.propertyId, userId, {
       providerName,
       category: category as WarrantyCategory,
+      // Item-targeted capture (Actionable Result Enrichment FRD §5): the item id was fixed server-side when the action launched, never taken from the form.
+      ...(typeof parameters.inventoryItemId === 'string' ? { inventoryItemId: parameters.inventoryItemId, scopeKind: WarrantyScopeKind.ITEM_SPECIFIC } : {}),
       policyNumber: typeof parameters.policyNumber === 'string' ? parameters.policyNumber : null,
       coverageDetails: typeof parameters.coverageDetails === 'string' ? parameters.coverageDetails : null,
       cost: typeof parameters.cost === 'number' ? parameters.cost : null,
       startDate,
       expiryDate,
       sourceExecutionId: execution.id,
+      overrideFingerprint: typeof parameters.overrideFingerprint === 'string' ? parameters.overrideFingerprint : null,
     });
   } catch (error) {
     if (error instanceof PropertyContextAccessDeniedError) {

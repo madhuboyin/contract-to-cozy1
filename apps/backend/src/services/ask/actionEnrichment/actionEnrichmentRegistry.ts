@@ -29,6 +29,13 @@ export interface ActionEnrichmentEntry {
   readonly entityType: AskActionEntityType;
   readonly actionId: string;
   readonly label: string;
+  /**
+   * The exact message the destination operation receives. `{item}` is replaced with the row's display name, so a destination that reads the subject
+   * from the message (and from the launch context) gets both. A row with no display name gets no action when its message needs one.
+   * For a destination with a declared-action guard the registry cannot import the handler constant, so a test pins equality.
+   */
+  readonly message: string;
+  readonly style?: 'PRIMARY' | 'SECONDARY' | 'QUIET';
   readonly destinationOperationId: AskOperationId;
   readonly effect: ActionEnrichmentEffect;
   readonly placement: ActionEnrichmentPlacement;
@@ -41,8 +48,44 @@ export const ACTION_ENRICHMENT_PRESENTATIONS: Readonly<Record<string, { readonly
   INVENTORY_RESULT_LIST: { supportsDetailPlacement: true },
 });
 
-/** Step 1 declares no rows. */
-export const ACTION_ENRICHMENT_REGISTRY: readonly ActionEnrichmentEntry[] = Object.freeze([]);
+/**
+ * The declared rows. Each is a registry row plus a test (FRD §8). Deferred rows, with their reasons, are listed in the FRD's implementation status.
+ *
+ * Row-level state keys (`predicateState`) are produced by the presenting read for each row it shows; an action is only offered on a row whose
+ * state matches. `warranty:NO_LINK_RECORDED` is the transitional warranty classifier's "no linked warranty recorded" state; it is deliberately
+ * not used for EXPLICIT_NO_COVERAGE (the homeowner said there is none), UNKNOWN, or CONFLICTED_LINKS.
+ */
+export const ACTION_ENRICHMENT_REGISTRY: readonly ActionEnrichmentEntry[] = Object.freeze([
+  {
+    id: 'inventory-warranty-absent-record-warranty',
+    sourceOperationId: 'DATA_POINT_READ',
+    predicateState: 'warranty:NO_LINK_RECORDED',
+    entityType: 'INVENTORY_ITEM',
+    actionId: 'record-warranty-item',
+    label: 'Record warranty',
+    message: 'Record a warranty in my home record.',
+    style: 'SECONDARY',
+    destinationOperationId: 'CAPTURE_WARRANTY_CONFIRM',
+    effect: 'MUTATION',
+    placement: 'INLINE',
+    presentation: 'INVENTORY_RESULT_LIST',
+  },
+  {
+    // A read, not a write: it opens the repair-or-replace analysis for that one appliance (the same launch the focused-guidance cards use).
+    id: 'inventory-aging-review-replacement',
+    sourceOperationId: 'DATA_POINT_READ',
+    predicateState: 'age:OLDER_THAN_ASKED',
+    entityType: 'INVENTORY_ITEM',
+    actionId: 'review-replacement-item',
+    label: 'Review replacement',
+    message: 'Should I repair or replace {item}?',
+    style: 'SECONDARY',
+    destinationOperationId: 'REPLACEMENT_GUIDANCE',
+    effect: 'READ',
+    placement: 'INLINE',
+    presentation: 'INVENTORY_RESULT_LIST',
+  },
+]);
 
 /** Inline actions shown per result block, counted in rendered order over eligible rows only (FRD FR-ACT-4). */
 export const ACTION_ENRICHMENT_MAX_INLINE_ROWS = 5;

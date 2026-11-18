@@ -1,5 +1,6 @@
 import type { AskPresentationBlock } from '../../../../productFramework/ask/ask.contract';
 import type { SemanticReadReceipt } from '../semanticExecutionReceipt';
+import type { EnrichmentRowAction } from '../../actionEnrichment/actionEnrichmentRows';
 import { humanizeEnumTokensInCopy, humanizePresentationText, humanizePresentationToken } from '../containment/presentationHumanizer';
 
 export interface SlicePresentationRow {
@@ -11,6 +12,10 @@ export interface SlicePresentationRow {
   readonly stateCode?: string;
   readonly badgeLabel?: string;
   readonly groupKey?: string;
+  /** Grounded entity type of this row. Set only with `actions`, so a row without a governed next step renders exactly as before. */
+  readonly entityType?: string;
+  /** Governed next-step actions chosen by the action-enrichment registry (Actionable Result Enrichment FRD). */
+  readonly actions?: readonly EnrichmentRowAction[];
 }
 
 export interface SliceRichPresentationInput {
@@ -21,6 +26,8 @@ export interface SliceRichPresentationInput {
   readonly listId?: string;
   readonly listTitle?: string;
   readonly listDescription?: string;
+  /** Said under the list when more rows qualified for an action than could be given one (FRD FR-ACT-4). */
+  readonly overflowNote?: string;
 }
 
 export interface SliceRichPresentationEquivalenceReport {
@@ -63,7 +70,7 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
       type: 'GROUPED_LIST',
       id: input.listId ?? `${receipt.answerVariantId}-list`,
       title: humanizeEnumTokensInCopy(input.listTitle ?? input.title),
-      description: input.listDescription ?? `Showing ${rows.length} of ${receipt.population.totalMatchCount} confirmed matches`,
+      description: [input.listDescription ?? `Showing ${rows.length} of ${receipt.population.totalMatchCount} confirmed matches`, input.overflowNote].filter(Boolean).join(' '),
       sections: [...grouped.entries()].map(([groupTitle, groupRows], index) => ({
         id: `${receipt.answerVariantId}-section-${index + 1}`,
         title: groupTitle,
@@ -74,6 +81,8 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
           meta: [...(row.meta ?? [])].map(humanizeEnumTokensInCopy),
           subtitle: row.subtitle ? humanizeEnumTokensInCopy(row.subtitle) : undefined,
           description: row.description ? humanizeEnumTokensInCopy(row.description) : undefined,
+          ...(row.entityType ? { entityType: row.entityType } : {}),
+          ...(row.actions && row.actions.length > 0 ? { actions: row.actions.map((action) => ({ ...action })) } : {}),
           badge: row.stateCode
             ? humanizePresentationToken(row.stateCode)
             : row.badgeLabel

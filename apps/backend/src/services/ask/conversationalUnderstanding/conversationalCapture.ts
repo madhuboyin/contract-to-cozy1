@@ -361,16 +361,28 @@ export const USER_ADD_ORIGIN = 'USER_ADD';
 // The empty form for a user-initiated warranty add. It deliberately reuses the CAPTURE_WARRANTY_EDIT capture
 // key, so submitting it goes through the existing edit-before-confirm path (same validation, ISO date
 // normalisation and parameter shape the confirm handler already reads).
-export function warrantyAddCaptureRequest(contextVersion: string): AskCaptureRequest {
+export function warrantyAddCaptureRequest(contextVersion: string, target?: { itemName: string }): AskCaptureRequest {
   const base = warrantyEditCaptureRequest({ captureOrigin: USER_ADD_ORIGIN }, contextVersion);
+  // Item-targeted capture (Actionable Result Enrichment FRD §5): the appliance is fixed by the server, never chosen in the form, and a
+  // whole-home plan is not a coverage type for one appliance.
+  type GroupField = { key: string; inputSchema: { type: string; options?: Array<{ value: string }> } & Record<string, unknown> } & Record<string, unknown>;
+  const schema = base.inputSchema as { type: string; fields?: GroupField[] };
+  const fields = target && schema.type === 'GROUP' && schema.fields
+    ? schema.fields.map((field) => field.key === 'category' && field.inputSchema.type === 'SINGLE_SELECT'
+      ? { ...field, inputSchema: { ...field.inputSchema, options: (field.inputSchema.options ?? []).filter((option) => option.value !== 'HOME_WARRANTY_PLAN') } }
+      : field)
+    : null;
   return {
     ...base,
+    ...(fields ? { inputSchema: { type: 'GROUP' as const, fields } } : {}),
     // WORKFLOW_INPUT makes the submit button read "Continue to review": nothing is saved until the confirmation.
     classification: 'WORKFLOW_INPUT',
     state: 'UNKNOWN',
     title: 'Record warranty',
-    question: 'Which warranty would you like to add to your home record?',
-    helpText: 'Only the provider, coverage type and dates are required. You will review everything before it is saved.',
+    question: target ? `Which warranty covers your ${target.itemName}?` : 'Which warranty would you like to add to your home record?',
+    helpText: target
+      ? `This warranty is recorded for ${target.itemName}. Only the provider, coverage type and dates are required. You will review everything before it is saved.`
+      : 'Only the provider, coverage type and dates are required. You will review everything before it is saved.',
     currentAnswer: { providerName: null, category: null, policyNumber: null, coverageDetails: null, cost: null, startDate: null, expiryDate: null },
     destinationLabel: 'Used to prepare this warranty; nothing is saved until you confirm',
   };
@@ -765,6 +777,7 @@ function eventEditConfirmationBlocksAndCard(mergedParameters: Record<string, unk
 function warrantyEditConfirmationBlocksAndCard(mergedParameters: Record<string, unknown>, sourceSentence: string, expiresAt: Date, version: number) {
   const startDateApproximate = Boolean(mergedParameters.startDateApproximate);
   const fields: Array<{ label: string; value: string }> = [
+    ...(typeof mergedParameters.inventoryItemName === 'string' && mergedParameters.inventoryItemName ? [{ label: 'Appliance', value: mergedParameters.inventoryItemName }] : []),
     { label: 'Provider', value: typeof mergedParameters.providerName === 'string' ? mergedParameters.providerName : '' },
     { label: 'Coverage', value: typeof mergedParameters.category === 'string' ? WARRANTY_CATEGORY_OPTIONS.find((option) => option.value === mergedParameters.category)?.label ?? mergedParameters.category : '' },
   ];
