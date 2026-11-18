@@ -479,7 +479,8 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string, mes
   const pursuingItems = readinessItems.filter((item) => item.status === 'PURSUING');
   const waivedItems = readinessItems.filter((item) => item.status === 'WAIVED');
   const waivedCount = waivedItems.length;
-  const filteredChecklist = Boolean(under || highPriorityOnly || appliancesOnly);
+  // Only a filter that was APPLIED counts: the cost ceiling is skipped for a non-owner (cost detail is owner-only), and a list that was not narrowed must not be titled as one that was.
+  const filteredChecklist = Boolean((under && isOwner) || highPriorityOnly || appliancesOnly);
 
   const grouped = new Map<string, typeof openItems>();
   for (const item of openItems) {

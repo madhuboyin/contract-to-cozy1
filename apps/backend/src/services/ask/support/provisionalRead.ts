@@ -361,10 +361,37 @@ export function groundedItemCostVerdict(question: string, result: AskOperationRe
 }
 const itemCostRouteGuard = (message: string): boolean => COST_TOPIC.test(message) && COST_NEW.test(message) && !COST_OTHER_JOB.test(message);
 
+// ---- seller-prep checklist --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// The checklist is a read of the sale case's readiness items. It may be delivered when (1) the question is a checklist read: not a decision on an item (waive, pursue, reopen), not another operation's job (value, proceeds, hold or rent,
+// a different record), (2) the answer has the shape the real handler produces (its summary and a checklist reason code; the delivery gate itself removes the boundary block, so it is not required here), and (3) a narrowing the homeowner named (appliances, high priority, a cost
+// ceiling) is the narrowing the handler applied, so a filtered question is never answered with the whole checklist. A cost ceiling a non-owner cannot have applied (cost detail is owner-only) is therefore withheld, not answered unfiltered.
+const SELLER_PREP_COMMAND = /\b(?:waive|waived|pursue|unpursue|reopen|dismiss|add|create|start|begin|mark|confirm|update|change|edit|delete|remove|set|reset|schedule|hire|book|list my home|put (?:my|the) home)\b/i;
+const SELLER_PREP_OTHER_JOB = /\b(?:net proceeds|proceeds|commission|capital gains?|sell,? hold|hold or rent|rent(?:ing)? (?:it |my home |the home )?out|market value|home value|worth|list(?:ing)? price|sale price|how much (?:will|can|could) i (?:sell|get)|warrant(?:y|ies)|claims?|permits?|projects?|recalls?|insurance|tax(?:es)?|mortgage|refinanc\w*|quotes?|bids?|inspection report|documents?)\b/i;
+const SELLER_PREP_ASKS_COST_CEILING = /\b(?:less than|under|below)\s*\$\s?\d/i;
+const SELLER_PREP_ASKS_HIGH_PRIORITY = /\bhigh priority\b/i;
+const SELLER_PREP_ASKS_APPLIANCES = /\bappliances?\b/i;
+const SELLER_PREP_REASONS = new Set(['SELLER_PREP_ITEMS_OPEN', 'SELLER_PREP_NO_OPEN_ITEMS']);
+export function groundedSellerPrepVerdict(question: string, result: AskOperationResult): GroundedReadVerdict {
+  const fail = (code: string): GroundedReadVerdict => ({ outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', code] });
+  if (SELLER_PREP_COMMAND.test(question)) return fail('QUESTION_IS_A_COMMAND');
+  if (SELLER_PREP_OTHER_JOB.test(question)) return fail('ANOTHER_OPERATION_OWNS_THE_QUESTION');
+  if (result.status !== 'ANSWERED' && result.status !== 'READY_WITH_LIMITATIONS') return fail('ANSWER_IS_NOT_A_DELIVERABLE_STATUS');
+  const ids = result.blocks.map(warrantyBlockId);
+  if (!ids.includes('seller-prep-summary') || !SELLER_PREP_REASONS.has(result.reasonCode ?? '')) return fail('ANSWER_IS_NOT_A_VERIFIED_VARIANT');
+  const summary = result.blocks.find((block) => warrantyBlockId(block) === 'seller-prep-summary') as { title?: string; body?: string } | undefined;
+  const filtered = summary?.title === 'Seller-prep items that match';
+  const askedNarrowing = SELLER_PREP_ASKS_COST_CEILING.test(question) || SELLER_PREP_ASKS_HIGH_PRIORITY.test(question) || SELLER_PREP_ASKS_APPLIANCES.test(question);
+  if (askedNarrowing && !filtered) return fail('NARROWING_WAS_NOT_APPLIED');
+  if (!askedNarrowing && filtered) return fail('FILTERED_VIEW_FOR_AN_UNFILTERED_QUESTION');
+  if (SELLER_PREP_ASKS_APPLIANCES.test(question) && !/appliance/i.test(summary?.body ?? '')) return fail('APPLIANCE_NARROWING_NOT_STATED');
+  return { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] };
+}
+const sellerPrepRouteGuard = (message: string): boolean => !SELLER_PREP_COMMAND.test(message) && !SELLER_PREP_OTHER_JOB.test(message);
+
 // ---- which operations may be tried provisionally --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 export type GroundedReadCheck = (question: string, result: AskOperationResult) => GroundedReadVerdict;
 /** FR-GATE-8: an operation may be tried provisionally only together with a grounded delivery check. This table IS the allowlist (fastPathCertificates derives PROVISIONAL_READ_OPERATIONS from it). */
-export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict, WARRANTY_LOOKUP: groundedWarrantyVerdict, HOME_STATUS_BOARD: groundedStatusBoardVerdict, HOME_BASICS_GUIDE: groundedHomeBasicsVerdict, PROPERTY_SUMMARY: groundedPropertySummaryVerdict, INCIDENT_CLAIM_STATUS: groundedClaimStatusVerdict, SAVED_RESULTS: groundedSavedResultsVerdict, WORK_OVERVIEW: groundedWorkOverviewVerdict, ITEM_REPLACEMENT_COST: groundedItemCostVerdict });
+export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict, WARRANTY_LOOKUP: groundedWarrantyVerdict, HOME_STATUS_BOARD: groundedStatusBoardVerdict, HOME_BASICS_GUIDE: groundedHomeBasicsVerdict, PROPERTY_SUMMARY: groundedPropertySummaryVerdict, INCIDENT_CLAIM_STATUS: groundedClaimStatusVerdict, SAVED_RESULTS: groundedSavedResultsVerdict, WORK_OVERVIEW: groundedWorkOverviewVerdict, ITEM_REPLACEMENT_COST: groundedItemCostVerdict, SELLER_PREP_CHECKLIST: groundedSellerPrepVerdict });
 
 /**
  * FR-CAP-3 Phase 1 disposition for every provisional family. FAST_PATH_RULES
@@ -386,6 +413,7 @@ export const PROVISIONAL_READ_FAMILY_DISPOSITIONS: Readonly<Record<string, {
   INCIDENT_CLAIM_STATUS: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'claimStatusRouteGuard', 'groundedClaimStatusVerdict', 'operationAnswerContract'] },
   WORK_OVERVIEW: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'workOverviewRouteGuard', 'groundedWorkOverviewVerdict', 'operationAnswerContract'] },
   ITEM_REPLACEMENT_COST: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'itemCostRouteGuard', 'groundedItemCostVerdict', 'operationAnswerContract'] },
+  SELLER_PREP_CHECKLIST: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'sellerPrepRouteGuard', 'groundedSellerPrepVerdict', 'sellerPrepHandlerBlockContract'] },
 });
 
 export function verifyProvisionalReadFamilyDispositions(): readonly string[] {
@@ -401,7 +429,7 @@ export function verifyProvisionalReadFamilyDispositions(): readonly string[] {
 }
 export const hasGroundedReadCheck = (operationId: AskOperationId): boolean => operationId in GROUNDED_READ_CHECKS;
 /** Checked before a provisional read is started: false means the rule's match is not the request this read answers, so the turn keeps the strict path. */
-export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ MAINTENANCE_STATUS: maintenanceRouteGuard, WARRANTY_LOOKUP: warrantyRouteGuard, HOME_STATUS_BOARD: statusBoardRouteGuard, HOME_BASICS_GUIDE: homeBasicsRouteGuard, PROPERTY_SUMMARY: propertySummaryRouteGuard, INCIDENT_CLAIM_STATUS: claimStatusRouteGuard, SAVED_RESULTS: savedResultsRouteGuard, WORK_OVERVIEW: workOverviewRouteGuard, ITEM_REPLACEMENT_COST: itemCostRouteGuard });
+export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ MAINTENANCE_STATUS: maintenanceRouteGuard, WARRANTY_LOOKUP: warrantyRouteGuard, HOME_STATUS_BOARD: statusBoardRouteGuard, HOME_BASICS_GUIDE: homeBasicsRouteGuard, PROPERTY_SUMMARY: propertySummaryRouteGuard, INCIDENT_CLAIM_STATUS: claimStatusRouteGuard, SAVED_RESULTS: savedResultsRouteGuard, WORK_OVERVIEW: workOverviewRouteGuard, ITEM_REPLACEMENT_COST: itemCostRouteGuard, SELLER_PREP_CHECKLIST: sellerPrepRouteGuard });
 export const provisionalRouteAllowed = (operationId: AskOperationId, message: string): boolean => (GROUNDED_READ_ROUTE_GUARDS[operationId]?.(message) ?? true);
 export function groundedVerdictFor(operationId: AskOperationId, question: string, result: AskOperationResult): GroundedReadVerdict {
   const check = GROUNDED_READ_CHECKS[operationId];
