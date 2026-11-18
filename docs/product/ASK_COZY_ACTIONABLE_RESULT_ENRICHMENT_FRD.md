@@ -1,6 +1,8 @@
 # Ask Cozy — Actionable Result Enrichment FRD
 
-**Status:** Draft v1.3 for owner review
+**Status:** Draft v1.4 for owner review
+
+**v1.4 amendment (2026-11-18):** Applies the fourth review: registry rows declare an explicit `effect` (`READ` | `MUTATION`) validated against destination metadata; single-use is defined as one durable write, consistent with existing confirm idempotency; an entity-type mismatch is `BOOT_FATAL`; and warranty date overlap is decided as inclusive.
 
 **v1.3 amendment (2026-11-18):** Applies the third review: `CAPTURE_WARRANTY_CONFIRM` must allow `GROUPED_LIST` for the exact-duplicate block; a changed conflict set at confirm ends in the existing terminal conflict result (no confirmation-engine re-arm in v1); fingerprint revalidation reruns the full classification query; the review-then-confirm rule and the role tests are limited to mutating actions.
 
@@ -44,7 +46,7 @@ source operation
 + semantic jobMatch (when present)
 + predicate / relation state (e.g. warranty absent)
 + entity type
-→ action { id, label, destinationOperation, placement }
+→ action { id, label, destinationOperation, effect: 'READ' | 'MUTATION', placement }
 ```
 
 The registry is the only place actions are declared. The `OPERATION_ACTION_IDS` entries for these actions are **generated from it**, not maintained in parallel.
@@ -127,7 +129,12 @@ Startup consumes only `BOOT_FATAL` issues. The architecture inventory reports al
 **Boot-fatal (structural), consistent with existing Ask registries (`confirmCapabilityHandlerRegistry.ts`):**
 - unknown source or destination operation;
 - duplicate action id within a source operation;
-- a **mutating** action whose destination is not confirmation-gated (read, analysis and inline-detail actions are not subject to this check).
+- a `MUTATION` action whose destination is not a registered, confirmation-gated command;
+- a `READ` action whose destination is a mutating operation;
+- an `effect` declaration that contradicts the destination's `ASK_OPERATION_DEFINITIONS` / domain-command metadata;
+- a destination operation that does not support the row's entity type (the row could never execute correctly).
+
+`effect` is declared explicitly because it states the behavior the action promises; it is never inferred from the action id or label. Read, analysis and inline-detail actions (`READ`) are not subject to the confirmation-gating check.
 
 **Test-only (presentation), never fail boot:**
 - detail placement on a presentation without `supportsDetailPlacement`;
@@ -156,7 +163,7 @@ One shared function normalizes provider (trim, case-fold, collapse whitespace, s
 
 ### 5.2 Duplicate and conflict classification
 
-**Date overlap:** `existing.start <= candidate.expiry AND candidate.start <= existing.expiry`. Two warranties sharing one boundary day overlap (expiry is treated as inclusive). Owner to confirm if expiry is semantically exclusive, in which case the comparisons become strict.
+**Date overlap (decided):** `existing.start <= candidate.expiry AND candidate.start <= existing.expiry`. Expiry is inclusive: the product stores calendar dates, and a warranty expiring on a date ordinarily covers that date, so two warranties sharing one boundary day overlap. Test: a warranty ending on day D and one starting on day D overlap; ending D and starting D+1 do not.
 
 Evaluated for the same property and inventory item, against existing warranties:
 
@@ -182,7 +189,7 @@ Multiple coverages on one item (manufacturer, extended, home plan) are legitimat
 
 - **Input:** execution id, user id, property id, item id, and the sorted `(recordId, updatedAt)` pairs of the conflicting records.
 - **Storage:** the server stores the fingerprint and conflicting-record ids in the same Ask execution's parameters. A client-supplied fingerprint or override flag is never trusted.
-- **Single use:** the confirmation claim is the atomic single-use boundary. An already claimed or completed execution cannot issue another override.
+- **Single use:** means **one durable write**, not that a safe network retry fails. The confirmation claim is the atomic boundary. A retry of the same execution with the same confirmation version and idempotency input returns the previously completed result. An already claimed or completed execution cannot issue another override, and a completed override cannot authorize a new write.
 - **Revalidation:** after acquiring the advisory lock, confirm **reruns the complete duplicate/conflict query** for the property and item (a stored id list alone would miss a newly added record), classifies **all** current matches, computes the fingerprint over that full current set, and compares it with the stored one.
 - **If it changed:** **[verified]** the confirmation engine claims `NEEDS_CONFIRMATION` to `RUNNING` and a `CLAIMED` receipt before the domain confirm runs (`askConfirm.ts` ~247), and a domain conflict ends the execution as terminal `EXPIRED` with the receipt `FAILED` and a "This changed before it could be confirmed" block (~365). There is no path that re-arms a claimed confirmation. **v1 decision:** use that existing terminal conflict result; the user starts "Record warranty" again and sees a fresh review. Nothing is written. A governed re-arm (receipt superseded, execution back to `NEEDS_CONFIRMATION`, version incremented, new fingerprint stored, stale confirmation unusable) is a possible later engine change and is **deferred**; it is out of scope for v1.
 
@@ -228,13 +235,15 @@ For every registry row:
 
 Warranty slice additionally:
 
-- repeated confirm of one execution returns the original row;
 - two executions with identical input: second blocked as exact duplicate, no confirm action present;
 - overlapping non-identical coverage: review plus "Record anyway";
 - same provider, no policy numbers, overlapping non-identical dates: classified **equivalent** (regression for the gap found in review);
 - an already-known conflicting record is updated between review and confirm: nothing written, existing terminal conflict result returned;
 - an **entirely new** conflicting warranty is inserted after review: nothing written, terminal conflict result returned (a stored-id reread alone would miss this);
-- override fingerprint is rejected on a different execution or user and on second use;
+- same execution, same confirmation version and idempotency input, retried: returns the previously completed result and never writes twice (**[verified]** existing engine behavior, `askConfirm.ts` ~285);
+- same execution with a different input/idempotency hash: rejected as an idempotency conflict;
+- override fingerprint copied to a different execution or user: rejected;
+- a completed override cannot authorize a new write;
 - two separate executions with identical input run concurrently: exactly one creation and one exact-duplicate result (not merely one rejected promise);
 - exactly one refresh invocation for the source execution after confirm;
 - exact-duplicate result is terminal `ANSWERED`, contains no confirmation object, pending capture request, consent checkbox, confirm button or server Cancel action, and its inline disclosure opens the existing warranty;
