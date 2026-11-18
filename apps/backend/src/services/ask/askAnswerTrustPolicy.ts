@@ -19,6 +19,8 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   REPLACEMENT_GUIDANCE: new Set(['repair-replace-boundary']),
   REFINANCE_ANALYSIS: new Set(['refinance-boundary']),
   SELL_HOLD_RENT_ANALYSIS: new Set(['sell-hold-rent-boundary']),
+  // The checklist's own "preparation guidance, not a listing or disclosure determination" block. Without this entry the gate removed it from every seller-prep answer (INAPPLICABLE_BOUNDARY_REMOVED).
+  SELLER_PREP_CHECKLIST: new Set(['seller-prep-boundary']),
   BREAK_EVEN_ANALYSIS: new Set(['break-even-boundary']),
   NEIGHBORHOOD_CHANGE_FEED: new Set(['neighborhood-change-boundary']),
   PAST_HAZARD_EXPOSURE: new Set(['past-hazard-boundary']),

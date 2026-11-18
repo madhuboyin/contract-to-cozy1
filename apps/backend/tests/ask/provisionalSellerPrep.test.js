@@ -70,9 +70,10 @@ test('the live prompt is delivered: the appliance-narrowed checklist passes the 
   const message = 'show seller readiness items that involve appliances';
   assert.equal(groundedSellerPrepVerdict(message, await run(message)).outcome, 'PASS');
   const gate = await deliver(message);
-  // REPAIRABLE = delivered after the gate drops a block the trust policy does not allow for this operation (today the handler's own 'seller-prep-boundary'); CLARIFY / BLOCK / UNAVAILABLE would withhold it.
-  assert.ok(['PASS', 'REPAIRABLE'].includes(gate.trust.outcome), `${gate.trust.outcome} ${JSON.stringify(gate.trust.reasonCodes)}`);
-  assert.ok(!gate.trust.reasonCodes.includes('PROVISIONAL_READ_NOT_GROUNDED'), JSON.stringify(gate.trust.reasonCodes));
+  // The handler's own 'seller-prep-boundary' is an allowed boundary for this operation, so the gate keeps it and nothing is repaired.
+  assert.equal(gate.trust.outcome, 'PASS', JSON.stringify(gate.trust.reasonCodes));
+  assert.ok(!gate.trust.reasonCodes.includes('INAPPLICABLE_BOUNDARY_REMOVED'), JSON.stringify(gate.trust.reasonCodes));
+  assert.ok(gate.result.blocks.some((block) => block.id === 'seller-prep-boundary'), 'the preparation-guidance boundary is delivered');
   assert.equal(gate.result.status, 'ANSWERED');
   assert.ok(!gate.result.blocks.some((block) => block.id === 'answer-unverified'));
   assert.deepEqual(gate.result.blocks.find((block) => block.id === 'seller-prep-open-items').sections.flatMap((s) => s.items.map((i) => i.id)), ['dishwasher']);
