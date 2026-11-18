@@ -510,7 +510,7 @@ const negatives: Record<AskOperationId, readonly string[]> = {
   HOME_EVENT_RADAR_FEED: ['Show my future home expenses and reserve plan', 'Query the broader intelligence envelope for my home'],
   MAINTENANCE_STATUS: ['What home profile information remains?', 'Create a maintenance task'],
   INVENTORY_LOOKUP: ['Is my overall home record complete?', 'When should I replace my refrigerator?'],
-  WARRANTY_LOOKUP: ['Which items are missing warranty coverage?', 'File a claim for my broken furnace', 'Add a warranty to my home record', 'Correct the expiry date on my warranty'],
+  WARRANTY_LOOKUP: ['Which items are missing warranty coverage?', 'File a claim for my broken furnace', 'Add a warranty to my home record', 'Record a warranty in my home record', 'Correct the expiry date on my warranty'],
   DOCUMENT_LOOKUP: ['What extracted facts still need my review before they become official?', 'Show my appliance inventory', 'What information does this house still need?', 'What derived intelligence does this property have?'],
   QUOTE_COMPARISON_REVIEW: ['Is my home profile complete?', 'Create a quote workspace'],
   HOME_ACTIONS: ['What maintenance is overdue?', 'Show my home record'],

@@ -857,7 +857,7 @@ export function InlineCaptureCard({
       onSubmit={(entered) => void save(null, false, entered)} onCancel={() => void cancelContinuityWorkflow()} />;
   }
 
-  // Add a warranty (FRD v1.385): the same RecordEditor as Edit warranty, started empty, so the two forms cannot drift apart.
+  // Record warranty, formerly "Add a warranty" (FRD v1.385): the same RecordEditor as Edit warranty, started empty, so the two forms cannot drift apart.
   if (schema.type === 'GROUP' && request.captureKey === 'CAPTURE_WARRANTY_EDIT') {
     const keyed = (key: string) => schema.fields.find((field) => field.key === key);
     const sectionOf: Record<string, string> = { providerName: 'warranty', category: 'warranty', policyNumber: 'warranty', coverageDetails: 'coverage', startDate: 'dates-cost', expiryDate: 'dates-cost', cost: 'dates-cost' };

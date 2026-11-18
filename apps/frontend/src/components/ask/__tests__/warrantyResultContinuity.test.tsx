@@ -137,7 +137,7 @@ test('warranty detail shows declared correction actions with exact identity, and
 });
 
 test('the warranties list renders its declared START_WORKFLOW block action as a button and dispatches that exact action; href actions stay links', () => {
-  const addAction = { id: 'add-warranty', label: 'Add a warranty', interactionType: 'START_WORKFLOW' as const, message: 'Add a warranty to my home record.', operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' as const };
+  const addAction = { id: 'add-warranty', label: 'Record warranty', interactionType: 'START_WORKFLOW' as const, message: 'Record a warranty in my home record.', operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' as const };
   const withAdd: typeof block = { ...block, actions: [addAction, ...block.actions] };
   const invoke = jest.fn();
   render(
@@ -147,7 +147,7 @@ test('the warranties list renders its declared START_WORKFLOW block action as a 
       </ResultViewContext.Provider>
     </AskBlockActionContext.Provider>,
   );
-  fireEvent.click(screen.getByRole('button', { name: /Add a warranty/ }));
+  fireEvent.click(screen.getByRole('button', { name: /Record warranty/ }));
   expect(invoke).toHaveBeenCalledWith(addAction);
   expect(screen.getByRole('link', { name: /Open Warranties/ })).toHaveAttribute('href', '/dashboard/warranties');
 });

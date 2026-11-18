@@ -549,7 +549,7 @@ export async function warrantyAddResult(userId: string, propertyId: string, sour
   if (access.role === HouseholdRole.VIEWER) {
     return {
       status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
-      blocks: [{ type: 'SUMMARY', id: 'warranty-add-permission', title: 'A contributor or owner can add a warranty', body: 'Your role can view warranties but not add them. Nothing has changed.', tone: 'CAUTION', actions: [] }],
+      blocks: [{ type: 'SUMMARY', id: 'warranty-add-permission', title: 'A contributor or owner can record a warranty', body: 'Your role can view warranties but not add them. Nothing has changed.', tone: 'CAUTION', actions: [] }],
       suggestions: [],
     };
   }
@@ -557,7 +557,7 @@ export async function warrantyAddResult(userId: string, propertyId: string, sour
   return {
     status: 'NEEDS_CONTEXT', reasonCode: 'WARRANTY_ADD_INPUT_REQUIRED', contextVersion,
     parameters: { captureOrigin: USER_ADD_ORIGIN, sourceExecutionId },
-    blocks: [{ type: 'SUMMARY', id: 'warranty-add-input', title: 'Add a warranty', body: 'Nothing has been saved yet. Enter the details, then review them before the warranty is added.', tone: 'DEFAULT', actions: [] }],
+    blocks: [{ type: 'SUMMARY', id: 'warranty-add-input', title: 'Record warranty', body: 'Nothing has been saved yet. Enter the details, then review them before the warranty is added.', tone: 'DEFAULT', actions: [] }],
     captureRequests: [warrantyAddCaptureRequest(contextVersion)],
     suggestions: [],
   };
@@ -935,11 +935,11 @@ registerCapabilityHandler('household.invitation', async (envelope) => householdI
 // add: never for an ASK_REFRESH re-run of a pending extraction-created confirmation, never for a bare message).
 export const EVENT_ADD_MESSAGE = 'Add an event to my home timeline.';
 
-// A warranty is added inline only from the declared "Add a warranty" action on the warranties list. Every other
+// A warranty is added inline only from the declared "Record warranty" action on the warranties list. Every other
 // call for this operation (an ASK_REFRESH re-run of a pending, extraction-created confirmation, or a message that
 // merely names it) keeps the original not-directly-routable boundary, so a pending candidate is never replaced
 // by an empty form.
-export const WARRANTY_ADD_MESSAGE = 'Add a warranty to my home record.';
+export const WARRANTY_ADD_MESSAGE = 'Record a warranty in my home record.';
 
 // ── Add a room (user-initiated) ──────────────────────────────────────────────────────────────────────────
 // A room is added inline only from the declared "Add a room" action. The form asks for a type, a REQUIRED name (the

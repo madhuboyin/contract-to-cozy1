@@ -185,7 +185,7 @@ export function WarrantyResultList({ block, propertyId, disabled, onAction, onFi
   link: (href: string, label: ReactNode) => ReactNode;
 }) {
   const controls = useContext(ResultViewContext);
-  // Warranties W-1 (FRD v1.124): inside an adopted calm answer the first workflow action ("Add a warranty") is the one dominant step
+  // Warranties W-1 (FRD v1.124): inside an adopted calm answer the first workflow action ("Record warranty") is the one dominant step
   // and the Warranties page link is quiet text. The list's own copy of that link exists for the calm answer only.
   const calm = useCalmAnswer();
   const listActions = block.actions.filter((action) => calm || action.id !== 'open-warranties-list');
@@ -233,7 +233,7 @@ export function WarrantyResultList({ block, propertyId, disabled, onAction, onFi
     </div>
     {block.sections.map((section) => <div key={section.id} className="border-b border-slate-200 px-4 py-4 sm:px-5">
       <h4 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{section.title} · {section.count}</h4>
-      {section.items.length === 0 && <div className="mt-3 rounded-xl bg-slate-50 px-4 py-5"><p className="text-sm font-medium text-slate-800">No warranties are recorded yet.</p><p className="mt-1 text-sm text-slate-600">Add a warranty to keep coverage dates and documents connected to this home.</p></div>}
+      {section.items.length === 0 && <div className="mt-3 rounded-xl bg-slate-50 px-4 py-5"><p className="text-sm font-medium text-slate-800">No warranties are recorded yet.</p><p className="mt-1 text-sm text-slate-600">Record a warranty to keep coverage dates and documents connected to this home.</p></div>}
       <ul className="mt-2 divide-y divide-slate-200">
         {section.items.map((item) => {
           const selected = controls?.view.selectedTaskId === item.id;

@@ -614,7 +614,7 @@ function correctableSummaryExecution() {
       ],
     }] }],
     actions: [
-      { id: 'add-warranty', label: 'Add a warranty', interactionType: 'START_WORKFLOW', message: 'Add a warranty to my home record.', operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' },
+      { id: 'add-warranty', label: 'Record warranty', interactionType: 'START_WORKFLOW', message: 'Record a warranty in my home record.', operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' },
       { id: 'open-warranties', label: 'Open Warranties', href: '/dashboard/warranties', style: 'SECONDARY' },
     ],
   });
@@ -715,22 +715,22 @@ function correctionExecution(kind: CorrectionKind, status: 'NEEDS_CONFIRMATION' 
   };
 }
 
-// Phase 3 add-record acceptance: user-initiated "Add a warranty" -> empty form -> confirmation -> receipt.
+// Phase 3 add-record acceptance: user-initiated "Record warranty" -> empty form -> confirmation -> receipt.
 // Shapes mirror what warrantyAddResult / editCaptureWarrantyCandidate / confirmCaptureWarranty produce.
 function warrantyAddExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId?: string, answer?: Record<string, unknown>) {
   const base = propertySummaryTimelineExecution();
   const common = {
-    ...base, sessionId: sessionId ?? base.sessionId, executionId: 'execution-warranty-add', question: 'Add a warranty to my home record.',
+    ...base, sessionId: sessionId ?? base.sessionId, executionId: 'execution-warranty-add', question: 'Record a warranty in my home record.',
     operation: { id: 'CAPTURE_WARRANTY_CONFIRM', version: '1.0', family: 'COMMAND' }, contextVersion: 'warranty-add-context-v1', updatedAt: new Date().toISOString(),
   };
   const field = (key: string, label: string, required: boolean, inputSchema: Record<string, unknown>) => ({ key, label, required, inputSchema });
   if (stage === 'FORM') {
     return {
       ...common, status: 'NEEDS_CONTEXT', confirmation: null,
-      blocks: [{ type: 'SUMMARY', id: 'warranty-add-input', title: 'Add a warranty', body: 'Nothing has been saved yet. Enter the details, then review them before the warranty is added.', tone: 'DEFAULT', actions: [] }],
+      blocks: [{ type: 'SUMMARY', id: 'warranty-add-input', title: 'Record warranty', body: 'Nothing has been saved yet. Enter the details, then review them before the warranty is added.', tone: 'DEFAULT', actions: [] }],
       captureRequests: [{
         requirementId: 'capture-warranty-edit', captureKey: 'CAPTURE_WARRANTY_EDIT', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
-        title: 'Add a warranty', question: 'Which warranty would you like to add to your home record?', helpText: 'Only the provider, coverage type and dates are required. You will review everything before it is saved.',
+        title: 'Record warranty', question: 'Which warranty would you like to add to your home record?', helpText: 'Only the provider, coverage type and dates are required. You will review everything before it is saved.',
         inputSchema: { type: 'GROUP', fields: [
           field('providerName', 'Provider', true, { type: 'SHORT_TEXT', maxLength: 160 }),
           field('category', 'Coverage type', true, { type: 'SINGLE_SELECT', options: [{ label: 'Home warranty plan', value: 'HOME_WARRANTY_PLAN' }, { label: 'HVAC', value: 'HVAC' }] }),
@@ -1167,7 +1167,7 @@ function warrantyJourneyExecution(state: WarrantyJourneyState, options: { viewer
     correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   };
   const boundary = { type: 'BOUNDARY', id: 'warranty-boundary', title: 'Recorded information only', body: 'This reports the warranty information recorded in your Home Record. It does not determine whether a repair is covered or file a claim.', severity: 'INFO', suggestions: [] };
-  const addAction = { id: 'add-warranty', label: 'Add a warranty', interactionType: 'START_WORKFLOW', message: 'Add a warranty to my home record.', operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' };
+  const addAction = { id: 'add-warranty', label: 'Record warranty', interactionType: 'START_WORKFLOW', message: 'Record a warranty in my home record.', operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' };
   if (options.empty) {
     return { ...common, executionId: 'execution-warranty-journey-empty', question: 'Show my warranty journey', status: 'READY_WITH_LIMITATIONS', viewState: null, blocks: [{
       type: 'SUMMARY', id: 'warranty-empty', title: 'No warranties are recorded for this home yet',
@@ -3475,7 +3475,7 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
       await fulfill(route, { success: true, data: addExecution(addKind, 'FORM', body.sessionId as string | undefined) }, 201);
       return;
     }
-    if (/^add a warranty to my home record/i.test(body.message)) {
+    if (/^record a warranty in my home record/i.test(body.message)) {
       if (typeof body.sessionId === 'string') correctionSessionId = body.sessionId;
       await fulfill(route, { success: true, data: warrantyAddExecution('FORM', body.sessionId as string | undefined) }, 201);
       return;

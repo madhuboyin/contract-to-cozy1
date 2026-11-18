@@ -368,7 +368,7 @@ export function warrantyAddCaptureRequest(contextVersion: string): AskCaptureReq
     // WORKFLOW_INPUT makes the submit button read "Continue to review": nothing is saved until the confirmation.
     classification: 'WORKFLOW_INPUT',
     state: 'UNKNOWN',
-    title: 'Add a warranty',
+    title: 'Record warranty',
     question: 'Which warranty would you like to add to your home record?',
     helpText: 'Only the provider, coverage type and dates are required. You will review everything before it is saved.',
     currentAnswer: { providerName: null, category: null, policyNumber: null, coverageDetails: null, cost: null, startDate: null, expiryDate: null },

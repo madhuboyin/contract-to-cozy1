@@ -101,7 +101,7 @@ test('client helpers: money is canonical and shape problems are reported', () =>
 });
 
 const addRequest = {
-  requirementId: 'capture-warranty-edit', captureKey: 'CAPTURE_WARRANTY_EDIT', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', title: 'Add a warranty',
+  requirementId: 'capture-warranty-edit', captureKey: 'CAPTURE_WARRANTY_EDIT', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', title: 'Record warranty',
   question: 'Which warranty?', helpText: 'x', allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: null, confirmationText: null, expectedContextVersion: 'add-v1',
   currentAnswer: { providerName: null, category: null, policyNumber: null, coverageDetails: null, startDate: null, expiryDate: null, cost: null },
   inputSchema: { type: 'GROUP', fields: [

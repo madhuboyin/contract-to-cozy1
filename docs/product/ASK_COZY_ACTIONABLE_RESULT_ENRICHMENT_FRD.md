@@ -1,6 +1,8 @@
 # Ask Cozy — Actionable Result Enrichment FRD
 
-**Status:** Draft v1.6 — build step 1 implemented (uncommitted at time of writing); steps 2-5 not started
+**Status:** Draft v1.7 — build steps 1 and 2 implemented; steps 3-5 not started
+
+**v1.7 amendment (2026-11-18):** Records build step 2, the "Record warranty" label migration, including what was deliberately left unchanged.
 
 **v1.6 amendment (2026-11-18):** Records build step 1 (registry framework, generated allowlist, typed validator, `supportedActionEntityTypes`, no rows) and two findings from building it: (1) `REPLACEMENT_GUIDANCE` is `semantic.effect: READ` but its persistence declaration is `USER_VISIBLE` (it writes a `ReplaceRepairAnalysis`, and decision threads for an HVAC item), so a `READ` registry row targeting it is accurate for confirmation purposes but not "persists nothing"; and (2) the runtime-bootstrap import guardrail lists the only modules startup may import, so the enrichment registry was added to it.
 
@@ -315,3 +317,12 @@ Nothing in this FRD has been implemented, executed or browser-verified. Code ref
 Effect cross-check uses existing metadata: a `MUTATION` row needs a domain command and `semantic.effect === 'WRITE'`; a `READ` row needs neither.
 
 Not verified: browser behaviour (nothing is rendered yet); the first-step claim that `richPresentationAdapter.ts` is the only path dropping row actions is **not** confirmed: `sliceExecutor.ts`, `crossDomainExecutor.ts` and `commandPreviewAdmission.ts` also build blocks with `actions: []` and must be reviewed when rows are wired in.
+
+**Step 2 (2026-11-18), label migration, user-visible copy only:**
+
+- Changed to "Record warranty": the catalog `title` and `createLabel` (`captureRegistry.ts` 435, 442), the capture title (`conversationalCapture.ts`), the Warranties list action label (`warranties.handler.ts`), the add-form summary title and the viewer-blocked title ("A contributor or owner can record a warranty") in `homeRecordWrites.handler.ts`, and the empty-state sentence in `WarrantyResultList.tsx`.
+- The canned workflow message `WARRANTY_ADD_MESSAGE` is now `Record a warranty in my home record.` The handler matches it by equality together with the declared action (`miscHandlers.handler.ts` ~1045), so a typed copy of either phrasing keeps the existing not-directly-routable boundary.
+- Kept as routing synonyms: `Add a warranty to my home record` stays in the `WARRANTY_LOOKUP` hard-negative examples and the Warranties `SKILL.md` do-not-select list; the new phrasing was added beside it in both.
+- Tests, fixtures and E2E specs updated to the new label and message. Test names that said "Add a warranty" now say "Record warranty".
+- **Not changed (decision needed):** three desktop, non-Ask surfaces still say "Add a warranty": `coverage/[itemId]/page.tsx`, `HomeRecordsClient.tsx` (a generic "Add a warranty, receipt, inspection report…" sentence) and `SellerPrepEntryFlowGate.tsx`. They are outside the Ask action this FRD governs and may mean something other than recording existing coverage, so they were left for an owner ruling. Historical FRD entries were not rewritten.
+- Executed: the seven warranty-add tests in `correctionHandlersRuntime.test.js`, `provisionalWarranty`, `warrantyLookupCapabilitySlice` (one routing failure, "What does my HVAC warranty cover?", is present without this change), `skillGovernanceExceptions`, the enrichment registry test, backend typecheck, and the frontend warranty tests. Two `calmWarrantyAnswer.test.tsx` failures and five `correctionHandlersRuntime.test.js` failures (inventory and room routing, Add item) exist without this change. Playwright E2E specs were edited but **not run**; nothing here is browser-verified.

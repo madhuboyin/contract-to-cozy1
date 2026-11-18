@@ -432,14 +432,14 @@ const relationalDefinitions: ContextCaptureDefinition[] = [
     captureKey: 'WARRANTY_SELECT_OR_CREATE',
     factKeys: ['coverage.warranties'],
     mode: 'RELATIONAL',
-    title: 'Add a warranty',
+    title: 'Record warranty',
     question: 'Which warranty should this claim use?',
     helpText: 'Add the minimum warranty identity and active dates needed to continue. Full terms and documents can be added later.',
     inputSchema: {
       type: 'RELATIONAL_SELECT_CREATE',
       entityType: 'WARRANTY',
       selectLabel: 'Select an existing warranty',
-      createLabel: 'Add a warranty',
+      createLabel: 'Record warranty',
       options: [],
       createFields: [
         { key: 'providerName', label: 'Warranty provider', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 120 } },

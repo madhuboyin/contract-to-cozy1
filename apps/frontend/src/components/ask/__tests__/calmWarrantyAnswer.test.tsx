@@ -16,7 +16,7 @@ const blocks = (overrides: { workflow?: boolean } = {}) => [
       row('w3', 'Cool Air', 'EXPIRED', null, ['HVAC', 'Expired Jan 3, 2026', '0 documents']),
     ] }],
     actions: [
-      ...(overrides.workflow === false ? [] : [{ id: 'add-warranty', label: 'Add a warranty', interactionType: 'START_WORKFLOW', message: 'Add a warranty to my home record.', operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' }]),
+      ...(overrides.workflow === false ? [] : [{ id: 'add-warranty', label: 'Record warranty', interactionType: 'START_WORKFLOW', message: 'Record a warranty in my home record.', operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' }]),
       { id: 'open-warranties-list', label: 'Open Warranties', href: '/dashboard/warranties', style: 'SECONDARY' },
     ] },
   { type: 'EVIDENCE', id: 'warranty-evidence', title: 'Record freshness', items: [{ label: 'Apex Roofing', source: 'Home warranties · recorded', observedAt: '2026-09-01T00:00:00.000Z' }] },
@@ -55,10 +55,10 @@ describe('calm Warranties answer', () => {
     expect(screen.getByText('ACTIVE')).not.toHaveClass('text-amber-800');
   });
 
-  it('makes "Add a warranty" the one dominant step and the page link quiet text; a viewer has no dominant step', async () => {
+  it('makes "Record warranty" the one dominant step and the page link quiet text; a viewer has no dominant step', async () => {
     window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
     const { unmount } = card(execution());
-    expect(await screen.findByRole('button', { name: /Add a warranty/ })).toHaveClass('bg-teal-700');
+    expect(await screen.findByRole('button', { name: /Record warranty/ })).toHaveClass('bg-teal-700');
     expect(screen.getByText('Open Warranties').closest('a')?.className ?? '').not.toContain('bg-teal-700');
     unmount();
     card(execution(blocks({ workflow: false })));
@@ -112,7 +112,7 @@ describe('calm Warranties filters', () => {
   it('renders no filter group when the result declares none', async () => {
     window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
     card(execution());
-    await screen.findByRole('button', { name: /Add a warranty/ });
+    await screen.findByRole('button', { name: /Record warranty/ });
     expect(screen.queryByRole('group', { name: /Warranty .*filters/ })).toBeNull();
   });
 });
