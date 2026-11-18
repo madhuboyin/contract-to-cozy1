@@ -1,6 +1,8 @@
 # Ask Cozy — Actionable Result Enrichment FRD
 
-**Status:** Draft v1.1 for owner review
+**Status:** Draft v1.2 for owner review
+
+**v1.2 amendment (2026-11-18):** Applies the second review: the safety rule now distinguishes mutating from read/analysis actions (so "Review replacement" is legal), the exact-duplicate result is a terminal `ANSWERED` result with a renderer-local disclosure and no server Cancel, classification has explicit precedence, `minRole` is dropped from registry rows, and the advisory lock defines the property-wide (no item) case.
 
 **v1.1 amendment (2026-11-18):** Applies the external review: single-refresh wording (`reconcileAskExecutionSideEffects` already refreshes the source), a non-confirming exact-duplicate surface, typed validation severities, the override's storage and atomic single-use mechanism, role policy derived from the destination operation, a concrete advisory-lock helper, the five-row counting scope, the routing-synonym carve-out for the label migration, v1 scope narrowed to audited rows, and an explicit date-overlap rule.
 
@@ -53,14 +55,14 @@ An action is emitted for a row only when **all** hold:
 2. The row has a grounded `entityType` and `entityId` taken from the executed result, never inferred from display text.
 3. The source operation's allowlist includes the action id (generated per FR-ACT-1).
 4. The destination operation supports that entity type.
-5. The household role satisfies the **destination operation's own** authorization policy, read from that policy, not copied into the registry (Viewer: no write actions; Contributor/Owner: per the operation's write policy). If a registry row carries a presentation-only `minRole` for cheap filtering, validation requires it to be no weaker than the destination policy. Registry eligibility never authorizes a write; confirmation reauthorizes independently.
+5. The household role satisfies the **destination operation's own** authorization policy, read from that policy, not copied into the registry (Viewer: no write actions; Contributor/Owner: per the operation's write policy). Registry rows carry **no `minRole`** in v1: eligibility is always derived from the destination policy, so the two cannot drift. Registry eligibility never authorizes a write; confirmation reauthorizes independently. (If a presentation role floor is ever added, a floor weaker than the destination policy is a `BOOT_FATAL` defect.)
 6. The result state makes the action meaningful (e.g. warranty absent).
 
 Eligibility is evaluated **per row**. A row that is ambiguous in a compound answer loses its action; clean sibling rows keep theirs. An ambiguous row never receives a mutation action.
 
 ### FR-ACT-3 Safety
 
-- Actions only start an existing, registered, confirmation-gated operation. No new write path is created by this FRD.
+- Every action starts an existing registered operation. A **mutating** action must target a confirmation-gated command. A read, analysis or inline-detail action may target an existing non-mutating operation (for example `REPLACEMENT_GUIDANCE`, a Viewer-accessible `DECISION_ANALYSIS` read) and is never represented as a write. No new write path is created by this FRD.
 - Nothing mutates on click: collect inputs, show a review, then confirm.
 - Prefer item-level actions. A list-level action is allowed only when the workflow is inherently property-wide. A long list does not downgrade targeted actions to a property-wide one.
 - Actions are Ask-native. No action navigates to a desktop page.
@@ -123,7 +125,7 @@ Startup consumes only `BOOT_FATAL` issues. The architecture inventory reports al
 **Boot-fatal (structural), consistent with existing Ask registries (`confirmCapabilityHandlerRegistry.ts`):**
 - unknown source or destination operation;
 - duplicate action id within a source operation;
-- a write action whose destination is not confirmation-gated.
+- a **mutating** action whose destination is not confirmation-gated (read, analysis and inline-detail actions are not subject to this check).
 
 **Test-only (presentation), never fail boot:**
 - detail placement on a presentation without `supportsDetailPlacement`;
@@ -142,6 +144,8 @@ The review and confirmation path is reused for the no-match and equivalent/confl
 4. The id is passed to the existing canonical writer (`captureWarranty`).
 5. The existing review and confirmation path is used for the normal outcome.
 
+This section covers item-targeted capture and the property-wide capture (no `inventoryItemId`) alike; the duplicate rules and lock apply to both, with a null item.
+
 No new write operation.
 
 ### 5.1 Shared normalization
@@ -158,9 +162,11 @@ Evaluated for the same property and inventory item, against existing warranties:
 - **Equivalent:** normalized provider matches; policy numbers match **or at least one is absent**; date ranges overlap; not an exact duplicate.
 - **Overlapping conflict:** dates overlap and provider, category or canonical scope differs.
 
+**Precedence (first match wins):** (1) exact duplicate; (2) overlapping conflict, i.e. dates overlap and provider, category or canonical scope differs; (3) equivalent, i.e. provider, category and scope match, policy numbers match or at least one is absent, and dates overlap; (4) no match. A provider difference alone always yields a conflict. A candidate with the same provider and policy number but a different category or scope is therefore a conflict, not equivalent.
+
 Outcomes:
 
-- **Exact duplicate:** creation is blocked. **[verified]** the shared confirmation card (`CaptureCards.tsx` ~355) always renders a consent checkbox, Cancel and a confirm button, and has no slot for inline record detail, so this outcome cannot use it. It returns a **non-confirming `SUMMARY` / conflict-review block** that carries the existing warranty's grounded entity id, states it is already recorded, and offers **Cancel** (closes the pending capture) and an **inline** "View existing warranty" (opens canonical warranty detail inline). **No confirmation object is returned; no consent checkbox or confirm button renders.** This is presentation work and is part of build step 4.
+- **Exact duplicate:** creation is blocked. **[verified]** the shared confirmation card (`CaptureCards.tsx` ~355) always renders a consent checkbox, Cancel and a confirm button, and has no slot for inline record detail, so this outcome cannot use it. It returns a **terminal `ANSWERED` result** (not `NEEDS_CONFIRMATION`) with: a summary stating the warranty is already recorded, and a **single-row existing-warranty results block** rendered by the current warranty inline-detail renderer, carrying the existing warranty's grounded entity id. "View existing warranty" is that row's **renderer-local inline disclosure**, not a navigation and not a server action, so it is outside trust validation. **No confirmation object and no pending capture request are returned; no consent checkbox or confirm button renders; no server-side Cancel action is emitted** because the execution is terminal. Dismissing the editor before this response keeps the existing editor Cancel. This is presentation work and is part of build step 4.
 - **Equivalent or overlapping conflict:** the existing confirmation card is used with `confirmLabel: "Record anyway"`, showing the existing coverage, plus **Cancel**.
 - **No match:** normal review and confirm.
 
@@ -180,7 +186,7 @@ An override is never a reusable stale bypass.
 ### 5.4 Concurrency and idempotency
 
 - **[reported]** `@@unique([propertyId, sourceExecutionId])` (`schema.prisma` ~5521) makes retries of the **same** execution return the original row. It does not stop two different executions creating the same warranty.
-- The pre-create check and insert run in one transaction holding a transaction-scoped advisory lock. A single helper derives the key; **[verified]** the repo already uses `pg_advisory_xact_lock(hashtextextended(<text>, 0))` (`diy.service.ts:383`), so the helper follows that one-`bigint` form over the text `warranty-create:<propertyId>:<inventoryItemId>`. It is deterministic across processes, acquired inside the same transaction **before** reading possible duplicates, and **every** Ask warranty-create path uses it. A hash collision may serialize unrelated items but never weakens correctness.
+- The pre-create check and insert run in one transaction holding a transaction-scoped advisory lock. A single helper derives the key; **[verified]** the repo already uses `pg_advisory_xact_lock(hashtextextended(<text>, 0))` (`diy.service.ts:383`), so the helper follows that one-`bigint` form over the text `warranty-create:<propertyId>:<inventoryItemId or PROPERTY>`; property-scoped creation (no `inventoryItemId`) uses the literal sentinel `PROPERTY`, so it is serialized and duplicate-checked the same way. It is deterministic across processes, acquired inside the same transaction **before** reading possible duplicates, and **every** Ask warranty-create path uses it. A hash collision may serialize unrelated items but never weakens correctness.
 - No semantic unique index is added: nullable policy numbers and legitimate multiple coverage make a correct one impractical. The remaining limitation (writers that bypass the lock) is documented here.
 - **[reported]** Item existence and property membership are already rechecked at confirm (`captureWarranty.ts` ~65).
 
@@ -224,7 +230,9 @@ Warranty slice additionally:
 - override fingerprint is rejected on a different execution or user and on second use;
 - two separate executions with identical input run concurrently: exactly one creation and one exact-duplicate result (not merely one rejected promise);
 - exactly one refresh invocation for the source execution after confirm;
-- exact-duplicate result contains no confirmation object, consent checkbox or confirm button;
+- exact-duplicate result is terminal `ANSWERED`, contains no confirmation object, pending capture request, consent checkbox, confirm button or server Cancel action, and its inline disclosure opens the existing warranty;
+- a candidate with same provider and policy number but different scope is classified as a conflict (precedence test);
+- a mutating registry action with a non-confirming destination yields a `BOOT_FATAL` issue, while a read action targeting `REPLACEMENT_GUIDANCE` does not;
 - a block with several sections shows at most five inline actions, and ineligible rows do not consume the five.
 
 ## 8. Build order
