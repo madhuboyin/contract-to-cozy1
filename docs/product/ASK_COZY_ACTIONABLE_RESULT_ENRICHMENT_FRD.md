@@ -1,6 +1,8 @@
 # Ask Cozy — Actionable Result Enrichment FRD
 
-**Status:** Draft v1.2 for owner review
+**Status:** Draft v1.3 for owner review
+
+**v1.3 amendment (2026-11-18):** Applies the third review: `CAPTURE_WARRANTY_CONFIRM` must allow `GROUPED_LIST` for the exact-duplicate block; a changed conflict set at confirm ends in the existing terminal conflict result (no confirmation-engine re-arm in v1); fingerprint revalidation reruns the full classification query; the review-then-confirm rule and the role tests are limited to mutating actions.
 
 **v1.2 amendment (2026-11-18):** Applies the second review: the safety rule now distinguishes mutating from read/analysis actions (so "Review replacement" is legal), the exact-duplicate result is a terminal `ANSWERED` result with a renderer-local disclosure and no server Cancel, classification has explicit precedence, `minRole` is dropped from registry rows, and the advisory lock defines the property-wide (no item) case.
 
@@ -63,7 +65,7 @@ Eligibility is evaluated **per row**. A row that is ambiguous in a compound answ
 ### FR-ACT-3 Safety
 
 - Every action starts an existing registered operation. A **mutating** action must target a confirmation-gated command. A read, analysis or inline-detail action may target an existing non-mutating operation (for example `REPLACEMENT_GUIDANCE`, a Viewer-accessible `DECISION_ANALYSIS` read) and is never represented as a write. No new write path is created by this FRD.
-- Nothing mutates on click: collect inputs, show a review, then confirm.
+- A **mutating** action never mutates on click: collect inputs, show a review, then confirm. A read or analysis action (for example `REPLACEMENT_GUIDANCE`) executes as a read with no confirmation step.
 - Prefer item-level actions. A list-level action is allowed only when the workflow is inherently property-wide. A long list does not downgrade targeted actions to a property-wide one.
 - Actions are Ask-native. No action navigates to a desktop page.
 
@@ -167,6 +169,8 @@ Evaluated for the same property and inventory item, against existing warranties:
 Outcomes:
 
 - **Exact duplicate:** creation is blocked. **[verified]** the shared confirmation card (`CaptureCards.tsx` ~355) always renders a consent checkbox, Cancel and a confirm button, and has no slot for inline record detail, so this outcome cannot use it. It returns a **terminal `ANSWERED` result** (not `NEEDS_CONFIRMATION`) with: a summary stating the warranty is already recorded, and a **single-row existing-warranty results block** rendered by the current warranty inline-detail renderer, carrying the existing warranty's grounded entity id. "View existing warranty" is that row's **renderer-local inline disclosure**, not a navigation and not a server action, so it is outside trust validation. **No confirmation object and no pending capture request are returned; no consent checkbox or confirm button renders; no server-side Cancel action is emitted** because the execution is terminal. Dismissing the editor before this response keeps the existing editor Cancel. This is presentation work and is part of build step 4.
+
+**Block-type contract.** **[verified]** the inline-detail renderer (`GroupedListBlock.tsx` ~1058) requires a `GROUPED_LIST` block with id `warranty-results` or `property-warranties`, while `CAPTURE_WARRANTY_CONFIRM` currently allows only `SUMMARY`, `WORKFLOW_PROGRESS` and `BOUNDARY` (`askOperationRegistry.ts` ~1102). Step 4 therefore adds `GROUPED_LIST` to that operation's `allowedBlockTypes`. This widens the operation's block-type contract and is accepted for that reason. Tests: the exact `warranty-results` block survives trust validation on the duplicate branch; normal confirmation results are unchanged; only the exact-duplicate branch emits a grouped list.
 - **Equivalent or overlapping conflict:** the existing confirmation card is used with `confirmLabel: "Record anyway"`, showing the existing coverage, plus **Cancel**.
 - **No match:** normal review and confirm.
 
@@ -179,7 +183,8 @@ Multiple coverages on one item (manufacturer, extended, home plan) are legitimat
 - **Input:** execution id, user id, property id, item id, and the sorted `(recordId, updatedAt)` pairs of the conflicting records.
 - **Storage:** the server stores the fingerprint and conflicting-record ids in the same Ask execution's parameters. A client-supplied fingerprint or override flag is never trusted.
 - **Single use:** the confirmation claim is the atomic single-use boundary. An already claimed or completed execution cannot issue another override.
-- **Revalidation:** confirm recomputes the fingerprint **after acquiring the item advisory lock**. If it changed, the updated review is returned instead of writing.
+- **Revalidation:** after acquiring the advisory lock, confirm **reruns the complete duplicate/conflict query** for the property and item (a stored id list alone would miss a newly added record), classifies **all** current matches, computes the fingerprint over that full current set, and compares it with the stored one.
+- **If it changed:** **[verified]** the confirmation engine claims `NEEDS_CONFIRMATION` to `RUNNING` and a `CLAIMED` receipt before the domain confirm runs (`askConfirm.ts` ~247), and a domain conflict ends the execution as terminal `EXPIRED` with the receipt `FAILED` and a "This changed before it could be confirmed" block (~365). There is no path that re-arms a claimed confirmation. **v1 decision:** use that existing terminal conflict result; the user starts "Record warranty" again and sees a fresh review. Nothing is written. A governed re-arm (receipt superseded, execution back to `NEEDS_CONFIRMATION`, version incremented, new fingerprint stored, stale confirmation unusable) is a possible later engine change and is **deferred**; it is out of scope for v1.
 
 An override is never a reusable stale bypass.
 
@@ -213,7 +218,8 @@ For every registry row:
 |---|---|
 | Owner | Action survives `validateAskAnswerTrust` |
 | Contributor | Follows the destination operation's write policy |
-| Viewer | No write action |
+| Viewer + mutating action | Absent |
+| Viewer + destination operation that permits Viewer reads | Action survives trust validation |
 | Missing entity id | No action |
 | Ambiguous row | No action; clean sibling rows unaffected |
 | Unknown / unsupported destination | `validateActionEnrichmentRegistry()` reports an issue |
@@ -226,7 +232,8 @@ Warranty slice additionally:
 - two executions with identical input: second blocked as exact duplicate, no confirm action present;
 - overlapping non-identical coverage: review plus "Record anyway";
 - same provider, no policy numbers, overlapping non-identical dates: classified **equivalent** (regression for the gap found in review);
-- conflicting records change between review and confirm: stale override rejected, review regenerated;
+- an already-known conflicting record is updated between review and confirm: nothing written, existing terminal conflict result returned;
+- an **entirely new** conflicting warranty is inserted after review: nothing written, terminal conflict result returned (a stored-id reread alone would miss this);
 - override fingerprint is rejected on a different execution or user and on second use;
 - two separate executions with identical input run concurrently: exactly one creation and one exact-duplicate result (not merely one rejected promise);
 - exactly one refresh invocation for the source execution after confirm;
