@@ -460,7 +460,19 @@ export type AskExecutionMode = 'DETERMINISTIC' | 'REMOTE_GENERATION';
 export type AskSafetyClass = 'STANDARD' | 'MATERIAL_DECISION' | 'EMERGENCY_BOUNDARY' | 'UNSAFE_RESTRICTED_BOUNDARY' | 'OUT_OF_SCOPE_BOUNDARY';
 export type AskPropertyRoleFloor = 'VIEWER' | 'CONTRIBUTOR' | 'OWNER' | null;
 
+/**
+ * Entity types an action launched from a result row may target. Declared on the operation (Actionable Result Enrichment FRD §4.1); the closed set
+ * grows only when a registry row needs a new type.
+ */
+export type AskActionEntityType = 'INVENTORY_ITEM' | 'WARRANTY' | 'WORK_ITEM' | 'HOME_EVENT';
+
 export interface AskOperationDefinition extends AskOperationResolution {
+  /**
+   * Launch-context entity types this operation accepts when started from a result row. The single metadata source the action-enrichment
+   * validator reads (FRD §4.1): the domain-command registry's one nominal type is too narrow for multi-target operations. Absent means the
+   * operation is not a valid target for an enrichment row.
+   */
+  supportedActionEntityTypes?: readonly AskActionEntityType[];
   /** False for orchestration-only operations created by trusted internal flows, never from raw message routing. */
   messageRoutable: boolean;
   executionMode: AskExecutionMode;
@@ -703,6 +715,7 @@ const definition = (
   propertyRoleFloor: AskPropertyRoleFloor,
   adapterKey: string,
   allowedBlockTypes: AskPresentationBlock['type'][],
+  supportedActionEntityTypes?: readonly AskActionEntityType[],
 ): AskOperationDefinition => {
   const base = {
     operationId,
@@ -721,7 +734,7 @@ const definition = (
     evalSuite: `ask-${operationId.toLowerCase().replace(/_/g, '-')}-golden`,
     composableRead: COMPOSABLE_READ_OPERATION_IDS.has(operationId),
   } satisfies Omit<AskOperationDefinition, 'semantic'>;
-  return { ...base, semantic: createAskOperationSemanticContract(base) };
+  return { ...base, ...(supportedActionEntityTypes ? { supportedActionEntityTypes } : {}), semantic: createAskOperationSemanticContract(base) };
 };
 
 export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOperationDefinition>> = Object.freeze({
@@ -1099,8 +1112,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // call the reconciliation mechanism, so they have no such block to allow.
   CAPTURE_FACT_CONFIRM: definition('CAPTURE_FACT_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.fact.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   CAPTURE_EVENT_CONFIRM: definition('CAPTURE_EVENT_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.event.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
-  CAPTURE_WARRANTY_CONFIRM: definition('CAPTURE_WARRANTY_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.warranty.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
-  CAPTURE_EVIDENCE_CONFIRM: definition('CAPTURE_EVIDENCE_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.evidence.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'RELATED_RECORDS', 'BOUNDARY']),
+  CAPTURE_WARRANTY_CONFIRM: definition('CAPTURE_WARRANTY_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.warranty.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY'], ['INVENTORY_ITEM']),
+  CAPTURE_EVIDENCE_CONFIRM: definition('CAPTURE_EVIDENCE_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.evidence.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'RELATED_RECORDS', 'BOUNDARY'], ['HOME_EVENT', 'INVENTORY_ITEM', 'WARRANTY', 'WORK_ITEM']),
   // Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21). safetyClass
   // is STANDARD, not MATERIAL_DECISION, unlike the three CAPTURE_* operations
   // above -- this is the materiality carve-out's own point: attaching/

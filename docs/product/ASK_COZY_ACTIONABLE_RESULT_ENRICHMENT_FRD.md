@@ -1,6 +1,8 @@
 # Ask Cozy — Actionable Result Enrichment FRD
 
-**Status:** Draft v1.5 for owner review
+**Status:** Draft v1.6 — build step 1 implemented (uncommitted at time of writing); steps 2-5 not started
+
+**v1.6 amendment (2026-11-18):** Records build step 1 (registry framework, generated allowlist, typed validator, `supportedActionEntityTypes`, no rows) and two findings from building it: (1) `REPLACEMENT_GUIDANCE` is `semantic.effect: READ` but its persistence declaration is `USER_VISIBLE` (it writes a `ReplaceRepairAnalysis`, and decision threads for an HVAC item), so a `READ` registry row targeting it is accurate for confirmation purposes but not "persists nothing"; and (2) the runtime-bootstrap import guardrail lists the only modules startup may import, so the enrichment registry was added to it.
 
 **v1.5 amendment (2026-11-18):** Applies the fifth review: destination-to-entity-type support is declared on the operation definition (`supportedActionEntityTypes`), the single metadata source the validator reads, with handler-local target lists derived from it or tested for equality.
 
@@ -299,3 +301,17 @@ An FRD update is part of each step's definition of done.
 ## 11. Verification status
 
 Nothing in this FRD has been implemented, executed or browser-verified. Code references marked **[verified]** were read in this review; those marked **[reported]** come from the second reviewer and must be re-checked at implementation time.
+
+## 12. Implementation status
+
+**Step 1 (2026-11-18), no homeowner-visible change, no rows declared:**
+
+- `services/ask/actionEnrichment/actionEnrichmentRegistry.ts`: entry type with explicit `effect` and `placement`, `validateActionEnrichmentRegistry()` returning typed `BOOT_FATAL` / `TEST_ONLY` issues, `actionEnrichmentBootFatalIssues()`, the generated allowlist (`actionEnrichmentAllowedActionIds`, `isActionEnrichmentActionDeclared`), presentation capabilities (only `INVENTORY_RESULT_LIST` supports detail placement), `ACTION_ENRICHMENT_MAX_INLINE_ROWS = 5`, and the exported overflow copy.
+- `askOperationRegistry.ts`: `AskActionEntityType`, optional `supportedActionEntityTypes` on the definition, declared for `CAPTURE_WARRANTY_CONFIRM` (`INVENTORY_ITEM`) and `CAPTURE_EVIDENCE_CONFIRM` (`HOME_EVENT`, `INVENTORY_ITEM`, `WARRANTY`, `WORK_ITEM`).
+- `askAnswerTrustPolicy.ts` consults the generated allowlist beside its hand-written one; with no rows it changes nothing.
+- `askRuntimeBootstrap.ts` adds only `BOOT_FATAL` issues to startup validation; `askArchitectureInventory.ts` reports every severity.
+- Tests: `tests/ask/actionEnrichmentRegistry.test.js` (every validator rule, the evidence-confirm regression, handler-list equality, generated allowlist, overflow copy).
+
+Effect cross-check uses existing metadata: a `MUTATION` row needs a domain command and `semantic.effect === 'WRITE'`; a `READ` row needs neither.
+
+Not verified: browser behaviour (nothing is rendered yet); the first-step claim that `richPresentationAdapter.ts` is the only path dropping row actions is **not** confirmed: `sliceExecutor.ts`, `crossDomainExecutor.ts` and `commandPreviewAdmission.ts` also build blocks with `actions: []` and must be reviewed when rows are wired in.

@@ -18,6 +18,7 @@
  */
 import { validateCapabilityHandlerRegistry } from './capabilityHandlerRegistry';
 import { validateConfirmCapabilityHandlerRegistry } from './confirmCapabilityHandlerRegistry';
+import { actionEnrichmentBootFatalIssues } from './actionEnrichment/actionEnrichmentRegistry';
 
 export interface AskHandlerManifestEntry {
   /** The module path under services/ask, without extension. Must equal the literal in `load`. */
@@ -192,7 +193,8 @@ export function loadAskHandlerManifest(manifest: readonly AskHandlerManifestEntr
 
 /** Pure check over the current registries: every operation adapter and every domain command's confirm adapter resolves, with no duplicate. */
 export function validateAskRuntimeRegistration(): string[] {
-  return [...validateCapabilityHandlerRegistry(), ...validateConfirmCapabilityHandlerRegistry()];
+  // Only structural enrichment defects stop startup; presentation defects are test-only (Action Enrichment FRD §4).
+  return [...validateCapabilityHandlerRegistry(), ...validateConfirmCapabilityHandlerRegistry(), ...actionEnrichmentBootFatalIssues()];
 }
 
 let initialized: { issues: readonly string[] } | null = null;

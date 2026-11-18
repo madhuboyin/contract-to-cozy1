@@ -8,6 +8,7 @@ import { isReceiptFollowUpAction } from './support/receiptFollowUps';
 import { isAlsoAnswerAction } from './support/alsoAnswer';
 import { PROPERTY_AREA_CAPTURE_SCOPES } from '../../modules/propertyContext/catalog/featureRequirementRegistry';
 import { DIY_FILTER_ACTION_IDS } from './support/diyTemplateBrowseFilter';
+import { isActionEnrichmentActionDeclared } from './actionEnrichment/actionEnrichmentRegistry';
 
 type AskAction = Extract<AskPresentationBlock, { type: 'SUMMARY' }>['actions'][number];
 
@@ -589,6 +590,8 @@ export function isAskActionApplicable(input: {
   if (isAlsoAnswerAction(action)) return true;
   const focusedHomeAction = operationId === 'HOME_ACTIONS' && action.id.startsWith('home-action-primary-');
   if (!input.trustedDynamicAction && !audienceAction && !focusedHomeAction
-    && !(OPERATION_ACTION_IDS[operationId]?.has(action.id) ?? false)) return false;
+    && !(OPERATION_ACTION_IDS[operationId]?.has(action.id) ?? false)
+    // Action Enrichment FRD §2: ids declared in the enrichment registry are allowed for their source operation (generated, not hand-listed).
+    && !isActionEnrichmentActionDeclared(operationId, action.id)) return false;
   return true;
 }

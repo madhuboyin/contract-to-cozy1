@@ -101,9 +101,9 @@ test('layering: support modules import only support modules; handlers never impo
       if (from.startsWith('handlers/') && (to === 'askOrchestrator.service.ts' || (to.startsWith('execution/') && to !== 'execution/executeOperation.ts'))) breaches.push(`${from} -> ${to}`);
       if (from.startsWith('execution/') && to === 'askOrchestrator.service.ts') breaches.push(`${from} -> ${to}`);
       // The runtime bootstrap sits above every layer: nothing in the decomposed layers or the facade-support files may import it back,
-      // and it may import only handlers, the one registering lifecycle module (execution/askCapture), and the two handler registries.
+      // and it may import only handlers, the one registering lifecycle module (execution/askCapture), the two handler registries, and the action-enrichment registry (startup validates its structural defects).
       if (to === 'askRuntimeBootstrap.ts' && from !== 'askOrchestrator.service.ts') breaches.push(`${from} -> ${to} (only the facade may import the runtime bootstrap)`);
-      if (from === 'askRuntimeBootstrap.ts' && !(to.startsWith('handlers/') || ['execution/askCapture.ts', 'capabilityHandlerRegistry.ts', 'confirmCapabilityHandlerRegistry.ts'].includes(to))) breaches.push(`${from} -> ${to}`);
+      if (from === 'askRuntimeBootstrap.ts' && !(to.startsWith('handlers/') || ['execution/askCapture.ts', 'capabilityHandlerRegistry.ts', 'confirmCapabilityHandlerRegistry.ts', 'actionEnrichment/actionEnrichmentRegistry.ts'].includes(to))) breaches.push(`${from} -> ${to}`);
       if (from === 'askFormatting.ts' && graph.has(target)) breaches.push(`${from} -> ${to}`);
     }
   }

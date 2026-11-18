@@ -29,6 +29,7 @@ import {
 import { ASK_DOMAIN_COMMAND_REGISTRY, getAskDomainCommandByOperation, validateAskDomainCommandRegistry } from '../services/ask/askDomainCommandRegistry';
 import { validateCapabilityHandlerRegistry } from '../services/ask/capabilityHandlerRegistry';
 import { validateConfirmCapabilityHandlerRegistry } from '../services/ask/confirmCapabilityHandlerRegistry';
+import { validateActionEnrichmentRegistry } from '../services/ask/actionEnrichment/actionEnrichmentRegistry';
 import { SKILL_DEFINITIONS, getSkillForOperation, validateSkillDefinitions } from '../services/skills/skillRegistry';
 import { validateSkillAdapterDefinitions } from '../services/skills/adapters/skillAdapterRegistry';
 import { KNOWN_UNGOVERNED_OPERATIONS, SKILL_GOVERNANCE_EXCEPTIONS, validateSkillOperationGovernanceCoverage } from '../services/intelligence/skillOperationGovernance.contract';
@@ -200,6 +201,8 @@ export function buildAskArchitectureInventory(): AskArchitectureInventory {
     validateAskDomainCommandRegistry: validateAskDomainCommandRegistry(),
     validateCapabilityHandlerRegistry: validateCapabilityHandlerRegistry(),
     validateConfirmCapabilityHandlerRegistry: validateConfirmCapabilityHandlerRegistry(),
+    // Reports every severity (BOOT_FATAL and TEST_ONLY); startup consumes only BOOT_FATAL.
+    validateActionEnrichmentRegistry: validateActionEnrichmentRegistry().map((issue) => `[${issue.severity}] ${issue.message}`),
     validateSkillDefinitions: validateSkillDefinitions(),
     validateSkillAdapterDefinitions: validateSkillAdapterDefinitions(),
     validateSkillOperationGovernanceCoverage: validateSkillOperationGovernanceCoverage({
