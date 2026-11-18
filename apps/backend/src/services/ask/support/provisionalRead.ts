@@ -9,7 +9,7 @@ import { planDataPointQuery } from '../dataPoint/dataPointQueryPlan';
 import { parseDeterministicSemanticRequest } from '../semantic/deterministicSemanticParser';
 import { parseCrossDomainSemanticRequest } from '../semantic/crossDomain/crossDomainPlanBuilder';
 import { SemanticReadReceiptSchema } from '../semantic/semanticExecutionReceipt';
-import { verifySemanticReadReceiptEntailment } from '../semantic/semanticReceiptEntailment';
+import { verifyReceiptPopulation, verifySemanticReadReceiptEntailment } from '../semantic/semanticReceiptEntailment';
 
 export interface GroundedReadVerdict { readonly outcome: 'PASS' | 'FAIL'; readonly reasonCodes: readonly string[] }
 
@@ -27,6 +27,39 @@ export function pointsNamedBy(question: string): Set<string> {
   for (const point of resolveDataPointsMulti(question)) named.add(point.id);
   for (const id of [...named]) { const alternate = ALTERNATE_POINT[id]; if (alternate) named.add(alternate); }
   return named;
+}
+
+/**
+ * A compound typed answer ("open claims or pending permits") has one receipt per facet, but the result carries only the first as `semanticExecutionReceipt`.
+ * It is grounded only when every part of the question was planned and answered: an independently parsed plan has the same facets, in order, each with a
+ * complete grammar, each facet's own receipt agrees with its planned facet (id, projection, subject, predicate) and passes the receipt's structural checks,
+ * and nothing was left unanswered. A partly answered or overflowing compound answer stays ungrounded: it names its own gap instead.
+ */
+function groundedMultiFacetVerdict(question: string, result: AskOperationResult): GroundedReadVerdict {
+  const notGrounded = (code: string): GroundedReadVerdict => ({ outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', code] });
+  const execution = (result.parameters as { crossDomainExecution?: { status?: string; overflowFacets?: unknown[]; facetResults?: Array<{ facetId?: string; receipt?: unknown }> } } | undefined)?.crossDomainExecution;
+  const facetResults = execution?.facetResults ?? [];
+  if (!execution || execution.status !== 'ANSWERED' || (execution.overflowFacets ?? []).length > 0) return notGrounded('COMPOUND_NOT_FULLY_ANSWERED');
+  const plan = parseCrossDomainSemanticRequest(question).plan;
+  if (plan.outcome !== 'MATCH' || plan.unresolvedSpans.length > 0 || plan.facets.length !== facetResults.length) return notGrounded('SEMANTIC_RECEIPT_PLAN_MISMATCH');
+  for (let index = 0; index < plan.facets.length; index += 1) {
+    const facet = plan.facets[index];
+    const receipt = SemanticReadReceiptSchema.safeParse(facetResults[index].receipt);
+    if (!facet.confidenceSignals.grammarComplete) return notGrounded('TYPED_GRAMMAR_DISAGREES');
+    if (!receipt.success) return notGrounded('RECEIPT_SCHEMA_INVALID');
+    const expectedPredicate = facet.relations[0]?.predicateId;
+    const agrees = receipt.data.facetId === facet.id
+      && receipt.data.projection === (facet.projection === 'ANALYSIS' ? 'DETAIL' : facet.projection)
+      && (!facet.subject || receipt.data.target.entityId === facet.subject.entityId)
+      && (expectedPredicate === undefined || receipt.data.predicateIds.includes(expectedPredicate));
+    if (!agrees) return notGrounded('SEMANTIC_RECEIPT_PLAN_MISMATCH');
+    const populationFailure = verifyReceiptPopulation(receipt.data);
+    if (populationFailure) return { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', 'SEMANTIC_RECEIPT_NOT_ENTAILED', populationFailure] };
+  }
+  const primary = verifySemanticReadReceiptEntailment(result);
+  return primary.outcome === 'PASS'
+    ? { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] }
+    : { outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', ...primary.reasonCodes] };
 }
 
 export function groundedReadVerdict(question: string, result: AskOperationResult): GroundedReadVerdict {
@@ -47,6 +80,7 @@ export function groundedReadVerdict(question: string, result: AskOperationResult
   // relation predicate) and its structural entailment passes. No legacy recognizer participates (FR-ONT-8).
   const receipt = SemanticReadReceiptSchema.safeParse((result.parameters as { semanticExecutionReceipt?: unknown } | undefined)?.semanticExecutionReceipt);
   if (receipt.success && !parameters.dataPointQuery?.template) {
+    if (((result.parameters as { crossDomainExecution?: { facetResults?: unknown[] } } | undefined)?.crossDomainExecution?.facetResults?.length ?? 0) > 1) return groundedMultiFacetVerdict(question, result);
     // Either typed-grammar producer may have built the plan the executor ran (the single-facet Phase 1 parser for relation reads,
     // the cross-domain grammar for jobs such as field absence). The receipt is grounded when an independently parsed single-facet
     // plan of either kind agrees with it; both failing is a disagreement.

@@ -8,13 +8,9 @@ export interface SemanticReceiptEntailmentVerdict {
 }
 
 /** Structural FR-ANS-2 checks; no text similarity or source scanning. */
-export function verifySemanticReadReceiptEntailment(result: AskOperationResult): SemanticReceiptEntailmentVerdict {
-  const parsed = SemanticReadReceiptSchema.safeParse((result.parameters as { semanticExecutionReceipt?: unknown } | undefined)?.semanticExecutionReceipt);
-  const fail = (code: string): SemanticReceiptEntailmentVerdict => ({ outcome: 'FAIL', reasonCodes: ['SEMANTIC_RECEIPT_NOT_ENTAILED', code], receipt: parsed.success ? parsed.data : null });
-  if (!parsed.success) return fail('RECEIPT_SCHEMA_INVALID');
-  const receipt = parsed.data;
-  const variant = result.blocks.find((block) => block.id === receipt.answerVariantId);
-  if (!variant || variant.type !== 'SUMMARY') return fail('ANSWER_VARIANT_MISSING');
+/** The structural checks that need only the receipt itself (population arithmetic, record counts, a non-empty population that was displayed). Used per facet of a compound answer, whose secondary facets have no block of their own. */
+export function verifyReceiptPopulation(receipt: SemanticReadReceipt): string | null {
+  const fail = (code: string): string => code;
   if (receipt.population.totalMatchCount !== receipt.population.confirmedCount) return fail('CONFIRMED_POPULATION_MISMATCH');
   if (new Set(receipt.resolvedRecordIds).size !== receipt.resolvedRecordIds.length) return fail('DUPLICATE_RESOLVED_RECORD');
   if (receipt.resolvedRecordIds.length > receipt.population.totalMatchCount) return fail('RESOLVED_RECORD_COUNT_EXCEEDS_POPULATION');
@@ -26,12 +22,24 @@ export function verifySemanticReadReceiptEntailment(result: AskOperationResult):
   }
   if (receipt.population.displayedCount > receipt.population.totalMatchCount) return fail('DISPLAYED_COUNT_EXCEEDS_POPULATION');
   if (receipt.population.truncated !== (receipt.population.displayedCount < receipt.population.totalMatchCount)) return fail('TRUNCATION_FLAG_MISMATCH');
+  if ((receipt.projection === 'LIST' || receipt.projection === 'DETAIL') && receipt.population.confirmedCount > 0 && receipt.population.displayedCount === 0) {
+    return fail('NON_EMPTY_POPULATION_NOT_DISPLAYED');
+  }
+  return null;
+}
+
+export function verifySemanticReadReceiptEntailment(result: AskOperationResult): SemanticReceiptEntailmentVerdict {
+  const parsed = SemanticReadReceiptSchema.safeParse((result.parameters as { semanticExecutionReceipt?: unknown } | undefined)?.semanticExecutionReceipt);
+  const fail = (code: string): SemanticReceiptEntailmentVerdict => ({ outcome: 'FAIL', reasonCodes: ['SEMANTIC_RECEIPT_NOT_ENTAILED', code], receipt: parsed.success ? parsed.data : null });
+  if (!parsed.success) return fail('RECEIPT_SCHEMA_INVALID');
+  const receipt = parsed.data;
+  const variant = result.blocks.find((block) => block.id === receipt.answerVariantId);
+  if (!variant || variant.type !== 'SUMMARY') return fail('ANSWER_VARIANT_MISSING');
+  const populationFailure = verifyReceiptPopulation(receipt);
+  if (populationFailure) return fail(populationFailure);
   if (receipt.projection === 'COUNT') {
     const summary = `${String((variant as { title?: unknown }).title ?? '')} ${String((variant as { body?: unknown }).body ?? '')}`;
     if (!new RegExp(`\\b${receipt.population.confirmedCount}\\b`).test(summary)) return fail('COUNT_NOT_RENDERED');
-  }
-  if ((receipt.projection === 'LIST' || receipt.projection === 'DETAIL') && receipt.population.confirmedCount > 0 && receipt.population.displayedCount === 0) {
-    return fail('NON_EMPTY_POPULATION_NOT_DISPLAYED');
   }
   return { outcome: 'PASS', reasonCodes: ['SEMANTIC_RECEIPT_ENTAILED'], receipt };
 }
