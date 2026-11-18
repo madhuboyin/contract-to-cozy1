@@ -1,7 +1,7 @@
 // Live-prompt OUTCOMES, not card shape. clarificationContract.test.js proves that any clarification card is well formed; it cannot tell a prompt that should have been ANSWERED from one that should
 // have been clarified. This file states, per live prompt, what the homeowner must get, and runs it through the production chain (cascade -> dispatcher -> executor -> evidence -> trust + relevance gate).
 //
-// KNOWN_GAPS lists prompts that do NOT yet get that outcome. Each asserts today's behaviour so the gap is visible and cannot widen; fixing one makes its assertion fail until the entry is moved to DELIVERED.
+// KNOWN_GAPS lists prompts that do NOT yet get that outcome (none today). Each asserts today's behaviour so the gap is visible and cannot widen; fixing one makes its assertion fail until the entry is moved to DELIVERED.
 // The list may only SHRINK.
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -49,23 +49,23 @@ for (const { prompt, mustMention } of DELIVERED) {
 }
 
 // The seller-readiness prompt moved here from KNOWN_GAPS (FR-FAST-10 amended 2026-11-18): it now starts SELLER_PREP_CHECKLIST provisionally. Delivery of its narrowed answer through the real handler and gate is asserted in provisionalSellerPrep.test.js.
+// "High risk" = the Appliance Oracle's failure risk by age; "missing documents" = nothing linked to the appliance or its warranties (owner definition 2026-11-18). Narrowing and delivery are asserted in provisionalApplianceRisk.test.js.
+test('DELIVERED: "list appliances that have missing documents and are high risk" starts the Appliance Oracle, not a document lookup or a question', () => {
+  const routing = route('list appliances that have missing documents and are high risk');
+  assert.equal(routing.stage, 'PROVISIONAL');
+  assert.equal(routing.operation.operationId, 'APPLIANCE_FAILURE_RISK');
+  assert.equal(routing.requiresClarification, false);
+});
+
 test('DELIVERED: "show seller readiness items that involve appliances" starts the seller-prep checklist, not recalls or replacement risk', () => {
   const routing = route('show seller readiness items that involve appliances');
   assert.equal(routing.stage, 'PROVISIONAL');
   assert.equal(routing.operation.operationId, 'SELLER_PREP_CHECKLIST');
 });
 
-const KNOWN_GAPS = [
-  {
-    prompt: 'list appliances that have missing documents and are high risk',
-    want: 'appliances that are both missing documents and high risk',
-    why: 'no typed job expresses "high risk" for an appliance, so the cross-domain parser cannot plan it and routing offers document options that cannot answer the intersection',
-    stillTrue: (routing) => routing.stage === 'CLARIFICATION' && routing.operation.operationId === 'GROUNDED_GUIDANCE',
-  },
-];
+// No known gaps remain. A new entry belongs here only with a recorded cause and an assertion of today's behaviour; the list may only shrink.
+const KNOWN_GAPS = [];
 
-for (const gap of KNOWN_GAPS) {
-  test(`KNOWN GAP: "${gap.prompt}" does not yet get ${gap.want}`, () => {
-    assert.equal(gap.stillTrue(route(gap.prompt)), true, `this gap appears fixed: move it to DELIVERED with a real assertion. Recorded cause: ${gap.why}`);
-  });
-}
+test('no live prompt is left as a known gap without an entry that records why', () => {
+  assert.deepEqual(KNOWN_GAPS, []);
+});

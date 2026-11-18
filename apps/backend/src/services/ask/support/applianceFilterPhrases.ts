@@ -1,0 +1,2 @@
+// The words the Appliance Oracle answer uses for each narrowing it applied. The handler writes them and the provisional-read delivery check reads them back, so a narrowed question is never delivered with an answer that did not apply the narrowing.
+export const APPLIANCE_FILTER_PHRASES = { risk: 'high or critical failure risk', cost: 'replacement cost over', documents: 'no document on file' } as const;

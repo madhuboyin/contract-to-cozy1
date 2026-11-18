@@ -817,7 +817,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "APPLIANCE_FAILURE_RISK",
   "confidence": 0.96,
   "order": 61,
-  "hash": "3d97fd7bc34efe91",
+  "hash": "9b1dc9ceba2498ba",
   "condition": "applianceFailureRiskPattern.test(message) && !applianceFailureRiskOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(mes...",
   "references": [
    "askOperationRegistry.ts:applianceFailureRiskOtherIntentPattern",

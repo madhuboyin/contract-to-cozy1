@@ -11,6 +11,8 @@ import { getAskPropertyTimezone } from '../askExecutionContext';
 import { collectionDescriptor } from '../support/collectionDescriptor';
 import { DEFAULT_CANDIDATE_SIGNALS, DEFAULT_CANDIDATE_TRAITS, type SuggestedNextActionCandidate } from '../suggestedActions/suggestedNextActionCandidate';
 import { singleGreaterThanAmountCents } from '../semantic/amountComparison';
+import { prisma } from '../../../lib/prisma';
+import { APPLIANCE_FILTER_PHRASES } from '../support/applianceFilterPhrases';
 
 // Appliance Oracle and Budget Planner (FRD v1.70, product decision option A for the Gemini-backed tools): Ask shows only
 // the calculated part of each page, with the services' Gemini recommendations switched off, and links to the page for the
@@ -79,7 +81,19 @@ export function applianceReplacementCandidates(report: OracleReportView, propert
   }];
 }
 
-export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY_OWNER_ONLY', propertyId: string, filter?: { replacementCostOverCents: number; highRiskOnly: boolean }): AskOperationResult {
+/** What a narrowed Oracle question asks for. `missingDocumentItemIds` is the set of inventory items with NO document on file (computed by the caller); an appliance with no inventory link cannot be checked and is not matched. */
+export interface ApplianceFailureRiskFilter { readonly replacementCostOverCents: number | null; readonly highRiskOnly: boolean; readonly missingDocumentItemIds?: ReadonlySet<string> }
+export { APPLIANCE_FILTER_PHRASES };
+function applianceFilterParts(filter: ApplianceFailureRiskFilter): string[] {
+  return [
+    ...(filter.highRiskOnly ? [APPLIANCE_FILTER_PHRASES.risk] : []),
+    ...(filter.replacementCostOverCents !== null ? [`an estimated ${APPLIANCE_FILTER_PHRASES.cost} ${wholeDollars(filter.replacementCostOverCents / 100)}`] : []),
+    ...(filter.missingDocumentItemIds ? [APPLIANCE_FILTER_PHRASES.documents] : []),
+  ];
+}
+const isLegacyCostRiskFilter = (filter: ApplianceFailureRiskFilter): boolean => filter.highRiskOnly && filter.replacementCostOverCents !== null && !filter.missingDocumentItemIds;
+
+export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY_OWNER_ONLY', propertyId: string, filter?: ApplianceFailureRiskFilter): AskOperationResult {
   if (report === 'PRIMARY_OWNER_ONLY') {
     return {
       status: 'BLOCKED', reasonCode: 'APPLIANCE_ORACLE_PRIMARY_OWNER_ONLY',
@@ -87,10 +101,14 @@ export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY
       suggestions: [],
     };
   }
+  let unlinkedForDocuments = 0;
   if (filter) {
+    const noDocuments = filter.missingDocumentItemIds;
+    unlinkedForDocuments = noDocuments ? report.predictions.filter((prediction) => !prediction.inventoryItemId).length : 0;
     const predictions = report.predictions.filter((prediction) =>
-      prediction.replacementCost * 100 > filter.replacementCostOverCents
+      (filter.replacementCostOverCents === null || prediction.replacementCost * 100 > filter.replacementCostOverCents)
       && (!filter.highRiskOnly || prediction.urgency === 'HIGH' || prediction.urgency === 'CRITICAL')
+      && (!noDocuments || (prediction.inventoryItemId != null && noDocuments.has(prediction.inventoryItemId)))
     );
     report = {
       ...report,
@@ -144,7 +162,7 @@ export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY
       blocks: [{
         type: 'SUMMARY', id: 'appliance-oracle-summary', title: filter ? 'No appliances match those filters' : skipped ? 'No appliance ages recorded yet' : 'No appliances recorded yet',
         body: filter
-          ? `No high- or critical-risk appliance has an estimated replacement cost over ${wholeDollars(filter.replacementCostOverCents / 100)}.`
+          ? (isLegacyCostRiskFilter(filter) ? `No high- or critical-risk appliance has an estimated replacement cost over ${wholeDollars((filter.replacementCostOverCents as number) / 100)}.` : `No appliance has ${applianceFilterParts(filter).join(' and ')}.`)
           : skipped
           ? 'Appliance Oracle estimates failure risk from each appliance\'s age. Add a purchase date below to include an appliance.'
           : 'Appliance Oracle estimates failure risk from each appliance\'s age. Add appliances with their purchase date to the inventory to see it.',
@@ -157,7 +175,10 @@ export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY
     type: 'SUMMARY', id: 'appliance-oracle-summary',
     title: filter ? `${report.totalAppliances} appliance${report.totalAppliances === 1 ? '' : 's'} match` : `${report.totalAppliances} appliance${report.totalAppliances === 1 ? '' : 's'} analysed`,
     body: [
-      filter ? `High or critical failure risk, with estimated replacement cost over ${wholeDollars(filter.replacementCostOverCents / 100)}.` : `${report.criticalCount} critical and ${report.highRiskCount} high risk.`,
+      filter
+        ? (isLegacyCostRiskFilter(filter) ? `High or critical failure risk, with estimated replacement cost over ${wholeDollars((filter.replacementCostOverCents as number) / 100)}.` : `Appliances with ${applianceFilterParts(filter).join(' and ')}.`)
+        : `${report.criticalCount} critical and ${report.highRiskCount} high risk.`,
+      unlinkedForDocuments ? `${unlinkedForDocuments} appliance${unlinkedForDocuments === 1 ? ' has' : 's have'} no inventory record linked, so documents could not be checked for ${unlinkedForDocuments === 1 ? 'it' : 'them'}.` : null,
       report.criticalCount + report.highRiskCount ? `Replacing those would cost an estimated ${wholeDollars(report.estimatedTotalCost)}.` : null,
       'Replacement model suggestions are not currently available in Ask.',
     ].filter(Boolean).join(' '),
@@ -170,13 +191,41 @@ export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY
   return { status: 'ANSWERED', reasonCode: 'APPLIANCE_ORACLE_READY', blocks, suggestions: [], ...(suggestedNextActionCandidates.length ? { suggestedNextActionCandidates } : {}) };
 }
 
+// "Missing documents" for an appliance: no document of any kind is linked to its inventory record, directly or through one of its warranties. The summary says so.
+const APPLIANCE_HIGH_RISK = /\b(?:high|critical)\s+(?:failure\s+)?risk\b/i;
+const APPLIANCE_MISSING_DOCUMENTS = /\b(?:missing|without|no|lacking|lack)\b.{0,25}\b(?:documents?|documentation|paperwork)\b|\b(?:documents?|paperwork)\b.{0,15}\bmissing\b/i;
+export const askedHighRisk = (message: string): boolean => APPLIANCE_HIGH_RISK.test(message);
+export const askedMissingDocuments = (message: string): boolean => APPLIANCE_MISSING_DOCUMENTS.test(message);
+
+/** Inventory items (of those given) that have no linked document. Pure given the rows; the query is scoped to the property's own item ids. */
+export async function inventoryItemsWithoutDocuments(itemIds: readonly string[]): Promise<Set<string>> {
+  if (!itemIds.length) return new Set();
+  const documents = await prisma.document.findMany({
+    where: { deletedAt: null, OR: [{ inventoryItemId: { in: [...itemIds] } }, { warranty: { inventoryItemId: { in: [...itemIds] } } }] },
+    select: { inventoryItemId: true, warranty: { select: { inventoryItemId: true } } },
+  });
+  const documented = new Set<string>();
+  for (const document of documents) {
+    if (document.inventoryItemId) documented.add(document.inventoryItemId);
+    if (document.warranty?.inventoryItemId) documented.add(document.warranty.inventoryItemId);
+  }
+  return new Set(itemIds.filter((id) => !documented.has(id)));
+}
+
 async function applianceFailureRiskResult(propertyId: string, userId: string, message: string): Promise<AskOperationResult> {
   try {
     const amount = singleGreaterThanAmountCents(message);
-    const filter = amount !== null && /\b(?:high|critical)\s+(?:failure\s+)?risk\b/i.test(message)
-      ? { replacementCostOverCents: amount, highRiskOnly: true }
-      : undefined;
-    return applianceFailureRiskFromView(await applianceOracleService.generateOracleReport(propertyId, userId, { includeRecommendations: false }), propertyId, filter);
+    const highRisk = askedHighRisk(message);
+    const missingDocuments = askedMissingDocuments(message);
+    const report = await applianceOracleService.generateOracleReport(propertyId, userId, { includeRecommendations: false });
+    if (!highRisk && !missingDocuments) return applianceFailureRiskFromView(report, propertyId);
+    // The old rule (a cost ceiling together with high risk) is unchanged; a cost ceiling alone never narrowed the answer and still does not.
+    const filter: ApplianceFailureRiskFilter = {
+      replacementCostOverCents: amount,
+      highRiskOnly: highRisk,
+      ...(missingDocuments ? { missingDocumentItemIds: await inventoryItemsWithoutDocuments(report.predictions.map((prediction) => prediction.inventoryItemId).filter((id): id is string => Boolean(id))) } : {}),
+    };
+    return applianceFailureRiskFromView(report, propertyId, filter);
   } catch (error) {
     if (error instanceof Error && error.message === 'Property not found or access denied') return applianceFailureRiskFromView('PRIMARY_OWNER_ONLY', propertyId);
     throw error;

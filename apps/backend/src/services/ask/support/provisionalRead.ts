@@ -9,6 +9,7 @@ import { planDataPointQuery } from '../dataPoint/dataPointQueryPlan';
 import { parseDeterministicSemanticRequest } from '../semantic/deterministicSemanticParser';
 import { parseCrossDomainSemanticRequest } from '../semantic/crossDomain/crossDomainPlanBuilder';
 import { SemanticReadReceiptSchema } from '../semantic/semanticExecutionReceipt';
+import { APPLIANCE_FILTER_PHRASES } from './applianceFilterPhrases';
 import { verifyReceiptPopulation, verifySemanticReadReceiptEntailment } from '../semantic/semanticReceiptEntailment';
 
 export interface GroundedReadVerdict { readonly outcome: 'PASS' | 'FAIL'; readonly reasonCodes: readonly string[] }
@@ -388,10 +389,37 @@ export function groundedSellerPrepVerdict(question: string, result: AskOperation
 }
 const sellerPrepRouteGuard = (message: string): boolean => !SELLER_PREP_COMMAND.test(message) && !SELLER_PREP_OTHER_JOB.test(message);
 
+// ---- appliance failure risk --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// The Appliance Oracle reads each appliance's age against a typical lifespan ("failure risk by age"). It may be delivered when (1) the question is a read of that risk, not a purchase, brand, repair or record request, (2) the answer is the
+// handler's own summary with an Oracle reason code, and (3) every narrowing the homeowner named (high or critical risk, a replacement-cost ceiling, missing documents) is stated by the summary as applied, and an unnarrowed question is
+// never answered with a "match" list. The summary's words come from support/applianceFilterPhrases, which the handler writes.
+const APPLIANCE_RISK_OTHER_INTENT = /\b(?:buy|recommend\w*|brand|model|should|repair|fix|add|record|log)\b/i;
+const APPLIANCE_ASKS_RISK = /\b(?:high|critical)\s+(?:failure\s+)?risk\b/i;
+const APPLIANCE_ASKS_MISSING_DOCUMENTS = /\b(?:missing|without|no|lacking|lack)\b.{0,25}\b(?:documents?|documentation|paperwork)\b|\b(?:documents?|paperwork)\b.{0,15}\bmissing\b/i;
+const APPLIANCE_ASKS_COST_CEILING = /\b(?:over|above|more than|greater than|exceed\w*)\s*\$\s?\d|\$\s?\d[\d,]*\s*(?:or more|\+)/i;
+const APPLIANCE_ORACLE_REASONS = new Set(['APPLIANCE_ORACLE_READY', 'APPLIANCE_ORACLE_EMPTY']);
+export function groundedApplianceRiskVerdict(question: string, result: AskOperationResult): GroundedReadVerdict {
+  const fail = (code: string): GroundedReadVerdict => ({ outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', code] });
+  if (APPLIANCE_RISK_OTHER_INTENT.test(question)) return fail('ANOTHER_OPERATION_OWNS_THE_QUESTION');
+  if (result.status !== 'ANSWERED' && result.status !== 'READY_WITH_LIMITATIONS') return fail('ANSWER_IS_NOT_A_DELIVERABLE_STATUS');
+  const summary = result.blocks.find((block) => warrantyBlockId(block) === 'appliance-oracle-summary') as { title?: string; body?: string } | undefined;
+  if (!summary || !APPLIANCE_ORACLE_REASONS.has(result.reasonCode ?? '')) return fail('ANSWER_IS_NOT_A_VERIFIED_VARIANT');
+  const said = `${summary.title ?? ''} ${summary.body ?? ''}`;
+  const askedRisk = APPLIANCE_ASKS_RISK.test(question);
+  const askedDocuments = APPLIANCE_ASKS_MISSING_DOCUMENTS.test(question);
+  const askedCost = askedRisk && APPLIANCE_ASKS_COST_CEILING.test(question);
+  if (askedRisk && !/\bhigh\b.{0,6}\bcritical\b.{0,12}\brisk/i.test(said)) return fail('RISK_NARROWING_NOT_STATED');
+  if (askedDocuments && !new RegExp(APPLIANCE_FILTER_PHRASES.documents, 'i').test(said)) return fail('DOCUMENT_NARROWING_NOT_STATED');
+  if (askedCost && !new RegExp(APPLIANCE_FILTER_PHRASES.cost, 'i').test(said)) return fail('COST_NARROWING_NOT_STATED');
+  if (!askedRisk && !askedDocuments && /\bmatch\b|\bthose filters\b/i.test(summary.title ?? '')) return fail('FILTERED_VIEW_FOR_AN_UNFILTERED_QUESTION');
+  return { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] };
+}
+const applianceRiskRouteGuard = (message: string): boolean => !APPLIANCE_RISK_OTHER_INTENT.test(message);
+
 // ---- which operations may be tried provisionally --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 export type GroundedReadCheck = (question: string, result: AskOperationResult) => GroundedReadVerdict;
 /** FR-GATE-8: an operation may be tried provisionally only together with a grounded delivery check. This table IS the allowlist (fastPathCertificates derives PROVISIONAL_READ_OPERATIONS from it). */
-export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict, WARRANTY_LOOKUP: groundedWarrantyVerdict, HOME_STATUS_BOARD: groundedStatusBoardVerdict, HOME_BASICS_GUIDE: groundedHomeBasicsVerdict, PROPERTY_SUMMARY: groundedPropertySummaryVerdict, INCIDENT_CLAIM_STATUS: groundedClaimStatusVerdict, SAVED_RESULTS: groundedSavedResultsVerdict, WORK_OVERVIEW: groundedWorkOverviewVerdict, ITEM_REPLACEMENT_COST: groundedItemCostVerdict, SELLER_PREP_CHECKLIST: groundedSellerPrepVerdict });
+export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict, WARRANTY_LOOKUP: groundedWarrantyVerdict, HOME_STATUS_BOARD: groundedStatusBoardVerdict, HOME_BASICS_GUIDE: groundedHomeBasicsVerdict, PROPERTY_SUMMARY: groundedPropertySummaryVerdict, INCIDENT_CLAIM_STATUS: groundedClaimStatusVerdict, SAVED_RESULTS: groundedSavedResultsVerdict, WORK_OVERVIEW: groundedWorkOverviewVerdict, ITEM_REPLACEMENT_COST: groundedItemCostVerdict, SELLER_PREP_CHECKLIST: groundedSellerPrepVerdict, APPLIANCE_FAILURE_RISK: groundedApplianceRiskVerdict });
 
 /**
  * FR-CAP-3 Phase 1 disposition for every provisional family. FAST_PATH_RULES
@@ -414,6 +442,7 @@ export const PROVISIONAL_READ_FAMILY_DISPOSITIONS: Readonly<Record<string, {
   WORK_OVERVIEW: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'workOverviewRouteGuard', 'groundedWorkOverviewVerdict', 'operationAnswerContract'] },
   ITEM_REPLACEMENT_COST: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'itemCostRouteGuard', 'groundedItemCostVerdict', 'operationAnswerContract'] },
   SELLER_PREP_CHECKLIST: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'sellerPrepRouteGuard', 'groundedSellerPrepVerdict', 'sellerPrepHandlerBlockContract'] },
+  APPLIANCE_FAILURE_RISK: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'applianceRiskRouteGuard', 'groundedApplianceRiskVerdict', 'applianceFilterPhrases'] },
 });
 
 export function verifyProvisionalReadFamilyDispositions(): readonly string[] {
@@ -429,7 +458,7 @@ export function verifyProvisionalReadFamilyDispositions(): readonly string[] {
 }
 export const hasGroundedReadCheck = (operationId: AskOperationId): boolean => operationId in GROUNDED_READ_CHECKS;
 /** Checked before a provisional read is started: false means the rule's match is not the request this read answers, so the turn keeps the strict path. */
-export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ MAINTENANCE_STATUS: maintenanceRouteGuard, WARRANTY_LOOKUP: warrantyRouteGuard, HOME_STATUS_BOARD: statusBoardRouteGuard, HOME_BASICS_GUIDE: homeBasicsRouteGuard, PROPERTY_SUMMARY: propertySummaryRouteGuard, INCIDENT_CLAIM_STATUS: claimStatusRouteGuard, SAVED_RESULTS: savedResultsRouteGuard, WORK_OVERVIEW: workOverviewRouteGuard, ITEM_REPLACEMENT_COST: itemCostRouteGuard, SELLER_PREP_CHECKLIST: sellerPrepRouteGuard });
+export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ MAINTENANCE_STATUS: maintenanceRouteGuard, WARRANTY_LOOKUP: warrantyRouteGuard, HOME_STATUS_BOARD: statusBoardRouteGuard, HOME_BASICS_GUIDE: homeBasicsRouteGuard, PROPERTY_SUMMARY: propertySummaryRouteGuard, INCIDENT_CLAIM_STATUS: claimStatusRouteGuard, SAVED_RESULTS: savedResultsRouteGuard, WORK_OVERVIEW: workOverviewRouteGuard, ITEM_REPLACEMENT_COST: itemCostRouteGuard, SELLER_PREP_CHECKLIST: sellerPrepRouteGuard, APPLIANCE_FAILURE_RISK: applianceRiskRouteGuard });
 export const provisionalRouteAllowed = (operationId: AskOperationId, message: string): boolean => (GROUNDED_READ_ROUTE_GUARDS[operationId]?.(message) ?? true);
 export function groundedVerdictFor(operationId: AskOperationId, question: string, result: AskOperationResult): GroundedReadVerdict {
   const check = GROUNDED_READ_CHECKS[operationId];

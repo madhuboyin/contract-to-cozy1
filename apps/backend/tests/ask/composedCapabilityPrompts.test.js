@@ -8,13 +8,14 @@ const { applianceFailureRiskFromView } = require('../../src/services/ask/askOrch
 const route = (message) => resolveAskRoutingCascade(message, { localRoutingEnabled: true });
 
 test('supported compound capability prompts start the governed read instead of clarification or fallback', () => {
-  for (const [message, operationId] of [
-    ['which appliances have an estimated replacement cost over $1000 and high failure risk?', 'APPLIANCE_FAILURE_RISK'],
-    ['show seller prep items that cost less than $500 and are high priority', 'SELLER_PREP_CHECKLIST'],
-    ['compare furnace replacement options and show return on investment', 'HOME_UPGRADE_SCENARIOS'],
+  // The Oracle prompt is a provisional read since 2026-11-18 (FR-FAST-10 slice 12); the others are still chosen by the local classifier.
+  for (const [message, operationId, stage] of [
+    ['which appliances have an estimated replacement cost over $1000 and high failure risk?', 'APPLIANCE_FAILURE_RISK', 'PROVISIONAL'],
+    ['show seller prep items that cost less than $500 and are high priority', 'SELLER_PREP_CHECKLIST', 'LOCAL_CLASSIFIER'],
+    ['compare furnace replacement options and show return on investment', 'HOME_UPGRADE_SCENARIOS', 'LOCAL_CLASSIFIER'],
   ]) {
     const decision = route(message);
-    assert.equal(decision.stage, 'LOCAL_CLASSIFIER', message);
+    assert.equal(decision.stage, stage, message);
     assert.equal(decision.operation.operationId, operationId, message);
     assert.equal(decision.requiresClarification, false, message);
   }
