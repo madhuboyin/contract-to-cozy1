@@ -56,12 +56,14 @@ function CalmSummary({ block }: { block: Extract<AskPresentationBlock, { type: '
   const declared = Boolean(block.headline?.trim() || block.supportLine?.trim() || block.bullets?.length);
   const headline = block.headline?.trim() || block.title;
   const supportLine = declared ? block.supportLine?.trim() || null : block.body;
+  const normalizedHeadline = headline.toLocaleLowerCase('en-US').replace(/[^a-z0-9]+/g, ' ').trim();
+  const distinctChips = block.chips?.filter((chip) => chip.label.toLocaleLowerCase('en-US').replace(/[^a-z0-9]+/g, ' ').trim() !== normalizedHeadline);
   return (
     <section data-calm-summary="" className={cn('max-w-[800px]', CALM_TONE_RULE[block.tone])}>
       <h3 className="font-display text-[22px] font-medium leading-snug tracking-[-0.01em] text-slate-950 sm:text-[26px]">{headline}</h3>
       {supportLine && <p className={cn('mt-1 whitespace-pre-wrap text-sm leading-6', declared ? 'text-slate-500' : 'text-slate-700')}>{supportLine}</p>}
       {block.bullets && <SummaryBullets bullets={block.bullets} />}
-      {block.chips && block.chips.length > 0 && <AnswerChips chips={block.chips} />}
+      {distinctChips && distinctChips.length > 0 && <AnswerChips chips={distinctChips} />}
       {actions.length > 0 && <div className="mt-3 flex flex-wrap gap-2 text-sm">{actions.map((action) => <ActionLink key={action.id} action={{ ...action, style: 'SECONDARY' }} />)}</div>}
     </section>
   );
@@ -1454,7 +1456,7 @@ function StateBlock({ block }: { block: StateBlockType }) {
 }
 
 export const LimitationBlock: AskBlockRenderer<'LIMITATION'> = ({ block }) => {
-  if (block.id === 'status-board-limits' || block.id === 'budget-forecast-assumed-age') {
+  if (block.id === 'status-board-limits' || block.id === 'budget-forecast-assumed-age' || block.id === 'semantic-amount-filter-not-applied') {
     return (
       <section
         data-status-board-limits={block.id === 'status-board-limits' ? '' : undefined}

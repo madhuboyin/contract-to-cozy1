@@ -238,7 +238,7 @@ export function ClaimResultList({ block, propertyId, disabled, onAction, onFilte
     <div className="border-b border-slate-100 p-4">
       <h3 className="font-semibold text-slate-950">{block.title}</h3>
       {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
-      {block.actions.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
+      {calm && block.actions.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
       {block.filters.length > 0 && (calm
         // C-2: the two filter dimensions (scope, state) and the way back are separate quiet groups, so it is clear which chip replaces which.
         ? <div className="mt-2 space-y-1" data-claim-filters="">
@@ -257,15 +257,15 @@ export function ClaimResultList({ block, propertyId, disabled, onAction, onFilte
     {block.sections.map((section) => <div key={section.id} className="border-b border-slate-100 p-4">
       <h4 className="font-semibold">{section.title} · {section.count}</h4>
       {section.items.length === 0 && <p className="mt-2 text-sm text-slate-500">Nothing in this group.</p>}
-      <ul className="mt-3 space-y-3">
-        {section.items.map((item) => <li key={item.id} className={cn('rounded-xl border p-3', detailId === item.id ? 'border-teal-600 bg-teal-50' : 'border-transparent bg-slate-50')}>
+      <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+        {section.items.map((item) => <li key={item.id} className={cn('rounded-xl border px-3 py-2.5', detailId === item.id ? 'border-teal-600 bg-teal-50' : 'border-slate-200 bg-white')}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             {item.entityType === 'CLAIM' || item.entityType === 'INCIDENT'
-              ? <button type="button" data-claim-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={detailId === item.id} aria-controls={`${item.entityType === 'CLAIM' ? 'claim' : 'incident'}-detail-${item.id}`} onClick={() => openDetail(item)} className="min-h-10 text-left font-medium text-slate-950 underline-offset-4 hover:text-teal-800 hover:underline">{item.title}</button>
+              ? <button type="button" aria-label={item.title} data-claim-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={detailId === item.id} aria-controls={`${item.entityType === 'CLAIM' ? 'claim' : 'incident'}-detail-${item.id}`} onClick={() => openDetail(item)} className="group min-h-9 text-left font-semibold text-slate-950 underline-offset-4 hover:text-teal-800"><span className="group-hover:underline">{item.title}</span><span className="ml-2 text-xs font-medium text-teal-700">View details</span></button>
               : item.href ? <span className="inline-flex min-h-10 items-center font-medium text-slate-950">{link(item.href, item.title)}</span> : <span className="font-medium text-slate-950">{item.title}</span>}
-            {item.status && <span className="text-xs text-slate-600">{item.status.replace(/_/g, ' ').toLowerCase()}</span>}
+            {item.status && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">{item.status.replace(/_/g, ' ').toLowerCase()}</span>}
           </div>
-          {item.description && <p className="mt-1 text-sm text-slate-600">{item.description}</p>}
+          {item.description && <p className="mt-0.5 line-clamp-2 text-sm text-slate-600">{item.description}</p>}
           {item.meta.filter((value) => label(value) !== label(item.status)).length > 0 && <p className="mt-1 text-xs text-slate-600">{item.meta.filter((value) => label(value) !== label(item.status)).map(label).join(' · ')}</p>}
         </li>)}
       </ul>

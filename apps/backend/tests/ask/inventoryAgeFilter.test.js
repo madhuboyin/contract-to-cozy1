@@ -65,6 +65,12 @@ test('the live prompt answers from data: no warranty OR old; a warranted young i
   const body = summary(r).body;
   assert.match(body, /^Matching: no warranty linked in your home record, or older than 10 years \(by recorded install date\)\./);
   assert.ok(!/Looking for/.test(body));
+  const list = r.operationResult.blocks.find((block) => block.type === 'GROUPED_LIST');
+  assert.equal(list.id, 'inventory-results');
+  assert.equal(list.title, '3 matching appliances');
+  assert.match(list.description, /Open any item for its full home-record details/);
+  assert.deepEqual(list.sections[0].items[0].meta, ['Appliance', 'Not recorded']);
+  assert.match(list.sections[0].items[0].description, /^Installed: /);
 });
 
 test('an item with no install date is never counted as old OR as not old: it is unknown when the date decides the answer', () => {

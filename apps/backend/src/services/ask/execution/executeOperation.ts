@@ -433,7 +433,12 @@ export async function executeOperation(input: { userId: string; sessionId: strin
     // Phase 0 measurement: the real suggested-next-action finalization for ordinary answers runs here, inside ROUTE_AND_EXECUTE, so it is timed on its own.
     const finalizeStartedAt = Date.now();
     const suggestionAwareResult = await finalizeSuggestedNextActions({
-      result: withAlsoAnswerAction({ ...result, skillHandoff }, input.message, input.operation.operationId), executionId: input.executionId, userId: input.userId, sessionId: input.sessionId,
+      // The semantic slice evaluates the whole predicate tree, including
+      // compound room/warranty/age questions. Offering one parsed clause again
+      // makes the UI imply that part of the question was dropped.
+      result: result.parameters?.semanticExecutionReceipt
+        ? { ...result, skillHandoff }
+        : withAlsoAnswerAction({ ...result, skillHandoff }, input.message, input.operation.operationId), executionId: input.executionId, userId: input.userId, sessionId: input.sessionId,
       propertyId: input.propertyId ?? null, operationId: input.operation.operationId, message: input.message,
       completedSemanticKeyHashes: () => loadCompletedSuggestedActionKeyHashes({ executionId: input.executionId, sessionId: input.sessionId, userId: input.userId }),
       recentCompletedMessages,

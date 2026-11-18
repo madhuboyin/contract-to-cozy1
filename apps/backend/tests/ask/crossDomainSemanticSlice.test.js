@@ -79,6 +79,16 @@ test('Phase 2A vertical slice executes inventory count, detail, and bounded room
   assert.equal(kitchenWarrantyResult.status, 'ANSWERED');
   assert.deepEqual(kitchenWarrantyResult.activeEntityIds, ['item-fridge']);
   assert.equal(kitchenWarrantyResult.traversalDepthUsed, 1);
+
+  const maintenanceResult = executeSemanticSlice({
+    rawText: 'show maintenance tasks',
+    snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT,
+    auth: SLICE_OWNER_AUTH,
+  });
+  const maintenanceList = maintenanceResult.operationResult.blocks.find((block) => block.type === 'GROUPED_LIST');
+  assert.equal(maintenanceList.id, 'maintenance-groups');
+  assert.match(maintenanceList.description, /Open a task to review/);
+  assert.ok(maintenanceList.sections.flatMap((section) => section.items).every((item) => item.meta.length >= 3));
 });
 
 test('Phase 2A vertical slice handles positive, negative, unknown, and conflicted warranty states with boundary disclosure', () => {

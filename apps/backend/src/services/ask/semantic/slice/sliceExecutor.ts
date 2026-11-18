@@ -587,6 +587,8 @@ function executeValidatedSlicePlan(input: {
       id: targetItem.id,
       label: targetItem.name,
       subtitle: `${recommendation} Estimated replacement: ${costText}.`,
+      description: `${recommendation} Estimated replacement: ${costText}.`,
+      meta: [targetItem.category, [targetItem.brand, targetItem.modelNumber].filter(Boolean).join(' ') || 'Not recorded'],
       stateCode: targetItem.condition ?? 'GOOD_CONDITION',
       groupKey: 'Replacement Guidance',
     }];
@@ -595,6 +597,9 @@ function executeValidatedSlicePlan(input: {
       title: `Replacement guidance for ${targetItem.name}`,
       summaryBody: `${recommendation} Estimated replacement cost: ${costText}.`,
       rows,
+      listId: 'inventory-results',
+      listTitle: `${targetItem.name} details`,
+      listDescription: 'Open the item for its full home-record details',
     });
     const operationResult: AskOperationResult = {
       status: 'ANSWERED',
@@ -766,6 +771,12 @@ function executeValidatedSlicePlan(input: {
             id: task.id,
             label: task.title,
             subtitle: `Due ${task.nextDueDate}${item ? ` · Item: ${item.name}` : ''}`,
+            description: item ? `Linked to ${item.name}` : undefined,
+            meta: [
+              `Due ${task.nextDueDate}`,
+              `${task.priority.toLowerCase()} priority`,
+              task.estimatedCostCents != null ? `Estimated cost ${formatMoneyCents(task.estimatedCostCents, false)}` : 'Estimated cost not recorded',
+            ],
             stateCode: task.status,
             groupKey: task.priority,
           };
@@ -775,6 +786,9 @@ function executeValidatedSlicePlan(input: {
       title: projection === 'COUNT' ? `${matchingTasks.length} maintenance tasks matched` : 'Maintenance tasks',
       summaryBody: `Found ${matchingTasks.length} matching maintenance task${matchingTasks.length === 1 ? '' : 's'}.`,
       rows,
+      listId: 'maintenance-groups',
+      listTitle: `${matchingTasks.length} matching maintenance ${matchingTasks.length === 1 ? 'task' : 'tasks'}`,
+      listDescription: 'Open a task to review its schedule, cost, status, and actions',
     });
     const operationResult: AskOperationResult = {
       status: 'ANSWERED',
@@ -917,6 +931,13 @@ function executeValidatedSlicePlan(input: {
           id: item.id,
           label: item.name,
           subtitle: parts.join(' · '),
+          description: ageInPlay
+            ? `Installed: ${item.installedOn ?? 'not recorded'}`
+            : undefined,
+          meta: [
+            room?.name ?? item.category,
+            [item.brand, item.modelNumber].filter(Boolean).join(' ') || 'Not recorded',
+          ],
           stateCode: facet.relations.some((r) => r.semanticRelationId === 'relation.inventory_item.warranty')
             ? warranty.state
             : item.condition,
@@ -996,6 +1017,16 @@ function executeValidatedSlicePlan(input: {
     title,
     summaryBody,
     rows,
+    // Semantic inventory reads are still ordinary inventory records. Giving
+    // them the canonical list identity enables the existing compact table and
+    // live item-detail disclosure instead of the generic label-only cards.
+    listId: 'inventory-results',
+    listTitle: projection === 'COUNT'
+      ? title
+      : `${matched.length} matching ${plural(matched.length, 'appliance', 'appliances')}`,
+    listDescription: projection === 'COUNT'
+      ? undefined
+      : `${matched.length} ${plural(matched.length, 'appliance', 'appliances')} · Open any item for its full home-record details`,
   });
 
   const operationResult: AskOperationResult = {

@@ -6,6 +6,8 @@ export interface SlicePresentationRow {
   readonly id: string;
   readonly label: string;
   readonly subtitle?: string;
+  readonly description?: string;
+  readonly meta?: readonly string[];
   readonly stateCode?: string;
   readonly badgeLabel?: string;
   readonly groupKey?: string;
@@ -16,6 +18,9 @@ export interface SliceRichPresentationInput {
   readonly title: string;
   readonly summaryBody: string;
   readonly rows: readonly SlicePresentationRow[];
+  readonly listId?: string;
+  readonly listTitle?: string;
+  readonly listDescription?: string;
 }
 
 export interface SliceRichPresentationEquivalenceReport {
@@ -56,9 +61,9 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
 
     blocks.push({
       type: 'GROUPED_LIST',
-      id: `${receipt.answerVariantId}-list`,
-      title: humanizeEnumTokensInCopy(input.title),
-      description: `Showing ${rows.length} of ${receipt.population.totalMatchCount} confirmed matches`,
+      id: input.listId ?? `${receipt.answerVariantId}-list`,
+      title: humanizeEnumTokensInCopy(input.listTitle ?? input.title),
+      description: input.listDescription ?? `Showing ${rows.length} of ${receipt.population.totalMatchCount} confirmed matches`,
       sections: [...grouped.entries()].map(([groupTitle, groupRows], index) => ({
         id: `${receipt.answerVariantId}-section-${index + 1}`,
         title: groupTitle,
@@ -66,8 +71,9 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
         items: groupRows.map((row) => ({
           id: row.id,
           title: humanizeEnumTokensInCopy(row.label),
-          meta: [],
+          meta: [...(row.meta ?? [])].map(humanizeEnumTokensInCopy),
           subtitle: row.subtitle ? humanizeEnumTokensInCopy(row.subtitle) : undefined,
+          description: row.description ? humanizeEnumTokensInCopy(row.description) : undefined,
           badge: row.stateCode
             ? humanizePresentationToken(row.stateCode)
             : row.badgeLabel

@@ -52,7 +52,9 @@ export function singleGreaterThanAmountCents(message: string): number | null {
 
 /**
  * A typed-stack answer to a question that also asked for an amount comparison is labelled partial: the comparison is named, the answer says it is not filtered
- * by it, and the status is no longer a plain ANSWERED. Only an answered result is touched, and only its first summary block (the one a receipt binds to keeps its id).
+ * by it, and the status is no longer a plain ANSWERED. The receipt-bound
+ * summary stays intact; a compact limitation carries the disclosure so list
+ * renderers can omit duplicate narrative without hiding the warning.
  */
 export function withUnappliedAmountComparison<T extends AskOperationResult>(result: T, message: string, appliedAmountOverCents: readonly number[] = []): T {
   if (result.status !== 'ANSWERED') return result;
@@ -65,12 +67,13 @@ export function withUnappliedAmountComparison<T extends AskOperationResult>(resu
   const summary = result.blocks[index];
   if (summary.type !== 'SUMMARY') return result;
   const blocks = result.blocks.slice();
-  blocks[index] = {
-    ...summary,
-    title: `${summary.title} (not filtered by amount)`,
-    body: `Partial answer: I couldn’t apply ${phrase}, so this list is not filtered by it. ${summary.body}`,
-    tone: 'CAUTION',
-  };
+  blocks.splice(index + 1, 0, {
+    type: 'LIMITATION',
+    id: 'semantic-amount-filter-not-applied',
+    title: 'Amount filter not applied',
+    body: `I couldn’t apply ${phrase}, so the records below are filtered by the other requested conditions only.`,
+    severity: 'CAUTION',
+  });
   return { ...result, status: 'READY_WITH_LIMITATIONS', blocks };
 }
 

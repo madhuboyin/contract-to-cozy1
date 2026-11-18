@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { ExecutionCard } from '../workspace/ExecutionCard';
 import { CALM_ANSWERS_STORAGE_KEY } from '@/features/ask/calmAnswers';
-import type { AskExecutionResponse } from '@/features/ask/types';
+import type { AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
 
 // Claims C-1 (FRD v1.127): the incident and claim status answer in the calm anatomy.
 const claimRow = { id: 'c1', title: 'Kitchen leak', description: 'Acme · water damage', meta: ['submitted', 'Opened Sep 1, 2026'], status: 'SUBMITTED', entityType: 'CLAIM', href: '/dashboard/properties/home/claims/c1', actions: [] };
@@ -28,6 +28,17 @@ const card = (value: AskExecutionResponse = execution()) => render(
 beforeEach(() => { window.localStorage.clear(); window.sessionStorage.clear(); askMock.mockClear(); });
 
 describe('calm Claims answer', () => {
+  it('does not repeat a headline as an identical at-a-glance chip', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    const value = execution();
+    const summary = value.blocks[0] as Extract<AskPresentationBlock, { type: 'SUMMARY' }>;
+    summary.headline = '2 open claims.';
+    summary.chips = [{ label: '2 open claims', tone: 'CAUTION' }];
+    card(value);
+    expect(await screen.findByRole('heading', { name: '2 open claims.' })).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'At a glance' })).not.toBeInTheDocument();
+  });
+
   it('leads with the producer sentence and chips, states the boundary as a quiet footnote, and says nothing about approval', async () => {
     window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
     const { container } = card();

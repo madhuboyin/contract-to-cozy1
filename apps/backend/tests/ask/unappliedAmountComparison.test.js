@@ -32,10 +32,10 @@ test('a typed answer to a question that also compared an amount is labelled part
   const wrapped = withUnappliedAmountComparison(answered, 'which appliances have no warranty that cost over $500');
   assert.equal(wrapped.status, 'READY_WITH_LIMITATIONS');
   const first = wrapped.blocks.find((b) => b.type === 'SUMMARY');
-  assert.match(first.title, /\(not filtered by amount\)$/);
-  assert.match(first.body, /^Partial answer: I couldn’t apply “over \$500”, so this list is not filtered by it\. /);
-  assert.equal(first.tone, 'CAUTION');
-  assert.equal(first.id, answered.blocks.find((b) => b.type === 'SUMMARY').id, 'the block the receipt binds to keeps its id');
+  assert.deepEqual(first, answered.blocks.find((b) => b.type === 'SUMMARY'), 'the receipt-bound summary stays intact');
+  const limitation = wrapped.blocks.find((b) => b.type === 'LIMITATION');
+  assert.equal(limitation.title, 'Amount filter not applied');
+  assert.match(limitation.body, /I couldn’t apply “over \$500”/);
   assert.equal(verifySemanticReadReceiptEntailment(wrapped).outcome, 'PASS');
 });
 
@@ -49,9 +49,9 @@ test('nothing changes without an amount comparison, or for a result that is not 
 test('a cross-domain answer keeps its month window and says the cost condition was not applied', async () => {
   const execution = await X.executeCrossDomainSnapshot({ rawText: 'show maintenance tasks due next month', snapshot: buildSeededCrossDomainSnapshot(), role: 'OWNER', propertyAuthorized: true });
   const wrapped = withUnappliedAmountComparison(X.buildOperationResultFromCrossDomainExecution(execution), 'show maintenance tasks due next month that cost more than $50');
-  const first = wrapped.blocks.find((b) => b.type === 'SUMMARY');
-  assert.match(first.body, /^Partial answer: I couldn’t apply “more than \$50”/);
-  assert.match(first.body, /due in [A-Z][a-z]+ \d{4}|No maintenance tasks are due in [A-Z][a-z]+ \d{4}/);
+  const limitation = wrapped.blocks.find((b) => b.type === 'LIMITATION');
+  assert.match(limitation.body, /I couldn’t apply “more than \$50”/);
+  assert.match(JSON.stringify(wrapped.blocks), /due in [A-Z][a-z]+ \d{4}|No maintenance tasks are due in [A-Z][a-z]+ \d{4}/);
 });
 
 const realPrisma = prismaModule.prisma;
@@ -64,5 +64,5 @@ test('the live prompt through the real handler is labelled partial, not presente
   propertyAccess.resolvePropertyAccess = async () => ({ role: 'OWNER', userId: 'u1', propertyId: 'p1' });
   const result = await capabilityInvoke('DATA_POINT_READ', { userId: 'u1', propertyId: 'p1', message: 'show maintenance tasks due next month that cost more than $50' });
   assert.equal(result.status, 'READY_WITH_LIMITATIONS');
-  assert.match(JSON.stringify(result.blocks), /Partial answer: I couldn’t apply “more than \$50”/);
+  assert.match(JSON.stringify(result.blocks), /I couldn’t apply “more than \$50”/);
 });
