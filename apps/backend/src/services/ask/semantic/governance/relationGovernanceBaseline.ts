@@ -327,6 +327,16 @@ export const ASK_SEMANTIC_PREDICATE_MEANING_MANIFEST: readonly SemanticPredicate
     canonicalParentPredicateId: null,
   },
   {
+    predicateId: 'predicate.permit.matches_filter',
+    semanticRelationId: 'relation.permit.self',
+    meaningVersion: 'permit-record-filters@1.0.0',
+    direction: 'FORWARD',
+    stateSemantics: 'ACTIVE_PARENT_CHILD_MEMBERSHIP',
+    canonicalAdapterId: 'cross-domain-wave-executor',
+    usage: 'READ',
+    canonicalParentPredicateId: null,
+  },
+  {
     predicateId: 'predicate.inspection_report.has_actionable_finding',
     semanticRelationId: 'relation.inspection_report.finding',
     meaningVersion: 'inspection-report-findings@1.0.0',

@@ -1,3 +1,4 @@
+import { PERMIT_CATEGORY_LABELS, PERMIT_OFFICIAL_STATUS_LABELS, PERMIT_REPORTED_STATUS_LABELS } from '../../support/permitTrackerRead';
 import { buildFreeTextClarification, buildPayloadClarification } from '../../support/clarificationContract';
 import type { AskClarification } from '../../../../productFramework/ask/ask.contract';
 import { EMERGENCY_BOUNDARY_BODY, EMERGENCY_BOUNDARY_TITLE } from '../../support/emergencyBoundary';
@@ -209,6 +210,16 @@ export interface CrossDomainProjectRecord {
   readonly permitStatus: 'CONFIRMED_NOT_REQUIRED' | 'NEEDS_PERMIT' | 'UNKNOWN' | 'APPROVED';
 }
 
+/** A permit record. `officialStatus` is the authority's; `reportedStatus` is the household's or contractor's word and never stands in for it. */
+export interface CrossDomainPermitRecord {
+  readonly id: string;
+  readonly propertyId: string;
+  readonly category: string;
+  readonly permitNumber: string | null;
+  readonly officialStatus: string;
+  readonly reportedStatus: string | null;
+}
+
 export interface CrossDomainContractorQuoteRecord {
   readonly id: string;
   readonly propertyId: string;
@@ -285,6 +296,7 @@ export interface CrossDomainPropertySnapshot extends SlicePropertySnapshot {
   readonly buyerTasks: readonly CrossDomainBuyerTaskRecord[];
   readonly sellerReadinessItems: readonly CrossDomainSellerReadinessRecord[];
   readonly projects: readonly CrossDomainProjectRecord[];
+  readonly permits: readonly CrossDomainPermitRecord[];
   readonly contractorQuotes: readonly CrossDomainContractorQuoteRecord[];
   readonly savedResults: readonly CrossDomainSavedResultRecord[];
   readonly savedResultsState?: {
@@ -1952,6 +1964,65 @@ function executeNewStackFacet(
     };
   }
 
+  if (job === 'query.permit.filter') {
+    // Permit records. The authority's status (`officialStatus`) decides open, expired and finaled; what the household reported is shown beside it and never replaces it.
+    // "Open" means not yet closed out: the official status is not finaled, expired or voided. A record whose official status is not confirmed counts as open, and is named.
+    const view = firstPredicateAtom(facet.where)?.enumStatus === 'EXPIRED' ? 'EXPIRED' : firstPredicateAtom(facet.where)?.enumStatus === 'FINALED' ? 'FINALED' : 'OPEN';
+    const records = snapshot.permits.filter((permit) => permit.propertyId === snapshot.propertyId);
+    const closed = new Set(['FINALED', 'EXPIRED', 'VOIDED']);
+    const matched = records.filter((permit) => (view === 'OPEN' ? !closed.has(permit.officialStatus) : permit.officialStatus === view));
+    const unconfirmed = matched.filter((permit) => permit.officialStatus === 'UNKNOWN');
+    const nameOf = (permit: CrossDomainPermitRecord) => `${PERMIT_CATEGORY_LABELS[permit.category] ?? permit.category} permit${permit.permitNumber ? ` ${permit.permitNumber}` : ''}`;
+    const subtitleOf = (permit: CrossDomainPermitRecord) => {
+      const official = PERMIT_OFFICIAL_STATUS_LABELS[permit.officialStatus] ?? permit.officialStatus;
+      const reported = permit.reportedStatus ? PERMIT_REPORTED_STATUS_LABELS[permit.reportedStatus] ?? null : null;
+      return permit.officialStatus === 'UNKNOWN' && reported ? `${official} · reported by the household: ${reported}` : `Official: ${official}`;
+    };
+    // Reported closed out by the household, not confirmed by the authority: never counted as finaled or expired, but said.
+    const reportedOnly = view === 'OPEN' ? [] : records.filter((permit) => permit.officialStatus === 'UNKNOWN' && permit.reportedStatus === (view === 'FINALED' ? 'COMPLETED_REPORTED' : 'EXPIRED_REPORTED'));
+    const rows = matched.map((permit) => ({ id: permit.id, label: nameOf(permit), subtitle: subtitleOf(permit) }));
+    const viewWord = view === 'OPEN' ? 'open' : view === 'EXPIRED' ? 'expired' : 'finaled';
+    const definition = view === 'OPEN' ? ' (not finaled, expired or voided)' : '';
+    const unconfirmedNote = unconfirmed.length > 0
+      ? ` ${unconfirmed.length} ${unconfirmed.length === 1 ? 'has' : 'have'} no confirmed official status, so ${unconfirmed.length === 1 ? 'it is' : 'they are'} counted as open on what the household reported.`
+      : '';
+    const reportedNote = reportedOnly.length > 0
+      ? ` ${reportedOnly.length} more ${reportedOnly.length === 1 ? 'is' : 'are'} reported ${viewWord} by the household but not confirmed by the authority, so not counted here: ${reportedOnly.map(nameOf).join(', ')}.`
+      : '';
+    const summary = records.length === 0
+      ? 'No permits are recorded for this home. That is not the same as nothing having been permitted: records may exist with the permitting office that have not been added.'
+      : matched.length === 0
+        ? `No ${viewWord} permits are recorded${definition}; ${records.length} permit${records.length === 1 ? ' is' : 's are'} recorded in all.${reportedNote}`
+        : `${matched.length} ${viewWord} permit(s)${definition}: ${matched.map((permit) => `${nameOf(permit)} (${subtitleOf(permit)})`).join(', ')}.${unconfirmedNote}${reportedNote}`;
+    const finalized = finalizeReceiptAndPresentation({
+      facet,
+      snapshot,
+      role,
+      projection: 'LIST',
+      operationAdapter: adapterId,
+      sourceType: 'PropertyPermitRecord',
+      predicateIds: evaluateWherePredicates(facet.where),
+      rows,
+      title: `${viewWord[0].toUpperCase()}${viewWord.slice(1)} permits`,
+      summaryBody: summary,
+      variantId: 'variant.permit_record_list',
+    });
+    return {
+      facetId: facet.id,
+      owner,
+      status: 'EXECUTED',
+      summary,
+      recordIds: rows.map((r) => r.id),
+      rows: finalized.rows,
+      missingSlots: [],
+      redactedFieldIds,
+      receipt: finalized.receipt,
+      entailment: finalized.entailment,
+      presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
+    };
+  }
+
   if (job === 'query.project.needs_permit') {
     const active = snapshot.projects.filter((p) => p.propertyId === snapshot.propertyId && p.status === 'ACTIVE');
     const needsOrUnknown = active.filter((p) => p.permitStatus === 'NEEDS_PERMIT' || p.permitStatus === 'UNKNOWN');
@@ -2507,6 +2578,7 @@ function buildMinimalCrossDomainSnapshot(propertyId: string, timeZoneOverride?: 
     buyerTasks: [],
     sellerReadinessItems: [],
     projects: [],
+    permits: [],
     contractorQuotes: [],
     savedResults: [],
   };
@@ -2563,6 +2635,8 @@ export async function loadCrossDomainPropertySnapshot(
     || hasJob('query.buyer_task.before_closing', 'job.buyer.contingency_deadlines', 'job.seller.listing_readiness')
   );
   const needProjects = hasDomain('domain.projects_quotes_vendors') || hasJob('query.project.needs_permit');
+  // Only the permit job reads permit records; a project or quote read in the same domain does not.
+  const needPermits = hasJob('query.permit.filter');
   const needQuotes = hasDomain('domain.projects_quotes_vendors') || hasJob('job.projects.quote_comparison');
   const needFinance = hasDomain('domain.ownership_costs_finance') || hasJob('job.finance.own_rent_break_even', 'job.finance.refinance_break_even');
   const needSaved = loadAll
@@ -2593,6 +2667,7 @@ export async function loadCrossDomainPropertySnapshot(
     inspectionRows,
     buyerChecklistRow,
     saleCaseRow,
+    permitRows,
     projectRows,
     quoteRows,
     riskMatchRows,
@@ -2714,6 +2789,14 @@ export async function loadCrossDomainPropertySnapshot(
           },
         })
       : Promise.resolve(null),
+    needPermits && typeof prismaAny.propertyPermitRecord?.findMany === 'function'
+      ? prisma.propertyPermitRecord.findMany({
+          where: { propertyId, isActive: true },
+          orderBy: [{ status: 'asc' }, { issueDate: 'desc' }],
+          take: 500,
+          select: { id: true, propertyId: true, category: true, permitNumber: true, status: true, reportedStatus: true },
+        })
+      : Promise.resolve([]),
     needProjects && typeof prismaAny.projectRecord?.findMany === 'function'
       ? prisma.projectRecord.findMany({
           where: { propertyId },
@@ -3159,6 +3242,14 @@ export async function loadCrossDomainPropertySnapshot(
       status: String(s.status).toUpperCase() === 'RESOLVED' ? 'COMPLETED' : String(s.status).toUpperCase() === 'WAIVED' ? 'WAIVED' : 'PENDING',
       ...(s.requirementClass ? { requirementClass: String(s.requirementClass) } : {}),
       ...(s.category ? { category: String(s.category) } : {}),
+    })),
+    permits: (permitRows as Array<any>).map((p) => ({
+      id: p.id,
+      propertyId: p.propertyId ?? propertyId,
+      category: String(p.category),
+      permitNumber: p.permitNumber ?? null,
+      officialStatus: String(p.status),
+      reportedStatus: p.reportedStatus ? String(p.reportedStatus) : null,
     })),
     projects: (projectRows as Array<any>).map((p) => ({
       id: p.id,

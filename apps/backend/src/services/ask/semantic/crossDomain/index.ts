@@ -352,6 +352,7 @@ export function buildSeededCrossDomainSnapshot(): CrossDomainPropertySnapshot {
         status: 'COMPLETED',
       },
     ],
+    permits: [],
     projects: [
       {
         id: 'proj-panel-upgrade',

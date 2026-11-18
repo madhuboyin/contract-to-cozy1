@@ -242,7 +242,7 @@ const LEGACY_OPERATION_SEMANTIC_SPECS: Readonly<Record<string, LegacyOperationSe
     domainIds: ['domain.projects_quotes_vendors'],
     requestClass: 'DATA_QUERY',
     subjectEntityIds: ['entity.project', 'entity.permit'],
-    jobMatches: ['query.project.needs_permit'],
+    jobMatches: ['query.project.needs_permit', 'query.permit.filter'],
     polarity: 'POSITIVE',
     projections: ['LIST', 'DETAIL'],
   },

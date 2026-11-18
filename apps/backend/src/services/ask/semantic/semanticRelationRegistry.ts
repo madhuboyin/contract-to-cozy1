@@ -286,6 +286,21 @@ export const ASK_SEMANTIC_RELATION_REGISTRY: readonly SemanticRelationRegistrati
     ],
   },
   {
+    semanticRelationId: 'relation.permit.self',
+    meaningVersion: 'permit-record-filters@1.0.0',
+    sourceEntityId: 'entity.permit',
+    targetEntityId: 'entity.permit',
+    relationPathId: 'path.permit.self',
+    canonicalAdapterId: 'cross-domain-wave-executor',
+    canonicalStoragePath: 'PropertyPermitRecord',
+    cardinality: 'ONE_TO_ONE',
+    maximumTraversalDepth: 1,
+    cyclePolicy: 'FORBID',
+    predicateIds: [
+      'predicate.permit.matches_filter',
+    ],
+  },
+  {
     semanticRelationId: 'relation.inspection_report.finding',
     meaningVersion: 'inspection-report-findings@1.0.0',
     sourceEntityId: 'entity.inspection_finding',

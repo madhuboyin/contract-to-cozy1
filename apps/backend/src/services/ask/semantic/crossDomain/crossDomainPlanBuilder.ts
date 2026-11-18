@@ -98,6 +98,7 @@ const CROSS_DOMAIN_LEXEME_SPECS: readonly CrossDomainLexemeSpec[] = Object.freez
   { role: 'CATEGORY', semanticId: 'category.maintenance.electrical', canonicalLabel: 'electrical', reviewedAliases: [] },
   { role: 'CATEGORY', semanticId: 'category.quote_scope.hvac', canonicalLabel: 'hvac', reviewedAliases: [] },
   { role: 'CATEGORY', semanticId: 'category.quote_scope.roofing', canonicalLabel: 'roofing', reviewedAliases: [] },
+  { role: 'STATUS', semanticId: 'status.permit.finaled', canonicalLabel: 'finaled', reviewedAliases: ['finalized', 'closed out'] },
   { role: 'STATUS', semanticId: 'status.maintenance.completed', canonicalLabel: 'completed', reviewedAliases: ['complete', 'done', 'finished'] },
   { role: 'STATUS', semanticId: 'status.open', canonicalLabel: 'open', reviewedAliases: ['incomplete', 'remaining', 'remains', 'unfinished', 'finish'] },
   { role: 'STATUS', semanticId: 'status.expired', canonicalLabel: 'expired', reviewedAliases: ['out of warranty', 'out'] },
@@ -695,6 +696,36 @@ function compileClauseSpecFromAnnotations(
     }
   }
 
+  // Permit records ("pending permits", "open permits", "expired permits", "finaled permits"). Only the permit records themselves: a question that also names a project, a
+  // listing or any other record is not this rule's. "Open" and "pending" both mean not yet closed out (the official status is not finaled, expired or voided), and the
+  // answer says so; the authority's status is kept apart from what the household reported. A bare "permits" with no status stays with the Permit Tracker read.
+  {
+    const entityIds = [...sig.ids].filter((id) => id.startsWith('entity.'));
+    const listingWords = ['listing', 'sell', 'selling', 'seller', 'readiness'];
+    const onlyPermits = has('entity.permit')
+      && entityIds.every((id) => id === 'entity.permit' || (id === 'entity.sale_readiness_item' && !listingWords.some((word) => options.clauseWords?.has(word))));
+    const views = [
+      has('status.permit.finaled') ? 'FINALED' : null,
+      has('status.expired') ? 'EXPIRED' : null,
+      has('status.open') || has('status.active') || has('time.maintenance.due') ? 'OPEN' : null,
+    ].filter((view): view is 'FINALED' | 'EXPIRED' | 'OPEN' => view !== null);
+    if (onlyPermits && views.length === 1) {
+      return {
+        domainId: 'domain.projects_quotes_vendors',
+        entityId: 'entity.permit',
+        requestClass: 'DATA_QUERY',
+        jobMatch: 'query.permit.filter',
+        projection: 'LIST',
+        polarity: 'POSITIVE',
+        relations: [{ semanticRelationId: 'relation.permit.self', predicateId: 'predicate.permit.matches_filter', targetEntityId: 'entity.permit' }],
+        where: { kind: 'PREDICATE', predicateId: 'predicate.permit.matches_filter', relationPathId: 'path.permit.self', enumStatus: views[0] },
+        time: null,
+        fields: [{ fieldId: 'field.permit.status' }],
+        requiredSlots: [],
+      };
+    }
+  }
+
   // Completed maintenance ("which completed maintenance tasks cost over $1,000"). The status is applied as a filter; a cost threshold is applied only as one strictly-greater
   // comparison. A completed question that also names a due window, an overdue state or a category is not one this rule answers, so it is not matched (never answered
   // with the status or the other condition silently dropped).
@@ -1170,7 +1201,8 @@ function compileClauseSpecFromAnnotations(
   }
 
   // Seller readiness before listing
-  if (has('entity.sale_readiness_item') && (has('time.period.before_listing') || has('status.open'))) {
+  // Not when the clause names another record ("open projects for this home": "home" is only a listing alias there).
+  if (has('entity.sale_readiness_item') && (has('time.period.before_listing') || has('status.open')) && ![...sig.ids].some((id) => id.startsWith('entity.') && id !== 'entity.sale_readiness_item')) {
     return {
       domainId: 'domain.seller_preparation',
       entityId: 'entity.sale_readiness_item',

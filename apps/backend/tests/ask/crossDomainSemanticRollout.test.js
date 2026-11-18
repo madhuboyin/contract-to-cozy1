@@ -125,6 +125,7 @@ test('production dataPointReadResult routes Wave 1-5 MATCH queries through execu
     ['propertyTaxBillRecord', () => []],
     ['recallMatch', () => []],
     ['inspectionFinding', () => []],
+    ['propertyPermitRecord', () => []],
     ['projectRecord', () => [
       {
         id: 'proj-live-1',
@@ -449,6 +450,7 @@ test('production dataPointReadResult loads live manual/receipt links, canonical 
     ['propertyTaxBillRecord', () => []],
     ['recallMatch', () => []],
     ['inspectionFinding', () => []],
+    ['propertyPermitRecord', () => []],
     ['projectRecord', () => []],
     ['quoteComparisonQuote', () => []],
     ['toolOverride', () => [{ key: 'MONTHLY_RENT_NOW', value: 2000 }]],

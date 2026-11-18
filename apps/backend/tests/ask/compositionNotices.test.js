@@ -53,7 +53,7 @@ test('the live prompt: the decomposer declines it, but the typed answer covers a
 });
 
 test('a cross-domain answer with a named gap (PARTIAL, overflow facet) still gets the note; a complete one does not', async () => {
-  const partial = await executeCrossDomainSnapshot({ rawText: 'are there any open claims or pending permits for this home?', snapshot: buildSeededCrossDomainSnapshot(), role: 'OWNER', propertyAuthorized: true });
+  const partial = await executeCrossDomainSnapshot({ rawText: 'are there any open claims or open projects for this home?', snapshot: buildSeededCrossDomainSnapshot(), role: 'OWNER', propertyAuthorized: true });
   assert.equal(partial.status, 'PARTIAL');
   assert.equal(typedAnswerCoversWholeMessage({ status: 'ANSWERED', parameters: { crossDomainExecution: partial } }), false);
   assert.equal(typedAnswerCoversWholeMessage({ status: 'ANSWERED', parameters: { crossDomainExecution: { status: 'ANSWERED', overflowFacets: [] } } }), true);
