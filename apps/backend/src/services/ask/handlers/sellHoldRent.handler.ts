@@ -457,13 +457,29 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string, mes
     readinessItems = readinessItems.filter((item) => item.estimatedCostMaxCents != null && item.estimatedCostMaxCents < thresholdCents);
   }
   if (highPriorityOnly) readinessItems = readinessItems.filter((item) => item.requirementClass === 'MATERIAL_BLOCKER');
+  // "…items that involve appliances": an item involves an appliance when it comes from an inventory record in the Appliance category, or from a warranty
+  // recorded against one. Items with no such link are left out, and the summary says what the filter means so a short list is not read as "no seller work".
+  const appliancesOnly = /\bappliances?\b/i.test(message);
+  if (appliancesOnly) {
+    const inventoryIds = readinessItems.filter((item) => item.sourceEntityType === 'INVENTORY_ITEM').map((item) => item.sourceEntityId);
+    const warrantyIds = readinessItems.filter((item) => item.sourceEntityType === 'WARRANTY').map((item) => item.sourceEntityId);
+    const [warranties, applianceRows] = await Promise.all([
+      warrantyIds.length ? prisma.warranty.findMany({ where: { id: { in: warrantyIds }, propertyId }, select: { id: true, inventoryItemId: true } }) : [],
+      inventoryIds.length ? prisma.inventoryItem.findMany({ where: { id: { in: inventoryIds }, propertyId, category: 'APPLIANCE' }, select: { id: true } }) : [],
+    ]);
+    const warrantyItemIds = warranties.map((warranty) => warranty.inventoryItemId).filter((id): id is string => Boolean(id));
+    const warrantyApplianceRows = warrantyItemIds.length ? await prisma.inventoryItem.findMany({ where: { id: { in: warrantyItemIds }, propertyId, category: 'APPLIANCE' }, select: { id: true } }) : [];
+    const applianceIds = new Set(applianceRows.map((row) => row.id));
+    const applianceWarrantyIds = new Set(warranties.filter((warranty) => warranty.inventoryItemId && warrantyApplianceRows.some((row) => row.id === warranty.inventoryItemId)).map((warranty) => warranty.id));
+    readinessItems = readinessItems.filter((item) => (item.sourceEntityType === 'INVENTORY_ITEM' && applianceIds.has(item.sourceEntityId)) || (item.sourceEntityType === 'WARRANTY' && applianceWarrantyIds.has(item.sourceEntityId)));
+  }
   const caseActions = sellerPrepCaseActions(access.role, overview.saleCase.status || 'PREPARING', overview.canCreate);
   const itemActions = sellerPrepItemActions(access.role);
   const openItems = readinessItems.filter((item) => item.status === 'OPEN');
   const pursuingItems = readinessItems.filter((item) => item.status === 'PURSUING');
   const waivedItems = readinessItems.filter((item) => item.status === 'WAIVED');
   const waivedCount = waivedItems.length;
-  const filteredChecklist = Boolean(under || highPriorityOnly);
+  const filteredChecklist = Boolean(under || highPriorityOnly || appliancesOnly);
 
   const grouped = new Map<string, typeof openItems>();
   for (const item of openItems) {
@@ -488,8 +504,8 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string, mes
     id: 'seller-prep-summary',
     title: filteredChecklist ? 'Seller-prep items that match' : 'Your seller-prep checklist',
     body: openItems.length
-      ? `${openItems.length} open item${openItems.length === 1 ? '' : 's'}${pursuingItems.length ? `, ${pursuingItems.length} already in progress` : ''}${waivedCount ? `, ${waivedCount} waived` : ''}.`
-      : filteredChecklist ? 'No checklist items match all of those filters.' : `No open items right now${waivedCount ? ` (${waivedCount} waived)` : ''}. This home is in good shape to list.`,
+      ? `${openItems.length} open item${openItems.length === 1 ? '' : 's'}${pursuingItems.length ? `, ${pursuingItems.length} already in progress` : ''}${waivedCount ? `, ${waivedCount} waived` : ''}${appliancesOnly ? ', limited to items from an appliance record or its warranty' : ''}.`
+      : filteredChecklist ? `No checklist items match all of those filters${appliancesOnly ? ' (items count as involving an appliance when they come from an appliance record or its warranty)' : ''}.` : `No open items right now${waivedCount ? ` (${waivedCount} waived)` : ''}. This home is in good shape to list.`,
     tone: 'DEFAULT',
     // This response is the canonical sale-readiness checklist, including progress, item details and every supported decision,
     // and (FRD v1.338) the case's own dates, budget range and stage. No CTA that exits Ask for the desktop rendering of the same data.
