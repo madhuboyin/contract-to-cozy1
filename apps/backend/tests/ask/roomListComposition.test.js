@@ -54,10 +54,19 @@ test('the real ambiguity is still asked: an "or" between conditions after a nega
   assert.equal(parseDeterministicSemanticRequest('which appliances have no warranty or due maintenance').outcome, 'BOUNDARY');
 });
 
-test('words that were not understood are reported before any question about the words that were (live prompt #15)', () => {
+test('missing receipts compose with an inclusive room list (live prompt #15)', () => {
   const rooms = [{ kind: 'ROOM', entityId: 'entity.room', recordId: 'r1', names: ['Kitchen'], authorized: true }, { kind: 'ROOM', entityId: 'entity.room', recordId: 'r2', names: ['Laundry Room'], authorized: true }];
   const plan = parseDeterministicSemanticRequest('show items with missing receipts in the kitchen or laundry room', { dynamicEntities: rooms });
-  assert.equal(plan.outcome, 'NONE_FITS', 'not a neither/either question');
-  assert.deepEqual(plan.unresolvedSpans.map((s) => s.text), ['receipts']);
+  assert.equal(plan.outcome, 'MATCH');
+  assert.deepEqual(plan.unresolvedSpans, []);
+  const receipt = plan.facets[0].where.operands.find((operand) => operand.kind === 'PREDICATE' && /receipt/.test(operand.predicateId));
+  assert.equal(receipt.predicateId, 'predicate.inventory_item.has_no_receipt_record');
   assert.equal(parseDeterministicSemanticRequest('which appliances have no warranty or sparkly widgets').outcome, 'NONE_FITS');
+});
+
+test('missing receipts are filtered before the kitchen-or-laundry room group is applied', () => {
+  const laundry = { id: 'room-laundry', propertyId: SEEDED.propertyId, name: 'Laundry Room' };
+  const items = SEEDED.items.map((item) => ({ ...item, receiptDocumentId: item.name === 'Refrigerator' ? 'receipt-1' : null }));
+  const snapshot = { ...SEEDED, rooms: [...SEEDED.rooms, laundry], items };
+  assert.deepEqual(ask('show items with missing receipts in the kitchen or laundry room', snapshot).names, ['Dishwasher']);
 });

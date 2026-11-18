@@ -259,6 +259,7 @@ export function parseDeterministicSemanticRequest(
   const warrantyRelation = annotations.find((annotation) => annotation.lexeme.semanticId === 'relation.inventory_item.warranty');
   const maintenanceRelation = annotations.find((annotation) => annotation.lexeme.semanticId === 'relation.inventory_item.maintenance_task');
   const roomRelation = annotations.find((annotation) => annotation.lexeme.semanticId === 'relation.inventory_item.room');
+  const receiptRelation = annotations.find((annotation) => annotation.lexeme.semanticId === 'relation.inventory_item.receipt_document');
   const projectionAnnotation = first(annotations, 'PROJECTION');
   const timeAnnotation = first(annotations, 'TIME');
   const coordinatorAnnotations = annotations.filter((annotation) => annotation.lexeme.role === 'COORDINATOR');
@@ -355,13 +356,13 @@ export function parseDeterministicSemanticRequest(
 
   // 0C. Phase 2A multi-relation / Boolean coordination over inventory_item
   const hasEffectiveRoomRelation = Boolean(roomRelation) || matchedRooms.length > 0;
-  const relationCount = [warrantyRelation, maintenanceRelation, hasEffectiveRoomRelation, agePhrase].filter(Boolean).length;
+  const relationCount = [warrantyRelation, maintenanceRelation, receiptRelation, hasEffectiveRoomRelation, agePhrase].filter(Boolean).length;
   const hasAnd = coordinatorAnnotations.some((annotation) => annotation.lexeme.semanticId === 'coordinator.and');
   const hasOr = coordinatorAnnotations.some((annotation) => annotation.lexeme.semanticId === 'coordinator.or');
   const hasNeitherNor = coordinatorAnnotations.some((annotation) => annotation.lexeme.semanticId === 'coordinator.neither')
     && coordinatorAnnotations.some((annotation) => annotation.lexeme.semanticId === 'coordinator.nor');
   const hasBooleanCoordinator = hasAnd || hasOr || hasNeitherNor;
-  if (inventorySubject && (relationCount >= 2 || (relationCount >= 1 && (maintenanceRelation || hasEffectiveRoomRelation || agePhrase || hasBooleanCoordinator)))) {
+  if (inventorySubject && (relationCount >= 2 || (relationCount >= 1 && (maintenanceRelation || receiptRelation || hasEffectiveRoomRelation || agePhrase || hasBooleanCoordinator)))) {
     const projection = projectionAnnotation?.lexeme.semanticId === 'projection.count' ? 'COUNT'
       : projectionAnnotation?.lexeme.semanticId === 'projection.detail' ? 'DETAIL'
       : projectionAnnotation?.lexeme.semanticId === 'projection.exists' ? 'EXISTS' : 'LIST';
@@ -417,6 +418,12 @@ export function parseDeterministicSemanticRequest(
       expressions.push(shouldNegateAtom ? { kind: 'NOT', operand: atom } : atom);
       relations.push({ semanticRelationId: 'relation.inventory_item.maintenance_task', predicateId, targetEntityId: 'entity.maintenance_task' });
     }
+    if (receiptRelation) {
+      const missingReceipt = /\b(?:missing|no|without)\s+(?:a\s+)?receipts?\b/i.test(rawText);
+      const predicateId = missingReceipt ? 'predicate.inventory_item.has_no_receipt_record' : 'predicate.inventory_item.has_receipt_record';
+      expressions.push({ kind: 'PREDICATE', predicateId, relationPathId: 'path.inventory_item.receipt_document' });
+      relations.push({ semanticRelationId: 'relation.inventory_item.receipt_document', predicateId, targetEntityId: 'entity.property_record' });
+    }
     if (hasEffectiveRoomRelation) {
       const predicateId = 'predicate.inventory_item.in_room';
       const roomAtoms: SemanticPredicateAtom[] = matchedRooms.length > 0
@@ -429,7 +436,7 @@ export function parseDeterministicSemanticRequest(
         : [{ kind: 'PREDICATE', predicateId, relationPathId: 'path.inventory_item.room' }];
       relations.push({ semanticRelationId: 'relation.inventory_item.room', predicateId, targetEntityId: 'entity.room' });
 
-      if (roomAtoms.length >= 2 && (warrantyRelation || maintenanceRelation || agePhrase)) {
+      if (roomAtoms.length >= 2 && (warrantyRelation || maintenanceRelation || receiptRelation || agePhrase)) {
         // A list of rooms ("in the kitchen or laundry room", or "kitchen and laundry room") is ONE positive group of places, inclusive whatever the other
         // conditions' polarity says ("MISSING receipts in the kitchen or laundry room": the negation belongs to the receipts, not to the rooms). The group is
         // then combined with the other conditions below. It used to be asked as a "neither/either" question, and where it was not, the top-level join was

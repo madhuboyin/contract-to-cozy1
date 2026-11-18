@@ -116,7 +116,7 @@ test('sellerPrepChecklistResult declares its canonical freshness and professiona
 test('the capability handler and captureFallbackHref registrations both exist for SELLER_PREP_CHECKLIST', () => {
   assert.match(
     orchestratorSource,
-    /registerCapabilityHandler\('seller-prep\.checklist', async \(envelope\) => sellerPrepChecklistResult\(envelope\.userId, envelope\.propertyId!\)\);/,
+    /registerCapabilityHandler\('seller-prep\.checklist', async \(envelope\) => sellerPrepChecklistResult\(envelope\.userId, envelope\.propertyId!, envelope\.message\)\);/,
   );
   const fallbackStart = orchestratorSource.indexOf('function captureFallbackHref(');
   assert.ok(fallbackStart > 0);

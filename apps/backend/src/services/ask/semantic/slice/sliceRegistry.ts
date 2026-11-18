@@ -89,6 +89,7 @@ export const SLICE_RELATIONS = ASK_SEMANTIC_RELATION_REGISTRY.filter((relation) 
   || relation.semanticRelationId === 'relation.inventory_item.maintenance_task'
   || relation.semanticRelationId === 'relation.inventory_item.room'
   || relation.semanticRelationId === 'relation.inventory_item.age'
+  || relation.semanticRelationId === 'relation.inventory_item.receipt_document'
   || relation.semanticRelationId === 'relation.maintenance_task.inventory_item'
 );
 

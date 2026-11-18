@@ -10,6 +10,7 @@ import { budgetForecasterService } from '../../budgetForecaster.service';
 import { getAskPropertyTimezone } from '../askExecutionContext';
 import { collectionDescriptor } from '../support/collectionDescriptor';
 import { DEFAULT_CANDIDATE_SIGNALS, DEFAULT_CANDIDATE_TRAITS, type SuggestedNextActionCandidate } from '../suggestedActions/suggestedNextActionCandidate';
+import { singleGreaterThanAmountCents } from '../semantic/amountComparison';
 
 // Appliance Oracle and Budget Planner (FRD v1.70, product decision option A for the Gemini-backed tools): Ask shows only
 // the calculated part of each page, with the services' Gemini recommendations switched off, and links to the page for the
@@ -78,12 +79,28 @@ export function applianceReplacementCandidates(report: OracleReportView, propert
   }];
 }
 
-export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY_OWNER_ONLY', propertyId: string): AskOperationResult {
+export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY_OWNER_ONLY', propertyId: string, filter?: { replacementCostOverCents: number; highRiskOnly: boolean }): AskOperationResult {
   if (report === 'PRIMARY_OWNER_ONLY') {
     return {
       status: 'BLOCKED', reasonCode: 'APPLIANCE_ORACLE_PRIMARY_OWNER_ONLY',
       blocks: [{ type: 'SUMMARY', id: 'appliance-oracle-summary', title: 'Only the home\'s primary owner can see the appliance oracle', body: 'Appliance Oracle is kept for the home\'s primary account holder, so it can\'t be shown here.', tone: 'CAUTION', actions: [] }],
       suggestions: [],
+    };
+  }
+  if (filter) {
+    const predictions = report.predictions.filter((prediction) =>
+      prediction.replacementCost * 100 > filter.replacementCostOverCents
+      && (!filter.highRiskOnly || prediction.urgency === 'HIGH' || prediction.urgency === 'CRITICAL')
+    );
+    report = {
+      ...report,
+      predictions,
+      totalAppliances: predictions.length,
+      criticalCount: predictions.filter((prediction) => prediction.urgency === 'CRITICAL').length,
+      highRiskCount: predictions.filter((prediction) => prediction.urgency === 'HIGH').length,
+      estimatedTotalCost: predictions.reduce((sum, prediction) => sum + prediction.replacementCost, 0),
+      appliancesWithoutAge: 0,
+      appliancesWithoutAgeItems: [],
     };
   }
   const boundary: AskPresentationBlock = {
@@ -125,8 +142,10 @@ export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY
     return {
       status: 'ANSWERED', reasonCode: 'APPLIANCE_ORACLE_EMPTY',
       blocks: [{
-        type: 'SUMMARY', id: 'appliance-oracle-summary', title: skipped ? 'No appliance ages recorded yet' : 'No appliances recorded yet',
-        body: skipped
+        type: 'SUMMARY', id: 'appliance-oracle-summary', title: filter ? 'No appliances match those filters' : skipped ? 'No appliance ages recorded yet' : 'No appliances recorded yet',
+        body: filter
+          ? `No high- or critical-risk appliance has an estimated replacement cost over ${wholeDollars(filter.replacementCostOverCents / 100)}.`
+          : skipped
           ? 'Appliance Oracle estimates failure risk from each appliance\'s age. Add a purchase date below to include an appliance.'
           : 'Appliance Oracle estimates failure risk from each appliance\'s age. Add appliances with their purchase date to the inventory to see it.',
         tone: 'DEFAULT', actions: [],
@@ -136,9 +155,9 @@ export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY
   }
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'appliance-oracle-summary',
-    title: `${report.totalAppliances} appliance${report.totalAppliances === 1 ? '' : 's'} analysed`,
+    title: filter ? `${report.totalAppliances} appliance${report.totalAppliances === 1 ? '' : 's'} match` : `${report.totalAppliances} appliance${report.totalAppliances === 1 ? '' : 's'} analysed`,
     body: [
-      `${report.criticalCount} critical and ${report.highRiskCount} high risk.`,
+      filter ? `High or critical failure risk, with estimated replacement cost over ${wholeDollars(filter.replacementCostOverCents / 100)}.` : `${report.criticalCount} critical and ${report.highRiskCount} high risk.`,
       report.criticalCount + report.highRiskCount ? `Replacing those would cost an estimated ${wholeDollars(report.estimatedTotalCost)}.` : null,
       'Replacement model suggestions are not currently available in Ask.',
     ].filter(Boolean).join(' '),
@@ -151,9 +170,13 @@ export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY
   return { status: 'ANSWERED', reasonCode: 'APPLIANCE_ORACLE_READY', blocks, suggestions: [], ...(suggestedNextActionCandidates.length ? { suggestedNextActionCandidates } : {}) };
 }
 
-async function applianceFailureRiskResult(propertyId: string, userId: string): Promise<AskOperationResult> {
+async function applianceFailureRiskResult(propertyId: string, userId: string, message: string): Promise<AskOperationResult> {
   try {
-    return applianceFailureRiskFromView(await applianceOracleService.generateOracleReport(propertyId, userId, { includeRecommendations: false }), propertyId);
+    const amount = singleGreaterThanAmountCents(message);
+    const filter = amount !== null && /\b(?:high|critical)\s+(?:failure\s+)?risk\b/i.test(message)
+      ? { replacementCostOverCents: amount, highRiskOnly: true }
+      : undefined;
+    return applianceFailureRiskFromView(await applianceOracleService.generateOracleReport(propertyId, userId, { includeRecommendations: false }), propertyId, filter);
   } catch (error) {
     if (error instanceof Error && error.message === 'Property not found or access denied') return applianceFailureRiskFromView('PRIMARY_OWNER_ONLY', propertyId);
     throw error;
@@ -258,5 +281,5 @@ async function maintenanceBudgetResult(propertyId: string, userId: string): Prom
   }
 }
 
-registerCapabilityHandler('appliance-oracle.risk', async (envelope) => applianceFailureRiskResult(envelope.propertyId!, envelope.userId));
+registerCapabilityHandler('appliance-oracle.risk', async (envelope) => applianceFailureRiskResult(envelope.propertyId!, envelope.userId, envelope.message));
 registerCapabilityHandler('budget-planner.forecast', async (envelope) => maintenanceBudgetResult(envelope.propertyId!, envelope.userId));

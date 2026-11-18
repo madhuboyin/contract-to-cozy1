@@ -142,6 +142,7 @@ export const ASK_SEMANTIC_RELATION_REGISTRY: readonly SemanticRelationRegistrati
     cyclePolicy: 'FORBID',
     predicateIds: [
       'predicate.inventory_item.has_receipt_record',
+      'predicate.inventory_item.has_no_receipt_record',
     ],
   },
   // Wave 2 (Phase 3): Protection — Warranties, Insurance, Claims & Intersected Claim Documents

@@ -200,19 +200,33 @@ export function homeUpgradeScenariosFromView(
   return { status: 'ANSWERED', reasonCode: outOfDate ? 'HOME_UPGRADE_RESULTS_STALE' : 'HOME_UPGRADE_SCENARIOS_READY', blocks, suggestions: [] };
 }
 
-async function homeUpgradeScenariosResult(propertyId: string, canChange: boolean): Promise<AskOperationResult> {
+async function homeUpgradeScenariosResult(propertyId: string, canChange: boolean, message = ''): Promise<AskOperationResult> {
   // The scenarios route's controller looks the twin up the same way; Ask never creates one (that is the page's init).
   const twin = await prisma.homeDigitalTwin.findUnique({ where: { propertyId }, select: { id: true } });
   if (!twin) return withSources(homeUpgradeScenariosFromView(null, propertyId), []);
   const service = new HomeDigitalTwinScenarioService();
-  const active = await service.listScenarios(twin.id, {});
+  let active = await service.listScenarios(twin.id, {});
   // Archived options are listed only to a contributor or owner, for the Restore and Delete actions.
-  const archived = canChange ? (await service.listScenarios(twin.id, { includeArchived: true })).filter((scenario) => scenario.isArchived) : [];
+  let archived = canChange ? (await service.listScenarios(twin.id, { includeArchived: true })).filter((scenario) => scenario.isArchived) : [];
+  const hvacOnly = /\b(?:furnace|hvac|heat pump|air conditioner)\b/i.test(message);
+  if (hvacOnly) {
+    const isHvac = (scenario: UpgradeScenarioView) => /\b(?:furnace|hvac|heat pump|air conditioner|heating|cooling)\b/i.test(`${scenario.name} ${scenario.component?.label ?? ''} ${scenario.component?.componentType ?? ''}`);
+    active = active.filter(isHvac);
+    archived = archived.filter(isHvac);
+  }
   // FR-AUT-1: the twin and the saved options listed.
-  return withSources(homeUpgradeScenariosFromView(active, propertyId, new Date(), { canChange, archived }), [sourceRef('HomeDigitalTwin', twin.id), ...[...active, ...archived].map((scenario) => sourceRef('HomeTwinScenario', String(scenario.id)))]);
+  const result = homeUpgradeScenariosFromView(active, propertyId, new Date(), { canChange, archived });
+  if (hvacOnly && active.length === 0) {
+    const summary = result.blocks.find((block) => block.type === 'SUMMARY');
+    if (summary?.type === 'SUMMARY') {
+      summary.title = 'No saved furnace replacement options';
+      summary.body = 'No saved Home Upgrade Planner options match the furnace or HVAC filter.';
+    }
+  }
+  return withSources(result, [sourceRef('HomeDigitalTwin', twin.id), ...[...active, ...archived].map((scenario) => sourceRef('HomeTwinScenario', String(scenario.id)))]);
 }
 
 registerCapabilityHandler('home-digital-twin.scenarios', async (envelope, deps) => {
   const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
-  return homeUpgradeScenariosResult(envelope.propertyId!, access.role !== 'VIEWER');
+  return homeUpgradeScenariosResult(envelope.propertyId!, access.role !== 'VIEWER', envelope.message);
 });

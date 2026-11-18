@@ -4,6 +4,8 @@
 
 **Date:** 2026-11-17
 
+**Revision 2026-11-17 — composed recorded-data filters:** The typed inventory slice now treats a linked receipt as a governed inventory-to-record relation and supports `missing receipt AND (room A OR room B)` without dropping either condition. Reviewed semantic examples route compound capability reads for Appliance Oracle risk plus an estimated replacement-cost threshold, seller-prep material blockers plus a maximum estimated cost, and saved furnace replacement options plus ROI without bypassing fast-path certification. The corresponding handlers apply the filters to their canonical data rather than rewriting the prompt as an unrelated clarification.
+
 **Scope:** All Ask Cozy homeowner turns, all product domains, reads, analyses, guided workflows, and confirmed writes
 
 **Primary objective:** Make the correctness of a basic home question depend on its meaning and the home's authorised data—not on matching one expected sentence

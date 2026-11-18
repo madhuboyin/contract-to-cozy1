@@ -423,7 +423,7 @@ export function sellerPrepCaseActions(role: HouseholdRole, status: string | null
   ];
 }
 
-async function sellerPrepChecklistResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+async function sellerPrepChecklistResult(userId: string, propertyId: string, message = ''): Promise<AskOperationResult> {
   const overview = await PropertySaleCaseService.getCase(userId, propertyId);
 
   if (!overview.saleCase) {
@@ -449,13 +449,21 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
   // never contains an amount, a formatted range or anything derived from one. Counts, status, category, class and completion state stay shared.
   const isOwner = access.role === HouseholdRole.OWNER;
   const hadCostDetail = overview.readinessItems.some((item) => item.estimatedCostMinCents != null || item.estimatedCostMaxCents != null || item.estimatedValueAddMinCents != null || item.estimatedValueAddMaxCents != null);
-  const readinessItems = isOwner ? overview.readinessItems : overview.readinessItems.map((item) => ({ ...item, estimatedCostMinCents: null, estimatedCostMaxCents: null, estimatedValueAddMinCents: null, estimatedValueAddMaxCents: null }));
+  let readinessItems = isOwner ? overview.readinessItems : overview.readinessItems.map((item) => ({ ...item, estimatedCostMinCents: null, estimatedCostMaxCents: null, estimatedValueAddMinCents: null, estimatedValueAddMaxCents: null }));
+  const under = /\b(?:under|less than|below)\s*\$\s?([\d,]+)\b/i.exec(message);
+  const highPriorityOnly = /\bhigh priority\b/i.test(message);
+  if (under && isOwner) {
+    const thresholdCents = Number(under[1].replace(/,/g, '')) * 100;
+    readinessItems = readinessItems.filter((item) => item.estimatedCostMaxCents != null && item.estimatedCostMaxCents < thresholdCents);
+  }
+  if (highPriorityOnly) readinessItems = readinessItems.filter((item) => item.requirementClass === 'MATERIAL_BLOCKER');
   const caseActions = sellerPrepCaseActions(access.role, overview.saleCase.status || 'PREPARING', overview.canCreate);
   const itemActions = sellerPrepItemActions(access.role);
   const openItems = readinessItems.filter((item) => item.status === 'OPEN');
   const pursuingItems = readinessItems.filter((item) => item.status === 'PURSUING');
   const waivedItems = readinessItems.filter((item) => item.status === 'WAIVED');
   const waivedCount = waivedItems.length;
+  const filteredChecklist = Boolean(under || highPriorityOnly);
 
   const grouped = new Map<string, typeof openItems>();
   for (const item of openItems) {
@@ -478,10 +486,10 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY',
     id: 'seller-prep-summary',
-    title: 'Your seller-prep checklist',
+    title: filteredChecklist ? 'Seller-prep items that match' : 'Your seller-prep checklist',
     body: openItems.length
       ? `${openItems.length} open item${openItems.length === 1 ? '' : 's'}${pursuingItems.length ? `, ${pursuingItems.length} already in progress` : ''}${waivedCount ? `, ${waivedCount} waived` : ''}.`
-      : `No open items right now${waivedCount ? ` (${waivedCount} waived)` : ''}. This home is in good shape to list.`,
+      : filteredChecklist ? 'No checklist items match all of those filters.' : `No open items right now${waivedCount ? ` (${waivedCount} waived)` : ''}. This home is in good shape to list.`,
     tone: 'DEFAULT',
     // This response is the canonical sale-readiness checklist, including progress, item details and every supported decision,
     // and (FRD v1.338) the case's own dates, budget range and stage. No CTA that exits Ask for the desktop rendering of the same data.
@@ -754,7 +762,7 @@ registerCapabilityHandler('sale-case.analysis', async (envelope) => {
   return whatIf ? sellHoldRentWhatIfResult(envelope.userId, envelope.propertyId!, envelope.message, whatIf) : sellHoldRentAnalysisResult(envelope.userId, envelope.propertyId!, envelope.message, priorViewState);
 });
 
-registerCapabilityHandler('seller-prep.checklist', async (envelope) => sellerPrepChecklistResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('seller-prep.checklist', async (envelope) => sellerPrepChecklistResult(envelope.userId, envelope.propertyId!, envelope.message));
 
 registerCapabilityHandler('seller-prep.item-decision', async (envelope) => sellerPrepItemDecisionResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 

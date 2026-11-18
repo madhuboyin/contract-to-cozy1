@@ -55,6 +55,7 @@ export interface SliceInventoryItemRecord {
   readonly roomId?: string | null;
   readonly propertyPlanWarrantyId?: string | null;
   readonly itemWarrantyIds: readonly string[];
+  readonly receiptDocumentId?: string | null;
   readonly coverageEvidenceStatus: 'NONE' | 'NOT_SURE' | 'UNKNOWN' | string;
 }
 
@@ -248,6 +249,8 @@ function describeWhere(expr: SemanticWhereExpression, snapshot: SlicePropertySna
   const years = expr.thresholdYears;
   switch (expr.predicateId) {
     case 'predicate.inventory_item.has_no_warranty_record': return negated ? 'a warranty linked in your home record' : 'no warranty linked in your home record';
+    case 'predicate.inventory_item.has_no_receipt_record': return negated ? 'a receipt linked in your home record' : 'no receipt linked in your home record';
+    case 'predicate.inventory_item.has_receipt_record': return negated ? 'no receipt linked in your home record' : 'a receipt linked in your home record';
     case 'predicate.inventory_item.has_warranty_record': return negated ? 'no warranty linked in your home record' : 'a warranty linked in your home record';
     case 'predicate.inventory_item.warranty_state_unknown': return negated ? 'a known warranty state' : 'an unknown warranty state';
     case 'predicate.inventory_item.has_due_maintenance': return negated ? 'no maintenance due' : 'maintenance due';
@@ -289,6 +292,10 @@ function evaluateWherePredicate(
         || warranty.state === 'BOTH_CONSISTENT';
     case 'predicate.inventory_item.has_no_warranty_record':
       return warranty.state === 'NO_LINK_RECORDED' || warranty.state === 'EXPLICIT_NO_COVERAGE';
+    case 'predicate.inventory_item.has_receipt_record':
+      return Boolean(item.receiptDocumentId);
+    case 'predicate.inventory_item.has_no_receipt_record':
+      return !item.receiptDocumentId;
     case 'predicate.inventory_item.warranty_state_unknown':
       return warranty.state === 'UNKNOWN' || warranty.state === 'CONFLICTED_LINKS';
     case 'predicate.inventory_item.has_due_maintenance':
@@ -1161,7 +1168,7 @@ function normalizeSliceRole(role: string): SliceAuthorizationContext['role'] {
  * into the typed SlicePropertySnapshot contract.
  */
 export async function loadSlicePropertySnapshot(propertyId: string): Promise<SlicePropertySnapshot> {
-  const [rooms, items, warranties, maintenanceTasks, workflowVersion] = await Promise.all([
+  const [rooms, items, warranties, documents, maintenanceTasks, workflowVersion] = await Promise.all([
     prisma.inventoryRoom.findMany({
       where: { propertyId },
       select: { id: true, propertyId: true, name: true },
@@ -1192,6 +1199,10 @@ export async function loadSlicePropertySnapshot(propertyId: string): Promise<Sli
       where: { propertyId },
       select: { id: true, inventoryItemId: true },
     }),
+    prisma.document.findMany({
+      where: { propertyId, inventoryItemId: { not: null }, deletedAt: null },
+      select: { id: true, inventoryItemId: true, type: true, name: true, description: true, metadata: true },
+    }),
     prisma.propertyMaintenanceTask.findMany({
       where: { propertyId },
       select: {
@@ -1216,6 +1227,16 @@ export async function loadSlicePropertySnapshot(propertyId: string): Promise<Sli
     const list = warrantiesByItem.get(w.inventoryItemId) ?? [];
     list.push(w.id);
     warrantiesByItem.set(w.inventoryItemId, list);
+  }
+  const receiptsByItem = new Map<string, string>();
+  for (const document of documents) {
+    if (!document.inventoryItemId) continue;
+    const metadata = document.metadata && typeof document.metadata === 'object' ? document.metadata as Record<string, unknown> : null;
+    const kind = String(metadata?.documentKind ?? metadata?.kind ?? metadata?.category ?? metadata?.role ?? '').toUpperCase();
+    const hint = `${String(document.name ?? '')} ${String(document.description ?? '')} ${kind}`;
+    if (String(document.type).toUpperCase() === 'INVOICE' || kind === 'RECEIPT' || /\breceipt\b|\binvoice\b|\bpurchase\b/i.test(hint)) {
+      if (!receiptsByItem.has(document.inventoryItemId)) receiptsByItem.set(document.inventoryItemId, document.id);
+    }
   }
 
   return {
@@ -1242,6 +1263,7 @@ export async function loadSlicePropertySnapshot(propertyId: string): Promise<Sli
       roomId: item.roomId ?? null,
       propertyPlanWarrantyId: item.warrantyApplicabilities[0]?.warrantyId ?? null,
       itemWarrantyIds: warrantiesByItem.get(item.id) ?? [],
+      receiptDocumentId: receiptsByItem.get(item.id) ?? null,
       coverageEvidenceStatus: String(item.coverageEvidenceStatus ?? 'UNKNOWN'),
     })),
     maintenanceTasks: maintenanceTasks.map((task) => ({
