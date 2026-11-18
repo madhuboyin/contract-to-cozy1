@@ -46,23 +46,33 @@ test('nothing changes without an amount comparison, or for a result that is not 
   assert.equal(withUnappliedAmountComparison(clarification, 'anything over $500'), clarification);
 });
 
-test('a cross-domain answer keeps its month window and says the cost condition was not applied', async () => {
-  const execution = await X.executeCrossDomainSnapshot({ rawText: 'show maintenance tasks due next month', snapshot: buildSeededCrossDomainSnapshot(), role: 'OWNER', propertyAuthorized: true });
-  const wrapped = withUnappliedAmountComparison(X.buildOperationResultFromCrossDomainExecution(execution), 'show maintenance tasks due next month that cost more than $50');
-  const limitation = wrapped.blocks.find((b) => b.type === 'LIMITATION');
-  assert.match(limitation.body, /I couldn’t apply “more than \$50”/);
-  assert.match(JSON.stringify(wrapped.blocks), /due in [A-Z][a-z]+ \d{4}|No maintenance tasks are due in [A-Z][a-z]+ \d{4}/);
+test('the exact live prompt applies both next-month and cost conditions and renders task details', async () => {
+  const seeded = buildSeededCrossDomainSnapshot();
+  const snapshot = {
+    ...seeded,
+    maintenanceTasks: seeded.maintenanceTasks.map((task) => task.id === 'task-plumbing-next-month'
+      ? { ...task, estimatedCostCents: 7500 }
+      : task.id === 'task-electrical-panel' ? { ...task, estimatedCostCents: 4000 } : task),
+  };
+  const execution = await X.executeCrossDomainSnapshot({ rawText: 'show maintenance tasks due next month that cost more than $50', snapshot, role: 'OWNER', propertyAuthorized: true });
+  const result = X.buildOperationResultFromCrossDomainExecution(execution);
+  const text = JSON.stringify(result.blocks);
+  assert.equal(result.status, 'ANSWERED');
+  assert.deepEqual(execution.facetResults[0].recordIds, ['task-plumbing-next-month']);
+  assert.match(text, /recorded cost over \$50\.00/);
+  assert.match(text, /Estimated cost \$75\.00/);
+  assert.doesNotMatch(text, /Inspect kitchen GFCI outlets|Amount filter not applied/);
 });
 
 const realPrisma = prismaModule.prisma;
 const originalAccess = propertyAccess.resolvePropertyAccess;
 test.afterEach(() => { prismaModule.prisma = realPrisma; propertyAccess.resolvePropertyAccess = originalAccess; });
 
-test('the live prompt through the real handler is labelled partial, not presented as the answer', async () => {
+test('the live prompt through the real handler no longer says its cost filter was dropped', async () => {
   const empty = { findMany: async () => [], findFirst: async () => null, findUnique: async () => null, count: async () => 0 };
   prismaModule.prisma = new Proxy({}, { get: (_t, model) => (model === 'then' ? undefined : model === 'property' ? { ...empty, findUnique: async () => ({ id: 'p1', timezone: 'UTC' }) } : empty) });
   propertyAccess.resolvePropertyAccess = async () => ({ role: 'OWNER', userId: 'u1', propertyId: 'p1' });
   const result = await capabilityInvoke('DATA_POINT_READ', { userId: 'u1', propertyId: 'p1', message: 'show maintenance tasks due next month that cost more than $50' });
-  assert.equal(result.status, 'READY_WITH_LIMITATIONS');
-  assert.match(JSON.stringify(result.blocks), /I couldn’t apply “more than \$50”/);
+  assert.equal(result.status, 'ANSWERED');
+  assert.doesNotMatch(JSON.stringify(result.blocks), /Amount filter not applied|I couldn’t apply “more than \$50”/);
 });

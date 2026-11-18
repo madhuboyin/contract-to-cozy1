@@ -788,6 +788,15 @@ function executeNewStackFacet(
 
   if (job === 'query.maintenance_task.filter') {
     const categories = firstPredicateTargetCategorySet(facet.where);
+    const amountOverCents = firstPredicateAtom(facet.where)?.amountOverCents;
+    const hasAmountThreshold = typeof amountOverCents === 'number';
+    const costRestricted = hasAmountThreshold && !canSeeRole(role, 'EDITOR');
+    if (costRestricted) redactedFieldIds.push('field.maintenance_task.cost');
+    const costOf = (task: CrossDomainPropertySnapshot['maintenanceTasks'][number]): { cents: number; estimated: boolean } | null => {
+      if (typeof task.actualCostCents === 'number') return { cents: task.actualCostCents, estimated: false };
+      if (typeof task.estimatedCostCents === 'number') return { cents: task.estimatedCostCents, estimated: true };
+      return null;
+    };
     const metaByTaskId = new Map(snapshot.maintenanceTaskMeta.map((m) => [m.taskId, m.category]));
     const refLocalYmd = localYmdInTimeZone(snapshot.asOfDate, snapshot.timezone);
     // A calendar-month constraint ("due next month") applies to every branch, including a category question ("plumbing tasks next month"); it used to be read
@@ -801,7 +810,7 @@ function executeNewStackFacet(
       const dueParts = datePartsInTimeZone(task.nextDueDate as Date | string, snapshot.timezone);
       return dueParts.year === monthWindow.year && dueParts.month === monthWindow.month;
     };
-    const matches = snapshot.maintenanceTasks.filter((task) => {
+    const timeMatches = snapshot.maintenanceTasks.filter((task) => {
       if (task.propertyId !== snapshot.propertyId) return false;
       if (categories && categories.length > 0) {
         const taskCat = metaByTaskId.get(task.id) ?? 'GENERAL';
@@ -812,15 +821,31 @@ function executeNewStackFacet(
       }
       return task.status === 'PAST_DUE' || (task.status === 'PENDING' && Boolean(task.nextDueDate) && localYmdInTimeZone(task.nextDueDate, snapshot.timezone) < refLocalYmd);
     });
+    const matches = hasAmountThreshold && !costRestricted
+      ? timeMatches.filter((task) => { const cost = costOf(task); return cost !== null && cost.cents > amountOverCents; })
+      : costRestricted ? [] : timeMatches;
+    const unknownCost = hasAmountThreshold && !costRestricted ? timeMatches.filter((task) => costOf(task) === null) : [];
     // The window is stated in the answer so the result can be audited against what "next month" meant.
     const windowLabel = monthWindow
       ? `${new Date(Date.UTC(monthWindow.year, monthWindow.month - 1, 1)).toLocaleString('en-US', { month: 'long', timeZone: 'UTC' })} ${monthWindow.year}`
       : null;
-    const rows = matches.map((m) => ({ id: m.id, label: m.title, subtitle: `Due ${m.nextDueDate}` }));
-    const summary = windowLabel
+    const rows = matches.map((m) => {
+      const cost = costOf(m);
+      return {
+        id: m.id,
+        label: m.title,
+        subtitle: [m.nextDueDate ? `Due ${m.nextDueDate}` : null, cost ? `${cost.estimated ? 'Estimated cost' : 'Recorded cost'} ${centsLabel(cost.cents)}` : 'Cost not recorded'].filter(Boolean).join(' · '),
+      };
+    });
+    const unknownCostNote = unknownCost.length
+      ? ` ${unknownCost.length} otherwise-matching task${unknownCost.length === 1 ? ' has' : 's have'} no recorded estimate or actual cost and ${unknownCost.length === 1 ? 'was' : 'were'} left out.`
+      : '';
+    const summary = costRestricted
+      ? 'Maintenance costs are available to a contributor or owner, so this cost-filtered list is not shown.'
+      : windowLabel
       ? (matches.length === 0
-        ? `No maintenance tasks are due in ${windowLabel} (the whole calendar month, in your home’s time zone).`
-        : `${matches.length} maintenance task(s) due in ${windowLabel} (the whole calendar month, in your home’s time zone): ${matches.map((m) => m.title).join(', ')}.`)
+        ? `No maintenance tasks due in ${windowLabel} have ${hasAmountThreshold ? `a recorded cost over ${centsLabel(amountOverCents)}` : 'a matching due date'} (the whole calendar month, in your home’s time zone).${unknownCostNote}`
+        : `${matches.length} maintenance task(s) due in ${windowLabel}${hasAmountThreshold ? ` with a recorded cost over ${centsLabel(amountOverCents)}` : ''} (the whole calendar month, in your home’s time zone): ${matches.map((m) => m.title).join(', ')}.${unknownCostNote}`)
       : (matches.length === 0 ? 'No matching maintenance tasks found.' : `${matches.length} maintenance task(s): ${matches.map((m) => m.title).join(', ')}.`);
     const predIds = evaluateWherePredicates(facet.where);
     const finalized = finalizeReceiptAndPresentation({

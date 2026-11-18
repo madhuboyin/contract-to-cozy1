@@ -775,6 +775,7 @@ function compileClauseSpecFromAnnotations(
         predicateId: 'predicate.maintenance_task.matches_filter',
         relationPathId: 'path.maintenance_task.self',
         enumStatus: 'OPEN',
+        ...(options.amountOverCents !== undefined && options.amountOverCents !== null ? { amountOverCents: options.amountOverCents } : {}),
       },
       time: { kind: 'CALENDAR_PERIOD', unit: 'MONTH', offset: 1 },
       fields: [{ fieldId: 'field.maintenance_task.title' }, { fieldId: 'field.maintenance_task.next_due_date' }],
