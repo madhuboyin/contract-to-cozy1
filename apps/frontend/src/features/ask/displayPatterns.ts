@@ -13,7 +13,7 @@ type ComparisonOption = Extract<AskPresentationBlock, { type: 'COMPARISON' }>['o
 export type GroupedListPattern = 'CHOICE_GRID' | 'BUDGET_BREAKDOWN' | 'STATUS_ACCORDION' | 'SHELVES' | 'DECK' | 'ROOM_MAP';
 
 export type GroupedListPatternDecision =
-  | { pattern: null; offersChoice: boolean; reason: 'NO_PATTERN' | 'NO_ITEMS' | 'ITEMS_WITHOUT_ACTIONS' | 'TOO_MANY_FOR_DECK' | 'CHOICE_GRID_INCOMPATIBLE' | 'HOMEOWNER_CHOSE_LIST' }
+  | { pattern: null; offersChoice: boolean; reason: 'NO_PATTERN' | 'NO_ITEMS' | 'SINGLE_ITEM' | 'ITEMS_WITHOUT_ACTIONS' | 'TOO_MANY_FOR_DECK' | 'CHOICE_GRID_INCOMPATIBLE' | 'HOMEOWNER_CHOSE_LIST' }
   | { pattern: 'CHOICE_GRID'; offersChoice: false; reason: 'DECLARED' }
   | { pattern: 'BUDGET_BREAKDOWN'; offersChoice: false; reason: 'DECLARED' }
   | { pattern: 'STATUS_ACCORDION'; offersChoice: false; reason: 'DECLARED' }
@@ -38,6 +38,9 @@ export function resolveGroupedListPattern(block: GroupedListBlock, preference: G
   if (!declared) return { pattern: null, offersChoice: false, reason: 'NO_PATTERN' };
   const items = groupedListItems(block);
   if (items.length === 0) return { pattern: null, offersChoice: false, reason: 'NO_ITEMS' };
+  // A shelf is navigation for a collection. With one item it creates a tiny card, disabled arrows and a large empty
+  // track. Fall back to the ordinary full-width row, which keeps the same canonical detail and actions.
+  if (declared.pattern === 'SHELVES' && items.length === 1) return { pattern: null, offersChoice: false, reason: 'SINGLE_ITEM' };
   if (declared.pattern === 'CHOICE_GRID') {
     const compatible = items.length <= CHOICE_GRID_MAX_ITEMS
       && items.every((item) => !item.href && item.actions?.length === 1);

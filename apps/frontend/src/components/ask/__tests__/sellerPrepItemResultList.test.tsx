@@ -101,6 +101,9 @@ test('the registry routes seller-prep-open-items here and wires item actions thr
   const onItemAction = jest.fn();
   mockedGet.mockResolvedValueOnce(overview([item()]));
   render(<BlockView block={block()} executionId="execution" propertyId="home" itemActionsDisabled={false} onItemAction={onItemAction} onFilterClick={() => {}} onCollectionPage={() => {}} onAccessLost={() => {}} />);
+  expect(screen.queryByRole('group', { name: 'View Open items' })).not.toBeInTheDocument();
+  expect(screen.getByText('View details')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Scroll Presentation/ })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Paint the front door' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Pursue before listing' })).toBeInTheDocument());
   fireEvent.click(screen.getByRole('button', { name: 'Pursue before listing' }));

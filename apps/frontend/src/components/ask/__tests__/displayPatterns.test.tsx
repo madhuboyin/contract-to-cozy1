@@ -40,9 +40,12 @@ describe('pattern resolver', () => {
     expect(resolveGroupedListPattern(list({}, [{ id: 's', title: 'S', count: 1, items: [item('1')] }]), 'AUTO')).toMatchObject({ pattern: null, reason: 'NO_PATTERN', offersChoice: false });
     expect(resolveGroupedListPattern(list({ presentation: { pattern: 'SHELVES' } }, [{ id: 's', title: 'S', count: 0, items: [] }]), 'AUTO')).toMatchObject({ pattern: null, reason: 'NO_ITEMS' });
     const shelves = list({ presentation: { pattern: 'SHELVES' } }, [{ id: 's', title: 'S', count: 1, items: [item('1')] }]);
-    expect(resolveGroupedListPattern(shelves, 'LIST')).toMatchObject({ pattern: null, reason: 'HOMEOWNER_CHOSE_LIST', offersChoice: true });
-    expect(resolveGroupedListPattern(shelves, 'CARDS')).toMatchObject({ pattern: null, reason: 'HOMEOWNER_CHOSE_LIST' });
-    expect(resolveGroupedListPattern(shelves, 'AUTO')).toMatchObject({ pattern: 'SHELVES' });
+    expect(resolveGroupedListPattern(shelves, 'LIST')).toMatchObject({ pattern: null, reason: 'SINGLE_ITEM', offersChoice: false });
+    expect(resolveGroupedListPattern(shelves, 'CARDS')).toMatchObject({ pattern: null, reason: 'SINGLE_ITEM', offersChoice: false });
+    expect(resolveGroupedListPattern(shelves, 'AUTO')).toMatchObject({ pattern: null, reason: 'SINGLE_ITEM', offersChoice: false });
+    const multipleShelves = list({ presentation: { pattern: 'SHELVES' } }, [{ id: 's', title: 'S', count: 2, items: [item('1'), item('2')] }]);
+    expect(resolveGroupedListPattern(multipleShelves, 'AUTO')).toMatchObject({ pattern: 'SHELVES', offersChoice: true });
+    expect(resolveGroupedListPattern(multipleShelves, 'LIST')).toMatchObject({ pattern: null, reason: 'HOMEOWNER_CHOSE_LIST', offersChoice: true });
   });
 
   test('a deck needs actions on every item and a bounded count; swipe ids must exist on every item', () => {

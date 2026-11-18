@@ -1,7 +1,7 @@
 'use client';
 
 import { type ReactNode, useContext, useEffect, useRef, useState } from 'react';
-import { ExternalLink, Loader2, X } from 'lucide-react';
+import { ChevronRight, ExternalLink, Loader2, X } from 'lucide-react';
 import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { getSaleCase } from '@/app/(dashboard)/dashboard/properties/[id]/tools/sale-case/saleCaseApi';
@@ -178,14 +178,30 @@ export function SellerPrepItemResultList({ block, propertyId, disabled, onAction
         {section.count > section.items.length && <div role="listitem" className="flex w-32 shrink-0 snap-start items-center justify-center rounded-xl border border-dashed border-slate-300 p-3 text-center text-xs text-slate-500">{section.count - section.items.length} more on the checklist page</div>}
       </HorizontalTrack>
     </div>)}
-    {layout === 'LIST' && block.sections.map((section) => <div key={section.id} className="border-b border-slate-100 p-4">
-      <h4 className="font-semibold">{section.title} · {section.count}</h4>
+    {layout === 'LIST' && block.sections.map((section) => <div key={section.id} className="border-b border-slate-100 p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-3">
+        <h4 className="text-xs font-bold uppercase tracking-[0.08em] text-slate-600">{section.title}</h4>
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{section.count} {section.count === 1 ? 'item' : 'items'}</span>
+      </div>
       <ul className="mt-3 space-y-3">
-        {section.items.map((item) => <li key={item.id} className={cn('rounded-xl border p-3', detailId === item.id ? 'border-teal-600 bg-teal-50' : 'border-transparent bg-slate-50')}>
-          <button type="button" data-sale-item-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={detailId === item.id} aria-controls={`sale-item-detail-${item.id}`} onClick={() => openDetail(item)} className="min-h-10 text-left font-medium text-slate-950 underline-offset-4 hover:text-teal-800 hover:underline">{item.title}</button>
-          {item.description && <p className="mt-1 text-sm text-slate-600">{item.description}</p>}
-          {item.meta.length > 0 && <p className="mt-1 text-xs text-slate-600">{item.meta.join(' · ')}</p>}
-        </li>)}
+        {section.items.map((item) => {
+          const facts = [...new Set([item.timingLabel, item.amountLabel, ...item.meta].filter((value): value is string => Boolean(value)))];
+          return <li key={item.id} className={cn('overflow-hidden rounded-2xl border bg-white transition-colors', detailId === item.id ? 'border-teal-600 ring-1 ring-teal-600' : 'border-slate-200 hover:border-teal-300')}>
+            <button type="button" aria-label={item.title} data-sale-item-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={detailId === item.id} aria-controls={`sale-item-detail-${item.id}`} onClick={() => openDetail(item)} className="group flex min-h-24 w-full items-start gap-4 p-4 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-600 sm:p-5">
+              <span className={cn('mt-1 h-10 w-1 shrink-0 rounded-full', item.tone === 'CRITICAL' ? 'bg-red-500' : item.tone === 'CAUTION' ? 'bg-amber-400' : 'bg-teal-600')} aria-hidden="true" />
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-start gap-2">
+                  <span className="text-base font-semibold leading-6 text-slate-950 group-hover:text-teal-800">{item.title}</span>
+                  {item.status && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{STATUS_LABELS[item.status] ?? item.status.replace(/_/g, ' ')}</span>}
+                </span>
+                {item.description && <span className="mt-1.5 block max-w-4xl text-sm leading-6 text-slate-600">{item.description}</span>}
+                {facts.length > 0 && <span className="mt-3 flex flex-wrap gap-2">{facts.map((fact) => <span key={fact} className="rounded-lg bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">{fact}</span>)}</span>}
+              </span>
+              <span className="mt-1 hidden shrink-0 items-center gap-1 text-sm font-semibold text-teal-700 sm:inline-flex">View details<ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" /></span>
+              <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-teal-700 sm:hidden" aria-hidden="true" />
+            </button>
+          </li>;
+        })}
       </ul>
     </div>)}
     {layout === 'LIST' && detailId && detailItem && <SaleItemDetail key={detailId} item={detailItem} expectedPropertyId={propertyId} disabled={disabled} onAction={onAction} onAccessLost={onAccessLost} onClose={closeDetail} link={link} />}
