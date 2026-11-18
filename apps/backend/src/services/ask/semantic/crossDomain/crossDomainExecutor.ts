@@ -746,17 +746,16 @@ function executeNewStackFacet(
       return { id: task.id, label: task.title, ...(parts.length > 0 ? { subtitle: parts.join(' · ') } : {}) };
     };
     const rows = matched.map(rowFor);
-    const named = matched.map((task) => { const cost = costOf(task); return hasThreshold && cost ? `${task.title} (${centsLabel(cost.cents)}${cost.estimated ? ', estimated' : ''})` : task.title; }).join(', ');
     const unknownNote = unknown.length > 0
-      ? ` ${unknown.length} completed task${unknown.length === 1 ? ' has' : 's have'} no recorded cost, so I can’t say whether ${unknown.length === 1 ? 'it was' : 'they were'} over ${centsLabel(threshold!)}: ${unknown.map((task) => task.title).join(', ')}.`
+      ? ` ${unknown.length} other completed task${unknown.length === 1 ? ' has' : 's have'} no recorded cost and ${unknown.length === 1 ? 'was' : 'were'} excluded.`
       : '';
     const summary = restricted
       ? 'Maintenance costs are redacted for the VIEWER role.'
       : hasThreshold
         ? (matched.length === 0
           ? `No completed maintenance task has a recorded cost over ${centsLabel(threshold!)}.${unknownNote}`
-          : `${matched.length} completed maintenance task(s) cost more than ${centsLabel(threshold!)}: ${named}.${unknownNote}`)
-        : (matched.length === 0 ? 'No completed maintenance tasks are recorded.' : `${matched.length} completed maintenance task(s): ${named}.`);
+          : `${matched.length} completed maintenance task${matched.length === 1 ? '' : 's'} ${matched.length === 1 ? 'has' : 'have'} a recorded cost over ${centsLabel(threshold!)}.${unknownNote}`)
+        : (matched.length === 0 ? 'No completed maintenance tasks are recorded.' : `${matched.length} completed maintenance task${matched.length === 1 ? ' is' : 's are'} recorded.`);
     const finalized = finalizeReceiptAndPresentation({
       facet,
       snapshot,
@@ -766,9 +765,34 @@ function executeNewStackFacet(
       sourceType: 'PropertyMaintenanceTask',
       predicateIds: evaluateWherePredicates(facet.where),
       rows: restricted ? [] : rows,
-      title: hasThreshold ? 'Completed maintenance over a cost' : 'Completed maintenance tasks',
+      title: hasThreshold ? `Completed maintenance over ${centsLabel(threshold!)}` : 'Completed maintenance tasks',
       summaryBody: summary,
       variantId: 'variant.maintenance_list',
+    });
+    const rowById = new Map(rows.map((row) => [row.id, row]));
+    const blocks = finalized.blocks.map((block): AskPresentationBlock => {
+      if (block.type !== 'GROUPED_LIST') return block;
+      return {
+        ...block,
+        id: 'maintenance-groups',
+        title: hasThreshold ? `Completed tasks over ${centsLabel(threshold!)}` : 'Completed maintenance tasks',
+        description: `${rows.length} confirmed ${rows.length === 1 ? 'match' : 'matches'}. Open a task for its current maintenance record.`,
+        sections: block.sections.map((section) => ({
+          ...section,
+          items: section.items.map((item) => {
+            const facts = rowById.get(item.id)?.subtitle?.split(' · ').filter(Boolean) ?? [];
+            return {
+              ...item,
+              meta: facts,
+              status: 'COMPLETED',
+              entityType: 'MAINTENANCE_TASK',
+              actions: [],
+              amountLabel: facts.find((fact) => fact.startsWith('$')) ?? null,
+              timingLabel: facts.find((fact) => fact.startsWith('Completed ')) ?? null,
+            };
+          }),
+        })),
+      };
     });
     return {
       facetId: facet.id,
@@ -782,7 +806,7 @@ function executeNewStackFacet(
       receipt: finalized.receipt,
       entailment: finalized.entailment,
       presentationEquivalence: finalized.equivalence,
-      blocks: finalized.blocks,
+      blocks,
     };
   }
 

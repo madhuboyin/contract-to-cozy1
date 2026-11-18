@@ -55,8 +55,14 @@ test('completed tasks over $1,000: actual else estimate (labelled), strictly gre
   assert.deepEqual(rows.map((r) => r.label), ['Replace roof flashing', 'Repaint deck']);
   assert.equal(rows[0].subtitle, '$1,250.00 · Completed 2026-03-04');
   assert.equal(rows[1].subtitle, '$1,500.00 (estimated) · Completed 2026-05-01');
-  assert.match(summary, /^2 completed maintenance task\(s\) cost more than \$1,000\.00: Replace roof flashing \(\$1,250\.00\), Repaint deck \(\$1,500\.00, estimated\)\./);
-  assert.match(summary, /1 completed task has no recorded cost, so I can’t say whether it was over \$1,000\.00: Check smoke alarms\./);
+  assert.equal(summary, '2 completed maintenance tasks have a recorded cost over $1,000.00. 1 other completed task has no recorded cost and was excluded.');
+  const list = result.blocks.find((block) => block.type === 'GROUPED_LIST');
+  assert.equal(list.id, 'maintenance-groups');
+  assert.equal(list.title, 'Completed tasks over $1,000.00');
+  assert.deepEqual(list.sections.flatMap((section) => section.items.map((item) => item.entityType)), ['MAINTENANCE_TASK', 'MAINTENANCE_TASK']);
+  assert.deepEqual(list.sections[0].items[0].meta, ['$1,250.00', 'Completed 2026-03-04']);
+  assert.equal(list.sections[0].items[0].amountLabel, '$1,250.00');
+  assert.equal(list.sections[0].items[0].timingLabel, 'Completed 2026-03-04');
   assert.doesNotMatch(summary, /Clean gutters|Service HVAC|Pending big job/);
   assert.doesNotMatch(summary, /couldn’t apply/);
 });
@@ -70,13 +76,13 @@ test('a thousands comma is part of the amount, not a clause boundary', async () 
 test('nothing over the threshold says so and still names the unknown cost', async () => {
   const { rows, summary } = await ask('which completed maintenance tasks cost over $5000');
   assert.equal(rows.length, 0);
-  assert.match(summary, /^No completed maintenance task has a recorded cost over \$5,000\.00\. 1 completed task has no recorded cost/);
+  assert.equal(summary, 'No completed maintenance task has a recorded cost over $5,000.00. 1 other completed task has no recorded cost and was excluded.');
 });
 
 test('the completed status alone lists every completed task and no open one', async () => {
   const { rows, summary } = await ask('show completed maintenance tasks');
   assert.deepEqual(rows.map((r) => r.label), ['Replace roof flashing', 'Repaint deck', 'Clean gutters', 'Service HVAC', 'Check smoke alarms']);
-  assert.match(summary, /^5 completed maintenance task\(s\): /);
+  assert.equal(summary, '5 completed maintenance tasks are recorded.');
 });
 
 test('a viewer does not get costs', async () => {

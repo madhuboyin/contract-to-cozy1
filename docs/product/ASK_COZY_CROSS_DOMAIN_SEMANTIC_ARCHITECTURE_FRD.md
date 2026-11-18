@@ -8,6 +8,8 @@
 
 **Revision 2026-11-18 — maintenance month plus cost:** `maintenance due next month AND cost more than $N` is one executable typed query. The calendar-month window and strict cost threshold are both applied. A task uses its recorded actual cost when present, otherwise its recorded estimate (labelled as estimated); a task with neither is excluded and disclosed as unknown. Result rows show due date and cost, and an answer never presents the unfiltered month list as satisfying the cost-filtered request.
 
+**Revision 2026-11-18 — completed maintenance cost presentation:** The answer summary reports the confirmed-match count and the excluded unknown-cost count without enumerating every task. Names, recorded/estimated costs, and completion dates remain on the result rows. Those rows are grounded `MAINTENANCE_TASK` records rendered through the canonical Ask maintenance detail workspace rather than static semantic labels.
+
 **Scope:** All Ask Cozy homeowner turns, all product domains, reads, analyses, guided workflows, and confirmed writes
 
 **Primary objective:** Make the correctness of a basic home question depend on its meaning and the home's authorised data—not on matching one expected sentence
