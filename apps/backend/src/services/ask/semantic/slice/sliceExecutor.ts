@@ -66,6 +66,11 @@ export interface SliceMaintenanceTaskRecord {
   readonly priority: 'LOW_PRIORITY' | 'MEDIUM_PRIORITY' | 'HIGH_PRIORITY' | string;
   readonly nextDueDate: string;
   readonly inventoryItemId?: string | null;
+  /** Recorded cost of finished work, in whole cents; null/absent means no cost is recorded (unknown, never zero). */
+  readonly actualCostCents?: number | null;
+  /** The estimate recorded before the work; used only when no actual cost is recorded, and always labelled as an estimate. */
+  readonly estimatedCostCents?: number | null;
+  readonly completedOn?: string | null;
 }
 
 export interface SlicePropertySnapshot {
@@ -1166,6 +1171,9 @@ export async function loadSlicePropertySnapshot(propertyId: string): Promise<Sli
         priority: true,
         nextDueDate: true,
         inventoryItemId: true,
+        actualCost: true,
+        estimatedCost: true,
+        lastCompletedDate: true,
       },
     }),
     (await import('../../handlers/maintenance.handler')).maintenanceWorkflowVersion(propertyId),
@@ -1213,6 +1221,9 @@ export async function loadSlicePropertySnapshot(propertyId: string): Promise<Sli
       priority: String(task.priority),
       nextDueDate: task.nextDueDate ? task.nextDueDate.toISOString().slice(0, 10) : '',
       inventoryItemId: task.inventoryItemId ?? null,
+      actualCostCents: task.actualCost === null || task.actualCost === undefined ? null : Math.round(Number(task.actualCost) * 100),
+      estimatedCostCents: task.estimatedCost === null || task.estimatedCost === undefined ? null : Math.round(Number(task.estimatedCost) * 100),
+      completedOn: task.lastCompletedDate ? task.lastCompletedDate.toISOString().slice(0, 10) : null,
     })),
   };
 }

@@ -3,7 +3,7 @@
 // with the authorised way to add it, and never guessed (FR-REC-2 MISSING_RECORD_DATA).
 import { clarifiedDocumentModeFrom, clarifiedQuoteIdsFrom, clarifiedReadingFrom } from '../support/clarificationContract';
 import type { NegativeOrReading } from '../semantic/deterministicSemanticParser';
-import { withUnappliedAmountComparison } from '../semantic/amountComparison';
+import { appliedAmountOverCents, withUnappliedAmountComparison } from '../semantic/amountComparison';
 import { parseCompareSubjects, unresolvedCompareCopy } from '../support/unresolvedCompare';
 import { agreementRefusalCopy } from '../support/unmatchedWords';
 import { inDomainNotUnderstoodResult } from '../recovery/inDomainNotUnderstood';
@@ -424,7 +424,7 @@ export async function dataPointReadResult(
           || Boolean(crossDomainParsed.clarification)
         )
       ) {
-        return withUnappliedAmountComparison(crossDomainExecution.operationResult, message);
+        return withUnappliedAmountComparison(crossDomainExecution.operationResult, message, appliedAmountOverCents(crossDomainParsed.plan));
       }
     }
 

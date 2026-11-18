@@ -1,4 +1,5 @@
 import { ASK_SHARED_LEXICON_VERSION, ASK_SHARED_SEMANTIC_LEXICON, type GeneratedSemanticLexeme } from '../sharedSemanticLexicon';
+import { singleGreaterThanAmountCents } from '../amountComparison';
 import {
   ASK_SEMANTIC_PLAN_VERSION,
   SemanticRequestPlanSchema,
@@ -97,6 +98,7 @@ const CROSS_DOMAIN_LEXEME_SPECS: readonly CrossDomainLexemeSpec[] = Object.freez
   { role: 'CATEGORY', semanticId: 'category.maintenance.electrical', canonicalLabel: 'electrical', reviewedAliases: [] },
   { role: 'CATEGORY', semanticId: 'category.quote_scope.hvac', canonicalLabel: 'hvac', reviewedAliases: [] },
   { role: 'CATEGORY', semanticId: 'category.quote_scope.roofing', canonicalLabel: 'roofing', reviewedAliases: [] },
+  { role: 'STATUS', semanticId: 'status.maintenance.completed', canonicalLabel: 'completed', reviewedAliases: ['complete', 'done', 'finished'] },
   { role: 'STATUS', semanticId: 'status.open', canonicalLabel: 'open', reviewedAliases: ['incomplete', 'remaining', 'remains', 'unfinished', 'finish'] },
   { role: 'STATUS', semanticId: 'status.expired', canonicalLabel: 'expired', reviewedAliases: ['out of warranty', 'out'] },
   { role: 'STATUS', semanticId: 'status.unpaid', canonicalLabel: 'unpaid', reviewedAliases: [] },
@@ -627,6 +629,8 @@ function compileClauseSpecFromAnnotations(
     documentMode?: 'EITHER_MISSING' | 'BOTH_MISSING';
     elapsedWindow?: SemanticTimeConstraint | null;
     clauseWords?: ReadonlySet<string>;
+    /** A single strictly-greater-than cost threshold read from this clause, in whole cents. */
+    amountOverCents?: number | null;
   } = {},
 ): ClauseSpec | null {
   const has = (id: string) => sig.ids.has(id);
@@ -689,6 +693,36 @@ function compileClauseSpecFromAnnotations(
         requiredSlots: [],
       };
     }
+  }
+
+  // Completed maintenance ("which completed maintenance tasks cost over $1,000"). The status is applied as a filter; a cost threshold is applied only as one strictly-greater
+  // comparison. A completed question that also names a due window, an overdue state or a category is not one this rule answers, so it is not matched (never answered
+  // with the status or the other condition silently dropped).
+  if (has('entity.maintenance_task') && has('status.maintenance.completed')) {
+    if (has('time.period.next_month') || has('time.maintenance.overdue') || has('time.maintenance.due') || sig.firstId('category.maintenance.')) return null;
+    return {
+      domainId: 'domain.maintenance',
+      entityId: 'entity.maintenance_task',
+      requestClass: 'DATA_QUERY',
+      jobMatch: 'query.maintenance_task.filter',
+      projection: 'LIST',
+      polarity: 'POSITIVE',
+      relations: [{
+        semanticRelationId: 'relation.maintenance_task.self',
+        predicateId: 'predicate.maintenance_task.matches_filter',
+        targetEntityId: 'entity.maintenance_task',
+      }],
+      where: {
+        kind: 'PREDICATE',
+        predicateId: 'predicate.maintenance_task.matches_filter',
+        relationPathId: 'path.maintenance_task.self',
+        enumStatus: 'COMPLETED',
+        ...(options.amountOverCents !== undefined && options.amountOverCents !== null ? { amountOverCents: options.amountOverCents } : {}),
+      },
+      time: null,
+      fields: [{ fieldId: 'field.maintenance_task.title' }],
+      requiredSlots: [],
+    };
   }
 
   // Maintenance next month
@@ -1426,7 +1460,8 @@ function splitCompoundClauses(rawText: string): {
 
   const rawParts = rawText
     .replace(/,\s+and\s+/gi, ', ')
-    .split(/\s*,\s*|\s+and\s+/i)
+    // A comma inside a number ("$1,200") is a thousands separator, not a clause boundary.
+    .split(/\s*(?:(?<!\d),|,(?=\s))\s*|\s+and\s+/i)
     .map((s) => s.trim())
     .filter(Boolean);
 
@@ -1536,6 +1571,7 @@ export function parseCrossDomainSemanticRequest(
           documentMode: options?.documentMode,
           elapsedWindow: extractElapsedWindow(clauseTokens),
           clauseWords: new Set(clauseTokens.map((token) => token.normalized)),
+          amountOverCents: singleGreaterThanAmountCents(clause.text),
         })
       : null;
 

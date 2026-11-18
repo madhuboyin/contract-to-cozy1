@@ -1,6 +1,6 @@
 # Ask Cozy — Cross-Domain Semantic Request Architecture FRD
 
-**Status:** Draft v1.25 for owner review
+**Status:** Draft v1.26 for owner review
 
 **Date:** 2026-11-17
 
@@ -51,6 +51,8 @@
 **v1.19 amendment:** Records two 2026-11-17 changes, with no change to requirements: (1) an "or" between questions about different domains is two questions, and a part that cannot be answered is named on the answered section instead of being dropped (`FR-PLAN-4`, `FR-PLAN-5`); and (2) two safety corrections: phrasings of a fire, smoke or alarm emergency that neither safety gate caught, one of them a regression from narrowing the fire/smoke pattern in v1.18, are now caught by both gates, and the gas-leak wording is tightened. Owner decisions on the review follow-ups are recorded at the end of the second row. Nothing here is browser- or live-verified.
 
 **v1.20 amendment:** Records the 2026-11-17 audit of every clarification card and the first step (a contract, a production repair and a test over every producer) of the owner-approved clarification-card work, with no change to requirements. Two producers were found to build cards that do not work: the slice "no A or B" card and the cross-domain clarifications. They are pinned as known defects that may only shrink; rebuilding them is the next steps of the approved order. Nothing here is browser- or live-verified.
+
+**v1.26 amendment:** Records the typed maintenance filters from the third live run (2026-11-17), with no change to requirements: a completed-status filter and a strictly-greater-than cost threshold ("which completed maintenance tasks cost over $1,000?"). A task's cost is its recorded actual cost, else its estimate labelled "estimated"; a task with neither is named as unknown and never counted as zero or as under the threshold; only completed tasks are listed; a viewer gets a redaction. A completed question that also names a due window, overdue or a category is not matched rather than answered with that condition dropped, and a cost question without the completed status is still not matched. Only "over / more than / above / exceeding / greater than" is applied; "under" and "at least" are not, and the partial-answer label now names only amounts the plan did not apply. A thousands comma ("$1,200") no longer splits a clause. Executed on a seeded home with hand-computed expectations and a with/without regression comparison over 295 files (no new failures after regenerating the registry drift snapshot for the new lexeme); not browser- or live-verified.
 
 **v1.25 amendment:** Records the first part of the refuse-versus-partial work from the third live run (2026-11-17): the agreement-gate refusal now names the words it could not match, and the finding that a blanket "run what is clean" rule cannot be built until the per-capability filters exist. No change to requirements. Nothing here is browser- or live-verified.
 **v1.24 amendment:** Records the relevance gate for clarification cards (2026-11-17), the first of the open findings listed in v1.23: a card no longer offers an option the prompt shares no distinctive word with. No change to requirements. Nothing here is browser- or live-verified, and the corpus measurement uses the local router, which differs from live.

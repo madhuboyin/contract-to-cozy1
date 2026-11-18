@@ -685,6 +685,19 @@ function firstPredicateTargetCategorySet(where: SemanticWhereExpression | null):
   return null;
 }
 
+function firstPredicateAtom(where: SemanticWhereExpression | null): Extract<SemanticWhereExpression, { kind: 'PREDICATE' }> | null {
+  if (!where) return null;
+  if (where.kind === 'PREDICATE') return where;
+  if (where.kind === 'NOT') return firstPredicateAtom(where.operand);
+  for (const op of where.operands) {
+    const found = firstPredicateAtom(op);
+    if (found) return found;
+  }
+  return null;
+}
+
+const centsLabel = (cents: number): string => `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 function executeNewStackFacet(
   facet: SemanticFacet,
   owner: MixedStackFacetOwnershipAssignment,
@@ -696,6 +709,70 @@ function executeNewStackFacet(
   const adapterId = owner.adapterId;
   const visibleItems = snapshot.extendedItems.filter((item) => item.propertyId === snapshot.propertyId && !item.isHidden);
   const redactedFieldIds: string[] = [];
+
+  if (job === 'query.maintenance_task.filter' && firstPredicateAtom(facet.where)?.enumStatus === 'COMPLETED') {
+    // Completed maintenance. A cost is the recorded actual cost; only when none is recorded is the estimate used, and it is labelled "estimated". A task with neither is
+    // unknown (never $0) and is named, not counted as under the threshold. The comparison is strictly greater than.
+    const threshold = firstPredicateAtom(facet.where)?.amountOverCents;
+    const hasThreshold = typeof threshold === 'number';
+    const restricted = hasThreshold && !canSeeRole(role, 'EDITOR');
+    if (restricted) redactedFieldIds.push('field.maintenance_task.cost');
+    const completed = snapshot.maintenanceTasks.filter((task) => task.propertyId === snapshot.propertyId && task.status === 'COMPLETED');
+    const costOf = (task: (typeof completed)[number]): { cents: number; estimated: boolean } | null => {
+      if (typeof task.actualCostCents === 'number') return { cents: task.actualCostCents, estimated: false };
+      if (typeof task.estimatedCostCents === 'number') return { cents: task.estimatedCostCents, estimated: true };
+      return null;
+    };
+    const matched = hasThreshold && !restricted ? completed.filter((task) => { const cost = costOf(task); return cost !== null && cost.cents > threshold; }) : completed;
+    const unknown = hasThreshold && !restricted ? completed.filter((task) => costOf(task) === null) : [];
+    const rowFor = (task: (typeof completed)[number]) => {
+      const cost = costOf(task);
+      const parts = [
+        hasThreshold && cost ? `${centsLabel(cost.cents)}${cost.estimated ? ' (estimated)' : ''}` : null,
+        task.completedOn ? `Completed ${task.completedOn}` : null,
+      ].filter(Boolean);
+      return { id: task.id, label: task.title, ...(parts.length > 0 ? { subtitle: parts.join(' · ') } : {}) };
+    };
+    const rows = matched.map(rowFor);
+    const named = matched.map((task) => { const cost = costOf(task); return hasThreshold && cost ? `${task.title} (${centsLabel(cost.cents)}${cost.estimated ? ', estimated' : ''})` : task.title; }).join(', ');
+    const unknownNote = unknown.length > 0
+      ? ` ${unknown.length} completed task${unknown.length === 1 ? ' has' : 's have'} no recorded cost, so I can’t say whether ${unknown.length === 1 ? 'it was' : 'they were'} over ${centsLabel(threshold!)}: ${unknown.map((task) => task.title).join(', ')}.`
+      : '';
+    const summary = restricted
+      ? 'Maintenance costs are redacted for the VIEWER role.'
+      : hasThreshold
+        ? (matched.length === 0
+          ? `No completed maintenance task has a recorded cost over ${centsLabel(threshold!)}.${unknownNote}`
+          : `${matched.length} completed maintenance task(s) cost more than ${centsLabel(threshold!)}: ${named}.${unknownNote}`)
+        : (matched.length === 0 ? 'No completed maintenance tasks are recorded.' : `${matched.length} completed maintenance task(s): ${named}.`);
+    const finalized = finalizeReceiptAndPresentation({
+      facet,
+      snapshot,
+      role,
+      projection: 'LIST',
+      operationAdapter: adapterId,
+      sourceType: 'PropertyMaintenanceTask',
+      predicateIds: evaluateWherePredicates(facet.where),
+      rows: restricted ? [] : rows,
+      title: hasThreshold ? 'Completed maintenance over a cost' : 'Completed maintenance tasks',
+      summaryBody: summary,
+      variantId: 'variant.maintenance_list',
+    });
+    return {
+      facetId: facet.id,
+      owner,
+      status: 'EXECUTED',
+      summary,
+      recordIds: restricted ? [] : rows.map((r) => r.id),
+      rows: finalized.rows,
+      missingSlots: [],
+      redactedFieldIds,
+      receipt: finalized.receipt,
+      entailment: finalized.entailment,
+      presentationEquivalence: finalized.equivalence,
+      blocks: finalized.blocks,
+    };
+  }
 
   if (job === 'query.maintenance_task.filter') {
     const categories = firstPredicateTargetCategorySet(facet.where);

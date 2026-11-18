@@ -24,6 +24,8 @@ export type SemanticWhereExpression =
       enumStatus?: string;
       /** Whole years for an age comparison ("older than 10 years"); only a predicate registered as numeric uses it. */
       thresholdYears?: number;
+      /** Strictly-greater-than cost threshold in whole cents ("cost over $1,000"); only a predicate registered as cost-filtered uses it. */
+      amountOverCents?: number;
     }
   | { kind: 'AND' | 'OR'; operands: SemanticWhereExpression[] }
   | { kind: 'NOT'; operand: SemanticWhereExpression };
@@ -54,6 +56,7 @@ const RegisteredPredicateExpressionSchema = z.object({
   targetCategorySet: z.array(z.string().min(1)).min(1).optional(),
   enumStatus: z.string().min(1).optional(),
   thresholdYears: z.number().int().min(1).max(100).optional(),
+  amountOverCents: z.number().int().min(0).max(100_000_000_000).optional(),
 }).strict().superRefine((predicate, context) => {
   if (!findSemanticPredicateRegistration(predicate.predicateId, predicate.relationPathId)) {
     context.addIssue({ code: z.ZodIssueCode.custom, message: 'predicate and relation path must be registered together' });
