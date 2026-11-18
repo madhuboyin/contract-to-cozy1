@@ -3505,27 +3505,49 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
       .filter((f) => f.recordIds.length > 0 && f.receipt && f.receipt.projection !== 'COUNT')
       .map((facetResult) => {
         const rowById = new Map((facetResult.rows ?? []).map((row) => [row.id, row]));
+        const sourceType = facetResult.receipt?.provenance.sourceType;
+        const entityType = sourceType === 'Claim' ? 'CLAIM' : sourceType === 'PropertyPermitRecord' ? 'PERMIT_RECORD' : undefined;
         return {
           id: `section-${facetResult.facetId}`,
           title: facetTitle(facetResult),
           count: facetResult.recordIds.length,
+          sourceType,
           items: facetResult.recordIds.map((id) => {
             const row = rowById.get(id);
             return {
               id,
               title: row?.label && row.label.trim().length > 0 ? row.label : 'Record',
               ...(row?.subtitle ? { description: row.subtitle } : {}),
-              meta: [] as string[],
+              ...(row?.subtitle ? { status: row.subtitle } : {}),
+              ...(entityType ? { entityType } : {}),
+              meta: row?.subtitle ? [row.subtitle] : [] as string[],
+              actions: [],
             };
           }),
         };
       });
-    if (listSections.length > 0) {
+    // Compound execution must preserve the canonical inline-detail surface for grounded claims and permits. Flattening
+    // these facets into the generic list made rows look interactive while leaving them as static labels.
+    for (const section of listSections.filter((candidate) => candidate.sourceType === 'Claim' || candidate.sourceType === 'PropertyPermitRecord')) {
+      blocks.push({
+        type: 'GROUPED_LIST',
+        id: section.sourceType === 'Claim' ? 'incident-claim-list' : 'permit-tracker-permits',
+        title: section.title,
+        sections: [{ id: section.id, title: section.title, count: section.count, items: section.items }],
+        actions: [],
+        filters: [],
+        listDensity: 'DENSE',
+      });
+    }
+    const genericSections = listSections
+      .filter((candidate) => candidate.sourceType !== 'Claim' && candidate.sourceType !== 'PropertyPermitRecord')
+      .map(({ sourceType: _sourceType, ...section }) => section);
+    if (genericSections.length > 0) {
       blocks.push({
         type: 'GROUPED_LIST',
         id: 'cross-domain-grouped-list',
         title: 'Matching home records',
-        sections: listSections,
+        sections: genericSections,
         actions: [],
         filters: [],
         listDensity: 'DENSE',

@@ -23,6 +23,7 @@ import { InventoryResultList } from '../InventoryResultList';
 import { MaintenanceResultList } from '../MaintenanceResultList';
 import { MaintenanceForecastResultList } from '../MaintenanceForecastResultList';
 import { ClaimResultList } from '../ClaimResultList';
+import { PermitResultList } from '../PermitResultList';
 import { InspectionFindingResultList } from '../InspectionFindingResultList';
 import { SellerPrepItemResultList } from '../SellerPrepItemResultList';
 import { BuyerTaskResultList } from '../BuyerTaskResultList';
@@ -1079,6 +1080,9 @@ const DeclaredListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   if (block.id === 'incident-claim-list') {
     return <NotedClaimResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onFilter={onFilterClick} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
+  }
+  if (block.id === 'permit-tracker-permits') {
+    return <PermitResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost} />;
   }
   return <GenericGroupedListBlock {...props} />;
 };

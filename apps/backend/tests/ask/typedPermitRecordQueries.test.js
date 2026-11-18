@@ -85,9 +85,13 @@ test('open claims or pending permits answers both parts', async () => {
   assert.match(summary, /3 open permit\(s\)/);
   assert.doesNotMatch(summary, /couldn’t answer/);
   assert.equal(result.blocks[0].title, 'Claims and Permits');
-  const records = result.blocks.find((block) => block.type === 'GROUPED_LIST');
-  assert.equal(records.title, 'Matching home records');
-  assert.equal(records.listDensity, 'DENSE');
+  const records = result.blocks.filter((block) => block.type === 'GROUPED_LIST');
+  assert.deepEqual(records.map((block) => block.id), ['incident-claim-list', 'permit-tracker-permits']);
+  assert.deepEqual(records.flatMap((block) => block.sections.flatMap((section) => section.items.map((item) => item.entityType))), [
+    ...Array(execution.facetResults[0].recordIds.length).fill('CLAIM'),
+    ...Array(execution.facetResults[1].recordIds.length).fill('PERMIT_RECORD'),
+  ]);
+  assert.ok(records.every((block) => block.listDensity === 'DENSE'));
 });
 
 test('what the rule cannot answer is named, not dropped; a bare permits question and the project question keep their routes', async () => {
