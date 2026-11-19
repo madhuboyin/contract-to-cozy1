@@ -113,3 +113,43 @@ test('one action per row: an aging appliance with no warranty link gets Record w
   const viewer = rows.enrichRowActions({ sourceOperationId: 'DATA_POINT_READ', role: 'VIEWER', rows: [{ id: 'a', label: 'Old Washer', entityType: 'INVENTORY_ITEM', states: ['age:OLDER_THAN_ASKED', 'warranty:NO_LINK_RECORDED'] }] });
   assert.deepEqual(viewer.actionsByRowId.get('a').map((action) => action.id), ['review-replacement-item']);
 });
+
+// ── maintenance tasks: Complete (primary) + Reschedule (additive) on open tasks ───────────────────────
+const taskAsk = (role, rawText = 'show maintenance tasks') => executeSemanticSlice({ rawText, snapshot: SLICE_SEEDED_PROPERTY_SNAPSHOT, auth: { ...SLICE_OWNER_AUTH, role } });
+
+test('an open maintenance task gets Complete then Reschedule; a completed task and a viewer get none', () => {
+  const owner = taskAsk('OWNER');
+  assert.equal(owner.status, 'ANSWERED');
+  const byId = new Map(listItems(owner).map((entry) => [entry.id, entry]));
+  const open = byId.get('maint-furnace-filter');
+  assert.equal(open.entityType, 'MAINTENANCE_TASK');
+  assert.deepEqual(open.actions.map((action) => [action.id, action.operationId, action.interactionType, action.message]), [
+    ['complete-maintenance-task', 'MAINTENANCE_TASK_COMPLETE', 'MUTATE_RECORD', 'Complete this maintenance task.'],
+    ['reschedule-maintenance-task', 'MAINTENANCE_TASK_UPDATE', 'MUTATE_RECORD', 'Reschedule this maintenance task.'],
+  ]);
+  assert.ok(byId.get('maint-water-heater-flush').actions?.length === 2, 'a pending task is open too');
+  assert.equal(byId.get('maint-fridge-coils').actions, undefined, 'a completed task has nothing to complete or reschedule');
+  const viewer = taskAsk('VIEWER');
+  assert.equal(listItems(viewer).filter((entry) => entry.actions?.length).length, 0, 'a viewer gets no write action');
+});
+
+test('the maintenance answer survives schema and trust validation for an owner; a viewer is stripped', () => {
+  const owner = taskAsk('OWNER');
+  for (const block of owner.operationResult.blocks) assert.ok(AskPresentationBlockSchema.safeParse(block).success, `${block.type} block is schema-valid`);
+  const actions = listItems(owner).find((entry) => entry.id === 'maint-furnace-filter').actions;
+  for (const action of actions) {
+    assert.equal(isAskActionApplicable({ action, operationId: 'DATA_POINT_READ', householdRole: 'OWNER', authoritativeSourceAvailable: true }), true, action.id);
+    assert.equal(isAskActionApplicable({ action, operationId: 'DATA_POINT_READ', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), false, action.id);
+  }
+});
+
+test('an additive row never makes a row eligible and does not take an extra inline slot', () => {
+  const task = (id, states) => ({ id, label: `Task ${id}`, entityType: 'MAINTENANCE_TASK', states });
+  const result = enrich([task('a', ['maintenance:OPEN']), task('b', [])], { presentation: 'MAINTENANCE_RESULT_LIST' });
+  assert.deepEqual(result.actionsByRowId.get('a').map((action) => action.id), ['complete-maintenance-task', 'reschedule-maintenance-task']);
+  assert.equal(result.actionsByRowId.has('b'), false);
+  const onlyAdditive = registry.ACTION_ENRICHMENT_REGISTRY.filter((entry) => entry.additive);
+  assert.equal(enrich([task('a', ['maintenance:OPEN'])], { entries: onlyAdditive }).actionsByRowId.size, 0);
+  const many = Array.from({ length: 7 }, (_, index) => task(`t${index}`, ['maintenance:OPEN']));
+  assert.equal(enrich(many).actionsByRowId.size, registry.ACTION_ENRICHMENT_MAX_INLINE_ROWS, 'two actions on a row still count as one eligible row');
+});

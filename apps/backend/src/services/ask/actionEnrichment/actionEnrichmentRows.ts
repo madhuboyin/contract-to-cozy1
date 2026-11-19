@@ -83,17 +83,19 @@ export function enrichRowActions(input: {
   let overflowCount = 0;
   for (const row of input.rows) {
     if (!row.entityType) continue;
-    // At most one primary remediation action per row: the first matching registry row wins.
-    const entry = entries.find((candidate) => candidate.entityType === row.entityType
+    // At most one PRIMARY remediation action per row: the first matching non-additive registry row wins.
+    const matches = (candidate: ActionEnrichmentEntry) => candidate.entityType === row.entityType
       && row.states.includes(candidate.predicateState)
       && roleSatisfiesDestination(input.role, candidate.destinationOperationId)
-      && messageFor(candidate, row.label) !== null);
+      && messageFor(candidate, row.label) !== null;
+    const entry = entries.find((candidate) => !candidate.additive && matches(candidate));
     if (!entry) continue;
-    const message = messageFor(entry, row.label) as string;
+    // Additive rows add a secondary action beside the primary one (for example Reschedule beside Complete); they never make a row eligible.
+    const chosen = [entry, ...entries.filter((candidate) => candidate.additive && candidate.id !== entry.id && matches(candidate))];
     eligible += 1;
-    // Ineligible rows never count toward the limit. Past it, a row keeps its action only where an existing detail surface can host it.
+    // Ineligible rows never count toward the limit. Past it, a row keeps its actions only where an existing detail surface can host them.
     if (eligible > ACTION_ENRICHMENT_MAX_INLINE_ROWS && !detailHosted) { overflowCount += 1; continue; }
-    actionsByRowId.set(row.id, [toAction(entry, message)]);
+    actionsByRowId.set(row.id, chosen.map((candidate) => toAction(candidate, messageFor(candidate, row.label) as string)));
   }
   return { actionsByRowId, overflowCount };
 }

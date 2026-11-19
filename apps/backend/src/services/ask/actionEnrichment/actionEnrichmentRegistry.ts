@@ -42,11 +42,18 @@ export interface ActionEnrichmentEntry {
   readonly placement: ActionEnrichmentPlacement;
   /** Presentation that renders the row; required for DETAIL placement. */
   readonly presentation?: string;
+  /**
+   * An additive row never makes a row eligible by itself and does not count toward the inline limit: it adds a secondary action beside the row's
+   * one primary action when its own state and role checks pass (for example Reschedule beside Complete). Default false: one primary action per row.
+   */
+  readonly additive?: boolean;
 }
 
 /** What a presentation can host. Only the inventory result list opens an inline detail surface today (FRD §2 FR-ACT-4). */
 export const ACTION_ENRICHMENT_PRESENTATIONS: Readonly<Record<string, { readonly supportsDetailPlacement: boolean }>> = Object.freeze({
   INVENTORY_RESULT_LIST: { supportsDetailPlacement: true },
+  // The maintenance list shows five tasks per section with "show more" and opens a task detail drawer that carries the task's actions.
+  MAINTENANCE_RESULT_LIST: { supportsDetailPlacement: true },
 });
 
 /**
@@ -85,6 +92,37 @@ export const ACTION_ENRICHMENT_REGISTRY: readonly ActionEnrichmentEntry[] = Obje
     effect: 'READ',
     placement: 'INLINE',
     presentation: 'INVENTORY_RESULT_LIST',
+  },
+  {
+    // The same launch the Maintenance result's own Complete button uses: launchContext MAINTENANCE_TASK + the task id resolves the exact task
+    // (no free-text matching), the confirmation re-authorizes at CONTRIBUTOR, and the confirm handler re-reads the task.
+    id: 'maintenance-open-complete',
+    sourceOperationId: 'DATA_POINT_READ',
+    predicateState: 'maintenance:OPEN',
+    entityType: 'MAINTENANCE_TASK',
+    actionId: 'complete-maintenance-task',
+    label: 'Complete',
+    message: 'Complete this maintenance task.',
+    style: 'PRIMARY',
+    destinationOperationId: 'MAINTENANCE_TASK_COMPLETE',
+    effect: 'MUTATION',
+    placement: 'INLINE',
+    presentation: 'MAINTENANCE_RESULT_LIST',
+  },
+  {
+    id: 'maintenance-open-reschedule',
+    sourceOperationId: 'DATA_POINT_READ',
+    predicateState: 'maintenance:OPEN',
+    entityType: 'MAINTENANCE_TASK',
+    actionId: 'reschedule-maintenance-task',
+    label: 'Reschedule',
+    message: 'Reschedule this maintenance task.',
+    style: 'SECONDARY',
+    destinationOperationId: 'MAINTENANCE_TASK_UPDATE',
+    effect: 'MUTATION',
+    placement: 'INLINE',
+    presentation: 'MAINTENANCE_RESULT_LIST',
+    additive: true,
   },
 ]);
 

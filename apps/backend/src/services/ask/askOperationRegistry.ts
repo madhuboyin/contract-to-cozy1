@@ -464,7 +464,7 @@ export type AskPropertyRoleFloor = 'VIEWER' | 'CONTRIBUTOR' | 'OWNER' | null;
  * Entity types an action launched from a result row may target. Declared on the operation (Actionable Result Enrichment FRD §4.1); the closed set
  * grows only when a registry row needs a new type.
  */
-export type AskActionEntityType = 'INVENTORY_ITEM' | 'WARRANTY' | 'WORK_ITEM' | 'HOME_EVENT';
+export type AskActionEntityType = 'INVENTORY_ITEM' | 'WARRANTY' | 'WORK_ITEM' | 'HOME_EVENT' | 'MAINTENANCE_TASK';
 
 export interface AskOperationDefinition extends AskOperationResolution {
   /**
@@ -740,8 +740,8 @@ const definition = (
 export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOperationDefinition>> = Object.freeze({
   MAINTENANCE_STATUS: definition('MAINTENANCE_STATUS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'maintenance.status', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   MAINTENANCE_TASK_CREATE: definition('MAINTENANCE_TASK_CREATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'maintenance.create', ['SUMMARY', 'WORKFLOW_PROGRESS', 'OUTPUT_ARTIFACTS']),
-  MAINTENANCE_TASK_COMPLETE: definition('MAINTENANCE_TASK_COMPLETE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'maintenance.complete', ['SUMMARY', 'WORKFLOW_PROGRESS']),
-  MAINTENANCE_TASK_UPDATE: definition('MAINTENANCE_TASK_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'maintenance.update', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS']),
+  MAINTENANCE_TASK_COMPLETE: definition('MAINTENANCE_TASK_COMPLETE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'maintenance.complete', ['SUMMARY', 'WORKFLOW_PROGRESS'], ['MAINTENANCE_TASK']),
+  MAINTENANCE_TASK_UPDATE: definition('MAINTENANCE_TASK_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'maintenance.update', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS'], ['MAINTENANCE_TASK']),
   MAINTENANCE_FORECAST: definition('MAINTENANCE_FORECAST', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'maintenance.forecast', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'BOUNDARY']),
   COVERAGE_GAPS: definition('COVERAGE_GAPS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'coverage.review', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'BOUNDARY']),
   COVERAGE_COMPARISON_STATUS: definition('COVERAGE_COMPARISON_STATUS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'coverage.comparison-status', ['SUMMARY', 'GROUPED_LIST', 'COMPARISON', 'BOUNDARY']),

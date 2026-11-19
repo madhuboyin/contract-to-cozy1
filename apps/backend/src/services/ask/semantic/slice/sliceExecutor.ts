@@ -780,11 +780,23 @@ function executeValidatedSlicePlan(input: {
       observedAt: `${snapshot.asOfDate}T00:00:00.000Z`,
       answerVariantId,
     });
+    // Action Enrichment FRD: an open task gets Complete and Reschedule from the registry (a viewer gets neither; confirmation re-authorizes either way).
+    const taskEnrichment = projection === 'COUNT' ? null : enrichRowActions({
+      sourceOperationId: 'DATA_POINT_READ',
+      role: auth.role,
+      presentation: 'MAINTENANCE_RESULT_LIST',
+      rows: matchingTasks.map((task) => ({
+        id: task.id, label: task.title, entityType: 'MAINTENANCE_TASK',
+        states: task.status === 'PENDING' || task.status === 'IN_PROGRESS' || task.status === 'PAST_DUE' ? ['maintenance:OPEN'] : [],
+      })),
+    });
     const rows: SlicePresentationRow[] = projection === 'COUNT'
       ? []
       : matchingTasks.map((task) => {
           const item = task.inventoryItemId ? accessibleItemsById.get(task.inventoryItemId) : undefined;
+          const taskActions = taskEnrichment?.actionsByRowId.get(task.id);
           return {
+            ...(taskActions ? { entityType: 'MAINTENANCE_TASK', actions: taskActions } : {}),
             id: task.id,
             label: task.title,
             subtitle: `Due ${task.nextDueDate}${item ? ` · Item: ${item.name}` : ''}`,
