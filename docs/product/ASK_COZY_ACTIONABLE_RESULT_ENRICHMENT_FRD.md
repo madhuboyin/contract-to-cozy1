@@ -1,6 +1,8 @@
 # Ask Cozy — Actionable Result Enrichment FRD
 
-**Status:** Draft v1.8 — build steps 1-5 implemented for the v1 rows below; not browser-verified; owner decisions listed in section 13
+**Status:** Draft v1.9 — build steps 1-5 implemented; Review replacement moved to a pure verdict; not browser-verified; DB concurrency criterion open; owner decisions recorded in section 13
+
+**v1.9 amendment (2026-11-18):** Applies the v1.8 review. (P1) `READ` validation now also requires persistence class `NONE` from `writeCapability.ts` (new boot-fatal code `READ_DESTINATION_PERSISTS`); the Review replacement row now launches the pure `ITEM_REPAIR_REPLACE_VERDICT` (preview mode, saves nothing) instead of `REPLACEMENT_GUIDANCE`, which persists a `ReplaceRepairAnalysis` and may start an HVAC decision thread. (P2/P3) Stale sections 1, 3, 7, 8 and 11 corrected. The concurrency criterion stays open. Owner rulings on the eight decisions are recorded in section 13.
 
 **v1.8 amendment (2026-11-18):** Records build steps 3-5: the warranty coverage guard (shared normalization, classification, advisory lock, single-use override), the item-targeted "Record warranty" slice with the non-confirming duplicate result, per-row enrichment wired into the semantic inventory presentation and the compound assembly, the first read row ("Review replacement"), and the rows deferred with reasons.
 
@@ -34,7 +36,7 @@
 
 A dedicated Warranty result offers an "Add a warranty" action. The same underlying fact ("this appliance has no warranty") shown through a compound or semantic inventory result offers nothing. The user sees the problem and has no next step.
 
-Actions are lost at two independent points:
+Actions were lost at two independent points (**resolved in Step 4**: the adapter now carries registry-declared row actions and the trust policy consults the generated allowlist; the history is kept for context):
 
 1. **Presentation.** **[reported]** `semantic/slice/richPresentationAdapter.ts` rebuilds rows without an action field (`SlicePresentationRow` has none, rows reconstructed near line 71, the grouped list always receives `actions: []` near line 84).
 2. **Trust validation.** **[verified]** `askAnswerTrustPolicy.ts` rejects any action id not declared in `OPERATION_ACTION_IDS` for the source operation (around lines 116 and 591).
@@ -102,8 +104,8 @@ The canonical **user-visible** label, title and workflow copy for recording an e
 
 | Action | Status |
 |---|---|
-| Record warranty | Property-wide workflow exists; item-targeted capture does not |
-| Review replacement | `REPLACEMENT_GUIDANCE` with an inventory-item target |
+| Record warranty | Implemented (Step 4): item-targeted capture with the coverage guard |
+| Review replacement | Implemented (Step 5): pure `ITEM_REPAIR_REPLACE_VERDICT` with an inventory-item target (v1.9; not `REPLACEMENT_GUIDANCE`) |
 | Reschedule maintenance | Maintenance update/confirmation flow |
 | Mark maintenance complete | Existing confirmation-gated maintenance operation |
 | Record permit | `PERMIT_TRACKER_COMMAND`, Contributor+ |
@@ -269,11 +271,11 @@ Warranty slice additionally:
 - same execution with a different input/idempotency hash: rejected as an idempotency conflict;
 - override fingerprint copied to a different execution or user: rejected;
 - a completed override cannot authorize a new write;
-- two separate executions with identical input run concurrently: exactly one creation and one exact-duplicate result (not merely one rejected promise);
+- two separate executions with identical input run concurrently: exactly one creation and one exact-duplicate result (not merely one rejected promise). **OPEN: only a simulated serialized store has run; this criterion is not satisfied until a real-PostgreSQL test (two independent transactions, item target and the PROPERTY sentinel) passes;**
 - exactly one refresh invocation for the source execution after confirm;
 - exact-duplicate result is terminal `ANSWERED`, contains no confirmation object, pending capture request, consent checkbox, confirm button or server Cancel action, and its inline disclosure opens the existing warranty;
 - a candidate with same provider and policy number but different scope is classified as a conflict (precedence test);
-- a mutating registry action with a non-confirming destination yields a `BOOT_FATAL` issue, while a read action targeting `REPLACEMENT_GUIDANCE` does not;
+- a mutating registry action with a non-confirming destination yields a `BOOT_FATAL` issue, while a read action targeting a persisting destination such as `REPLACEMENT_GUIDANCE` yields `READ_DESTINATION_PERSISTS`, while one targeting `ITEM_REPAIR_REPLACE_VERDICT` does not;
 - a block with several sections shows at most five inline actions, and ineligible rows do not consume the five.
 
 ## 8. Build order
@@ -282,7 +284,7 @@ Warranty slice additionally:
 2. Label migration (its own commit).
 3. Shared normalization, equivalent-coverage check and advisory lock in the warranty confirm path.
 4. Item-level "Record warranty" vertical slice with the full matrix, including the non-confirming exact-duplicate block.
-5. Remaining rows, each a registry row plus a test: Review replacement, Attach document, maintenance reschedule/complete, then permit, recall and inventory details after each destination is re-verified.
+5. Review replacement: **done** (pure verdict, v1.9). Remaining rows, each a registry row plus a test, in the owner-ruled order (section 13): maintenance complete/reschedule, add missing inventory details, record permit, recall confirm/dismiss, seller-readiness actions, attach document (after an upload-start contract exists). Open claim is not generic enrichment.
 
 An FRD update is part of each step's definition of done.
 
@@ -304,7 +306,14 @@ An FRD update is part of each step's definition of done.
 
 ## 11. Verification status
 
-Nothing in this FRD has been implemented, executed or browser-verified. Code references marked **[verified]** were read in this review; those marked **[reported]** come from the second reviewer and must be re-checked at implementation time.
+| Area | Status |
+|---|---|
+| Registry validation, generated allowlist, row eligibility/overflow, warranty classification, fingerprint, review step, confirm-time guard logic | Executed (unit tests; backend typecheck clean) |
+| Frontend inventory list inline actions and five-row limit | Executed (jest, jsdom) only |
+| Advisory lock under real concurrency | **Not verified** (simulated serialized store only; criterion in section 7 open) |
+| Launching `ITEM_REPAIR_REPLACE_VERDICT` from a row end to end (declared internal-operation launch) | Code-traced, not executed |
+| Compound multi-facet action pass-through | Typechecked and code-traced, not executed |
+| Five-row limit and detail placement, fixed-appliance review card, exact-duplicate inline record, overlap "Record anyway" layout | **Not verified: needs a browser** |
 
 ## 12. Implementation status
 
@@ -358,13 +367,15 @@ Not verified: browser behaviour (nothing is rendered yet); the first-step claim 
 
 **Verification actually performed (not browser-verified):** backend typecheck; the new registry, rows, guard and review tests; the existing import-graph guardrail (no cycle) and startup/inventory/runtime suites, whose pre-existing failures are unchanged; frontend jest for the inventory list. The advisory lock is exercised only against a **simulated serialized store**, not a real PostgreSQL concurrent transaction; Playwright was not run; the compound multi-facet pass-through is code-traced and typechecked, not exercised end to end.
 
-## 13. Decisions for the owner
+## 13. Owner decisions (rulings received 2026-11-18)
 
-1. **Desktop "Add a warranty" copy:** rename the three non-Ask surfaces (`coverage/[itemId]/page.tsx`, `HomeRecordsClient.tsx`, `SellerPrepEntryFlowGate.tsx`) too, or leave them?
-2. **Terminal conflict vs re-arm:** v1 ends a changed-coverage confirmation in the existing terminal conflict result (start Record warranty again). Accept, or build a governed re-arm in the confirmation engine?
-3. **Appliance as a "fixed form field":** the capture form has no read-only field type, so the appliance is named in the form question and shown as a fixed "Appliance" field on the review card. Accept, or add a read-only capture field type?
-4. **Explicit "no coverage" items:** they are not offered Record warranty (it would create a conflicting link). Should they instead be offered a "Change coverage status" step, or stay as is?
-5. **Property-wide Record warranty from Ask today:** the existing form creates only `HOME_WARRANTY_PLAN` warranties, because any other category needs an inventory item and the form never supplied one (the writer rejects it). Fix by guiding a non-plan category to an item pick, or leave plan-only?
-6. **Deferred rows (section 12):** which to build next, in what order?
-7. **Review replacement's persistence:** accept the persisted `ReplaceRepairAnalysis` as acceptable for a `READ` row, or require a non-persisting variant for list launches?
-8. **Real concurrency test:** the advisory lock was tested against a simulated store. Add a real-PostgreSQL concurrency test (needs a test database), or accept?
+1. **Desktop copy: rename** the three surfaces with context-sensitive copy (coverage page and seller-prep CTA: "Record warranty"; Home Records sentence: "Record a warranty, or add a receipt, inspection report, or another file…"). Routing synonyms unchanged. **Not yet done.**
+2. **Terminal conflict kept for v1.** No re-arm. Future: an Ask-native "Review current coverage" action that starts a fresh execution.
+3. **Fixed-appliance presentation accepted;** no read-only field type until a second workflow needs fixed targets.
+4. **Add an "Update coverage status" flow** for explicit no-coverage items (show status, correcting vs newly obtained, confirm superseding, then launch item capture). Until it exists the action stays absent. **Not yet built.**
+5. **Property-wide capture plan-only, made explicit:** rename to "Record home warranty plan", expose only `HOME_WARRANTY_PLAN`; other categories need an item picker first. **Not yet built.**
+6. **Deferred order:** maintenance complete/reschedule; add missing inventory details; record permit; recall confirm/dismiss; seller-readiness actions; attach document (after an upload-start contract); claims stay inline details/view actions.
+7. **Non-persisting replacement analysis for list rows: done in v1.9** (pure verdict; registry now enforces persistence class `NONE` for `READ` rows).
+8. **Real PostgreSQL concurrency test required** before the criterion closes; needs a DB-capable environment. Open.
+
+Browser verification remains required for the items marked in section 11.

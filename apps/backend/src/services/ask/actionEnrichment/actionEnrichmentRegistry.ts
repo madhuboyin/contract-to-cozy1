@@ -10,8 +10,9 @@
  */
 import { ASK_OPERATION_DEFINITIONS, type AskActionEntityType, type AskOperationId } from '../askOperationRegistry';
 import { getAskDomainCommandByOperation } from '../askDomainCommandRegistry';
+import { persistenceClassOf } from '../support/writeCapability';
 
-/** READ: starts a non-mutating operation (a read, analysis or inline detail). MUTATION: starts a confirmation-gated command. Declared, never inferred from the id or label. */
+/** READ: starts an operation whose persistence class is NONE (validated against writeCapability, not just the absence of a confirmation).  MUTATION: starts a confirmation-gated command. Declared, never inferred from the id or label. */
 export type ActionEnrichmentEffect = 'READ' | 'MUTATION';
 
 /** INLINE: shown on the row. DETAIL: shown inside an existing detail surface, only on a presentation that declares support. */
@@ -71,7 +72,7 @@ export const ACTION_ENRICHMENT_REGISTRY: readonly ActionEnrichmentEntry[] = Obje
     presentation: 'INVENTORY_RESULT_LIST',
   },
   {
-    // A read, not a write: it opens the repair-or-replace analysis for that one appliance (the same launch the focused-guidance cards use).
+    // A pure read: the repair-or-replace verdict for that one appliance, computed in preview mode. It persists nothing (the ordinary REPLACEMENT_GUIDANCE turn saves an analysis and may start an HVAC decision thread, so it is not used for a list row).
     id: 'inventory-aging-review-replacement',
     sourceOperationId: 'DATA_POINT_READ',
     predicateState: 'age:OLDER_THAN_ASKED',
@@ -80,7 +81,7 @@ export const ACTION_ENRICHMENT_REGISTRY: readonly ActionEnrichmentEntry[] = Obje
     label: 'Review replacement',
     message: 'Should I repair or replace {item}?',
     style: 'SECONDARY',
-    destinationOperationId: 'REPLACEMENT_GUIDANCE',
+    destinationOperationId: 'ITEM_REPAIR_REPLACE_VERDICT',
     effect: 'READ',
     placement: 'INLINE',
     presentation: 'INVENTORY_RESULT_LIST',
@@ -139,6 +140,9 @@ export function validateActionEnrichmentRegistry(
         if (destination.semantic.effect !== 'WRITE') add('BOOT_FATAL', 'EFFECT_CONTRADICTS_OPERATION', entry, `declared MUTATION but ${entry.destinationOperationId} is ${destination.semantic.effect}`);
       } else {
         if (command || destination.semantic.effect === 'WRITE') add('BOOT_FATAL', 'READ_DESTINATION_MUTATING', entry, `declared READ but ${entry.destinationOperationId} is a mutating operation`);
+        // A list-row READ must persist nothing at all: no analysis row, no decision thread, no reconciliation (P1 review). TECHNICAL/DERIVED are not accepted either.
+        const persistence = persistenceClassOf(entry.destinationOperationId);
+        if (persistence !== 'NONE') add('BOOT_FATAL', 'READ_DESTINATION_PERSISTS', entry, `declared READ but ${entry.destinationOperationId} has persistence class ${persistence}`);
       }
       // §4.1: the operation's own declaration is the only source. A missing declaration is as fatal as a mismatch.
       const supported = destination.supportedActionEntityTypes;

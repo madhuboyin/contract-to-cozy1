@@ -88,7 +88,7 @@ test('"older than 10 years": the aging appliance gets Review replacement, naming
     assert.deepEqual(entries.map((entry) => entry.title), ['Furnace']);
     const [action] = entries[0].actions;
     assert.deepEqual([action.id, action.label, action.operationId, action.interactionType, action.message],
-      ['review-replacement-item', 'Review replacement', 'REPLACEMENT_GUIDANCE', 'CONVERSATION_CONTINUE', 'Should I repair or replace Furnace?']);
+      ['review-replacement-item', 'Review replacement', 'ITEM_REPAIR_REPLACE_VERDICT', 'CONVERSATION_CONTINUE', 'Should I repair or replace Furnace?']);
     assert.equal(entries[0].entityType, 'INVENTORY_ITEM');
     for (const block of result.operationResult.blocks) assert.ok(AskPresentationBlockSchema.safeParse(block).success);
     assert.equal(isAskActionApplicable({ action, operationId: 'DATA_POINT_READ', householdRole: role, authoritativeSourceAvailable: true }), true);

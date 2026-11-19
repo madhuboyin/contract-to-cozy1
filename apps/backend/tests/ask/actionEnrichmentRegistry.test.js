@@ -29,8 +29,8 @@ test('every shipped row\'s canned message equals the destination handler\'s decl
 
 test('a well-formed mutation row and a declared read row validate cleanly; a read destination with no entity-type declaration does not', () => {
   assert.deepEqual(codes([row()]), []);
-  // REPLACEMENT_GUIDANCE is a Viewer-accessible read that declares the entity type it accepts.
-  const read = row({ id: 'row-2', actionId: 'review-replacement', message: 'Should I repair or replace {item}?', destinationOperationId: 'REPLACEMENT_GUIDANCE', effect: 'READ' });
+  // ITEM_REPAIR_REPLACE_VERDICT is a Viewer-accessible read that declares the entity type it accepts.
+  const read = row({ id: 'row-2', actionId: 'review-replacement', message: 'Should I repair or replace {item}?', destinationOperationId: 'ITEM_REPAIR_REPLACE_VERDICT', effect: 'READ' });
   assert.deepEqual(registry.validateActionEnrichmentRegistry([read]).map((issue) => issue.code), []);
   // A read destination that declares nothing is fatal, even though it is not a write.
   const undeclared = row({ id: 'row-3', actionId: 'show-status', destinationOperationId: 'MAINTENANCE_STATUS', effect: 'READ' });
@@ -89,4 +89,12 @@ test('startup registration reports no enrichment issues and overflow copy is the
   assert.deepEqual(validateAskRuntimeRegistration().filter((issue) => issue.startsWith('action enrichment')), []);
   assert.equal(registry.ACTION_ENRICHMENT_MAX_INLINE_ROWS, 5);
   assert.equal(registry.actionEnrichmentOverflowCopy(3), '3 more matching items — narrow your question to act on them.');
+});
+
+test('a READ row whose destination persists anything is boot-fatal (REPLACEMENT_GUIDANCE saves an analysis; the pure verdict does not)', () => {
+  const persisting = row({ id: 'row-p', actionId: 'review-replacement', message: 'Should I repair or replace {item}?', destinationOperationId: 'REPLACEMENT_GUIDANCE', effect: 'READ' });
+  assert.ok(codes([persisting]).includes('BOOT_FATAL:READ_DESTINATION_PERSISTS'));
+  const shipped = registry.ACTION_ENRICHMENT_REGISTRY.filter((entry) => entry.effect === 'READ');
+  assert.ok(shipped.length > 0);
+  assert.deepEqual(registry.validateActionEnrichmentRegistry(shipped).map((issue) => issue.code), []);
 });
