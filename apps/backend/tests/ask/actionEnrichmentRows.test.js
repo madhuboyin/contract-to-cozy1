@@ -167,3 +167,25 @@ test('a row with missing brand/model/serial gets Add missing details for a contr
   const both = enrich([{ ...missing, states: ['details:MISSING', 'warranty:NO_LINK_RECORDED'] }]);
   assert.deepEqual(both.actionsByRowId.get('a').map((action) => action.id), ['record-warranty-item']);
 });
+
+// ── shared "missing correctable fields" judgement + the widened semantic gate ──────────────────────────
+const { missingCorrectableFields } = require('../../src/services/ask/support/inventoryMissingFields');
+
+test('the shared judgement covers exactly the four correctable fields, in a fixed order; documents and coverage are not part of it', () => {
+  assert.deepEqual(missingCorrectableFields({}), ['purchasedOn', 'brand', 'model', 'serialNo']);
+  assert.deepEqual(missingCorrectableFields({ manufacturer: 'Bosch', modelNumber: 'X', serialNumber: 'S' }), ['purchasedOn']);
+  assert.deepEqual(missingCorrectableFields({ brand: 'B', model: 'M', serialNo: 'S', purchasedOn: '2020-01-01' }), []);
+});
+
+test('a plain inventory list (no warranty or age in the question) offers Add missing details only on rows missing a correctable field, never for a viewer or a count', () => {
+  const complete = item('c1', 'Complete Dryer', { brand: 'B', modelNumber: 'M', serialNumber: 'S', purchasedOn: '2020-01-01' });
+  const noPurchase = item('c2', 'Undated Washer', { brand: 'B', modelNumber: 'M', serialNumber: 'S', purchasedOn: null });
+  const snapshot = { ...SLICE_SEEDED_PROPERTY_SNAPSHOT, items: [complete, noPurchase] };
+  const run = (rawText, role) => executeSemanticSlice({ rawText, snapshot, auth: { ...SLICE_OWNER_AUTH, role } });
+  const owner = run('List my appliances', 'OWNER');
+  const flagged = listItems(owner).filter((entry) => entry.actions?.some((action) => action.id === 'complete-missing-details-item'));
+  assert.deepEqual(flagged.map((entry) => entry.title), ['Undated Washer']);
+  assert.equal(listItems(run('List my appliances', 'VIEWER')).some((entry) => entry.actions?.length), false);
+  const count = run('How many appliances do I have?', 'OWNER');
+  assert.equal(count.operationResult.blocks.some((block) => block.type === 'GROUPED_LIST' && block.sections.some((section) => section.items.some((entry) => entry.actions?.length))), false);
+});

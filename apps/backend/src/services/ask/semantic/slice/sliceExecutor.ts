@@ -1,4 +1,5 @@
 import { buildPayloadClarification } from '../../support/clarificationContract';
+import { missingCorrectableFields } from '../../support/inventoryMissingFields';
 import type { AskClarification } from '../../../../productFramework/ask/ask.contract';
 import { prisma } from '../../../../lib/prisma';
 import { AskConfirmationSchema } from '../../../../productFramework/ask/ask.contract';
@@ -53,6 +54,8 @@ export interface SliceInventoryItemRecord {
   readonly purchaseCostCents?: number | null;
   readonly replacementCostCents?: number | null;
   readonly installedOn?: string | null;
+  /** Recorded purchase date (YYYY-MM-DD); null/absent = not recorded. Read only by the shared missing-details judgement. */
+  readonly purchasedOn?: string | null;
   readonly condition?: 'GOOD_CONDITION' | 'FAIR_CONDITION' | 'POOR_CONDITION' | 'REPLACE_SOON' | string;
   readonly roomId?: string | null;
   readonly propertyPlanWarrantyId?: string | null;
@@ -980,7 +983,8 @@ function executeValidatedSlicePlan(input: {
   // An aging row (installed longer ago than the age the homeowner asked about, with a recorded install date) is also offered "Review replacement".
   const askedAges = positiveAgeThresholds(facet.where);
   const youngestAskedAge = askedAges.length > 0 ? Math.min(...askedAges) : null;
-  const enrichment = (isWarrantyRelation || youngestAskedAge !== null) && projection !== 'COUNT'
+  // Every row-bearing list is enriched: the same grounded item state yields the same next step whatever the question mentioned.
+  const enrichment = projection !== 'COUNT'
     ? enrichRowActions({
       sourceOperationId: 'DATA_POINT_READ',
       role: auth.role,
@@ -992,8 +996,8 @@ function executeValidatedSlicePlan(input: {
         states: [
           ...(isWarrantyRelation ? [`warranty:${warranty.state}`] : []),
           ...(youngestAskedAge !== null && isOlderThanYears(item, youngestAskedAge, snapshot.asOfDate) === true ? ['age:OLDER_THAN_ASKED'] : []),
-          // The snapshot carries brand, model and serial (not the purchase date), so only those establish "missing"; no false positive is possible.
-          ...(!item.brand || !item.modelNumber || !item.serialNumber ? ['details:MISSING'] : []),
+          // The one shared judgement of fields INVENTORY_ITEM_CORRECT can fill (brand, model, serial number, purchase date).
+          ...(missingCorrectableFields(item).length > 0 ? ['details:MISSING'] : []),
         ],
       })),
     })
@@ -1238,6 +1242,7 @@ export async function loadSlicePropertySnapshot(propertyId: string): Promise<Sli
         purchaseCostCents: true,
         replacementCostCents: true,
         installedOn: true,
+        purchasedOn: true,
         condition: true,
         roomId: true,
         coverageEvidenceStatus: true,
@@ -1311,6 +1316,7 @@ export async function loadSlicePropertySnapshot(propertyId: string): Promise<Sli
       purchaseCostCents: item.purchaseCostCents ?? null,
       replacementCostCents: item.replacementCostCents ?? null,
       installedOn: item.installedOn ? item.installedOn.toISOString().slice(0, 10) : null,
+      purchasedOn: item.purchasedOn ? item.purchasedOn.toISOString().slice(0, 10) : null,
       condition: String(item.condition),
       roomId: item.roomId ?? null,
       propertyPlanWarrantyId: item.warrantyApplicabilities[0]?.warrantyId ?? null,

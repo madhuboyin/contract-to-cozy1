@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { missingCorrectableFields } from '../support/inventoryMissingFields';
 import { listedItems, sourceRef, withSources } from '../composition/sourceAuthorization';
 import { isItemDocumentsMessage, itemDocumentsResult } from './inventoryDocumentCommands.handler';
 import { inventoryDeleteResult, isInventoryDeleteMessage } from './inventoryDeleteCommands.handler';
@@ -67,12 +68,11 @@ export type InventoryMissingFactsInput = {
   documents: readonly unknown[]; linkedWarranties?: readonly unknown[]; insurancePolicyId: string | null; coverageEvidenceStatus: string;
 };
 
+const CORRECTABLE_FIELD_FACT_LABEL = { brand: 'Brand or manufacturer', model: 'Model', serialNo: 'Serial number', purchasedOn: 'Purchase date' } as const;
+
 export function inventoryMissingFacts(item: InventoryMissingFactsInput): string[] {
   return [
-    item.brand || item.manufacturer ? null : 'Brand or manufacturer',
-    item.model || item.modelNumber ? null : 'Model',
-    item.serialNo || item.serialNumber ? null : 'Serial number',
-    item.purchasedOn ? null : 'Purchase date',
+    ...missingCorrectableFields(item).map((field) => CORRECTABLE_FIELD_FACT_LABEL[field]),
     item.documents.length ? null : 'Documents',
     item.linkedWarranties?.length || item.insurancePolicyId || item.coverageEvidenceStatus !== 'UNKNOWN' ? null : 'Coverage evidence',
   ].filter((value): value is string => Boolean(value));
@@ -1014,12 +1014,7 @@ export function inventoryMissingCorrectionActions(
   canManage: boolean,
 ) {
   if (!canManage) return undefined;
-  const hasMissingFields = [
-    ...(!item.brand && !item.manufacturer ? ['brand' as const] : []),
-    ...(!item.model && !item.modelNumber ? ['model' as const] : []),
-    ...(!item.serialNo && !item.serialNumber ? ['serialNo' as const] : []),
-    ...(!item.purchasedOn ? ['purchasedOn' as const] : []),
-  ].length > 0;
+  const hasMissingFields = missingCorrectableFields(item).length > 0;
   const coverageUnknown = !item.linkedWarranties?.length && !item.insurancePolicyId && (!item.coverageEvidenceStatus || item.coverageEvidenceStatus === 'UNKNOWN');
   return [
     ...(hasMissingFields ? [{
@@ -1044,12 +1039,8 @@ export function inventoryMissingDetailCandidates(
   item: { id: string; name: string; updatedAt?: Date; brand?: string | null; manufacturer?: string | null; model?: string | null; modelNumber?: string | null; serialNo?: string | null; serialNumber?: string | null; purchasedOn?: Date | string | null },
   context: { propertyId: string; sourceOperationId: string | null; limit?: number },
 ): SuggestedNextActionCandidate[] {
-  const missing: Array<{ field: InventoryCorrectionField; outcomeKey: string }> = [
-    ...(!item.purchasedOn ? [{ field: 'purchasedOn' as const, outcomeKey: 'ADD_PURCHASE_DATE' }] : []),
-    ...(!item.brand && !item.manufacturer ? [{ field: 'brand' as const, outcomeKey: 'ADD_BRAND' }] : []),
-    ...(!item.model && !item.modelNumber ? [{ field: 'model' as const, outcomeKey: 'ADD_MODEL' }] : []),
-    ...(!item.serialNo && !item.serialNumber ? [{ field: 'serialNo' as const, outcomeKey: 'ADD_SERIAL_NUMBER' }] : []),
-  ];
+  const OUTCOME_KEYS = { purchasedOn: 'ADD_PURCHASE_DATE', brand: 'ADD_BRAND', model: 'ADD_MODEL', serialNo: 'ADD_SERIAL_NUMBER' } as const;
+  const missing: Array<{ field: InventoryCorrectionField; outcomeKey: string }> = missingCorrectableFields(item).map((field) => ({ field, outcomeKey: OUTCOME_KEYS[field] }));
   const shortName = item.name.length > 40 ? `${item.name.slice(0, 39)}…` : item.name;
   return missing.slice(0, context.limit ?? 3).map(({ field, outcomeKey }) => ({
     source: 'MISSING_DETAIL' as const,

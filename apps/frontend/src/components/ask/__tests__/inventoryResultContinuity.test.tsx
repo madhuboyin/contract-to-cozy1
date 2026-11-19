@@ -326,3 +326,12 @@ test('Review replacement shows inline as a read launch for that exact appliance'
   fireEvent.click(screen.getByRole('button', { name: 'Review replacement' }));
   expect(onAction).toHaveBeenCalledWith('INVENTORY_ITEM', 'item-0', 'Should I repair or replace Water heater?', 'REPLACEMENT_GUIDANCE', 'CONVERSATION_CONTINUE');
 });
+
+test('Add missing details shows inline on a row and launches INVENTORY_ITEM_CORRECT for that exact item', () => {
+  const missing = { id: 'complete-missing-details-item', label: 'Add missing details', message: 'Complete the missing details for this inventory item.', style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT' };
+  const incomplete = { ...block, sections: [{ ...block.sections[0], items: [{ ...block.sections[0].items[0], entityType: 'INVENTORY_ITEM', actions: [missing] }] }] } as typeof block;
+  const onAction = jest.fn();
+  render(<InventoryResultList block={incomplete} propertyId="home" onAction={onAction} onFilter={() => {}} onPage={() => {}} onAccessLost={() => {}} link={(_, label) => label} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Add missing details' }));
+  expect(onAction).toHaveBeenCalledWith('INVENTORY_ITEM', 'item-0', 'Complete the missing details for this inventory item.', 'INVENTORY_ITEM_CORRECT', 'MUTATE_RECORD');
+});
