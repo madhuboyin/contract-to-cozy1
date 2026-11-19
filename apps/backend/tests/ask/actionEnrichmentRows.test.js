@@ -24,7 +24,9 @@ test('an owner gets the governed action on a row whose state matches; a viewer g
 
 test('eligibility is per row: a missing id/type or a non-matching state loses its action without affecting siblings', () => {
   const result = enrich([row('ok'), row('no-type', { entityType: null }), row('other-state', { states: ['warranty:UNKNOWN'] }), row('explicit', { states: ['warranty:EXPLICIT_NO_COVERAGE'] }), row('wrong-type', { entityType: 'WARRANTY' }), row('ok2')]);
-  assert.deepEqual([...result.actionsByRowId.keys()], ['ok', 'ok2']);
+  // An explicit "no coverage" row is eligible for its own reconciling action (never Record warranty); unknown and conflicted rows get none.
+  assert.deepEqual([...result.actionsByRowId.keys()], ['ok', 'explicit', 'ok2']);
+  assert.equal(result.actionsByRowId.get('explicit')[0].id, 'update-coverage-status-item');
 });
 
 test('only the registry source operation matters, and one action per row', () => {
@@ -54,12 +56,14 @@ test('"appliances with no warranty": only items with no recorded link get Record
   const snapshot = snapshotWith([item('n1', 'Washer'), item('n2', 'Dryer')]);
   const owner = ask(snapshot, 'OWNER');
   const withAction = listItems(owner).filter((entry) => entry.actions?.length);
-  assert.deepEqual(withAction.map((entry) => entry.title).sort(), ['Dryer', 'Washer']);
-  for (const entry of withAction) {
+  assert.deepEqual(withAction.filter((entry) => entry.actions[0].id === 'record-warranty-item').map((entry) => entry.title).sort(), ['Dryer', 'Washer']);
+  for (const entry of withAction.filter((candidate) => candidate.title !== 'Dishwasher')) {
     assert.equal(entry.entityType, 'INVENTORY_ITEM');
     assert.equal(entry.actions[0].id, 'record-warranty-item');
   }
-  assert.ok(listItems(owner).some((entry) => entry.title === 'Dishwasher' && !entry.actions), 'an explicit "no coverage" item is not offered a conflicting record');
+  // An explicit "no coverage" item is never offered Record warranty (it would contradict the statement); it gets the reconciling step instead.
+  const explicit = listItems(owner).find((entry) => entry.title === 'Dishwasher');
+  assert.ok(!explicit.actions || explicit.actions.every((action) => action.id !== 'record-warranty-item'));
   const viewer = ask(snapshot, 'VIEWER');
   assert.equal(listItems(viewer).filter((entry) => entry.actions?.length).length, 0, 'a viewer gets no write action');
 });
@@ -74,7 +78,8 @@ test('the enriched answer survives schema validation and trust validation for an
 
 test('seven qualifying items keep the action on every row (the inventory list hosts overflow in its detail) with no overflow note', () => {
   const owner = ask(snapshotWith([...Array(7).keys()].map((index) => item(`n${index}`, `Appliance ${index}`))), 'OWNER');
-  assert.equal(listItems(owner).filter((entry) => entry.actions?.length).length, 7);
+  // 7 added items plus the seeded explicit-no-coverage Dishwasher, which now carries Update coverage status.
+  assert.equal(listItems(owner).filter((entry) => entry.actions?.length).length, 8);
   assert.ok(!owner.operationResult.blocks.find((block) => block.type === 'GROUPED_LIST').description.includes('narrow your question'));
 });
 
@@ -188,4 +193,11 @@ test('a plain inventory list (no warranty or age in the question) offers Add mis
   assert.equal(listItems(run('List my appliances', 'VIEWER')).some((entry) => entry.actions?.length), false);
   const count = run('How many appliances do I have?', 'OWNER');
   assert.equal(count.operationResult.blocks.some((block) => block.type === 'GROUPED_LIST' && block.sections.some((section) => section.items.some((entry) => entry.actions?.length))), false);
+});
+
+test('an explicit no-coverage row gets Update coverage status (COVERAGE_COMMAND, item launch), never Record warranty; a viewer gets none', () => {
+  const r = { id: 'a', label: 'Dishwasher', entityType: 'INVENTORY_ITEM', states: ['warranty:EXPLICIT_NO_COVERAGE', 'details:MISSING'] };
+  const owner = enrich([r]);
+  assert.deepEqual(owner.actionsByRowId.get('a').map((action) => [action.id, action.operationId, action.interactionType]), [['update-coverage-status-item', 'COVERAGE_COMMAND', 'MUTATE_RECORD']]);
+  assert.equal(enrich([r], { role: 'VIEWER' }).actionsByRowId.size, 0);
 });

@@ -23,7 +23,7 @@ import { getOrCreateCoverageReview } from '../../coverageReview.service';
 import { recordCoverageDecisionWithEffects } from '../../coverageDecisionOperations';
 import { GUIDANCE_STEP_REFUSAL_TEXT, guidanceStepIdFromSourceExecution, launchedGuidanceStepId, resolveGuidanceStepBinding } from '../support/guidanceStepBinding';
 import {
-  COVERAGE_COMMAND_ACTION_IDS, COVERAGE_COMMAND_MESSAGES, COVERAGE_COMPARISON_ENTITY_TYPE, COVERAGE_DECISIONS, COVERAGE_DECISION_CAPTURE_KEY,
+  COVERAGE_COMMAND_ACTION_IDS, COVERAGE_COMMAND_MESSAGES, COVERAGE_COMPARISON_ENTITY_TYPE, COVERAGE_ITEM_ENTITY_TYPE, COVERAGE_DECISIONS, COVERAGE_DECISION_CAPTURE_KEY,
   COVERAGE_COMMAND_KIND_ROLE_FLOORS, COVERAGE_DECISION_OPTION_LABELS, COVERAGE_PROPERTY_ENTITY_TYPE, coverageCommandKindFromMessage, coverageCommandTargetsProperty, parseCoverageDecisionAnswer,
   type CoverageCommandKind, type CoverageDecisionInput,
 } from '../support/coverageCommand';
@@ -77,6 +77,12 @@ async function loadComparison(propertyId: string, comparisonId: string): Promise
   });
 }
 const comparisonVersion = (comparison: ComparisonRow) => sha(`coverage-decision:${comparison.id}:${comparison.updatedAt.toISOString()}:${comparison.status}:${comparison.options.map((o) => `${o.id}${o.equivalenceStatus}`).join(',')}`);
+
+type ItemCoverageRow = { id: string; name: string; updatedAt: Date; coverageEvidenceStatus: string };
+async function loadItemCoverage(propertyId: string, itemId: string): Promise<ItemCoverageRow | null> {
+  return database.inventoryItem.findFirst({ where: { id: itemId, propertyId }, select: { id: true, name: true, updatedAt: true, coverageEvidenceStatus: true } });
+}
+const itemCoverageVersion = (item: ItemCoverageRow) => sha(`coverage-item-status:${item.id}:${item.updatedAt.toISOString()}:${item.coverageEvidenceStatus}`);
 
 function decisionCapture(comparison: ComparisonRow, contextVersion: string, entered?: Record<string, unknown>): AskCaptureRequest {
   const alternatives = comparison.options.filter((option) => option.optionType !== 'CURRENT_POLICY');
@@ -163,6 +169,18 @@ export async function coverageCommandResult(userId: string, propertyId: string, 
     suggestions: [],
   });
 
+  if (kind === 'CLEAR_NO_COVERAGE') {
+    const item = await loadItemCoverage(propertyId, launch.entityId);
+    const gone = (reasonCode: string, title: string, body: string): AskOperationResult => ({ status: 'NOT_APPLICABLE', reasonCode, blocks: [{ type: 'SUMMARY', id: 'coverage-item-status-unavailable', title, body, tone: 'DEFAULT', actions: [] }], suggestions: [] });
+    if (!item) return gone('COVERAGE_ITEM_NOT_FOUND', 'That item is no longer available', 'Ask could not find that inventory item. Nothing has changed.');
+    if (item.coverageEvidenceStatus !== 'NONE') return gone('COVERAGE_ITEM_STATUS_CHANGED', 'This item is not recorded as having no coverage', 'Its coverage status changed since this answer. Ask again to see the current state. Nothing has changed.');
+    const contextVersion = itemCoverageVersion(item);
+    return confirm(contextVersion, `Update the coverage status of ${item.name}?`,
+      'You told Cozy this item has no coverage. Confirming clears that statement, so a warranty or insurance policy can be recorded for it without contradicting it. It does not create a warranty or policy, and the item is not treated as covered.',
+      'Clear "no coverage"',
+      [{ label: 'Item', value: item.name }, { label: 'Now', value: 'Recorded as having no coverage' }, { label: 'After', value: 'Coverage not recorded' }],
+      {});
+  }
   if (kind === 'START') {
     const contextVersion = sha(`coverage-start:${propertyId}`);
     return confirm(contextVersion, 'Start a coverage comparison?', 'This opens a comparison against your verified current policy so quotes or other policy terms can be lined up with it. It does not contact an insurer or change your policy.', 'Start comparison', [], {});
@@ -242,7 +260,7 @@ registerCapabilityHandler('coverage.command', async (envelope) => {
   }
   const kind = coverageCommandKindFromMessage(envelope.message);
   if (!kind || launch?.operationId !== 'COVERAGE_COMMAND' || launch.surface === 'ASK_REFRESH' || !launch.entityId) return notRoutable();
-  const entityType = coverageCommandTargetsProperty(kind) ? COVERAGE_PROPERTY_ENTITY_TYPE : COVERAGE_COMPARISON_ENTITY_TYPE;
+  const entityType = kind === 'CLEAR_NO_COVERAGE' ? COVERAGE_ITEM_ENTITY_TYPE : coverageCommandTargetsProperty(kind) ? COVERAGE_PROPERTY_ENTITY_TYPE : COVERAGE_COMPARISON_ENTITY_TYPE;
   if (launch.entityType !== entityType) return notRoutable();
   const sourceExecutionId = launch.sourceExecutionId ?? null;
   const guidanceStepId = launchedGuidanceStepId(launch) ?? await guidanceStepIdFromSourceExecution(envelope.userId, envelope.propertyId!, sourceExecutionId);
@@ -267,7 +285,19 @@ async function confirmCoverageCommand(ctx: ConfirmCapabilityContext): Promise<Co
     let title: string; let description: string; let artifactType = 'COVERAGE_COMPARISON'; let artifactId = command.entityId;
     let journeyNote: string | null = null;
     const actions: Array<Record<string, unknown>> = [];
-    if (kind === 'START') {
+    if (kind === 'CLEAR_NO_COVERAGE') {
+      const item = await loadItemCoverage(propertyId, command.entityId);
+      if (!item) throw stale('That item is no longer available.');
+      if (item.coverageEvidenceStatus !== 'NONE') throw stale('This item is no longer recorded as having no coverage. Ask again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
+      if (parameters.coverageContextVersion !== itemCoverageVersion(item)) {
+        throw stale('This item changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
+      }
+      // Guarded write: only a row still recorded as "no coverage" changes; a concurrent change makes it a no-op, never an overwrite.
+      const changed = await database.inventoryItem.updateMany({ where: { id: item.id, propertyId, coverageEvidenceStatus: 'NONE' }, data: { coverageEvidenceStatus: 'UNKNOWN' } });
+      if (!changed.count) throw stale('This item changed while the confirmation was open. Ask again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
+      artifactType = 'INVENTORY_ITEM'; artifactId = item.id;
+      title = 'Coverage status updated'; description = `${item.name} is no longer recorded as having no coverage. Nothing was added: record a warranty or an insurance policy for it if it has one.`;
+    } else if (kind === 'START') {
       const result = await getOrCreateCoverageComparison(propertyId, userId, {});
       if (result.state === 'BASELINE_REQUIRED' || !result.comparison) throw stale('A verified current policy is needed before a comparison can start.');
       artifactId = result.comparison.id;

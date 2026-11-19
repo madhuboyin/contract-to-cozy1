@@ -8,11 +8,15 @@ import { z } from 'zod';
 
 export const COVERAGE_PROPERTY_ENTITY_TYPE = 'COVERAGE_PROPERTY';
 export const COVERAGE_COMPARISON_ENTITY_TYPE = 'COVERAGE_COMPARISON';
+/** The item-level step targets the inventory item itself. */
+export const COVERAGE_ITEM_ENTITY_TYPE = 'INVENTORY_ITEM';
 export const COVERAGE_COMMAND_MESSAGES = {
   START: 'Start a coverage comparison against my verified policy.',
   REVIEW: 'Review my coverage with the confirmed policy facts.',
   DECIDE: 'Record my coverage decision.',
   ADD_QUOTE: 'Add a quote to my coverage comparison.',
+  // Reconciles a recorded "this item has no coverage" statement before any warranty is recorded for it (Actionable Result Enrichment FRD ruling 4).
+  CLEAR_NO_COVERAGE: 'Update the coverage status for this inventory item.',
 } as const;
 export type CoverageCommandKind = keyof typeof COVERAGE_COMMAND_MESSAGES;
 /**
@@ -21,10 +25,10 @@ export type CoverageCommandKind = keyof typeof COVERAGE_COMMAND_MESSAGES;
  * registered floor is the lowest of these; a test holds the two together.
  */
 export const COVERAGE_COMMAND_KIND_ROLE_FLOORS: Record<CoverageCommandKind, 'CONTRIBUTOR' | 'OWNER'> = {
-  START: 'CONTRIBUTOR', REVIEW: 'CONTRIBUTOR', ADD_QUOTE: 'CONTRIBUTOR', DECIDE: 'OWNER',
+  START: 'CONTRIBUTOR', REVIEW: 'CONTRIBUTOR', ADD_QUOTE: 'CONTRIBUTOR', CLEAR_NO_COVERAGE: 'CONTRIBUTOR', DECIDE: 'OWNER',
 };
 
-export const COVERAGE_COMMAND_ACTION_IDS = { START: 'coverage-start-comparison', REVIEW: 'coverage-generate-review', DECIDE: 'coverage-record-decision', ADD_QUOTE: 'coverage-add-quote' } as const;
+export const COVERAGE_COMMAND_ACTION_IDS = { START: 'coverage-start-comparison', REVIEW: 'coverage-generate-review', DECIDE: 'coverage-record-decision', ADD_QUOTE: 'coverage-add-quote', CLEAR_NO_COVERAGE: 'update-coverage-status-item' } as const;
 export const coverageCommandKindFromMessage = (message: string): CoverageCommandKind | null =>
   ((Object.entries(COVERAGE_COMMAND_MESSAGES) as Array<[CoverageCommandKind, string]>).find(([, value]) => value === message)?.[0]) ?? null;
 export const coverageCommandTargetsProperty = (kind: CoverageCommandKind) => kind === 'START' || kind === 'REVIEW';

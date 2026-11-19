@@ -335,3 +335,12 @@ test('Add missing details shows inline on a row and launches INVENTORY_ITEM_CORR
   fireEvent.click(screen.getByRole('button', { name: 'Add missing details' }));
   expect(onAction).toHaveBeenCalledWith('INVENTORY_ITEM', 'item-0', 'Complete the missing details for this inventory item.', 'INVENTORY_ITEM_CORRECT', 'MUTATE_RECORD');
 });
+
+test('Update coverage status shows inline and launches COVERAGE_COMMAND for that exact item', () => {
+  const update = { id: 'update-coverage-status-item', label: 'Update coverage status', message: 'Update the coverage status for this inventory item.', style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'COVERAGE_COMMAND' };
+  const explicit = { ...block, sections: [{ ...block.sections[0], items: [{ ...block.sections[0].items[0], entityType: 'INVENTORY_ITEM', actions: [update] }] }] } as typeof block;
+  const onAction = jest.fn();
+  render(<InventoryResultList block={explicit} propertyId="home" onAction={onAction} onFilter={() => {}} onPage={() => {}} onAccessLost={() => {}} link={(_, label) => label} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Update coverage status' }));
+  expect(onAction).toHaveBeenCalledWith('INVENTORY_ITEM', 'item-0', 'Update the coverage status for this inventory item.', 'COVERAGE_COMMAND', 'MUTATE_RECORD');
+});

@@ -10,6 +10,7 @@
  */
 import { ASK_OPERATION_DEFINITIONS, type AskActionEntityType, type AskOperationId } from '../askOperationRegistry';
 import { getAskDomainCommandByOperation } from '../askDomainCommandRegistry';
+import { COVERAGE_COMMAND_MESSAGES } from '../support/coverageCommand';
 import { persistenceClassOf } from '../support/writeCapability';
 
 /** READ: starts an operation whose persistence class is NONE (validated against writeCapability, not just the absence of a confirmation).  MUTATION: starts a confirmation-gated command. Declared, never inferred from the id or label. */
@@ -90,6 +91,22 @@ export const ACTION_ENRICHMENT_REGISTRY: readonly ActionEnrichmentEntry[] = Obje
     style: 'SECONDARY',
     destinationOperationId: 'ITEM_REPAIR_REPLACE_VERDICT',
     effect: 'READ',
+    placement: 'INLINE',
+    presentation: 'INVENTORY_RESULT_LIST',
+  },
+  {
+    // The homeowner said there is no coverage: recording a warranty would contradict that, so the first step reconciles the statement (clears it after a
+    // confirmation) and only then can a warranty be recorded. Never offered for an item with no link recorded, unknown or conflicted coverage.
+    id: 'inventory-explicit-no-coverage-update-status',
+    sourceOperationId: 'DATA_POINT_READ',
+    predicateState: 'warranty:EXPLICIT_NO_COVERAGE',
+    entityType: 'INVENTORY_ITEM',
+    actionId: 'update-coverage-status-item',
+    label: 'Update coverage status',
+    message: COVERAGE_COMMAND_MESSAGES.CLEAR_NO_COVERAGE,
+    style: 'SECONDARY',
+    destinationOperationId: 'COVERAGE_COMMAND',
+    effect: 'MUTATION',
     placement: 'INLINE',
     presentation: 'INVENTORY_RESULT_LIST',
   },

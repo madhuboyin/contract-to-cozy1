@@ -134,7 +134,7 @@ test('every coverage step follows the household floors, never the primary accoun
 });
 
 test('the per-step floors are declared once and agree with the registered operation floor and the decision route', () => {
-  assert.deepEqual(command.COVERAGE_COMMAND_KIND_ROLE_FLOORS, { START: 'CONTRIBUTOR', REVIEW: 'CONTRIBUTOR', ADD_QUOTE: 'CONTRIBUTOR', DECIDE: 'OWNER' });
+  assert.deepEqual(command.COVERAGE_COMMAND_KIND_ROLE_FLOORS, { START: 'CONTRIBUTOR', REVIEW: 'CONTRIBUTOR', ADD_QUOTE: 'CONTRIBUTOR', CLEAR_NO_COVERAGE: 'CONTRIBUTOR', DECIDE: 'OWNER' });
   const lowest = Object.values(command.COVERAGE_COMMAND_KIND_ROLE_FLOORS).includes('CONTRIBUTOR') ? 'CONTRIBUTOR' : 'OWNER';
   assert.equal(getAskDomainCommandByOperation(OP).roleFloor, lowest);
   const routes = require('node:fs').readFileSync(require.resolve('../../src/routes/coverageAnalysis.routes.ts'), 'utf8');
@@ -389,4 +389,52 @@ test('a stale or incompatible step saves the decision as a plain one and names n
     await confirmCapabilityInvoke(OP, ctx(decideParams()));
     assert.equal('guidanceJourneyId' in w.calls[0][4], false, 'outside a journey the decision behaves exactly as before');
   } finally { w.restore(); restore(); }
+});
+
+// ── Update coverage status: clears a recorded "no coverage" statement after a confirmation (Actionable Result Enrichment FRD, ruling 4) ──
+test('Update coverage status: proposes a confirmation for an item recorded as no coverage; refuses other states, other types and a viewer; writes nothing at propose', async () => {
+  const restore = withData(); const saved = prisma.inventoryItem; const writes = [];
+  const item = { id: 'item-1', name: 'Dishwasher', updatedAt: new Date('2026-10-01T00:00:00Z'), coverageEvidenceStatus: 'NONE' };
+  prisma.inventoryItem = { findFirst: async (args) => (args.where.id === 'item-1' && args.where.propertyId === 'prop-1' ? item : null), updateMany: async (a) => { writes.push(a); return { count: 1 }; } };
+  const launch = { operationId: OP, surface: 'ASK_PAGE', entityId: 'item-1', entityType: 'INVENTORY_ITEM' };
+  try {
+    const restoreRole = withRole('CONTRIBUTOR');
+    const out = await invoke(M.CLEAR_NO_COVERAGE, launch);
+    assert.equal(out.status, 'NEEDS_CONFIRMATION');
+    assert.equal(out.parameters.coverageCommand.kind, 'CLEAR_NO_COVERAGE');
+    assert.match(out.confirmation.description, /does not create a warranty/);
+    assert.equal(writes.length, 0);
+    assert.notEqual((await invoke(M.CLEAR_NO_COVERAGE, { ...launch, entityType: 'COVERAGE_COMPARISON' })).status, 'NEEDS_CONFIRMATION');
+    assert.notEqual((await invoke(M.CLEAR_NO_COVERAGE, { ...launch, surface: 'ASK_REFRESH' })).status, 'NEEDS_CONFIRMATION');
+    assert.equal((await invoke(M.CLEAR_NO_COVERAGE, { ...launch, entityId: 'other' })).reasonCode, 'COVERAGE_ITEM_NOT_FOUND');
+    item.coverageEvidenceStatus = 'UNKNOWN';
+    assert.equal((await invoke(M.CLEAR_NO_COVERAGE, launch)).reasonCode, 'COVERAGE_ITEM_STATUS_CHANGED');
+    item.coverageEvidenceStatus = 'NONE';
+    restoreRole();
+    const restoreViewer = withRole('VIEWER');
+    assert.equal((await invoke(M.CLEAR_NO_COVERAGE, launch, 'VIEWER')).status, 'BLOCKED');
+    restoreViewer();
+    assert.equal(writes.length, 0);
+  } finally { prisma.inventoryItem = saved; restore(); }
+});
+
+test('Update coverage status: confirm writes UNKNOWN only through a guarded update; a stale version, a changed status, a lost race and a viewer write nothing', async () => {
+  const restore = withData(); const w = installWrites(); const saved = prisma.inventoryItem; const writes = []; let count = 1;
+  const item = { id: 'item-1', name: 'Dishwasher', updatedAt: new Date('2026-10-01T00:00:00Z'), coverageEvidenceStatus: 'NONE' };
+  prisma.inventoryItem = { findFirst: async () => item, updateMany: async (a) => { writes.push(a); return { count }; } };
+  const version = require('node:crypto').createHash('sha256').update(`coverage-item-status:item-1:${item.updatedAt.toISOString()}:NONE`).digest('hex');
+  const base = { coverageCommand: { kind: 'CLEAR_NO_COVERAGE', entityId: 'item-1' }, coverageContextVersion: version };
+  try {
+    const out = await confirmCapabilityInvoke(OP, ctx(base));
+    assert.equal(out.artifactType, 'INVENTORY_ITEM');
+    assert.deepEqual(writes[0], { where: { id: 'item-1', propertyId: 'prop-1', coverageEvidenceStatus: 'NONE' }, data: { coverageEvidenceStatus: 'UNKNOWN' } });
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ ...base, coverageContextVersion: 'old' })), (e) => e.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+    count = 0;
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx(base)), (e) => e.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+    count = 1; item.coverageEvidenceStatus = 'UNKNOWN';
+    const before = writes.length;
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx(base)), (e) => e.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx(base, 'VIEWER')), (e) => e.code === 'ASK_PERMISSION_REQUIRED');
+    assert.equal(writes.length, before, 'a changed status, a stale version and a viewer attempt no write');
+  } finally { prisma.inventoryItem = saved; w.restore(); restore(); }
 });
