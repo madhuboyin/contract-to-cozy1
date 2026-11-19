@@ -237,7 +237,7 @@ export default function CoverageFocusPage() {
               <div className="rounded-xl bg-teal-800 hover:bg-teal-700 active:scale-[0.99] transition-all px-4 py-3 flex items-center justify-between gap-2 cursor-pointer">
                 <div className="flex items-center gap-2.5">
                   <Shield className="h-4 w-4 text-white/80 shrink-0" />
-                  <p className="text-sm font-semibold text-white">Add a warranty</p>
+                  <p className="text-sm font-semibold text-white">Record warranty</p>
                 </div>
                 <ArrowRight className="h-4 w-4 text-white/80 shrink-0" />
               </div>

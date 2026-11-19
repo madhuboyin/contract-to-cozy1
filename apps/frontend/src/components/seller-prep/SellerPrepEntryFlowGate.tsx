@@ -265,7 +265,7 @@ export function SellerPrepEntryFlowGate({ propertyId }: { propertyId: string }) 
             <p className="text-xs text-gray-500">Optional — doesn&rsquo;t block your checklist, but worth adding if you have one.</p>
           </div>
           <a href={`/dashboard/warranties?action=new&propertyId=${propertyId}`} className="shrink-0">
-            <Button size="sm" variant="ghost">Add a warranty</Button>
+            <Button size="sm" variant="ghost">Record warranty</Button>
           </a>
         </div>
       ) : null}

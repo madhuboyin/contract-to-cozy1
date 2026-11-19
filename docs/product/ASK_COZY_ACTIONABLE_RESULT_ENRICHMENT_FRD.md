@@ -1,6 +1,8 @@
 # Ask Cozy — Actionable Result Enrichment FRD
 
-**Status:** Draft v1.9 — build steps 1-5 implemented; Review replacement moved to a pure verdict; not browser-verified; DB concurrency criterion open; owner decisions recorded in section 13
+**Status:** Draft v1.10 — build steps 1-5 implemented; Review replacement moved to a pure verdict; not browser-verified; DB concurrency criterion open; owner decisions recorded in section 13
+
+**v1.10 amendment (2026-11-18):** Desktop copy rename (ruling 1) done in `coverage/[itemId]/page.tsx`, `SellerPrepEntryFlowGate.tsx` and `HomeRecordsClient.tsx`.
 
 **v1.9 amendment (2026-11-18):** Applies the v1.8 review. (P1) `READ` validation now also requires persistence class `NONE` from `writeCapability.ts` (new boot-fatal code `READ_DESTINATION_PERSISTS`); the Review replacement row now launches the pure `ITEM_REPAIR_REPLACE_VERDICT` (preview mode, saves nothing) instead of `REPLACEMENT_GUIDANCE`, which persists a `ReplaceRepairAnalysis` and may start an HVAC decision thread. (P2/P3) Stale sections 1, 3, 7, 8 and 11 corrected. The concurrency criterion stays open. Owner rulings on the eight decisions are recorded in section 13.
 
@@ -369,7 +371,7 @@ Not verified: browser behaviour (nothing is rendered yet); the first-step claim 
 
 ## 13. Owner decisions (rulings received 2026-11-18)
 
-1. **Desktop copy: rename** the three surfaces with context-sensitive copy (coverage page and seller-prep CTA: "Record warranty"; Home Records sentence: "Record a warranty, or add a receipt, inspection report, or another file…"). Routing synonyms unchanged. **Not yet done.**
+1. **Desktop copy: rename** the three surfaces with context-sensitive copy (coverage page and seller-prep CTA: "Record warranty"; Home Records sentence: "Record a warranty, or add a receipt, inspection report, or another file…"). Routing synonyms unchanged. **Done (v1.10):** the three strings are changed; no test referenced them; string-only, not browser-checked and no `next build` run.
 2. **Terminal conflict kept for v1.** No re-arm. Future: an Ask-native "Review current coverage" action that starts a fresh execution.
 3. **Fixed-appliance presentation accepted;** no read-only field type until a second workflow needs fixed targets.
 4. **Add an "Update coverage status" flow** for explicit no-coverage items (show status, correcting vs newly obtained, confirm superseding, then launch item capture). Until it exists the action stays absent. **Not yet built.**

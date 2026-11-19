@@ -1628,7 +1628,7 @@ export default function HomeRecordsClient() {
               ? 'Records you move to trash stay recoverable here for 30 days.'
               : isFiltering
                 ? 'Try a different search term, type, or view.'
-                : 'Add a warranty, receipt, inspection report, or other file tied to this property.'
+                : 'Record a warranty, or add a receipt, inspection report, or another file tied to this property.'
           }
           action={
             !showTrashed && !isFiltering ? (
