@@ -1,6 +1,8 @@
 # Ask Cozy — Actionable Result Enrichment FRD
 
-**Status:** Draft v1.10 — build steps 1-5 implemented; Review replacement moved to a pure verdict; not browser-verified; DB concurrency criterion open; owner decisions recorded in section 13
+**Status:** Draft v1.11 — build steps 1-5 implemented; Review replacement moved to a pure verdict; not browser-verified; DB concurrency criterion open; owner decisions recorded in section 13
+
+**v1.11 amendment (2026-11-18):** Ruling 5 plan-only guard implemented (`warrantyAddScope` / `warrantyCategoryAllowedForScope` in `conversationalCapture.ts`). Tests updated; e2e mocks relabelled but Playwright not run.
 
 **v1.10 amendment (2026-11-18):** Desktop copy rename (ruling 1) done in `coverage/[itemId]/page.tsx`, `SellerPrepEntryFlowGate.tsx` and `HomeRecordsClient.tsx`.
 
@@ -375,7 +377,7 @@ Not verified: browser behaviour (nothing is rendered yet); the first-step claim 
 2. **Terminal conflict kept for v1.** No re-arm. Future: an Ask-native "Review current coverage" action that starts a fresh execution.
 3. **Fixed-appliance presentation accepted;** no read-only field type until a second workflow needs fixed targets.
 4. **Add an "Update coverage status" flow** for explicit no-coverage items (show status, correcting vs newly obtained, confirm superseding, then launch item capture). Until it exists the action stays absent. **Not yet built.**
-5. **Property-wide capture plan-only, made explicit:** rename to "Record home warranty plan", expose only `HOME_WARRANTY_PLAN`; other categories need an item picker first. **Not yet built.**
+5. **Property-wide capture plan-only, made explicit:** rename to "Record home warranty plan", expose only `HOME_WARRANTY_PLAN`; other categories need an item picker first. **Done for the plan-only guard (v1.11):** the Warranties list action and form are "Record home warranty plan", the coverage-type list is the plan only (prefilled), and `editCaptureWarrantyCandidate` rejects any other category server-side for a user-started property-level add (item-targeted add rejects the plan, mirror image; extracted candidates are unconstrained). **Not built:** the item picker for non-plan categories; the user is pointed to start Record warranty from the item.
 6. **Deferred order:** maintenance complete/reschedule; add missing inventory details; record permit; recall confirm/dismiss; seller-readiness actions; attach document (after an upload-start contract); claims stay inline details/view actions.
 7. **Non-persisting replacement analysis for list rows: done in v1.9** (pure verdict; registry now enforces persistence class `NONE` for `READ` rows).
 8. **Real PostgreSQL concurrency test required** before the criterion closes; needs a DB-capable environment. Open.

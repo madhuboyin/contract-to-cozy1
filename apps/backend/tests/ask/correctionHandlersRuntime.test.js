@@ -619,7 +619,7 @@ test('Record warranty: the declared action returns the empty capture form, reusi
   assert.equal(request.classification, 'WORKFLOW_INPUT', 'the submit button must say "Continue to review", not "Save"');
   assert.equal(request.expectedContextVersion, result.contextVersion, 'the submit branch compares the execution context version to the request');
   assert.deepEqual(request.inputSchema.fields.map((field) => field.key), ['providerName', 'category', 'policyNumber', 'coverageDetails', 'startDate', 'expiryDate', 'cost']);
-  assert.ok(request.currentAnswer && Object.values(request.currentAnswer).every((value) => value === null), 'nothing is pre-filled');
+  assert.ok(request.currentAnswer && Object.entries(request.currentAnswer).every(([key, value]) => value === null || (key === 'category' && value === 'HOME_WARRANTY_PLAN')), 'only the fixed whole-home plan type is pre-filled');
   const kind = (key) => request.inputSchema.fields.find((field) => field.key === key).inputSchema;
   assert.equal(kind('coverageDetails').type, 'LONG_TEXT', 'a multiline coverage-details box');
   assert.deepEqual([kind('startDate').type, kind('startDate').allowedPrecisions, kind('startDate').allowFuture], ['APPROXIMATE_DATE', ['EXACT_DATE'], true], 'a native exact-day date input');
@@ -1091,14 +1091,14 @@ test('warranty edit: clearing an optional field is a change; a past expiry is al
 });
 
 test('Record warranty: the native date control\'s exact-day values and an omitted/cleared optional field are accepted', () => {
-  const stored = { captureOrigin: 'USER_ADD', confirmationVersion: 1 };
+  const stored = { captureOrigin: 'USER_ADD', inventoryItemId: 'item-1', confirmationVersion: 1 };
   const answer = { providerName: 'Acme', category: 'HVAC', startDate: { precision: 'EXACT_DATE', value: '2026-01-01' }, expiryDate: { precision: 'EXACT_DATE', value: '2027-01-01' } };
   const edited = editCaptureWarrantyCandidate(stored, 'Record a warranty in my home record.', 'ctx-1', answer, new Date('2026-09-21T00:00:00.000Z'));
   assert.equal(edited.status, 'NEEDS_CONFIRMATION');
   assert.equal(edited.parameters.cost, null);
   assert.equal(edited.parameters.policyNumber, null);
   assert.equal(edited.confirmation.fields.find((field) => field.label === 'Coverage').value, 'HVAC');
-  const friendly = editCaptureWarrantyCandidate(stored, 'x', 'ctx-1', { ...answer, category: 'HOME_WARRANTY_PLAN' }, new Date());
+  const friendly = editCaptureWarrantyCandidate({ captureOrigin: 'USER_ADD', confirmationVersion: 1 }, 'x', 'ctx-1', { ...answer, category: 'HOME_WARRANTY_PLAN' }, new Date());
   assert.equal(friendly.confirmation.fields.find((field) => field.label === 'Coverage').value, 'Home warranty plan');
   assert.equal(editCaptureWarrantyCandidate(stored, 'x', 'ctx-1', { ...answer, expiryDate: { precision: 'EXACT_DATE', value: '2025-01-01' } }, new Date()), null, 'expiry must follow the start date');
 });

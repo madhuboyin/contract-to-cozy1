@@ -523,12 +523,12 @@ test('a contributor adds a warranty inline: the Add action opens the form, Conti
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Warranties', exact: true }) });
   await expect(response.getByRole('link', { name: /Open Warranties/ })).toBeVisible();
-  await response.getByRole('button', { name: 'Record warranty' }).click();
+  await response.getByRole('button', { name: 'Record home warranty plan' }).click();
 
   // The declared action dispatches through the normal Ask path, pinned to the capture operation.
   await expect.poll(() => api.executionBodies.some((body) => body.message === 'Record a warranty in my home record.'
     && (body.launchContext as { operationId?: string } | undefined)?.operationId === 'CAPTURE_WARRANTY_CONFIRM')).toBe(true);
-  await expect(page.getByRole('heading', { name: 'Record warranty', level: 3 }).last()).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Record home warranty plan', level: 3 }).last()).toBeVisible();
   await expect(page.getByText('Nothing has been saved yet', { exact: false })).toBeVisible();
 
   await page.getByLabel('Provider').fill('Acme Home Warranty');

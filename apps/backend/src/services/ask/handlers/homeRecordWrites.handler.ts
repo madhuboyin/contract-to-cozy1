@@ -566,8 +566,8 @@ export async function warrantyAddResult(userId: string, propertyId: string, sour
   return {
     status: 'NEEDS_CONTEXT', reasonCode: 'WARRANTY_ADD_INPUT_REQUIRED', contextVersion,
     parameters: { captureOrigin: USER_ADD_ORIGIN, sourceExecutionId, ...(item ? { inventoryItemId: item.id, inventoryItemName: item.name } : {}) },
-    blocks: [{ type: 'SUMMARY', id: 'warranty-add-input', title: 'Record warranty', body: 'Nothing has been saved yet. Enter the details, then review them before the warranty is added.', tone: 'DEFAULT', actions: [] }],
-    captureRequests: [warrantyAddCaptureRequest(contextVersion, item ? { itemName: item.name } : undefined)],
+    blocks: [{ type: 'SUMMARY', id: 'warranty-add-input', title: item ? 'Record warranty' : 'Record home warranty plan', body: 'Nothing has been saved yet. Enter the details, then review them before the warranty is added.', tone: 'DEFAULT', actions: [] }],
+    captureRequests: [warrantyAddCaptureRequest(contextVersion, item ? { itemId: item.id, itemName: item.name } : undefined)],
     suggestions: [],
   };
 }

@@ -614,7 +614,7 @@ function correctableSummaryExecution() {
       ],
     }] }],
     actions: [
-      { id: 'add-warranty', label: 'Record warranty', interactionType: 'START_WORKFLOW', message: 'Record a warranty in my home record.', operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' },
+      { id: 'add-warranty', label: 'Record home warranty plan', interactionType: 'START_WORKFLOW', message: 'Record a warranty in my home record.', operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' },
       { id: 'open-warranties', label: 'Open Warranties', href: '/dashboard/warranties', style: 'SECONDARY' },
     ],
   });
@@ -727,10 +727,10 @@ function warrantyAddExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId
   if (stage === 'FORM') {
     return {
       ...common, status: 'NEEDS_CONTEXT', confirmation: null,
-      blocks: [{ type: 'SUMMARY', id: 'warranty-add-input', title: 'Record warranty', body: 'Nothing has been saved yet. Enter the details, then review them before the warranty is added.', tone: 'DEFAULT', actions: [] }],
+      blocks: [{ type: 'SUMMARY', id: 'warranty-add-input', title: 'Record home warranty plan', body: 'Nothing has been saved yet. Enter the details, then review them before the warranty is added.', tone: 'DEFAULT', actions: [] }],
       captureRequests: [{
         requirementId: 'capture-warranty-edit', captureKey: 'CAPTURE_WARRANTY_EDIT', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
-        title: 'Record warranty', question: 'Which warranty would you like to add to your home record?', helpText: 'Only the provider, coverage type and dates are required. You will review everything before it is saved.',
+        title: 'Record home warranty plan', question: 'Which home warranty plan would you like to record?', helpText: 'Only the provider, coverage type and dates are required. You will review everything before it is saved.',
         inputSchema: { type: 'GROUP', fields: [
           field('providerName', 'Provider', true, { type: 'SHORT_TEXT', maxLength: 160 }),
           field('category', 'Coverage type', true, { type: 'SINGLE_SELECT', options: [{ label: 'Home warranty plan', value: 'HOME_WARRANTY_PLAN' }, { label: 'HVAC', value: 'HVAC' }] }),
@@ -1167,7 +1167,7 @@ function warrantyJourneyExecution(state: WarrantyJourneyState, options: { viewer
     correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   };
   const boundary = { type: 'BOUNDARY', id: 'warranty-boundary', title: 'Recorded information only', body: 'This reports the warranty information recorded in your Home Record. It does not determine whether a repair is covered or file a claim.', severity: 'INFO', suggestions: [] };
-  const addAction = { id: 'add-warranty', label: 'Record warranty', interactionType: 'START_WORKFLOW', message: 'Record a warranty in my home record.', operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' };
+  const addAction = { id: 'add-warranty', label: 'Record home warranty plan', interactionType: 'START_WORKFLOW', message: 'Record a warranty in my home record.', operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' };
   if (options.empty) {
     return { ...common, executionId: 'execution-warranty-journey-empty', question: 'Show my warranty journey', status: 'READY_WITH_LIMITATIONS', viewState: null, blocks: [{
       type: 'SUMMARY', id: 'warranty-empty', title: 'No warranties are recorded for this home yet',

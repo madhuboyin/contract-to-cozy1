@@ -22,7 +22,7 @@ test('a list question: exact counts, one dominant step, a quiet page link, recor
   // Never the bare word "soon": the number is always there.
   await expect(page.locator('#ask-execution-execution-warranty-journey-1')).not.toContainText(/expires? soon|expiring soon/i);
   await expect(page.getByRole('list', { name: 'At a glance' })).toContainText('1 expire within 60 days');
-  await expect(page.getByRole('button', { name: /Record warranty/ })).toHaveClass(/bg-teal-700/);
+  await expect(page.getByRole('button', { name: /Record home warranty plan/ })).toHaveClass(/bg-teal-700/);
   const pageLink = page.getByRole('link', { name: /Open Warranties/ });
   await expect(pageLink).toHaveCount(1);
   await expect(pageLink).not.toHaveClass(/bg-teal-700/);
@@ -59,7 +59,7 @@ test('filters replace the result: each chip continues the source, replaces one d
   await expect.poll(() => api.executionBodies.at(-1)).toMatchObject({ message: 'Only show warranties expiring within 60 days', launchContext: { sourceExecutionId: 'execution-warranty-journey-1' } });
   await expect(page.getByText('Earlier version of this answer · show')).toBeVisible();
   await expect(page.getByText('Show my warranty journey', { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole('button', { name: /Record warranty/ })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /Record home warranty plan/ })).toHaveCount(1);
   const applied = status(page).getByRole('button', { name: 'Expires within 60 days' });
   await expect(applied).toHaveAttribute('aria-pressed', 'true');
   await expect(applied).toBeDisabled();
@@ -153,7 +153,7 @@ test('a viewer sees the same recorded answer with no write or correction control
   await installAskApi(page, { warrantyViewer: true });
   await startWarranties(page);
   await expect(page.getByRole('heading', { name: HEADLINE })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Record warranty/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Record home warranty plan/ })).toHaveCount(0);
   await expect(page.getByRole('link', { name: /Open Warranties/ })).toHaveCount(1);
   const response = live(page, 1);
   await response.getByRole('button', { name: 'Acme Home Warranty' }).click();
@@ -201,7 +201,7 @@ test('on a phone: nothing scrolls sideways, chips and the primary step are reach
   await installAskApi(page);
   await startWarranties(page);
   await noSidewaysScroll(page);
-  const add = page.getByRole('button', { name: /Record warranty/ });
+  const add = page.getByRole('button', { name: /Record home warranty plan/ });
   await add.scrollIntoViewIfNeeded();
   const box = await add.boundingBox();
   expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);

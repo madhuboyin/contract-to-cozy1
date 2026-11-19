@@ -69,17 +69,38 @@ test('a different execution or user gets a different fingerprint for the same co
   assert.notEqual(a, await run(exec, 'u2'));
 });
 
-test('a property-wide submission with a scope the writer rejects is left for the confirmation, as before', async () => {
-  const propertyWide = editCaptureWarrantyCandidate({ captureOrigin: USER_ADD_ORIGIN, sourceExecutionId: 's1' }, 'm', 'ctx-1', { ...answer, category: 'APPLIANCE' }, new Date('2026-01-01T00:00:00.000Z'));
+test('a property-wide extracted candidate with a scope the writer rejects is left for the confirmation, as before', async () => {
+  // (A user-started property-level add can no longer reach this: the server rejects a non-plan category up front.)
+  const propertyWide = editCaptureWarrantyCandidate({ sourceExecutionId: 's1' }, 'm', 'ctx-1', { ...answer, category: 'APPLIANCE' }, new Date('2026-01-01T00:00:00.000Z'));
   const result = await withPrisma([], () => reviewWarrantyCoverageForEdit({ execution: exec, userId: 'u1', edited: propertyWide }));
   assert.equal(result, propertyWide);
 });
 
 test('the item-targeted form names the appliance and offers no whole-home plan coverage type', () => {
-  const request = warrantyAddCaptureRequest('ctx', { itemName: 'Samsung Refrigerator' });
+  const request = warrantyAddCaptureRequest('ctx', { itemId: 'item-1', itemName: 'Samsung Refrigerator' });
   assert.match(request.question, /Samsung Refrigerator/);
   const category = request.inputSchema.fields.find((field) => field.key === 'category');
   assert.ok(!category.inputSchema.options.some((option) => option.value === 'HOME_WARRANTY_PLAN'));
+});
+
+test('property-level Record home warranty plan offers only the whole-home plan, prefilled, and the server rejects any other category', () => {
+  const { warrantyAddScope, warrantyCategoryAllowedForScope } = require('../../src/services/ask/conversationalUnderstanding/conversationalCapture');
   const plain = warrantyAddCaptureRequest('ctx');
-  assert.ok(plain.inputSchema.fields.find((field) => field.key === 'category').inputSchema.options.some((option) => option.value === 'HOME_WARRANTY_PLAN'));
+  assert.equal(plain.title, 'Record home warranty plan');
+  const options = plain.inputSchema.fields.find((field) => field.key === 'category').inputSchema.options;
+  assert.deepEqual(options.map((option) => option.value), ['HOME_WARRANTY_PLAN']);
+  assert.equal(plain.currentAnswer.category, 'HOME_WARRANTY_PLAN');
+  const stored = { captureOrigin: USER_ADD_ORIGIN };
+  assert.equal(warrantyAddScope(stored), 'HOME_PLAN');
+  const answer = (category) => ({ providerName: 'Acme', category, startDate: '2026-01-01', expiryDate: '2027-01-01' });
+  assert.equal(editCaptureWarrantyCandidate(stored, 'm', 'ctx', answer('APPLIANCE'), new Date('2026-06-01')), null, 'a hand-built non-plan category is rejected');
+  const ok = editCaptureWarrantyCandidate(stored, 'm', 'ctx', answer('HOME_WARRANTY_PLAN'), new Date('2026-06-01'));
+  assert.equal(ok.status, 'NEEDS_CONFIRMATION');
+  // The post-review edit form stays constrained.
+  assert.deepEqual(ok.captureRequests[0].inputSchema.fields.find((field) => field.key === 'category').inputSchema.options.map((o) => o.value), ['HOME_WARRANTY_PLAN']);
+  // Item scope is the mirror image; an extracted candidate (no USER_ADD origin) is unconstrained.
+  const itemStored = { captureOrigin: USER_ADD_ORIGIN, inventoryItemId: 'item-1' };
+  assert.equal(warrantyAddScope(itemStored), 'ITEM');
+  assert.equal(editCaptureWarrantyCandidate(itemStored, 'm', 'ctx', answer('HOME_WARRANTY_PLAN'), new Date('2026-06-01')), null);
+  assert.equal(warrantyCategoryAllowedForScope(warrantyAddScope({}), 'APPLIANCE'), true);
 });

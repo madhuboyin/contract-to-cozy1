@@ -229,7 +229,7 @@ function warrantiesFromRecordsInner(input: {
   const { message, propertyId, records, canWrite, ownedIds, priorViewState } = input;
   const conflictedIds = input.conflictedIds ?? new Set<string>();
   const now = input.now ?? new Date();
-  const addAction = { id: 'add-warranty', label: 'Record warranty', interactionType: 'START_WORKFLOW' as const, message: WARRANTY_ADD_MESSAGE, operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' as const };
+  const addAction = { id: 'add-warranty', label: 'Record home warranty plan', interactionType: 'START_WORKFLOW' as const, message: WARRANTY_ADD_MESSAGE, operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' as const };
 
   // FR-PLAN-5: a request that also asks about recalls ("appliances with open recalls and no active warranty") is not a warranty question this read can answer.
   // Answering only the warranty half and calling it the answer is the silent partial interpretation the FRD forbids, so it says what it cannot combine

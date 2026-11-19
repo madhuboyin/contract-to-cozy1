@@ -316,7 +316,25 @@ function eventEditCaptureRequest(parameters: Record<string, unknown>, contextVer
 // `startDateApproximate` is set, the question/helpText call this out
 // directly so the homeowner notices there's a guess to review, not just an
 // optional field to leave alone.
+/**
+ * Which coverage types a user-started "Record warranty" may use (Actionable Result Enrichment FRD §13 ruling 5). Item-targeted: any except the
+ * whole-home plan. Property-level: ONLY the whole-home plan, because every other category needs an inventory item the form cannot supply and the
+ * writer rejects it. A candidate Ask extracted from conversation (no USER_ADD origin) is left unconstrained: null.
+ */
+export type WarrantyAddScope = 'ITEM' | 'HOME_PLAN';
+export function warrantyAddScope(parameters: Record<string, unknown>): WarrantyAddScope | null {
+  if (parameters.captureOrigin !== USER_ADD_ORIGIN) return null;
+  return typeof parameters.inventoryItemId === 'string' && parameters.inventoryItemId ? 'ITEM' : 'HOME_PLAN';
+}
+/** The server-side twin of the form restriction: false when the submitted category is not allowed for the add scope. */
+export function warrantyCategoryAllowedForScope(scope: WarrantyAddScope | null, category: string): boolean {
+  if (scope === 'HOME_PLAN') return category === 'HOME_WARRANTY_PLAN';
+  if (scope === 'ITEM') return category !== 'HOME_WARRANTY_PLAN';
+  return true;
+}
+
 function warrantyEditCaptureRequest(parameters: Record<string, unknown>, contextVersion: string): AskCaptureRequest {
+  const scope = warrantyAddScope(parameters);
   const startDateApproximate = Boolean(parameters.startDateApproximate);
   return {
     requirementId: 'capture-warranty-edit',
@@ -330,7 +348,7 @@ function warrantyEditCaptureRequest(parameters: Record<string, unknown>, context
     // ahead of today; past dates are allowed too) and a $-prefixed USD cost. Same keys as before, so the edit path is unchanged.
     inputSchema: { type: 'GROUP', fields: [
       { key: 'providerName', label: 'Provider', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 160 } },
-      { key: 'category', label: 'Coverage type', required: true, inputSchema: { type: 'SINGLE_SELECT', options: WARRANTY_CATEGORY_OPTIONS } },
+      { key: 'category', label: 'Coverage type', required: true, inputSchema: { type: 'SINGLE_SELECT', options: WARRANTY_CATEGORY_OPTIONS.filter((option) => warrantyCategoryAllowedForScope(scope, option.value)) } },
       { key: 'policyNumber', label: 'Policy number', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 160 } },
       { key: 'coverageDetails', label: 'Coverage details', helpText: 'What is and is not covered, claim limits, deductibles.', required: false, inputSchema: { type: 'LONG_TEXT', maxLength: 2000 } },
       { key: 'startDate', label: startDateApproximate ? 'Start date (estimated)' : 'Start date', required: true, inputSchema: { type: 'APPROXIMATE_DATE', allowedPrecisions: ['EXACT_DATE'], allowFuture: true } },
@@ -361,29 +379,20 @@ export const USER_ADD_ORIGIN = 'USER_ADD';
 // The empty form for a user-initiated warranty add. It deliberately reuses the CAPTURE_WARRANTY_EDIT capture
 // key, so submitting it goes through the existing edit-before-confirm path (same validation, ISO date
 // normalisation and parameter shape the confirm handler already reads).
-export function warrantyAddCaptureRequest(contextVersion: string, target?: { itemName: string }): AskCaptureRequest {
-  const base = warrantyEditCaptureRequest({ captureOrigin: USER_ADD_ORIGIN }, contextVersion);
-  // Item-targeted capture (Actionable Result Enrichment FRD §5): the appliance is fixed by the server, never chosen in the form, and a
-  // whole-home plan is not a coverage type for one appliance.
-  type GroupField = { key: string; inputSchema: { type: string; options?: Array<{ value: string }> } & Record<string, unknown> } & Record<string, unknown>;
-  const schema = base.inputSchema as { type: string; fields?: GroupField[] };
-  const fields = target && schema.type === 'GROUP' && schema.fields
-    ? schema.fields.map((field) => field.key === 'category' && field.inputSchema.type === 'SINGLE_SELECT'
-      ? { ...field, inputSchema: { ...field.inputSchema, options: (field.inputSchema.options ?? []).filter((option) => option.value !== 'HOME_WARRANTY_PLAN') } }
-      : field)
-    : null;
+export function warrantyAddCaptureRequest(contextVersion: string, target?: { itemId: string; itemName: string }): AskCaptureRequest {
+  // The coverage-type list is constrained by scope inside warrantyEditCaptureRequest (item: no whole-home plan; property: whole-home plan only).
+  const base = warrantyEditCaptureRequest({ captureOrigin: USER_ADD_ORIGIN, ...(target ? { inventoryItemId: target.itemId } : {}) }, contextVersion);
   return {
     ...base,
-    ...(fields ? { inputSchema: { type: 'GROUP' as const, fields } } : {}),
     // WORKFLOW_INPUT makes the submit button read "Continue to review": nothing is saved until the confirmation.
     classification: 'WORKFLOW_INPUT',
     state: 'UNKNOWN',
-    title: 'Record warranty',
-    question: target ? `Which warranty covers your ${target.itemName}?` : 'Which warranty would you like to add to your home record?',
+    title: target ? 'Record warranty' : 'Record home warranty plan',
+    question: target ? `Which warranty covers your ${target.itemName}?` : 'Which home warranty plan would you like to record?',
     helpText: target
       ? `This warranty is recorded for ${target.itemName}. Only the provider, coverage type and dates are required. You will review everything before it is saved.`
-      : 'Only the provider, coverage type and dates are required. You will review everything before it is saved.',
-    currentAnswer: { providerName: null, category: null, policyNumber: null, coverageDetails: null, cost: null, startDate: null, expiryDate: null },
+      : 'This records a whole-home plan. For coverage on one appliance or system, start Record warranty from that item. Only the provider and dates are required. You will review everything before it is saved.',
+    currentAnswer: { providerName: null, category: target ? null : 'HOME_WARRANTY_PLAN', policyNumber: null, coverageDetails: null, cost: null, startDate: null, expiryDate: null },
     destinationLabel: 'Used to prepare this warranty; nothing is saved until you confirm',
   };
 }
@@ -1201,6 +1210,8 @@ export function editCaptureWarrantyCandidate(
   const parameters = asParameterRecord(storedParameters);
   const parsedAnswer = WARRANTY_EDIT_ANSWER_SCHEMA.safeParse(answer);
   if (!parsedAnswer.success) return null;
+  // Server-side twin of the form restriction (a hand-built submission cannot pick a category the add scope does not allow).
+  if (!warrantyCategoryAllowedForScope(warrantyAddScope(parameters), parsedAnswer.data.category)) return null;
   // Code review finding (2026-09-13, [P1]): see editCaptureFactCandidate's
   // own comment on confirmationVersion. `startDateApproximate: false`
   // because the homeowner just explicitly supplied/confirmed this date --
