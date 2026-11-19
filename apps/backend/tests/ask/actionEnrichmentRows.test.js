@@ -153,3 +153,17 @@ test('an additive row never makes a row eligible and does not take an extra inli
   const many = Array.from({ length: 7 }, (_, index) => task(`t${index}`, ['maintenance:OPEN']));
   assert.equal(enrich(many).actionsByRowId.size, registry.ACTION_ENRICHMENT_MAX_INLINE_ROWS, 'two actions on a row still count as one eligible row');
 });
+
+// ── inventory: Add missing details (last primary; never displaces Record warranty / Review replacement) ──
+test('a row with missing brand/model/serial gets Add missing details for a contributor; a viewer and a complete row get none', () => {
+  const missing = { id: 'a', label: 'Washer', entityType: 'INVENTORY_ITEM', states: ['details:MISSING'] };
+  const owner = enrich([missing, { ...missing, id: 'b', states: [] }]);
+  assert.deepEqual(owner.actionsByRowId.get('a').map((action) => [action.id, action.operationId, action.interactionType]), [['complete-missing-details-item', 'INVENTORY_ITEM_CORRECT', 'MUTATE_RECORD']]);
+  assert.equal(owner.actionsByRowId.has('b'), false);
+  assert.equal(enrich([missing], { role: 'VIEWER' }).actionsByRowId.size, 0);
+  // The message is the one the inline detail's own action sends, so the destination handler recognises it.
+  assert.match(owner.actionsByRowId.get('a')[0].message, /\b(?:complete|add|update|fill in)\b.{0,35}\bmissing details\b/i);
+  // Record warranty and Review replacement keep priority on the same row.
+  const both = enrich([{ ...missing, states: ['details:MISSING', 'warranty:NO_LINK_RECORDED'] }]);
+  assert.deepEqual(both.actionsByRowId.get('a').map((action) => action.id), ['record-warranty-item']);
+});

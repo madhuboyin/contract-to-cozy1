@@ -94,6 +94,22 @@ export const ACTION_ENRICHMENT_REGISTRY: readonly ActionEnrichmentEntry[] = Obje
     presentation: 'INVENTORY_RESULT_LIST',
   },
   {
+    // Declared AFTER Record warranty and Review replacement, so a row that qualifies for those keeps its one primary action. Same message the inline
+    // detail's own "Add missing details" action sends; the destination resolves the exact item from the launch context and opens the field editor.
+    id: 'inventory-missing-details-complete',
+    sourceOperationId: 'DATA_POINT_READ',
+    predicateState: 'details:MISSING',
+    entityType: 'INVENTORY_ITEM',
+    actionId: 'complete-missing-details-item',
+    label: 'Add missing details',
+    message: 'Complete the missing details for this inventory item.',
+    style: 'SECONDARY',
+    destinationOperationId: 'INVENTORY_ITEM_CORRECT',
+    effect: 'MUTATION',
+    placement: 'INLINE',
+    presentation: 'INVENTORY_RESULT_LIST',
+  },
+  {
     // The same launch the Maintenance result's own Complete button uses: launchContext MAINTENANCE_TASK + the task id resolves the exact task
     // (no free-text matching), the confirmation re-authorizes at CONTRIBUTOR, and the confirm handler re-reads the task.
     id: 'maintenance-open-complete',

@@ -992,6 +992,8 @@ function executeValidatedSlicePlan(input: {
         states: [
           ...(isWarrantyRelation ? [`warranty:${warranty.state}`] : []),
           ...(youngestAskedAge !== null && isOlderThanYears(item, youngestAskedAge, snapshot.asOfDate) === true ? ['age:OLDER_THAN_ASKED'] : []),
+          // The snapshot carries brand, model and serial (not the purchase date), so only those establish "missing"; no false positive is possible.
+          ...(!item.brand || !item.modelNumber || !item.serialNumber ? ['details:MISSING'] : []),
         ],
       })),
     })
