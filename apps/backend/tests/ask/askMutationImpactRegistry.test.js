@@ -159,11 +159,16 @@ test('answers in other conversations are marked stale, not refreshed, newest per
 });
 
 test('a refreshed answer that does not fit in the response is reported, so the screen never keeps the old copy silently', async () => {
-  install([row('a', { operationId: 'BUYER_PLAN_STATUS', updatedAt: t(1) }), row('b', { operationId: 'BUYER_DEADLINES', updatedAt: t(2) }), row('c', { operationId: 'BUYER_FINANCING_READINESS', updatedAt: t(3) }), row('d', { operationId: 'BUYER_LOAN_ESTIMATES', updatedAt: t(4) })]);
+  const { MAX_ASK_CHILD_EXECUTIONS } = require('../../src/productFramework/ask/ask.contract.ts');
+  const buyerReads = registry.ASK_MUTATION_IMPACT_REGISTRY.BUYER_PLAN_SETUP_COMMAND.reads;
+  // One answer per declared read plus the explicit source: one more than the response can carry.
+  install([...buyerReads.map((operationId, index) => row(`s${index}`, { operationId, updatedAt: t(index + 1) })), row('src', { operationId: 'BUYER_MOVE_STATUS', updatedAt: t(30) })]);
   const buyer = { ...writer, operationId: 'BUYER_PLAN_SETUP_COMMAND' };
-  const { value } = await reconciliation.runInReconciliationScope(() => executeOperation.reconcileAskExecutionSideEffects('u1', buyer, {}, refresher({})));
-  assert.equal(value.refreshedExecutions.length, 3, 'the response carries at most three');
-  assert.equal(value.staleExecutionIds.length, 1, 'the fourth was refreshed but not delivered');
+  const { value } = await reconciliation.runInReconciliationScope(() => executeOperation.reconcileAskExecutionSideEffects('u1', buyer, { sourceExecutionId: 'src' }, refresher({})));
+  assert.equal(buyerReads.length + 1 > MAX_ASK_CHILD_EXECUTIONS, true, 'the fixture must exceed the cap');
+  assert.equal(value.refreshedExecutions.length, MAX_ASK_CHILD_EXECUTIONS, 'the response carries at most the shared child cap');
+  assert.equal(value.refreshedExecutions[0].executionId, 'src', 'the explicit source always keeps its slot');
+  assert.equal(value.staleExecutionIds.length, buyerReads.length + 1 - MAX_ASK_CHILD_EXECUTIONS, 'the overflow was refreshed but not delivered');
   assert.ok(!value.refreshedExecutions.some((r) => r.executionId === value.staleExecutionIds[0]));
 });
 
