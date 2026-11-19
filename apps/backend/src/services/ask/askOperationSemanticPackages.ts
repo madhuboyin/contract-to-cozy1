@@ -178,7 +178,7 @@ const jobs: Record<AskOperationId, string> = {
   COVERAGE_TERM_REVIEW: "mark the current policy or warranty terms a guided journey step is about as reviewed, after confirmation",
   MAINTENANCE_EVIDENCE_ATTACH: "attach Home Records (chosen or uploaded) as evidence for a maintenance task, after confirmation",
   COVERAGE_ANALYSIS_RUN: 'run the coverage check for a guided journey step, after confirmation, and save its result',
-  COVERAGE_COMMAND: 'prepare the coverage review, start a coverage comparison, or record a keep, change, shop or defer decision about the insurance policy, after confirmation',
+  COVERAGE_COMMAND: 'prepare the coverage review, start a coverage comparison, or record a keep, change, shop or defer decision about the insurance policy, or correct an item\'s recorded no-coverage status, after confirmation',
   RISK_MITIGATION_PLAN: 'show which loss-prevention work matters most for the household\'s insurance risk, from its saved loss-prevention plan, ranked by the premium driver each step addresses and then by readiness, without promising a saving',
   COVERAGE_REVIEW_STATUS: 'show the questions worth asking about the confirmed facts on the household\'s insurance policy',
   HOME_UPGRADE_COMMAND: 'record a decision on, rename, archive, restore, recalculate or delete a saved home upgrade option, after confirmation',

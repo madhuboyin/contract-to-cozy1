@@ -201,3 +201,16 @@ test('an explicit no-coverage row gets Update coverage status (COVERAGE_COMMAND,
   assert.deepEqual(owner.actionsByRowId.get('a').map((action) => [action.id, action.operationId, action.interactionType]), [['update-coverage-status-item', 'COVERAGE_COMMAND', 'MUTATE_RECORD']]);
   assert.equal(enrich([r], { role: 'VIEWER' }).actionsByRowId.size, 0);
 });
+
+test('contract: explicit no coverage -> confirmed CLEAR_NO_COVERAGE -> no link recorded -> Record warranty is offered', () => {
+  const { classifyTransitionalWarrantyLinks } = require('../../src/services/ask/semantic/transitionalWarrantyRead');
+  const input = { inventoryItemId: 'item-1', label: 'Dishwasher', propertyPlanWarrantyId: null, itemWarrantyIds: [] };
+  const toRow = (read) => ({ id: read.inventoryItemId, label: read.label, entityType: 'INVENTORY_ITEM', states: [`warranty:${read.state}`] });
+  const before = classifyTransitionalWarrantyLinks({ ...input, coverageEvidenceStatus: 'NONE' });
+  assert.equal(before.state, 'EXPLICIT_NO_COVERAGE');
+  assert.deepEqual(enrich([toRow(before)]).actionsByRowId.get('item-1').map((a) => a.id), ['update-coverage-status-item']);
+  // The confirmed transition writes NONE -> UNKNOWN (guarded updateMany, covered in coverageCommands.test.js); the item then reads as unrecorded.
+  const after = classifyTransitionalWarrantyLinks({ ...input, coverageEvidenceStatus: 'UNKNOWN' });
+  assert.equal(after.state, 'NO_LINK_RECORDED');
+  assert.deepEqual(enrich([toRow(after)]).actionsByRowId.get('item-1').map((a) => a.id), ['record-warranty-item']);
+});

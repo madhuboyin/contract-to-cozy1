@@ -219,3 +219,18 @@ test('a confirmation always reconciles, and a reconciliation failure never fails
   assert.match(source, /catch \(error\) \{\s*logger\.warn\(\{ err: error, executionId, operationId: execution\.operationId \}, '\[ASK\] Reconciliation after a confirmed write failed; the write stands'\)/);
   assert.match(source, /reconciliation: \{ staleExecutionIds, markedElsewhere \}/, 'a replayed confirmation reports it too');
 });
+
+test('COVERAGE_COMMAND reads include the inventory answers a coverage-status correction changes', async () => {
+  const reads = registry.ASK_MUTATION_IMPACT_REGISTRY.COVERAGE_COMMAND.reads;
+  assert.ok(reads.includes('DATA_POINT_READ') && reads.includes('INVENTORY_LOOKUP'));
+  const coverageWriter = { ...writer, operationId: 'COVERAGE_COMMAND' };
+  const updates = install([
+    row('origin', { operationId: 'DATA_POINT_READ', updatedAt: t(2) }),
+    row('other', { operationId: 'INVENTORY_LOOKUP', sessionId: 's2', updatedAt: t(3) }),
+  ]);
+  const refreshed = [];
+  const { value } = await reconciliation.runInReconciliationScope(() => executeOperation.reconcileAskExecutionSideEffects('u1', coverageWriter, { sourceExecutionId: 'origin' }, async (userId, id) => { refreshed.push(id); return { response: { executionId: id }, refreshed: true }; }));
+  assert.deepEqual(refreshed, ['origin'], 'the originating answer refreshes exactly once');
+  assert.deepEqual(value.refreshedExecutions.map((r) => r.executionId), ['origin']);
+  assert.deepEqual(updates.map((u) => u.id), ['other'], 'another conversation\'s current inventory answer is marked stale');
+});
