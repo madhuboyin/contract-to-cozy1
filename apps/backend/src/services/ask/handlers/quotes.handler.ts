@@ -69,7 +69,16 @@ type QuoteForReview = {
   readinessStage?: string | null; scopeSummary?: string | null; serviceLabelRaw?: string | null;
   quoteDate?: Date | null; expirationDate?: Date | null; missingFactsJson?: unknown;
   terms?: Array<{ type: string; value: string }> | null;
+  providerLicenseNumber?: string | null; providerLicenseVerified?: boolean | null;
 };
+
+/** The contractor's licence as recorded on the quote. A number on file is shown as recorded; it is called verified only when the quote says it was. */
+export function quoteLicenseLabel(quote: Pick<QuoteForReview, 'providerLicenseNumber' | 'providerLicenseVerified'>): string {
+  const number = quote.providerLicenseNumber?.trim();
+  if (!number) return 'Not recorded';
+  return `${number} · recorded, ${quote.providerLicenseVerified === true ? 'verified' : 'not verified'}`;
+}
+const QUOTE_LICENSE_NOTE = ' A recorded licence number is not proof the licence is current; check it with your licensing authority.';
 
 /**
  * IW-PRES-016 (FRD v1.76). The quotes still in play (every quote the homeowner has not rejected) as a comparison
@@ -104,7 +113,7 @@ export function quoteReviewComparison(
   const ready = new Set(comparability.eligibleQuoteIds);
   return {
     type: 'COMPARISON', id: 'quote-review-table', title: 'Recorded proposals',
-    description: `Ask preserves the canonical readiness state and does not select a provider.${rejected ? ` ${rejected} rejected ${rejected === 1 ? 'quote is' : 'quotes are'} not shown here.` : ''}`,
+    description: `Ask preserves the canonical readiness state and does not select a provider.${active.some((quote) => quote.providerLicenseNumber?.trim()) ? QUOTE_LICENSE_NOTE : ''}${rejected ? ` ${rejected} rejected ${rejected === 1 ? 'quote is' : 'quotes are'} not shown here.` : ''}`,
     options: active.map((quote) => {
       const amount = amountOf(quote);
       const leading = quote.id === lowestId;
@@ -133,6 +142,7 @@ export function quoteReviewComparison(
             : { label: 'Readiness', value: quoteReadinessLabel(quote.readinessStage), tone: 'CAUTION' as const },
           { label: 'Scope', value: scope ?? 'Scope not confirmed', tone: scope ? 'DEFAULT' as const : 'CAUTION' as const },
           { label: 'Warranty', value: warranty ?? 'Not recorded', tone: 'DEFAULT' as const },
+          { label: 'Licence', value: quoteLicenseLabel(quote), tone: 'DEFAULT' as const },
           { label: 'Freshness', ...freshness },
           missing.length
             ? { label: 'Missing facts', value: missing.slice(0, 3).join(', ') + (missing.length > 3 ? ` and ${missing.length - 3} more` : ''), tone: 'CAUTION' as const }
@@ -233,9 +243,9 @@ async function quoteComparisonReviewResult(propertyId: string, canChange = false
   const strip = quoteReviewComparison(quotes, comparability);
   if (strip) blocks.push(strip);
   else if (quotes.length) blocks.push({
-    type: 'TABLE', id: 'quote-review-table', title: 'Recorded proposals', description: 'Ask preserves the canonical readiness state and does not select a provider.',
-    columns: [{ key: 'vendor', label: 'Provider' }, { key: 'amount', label: 'Price' }, { key: 'readiness', label: 'Readiness' }, { key: 'scope', label: 'Scope' }],
-    rows: quotes.map((quote) => ({ id: quote.id, values: { vendor: quote.vendorName, amount: `${quote.currency ?? 'USD'} ${Number(quote.quoteAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })}`, readiness: comparisonReady.has(quote.id) ? 'Comparison ready' : String(quote.readinessStage ?? 'Needs review').toLowerCase().replace(/_/g, ' '), scope: quote.scopeSummary ?? quote.serviceLabelRaw ?? 'Scope not confirmed' } })), actions: [],
+    type: 'TABLE', id: 'quote-review-table', title: 'Recorded proposals', description: `Ask preserves the canonical readiness state and does not select a provider.${quotes.some((quote) => quote.providerLicenseNumber?.trim()) ? QUOTE_LICENSE_NOTE : ''}`,
+    columns: [{ key: 'vendor', label: 'Provider' }, { key: 'amount', label: 'Price' }, { key: 'readiness', label: 'Readiness' }, { key: 'scope', label: 'Scope' }, { key: 'license', label: 'Licence' }],
+    rows: quotes.map((quote) => ({ id: quote.id, values: { vendor: quote.vendorName, amount: `${quote.currency ?? 'USD'} ${Number(quote.quoteAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })}`, readiness: comparisonReady.has(quote.id) ? 'Comparison ready' : String(quote.readinessStage ?? 'Needs review').toLowerCase().replace(/_/g, ' '), scope: quote.scopeSummary ?? quote.serviceLabelRaw ?? 'Scope not confirmed', license: quoteLicenseLabel(quote) } })), actions: [],
   });
   const locked = shown.outcome !== 'OPEN' || ['FINALIZATION', 'BOOKING', 'SCHEDULED', 'COMPLETED', 'CLOSED'].includes(String(shown.journeyStage));
   if (canChange && !locked && quotes.length) {

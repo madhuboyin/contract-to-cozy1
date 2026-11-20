@@ -192,3 +192,19 @@ test('the review answer links to no desktop page; an empty workspace list starts
   assert.deepEqual(viewer.blocks[0].actions, []);
   assert.match(viewer.blocks[0].body, /contributor or owner can create one/);
 });
+
+// Review screenshot (2026-11-19): "compare kitchen quotes and show contractor license numbers". The licence is stored on the quote but the comparison never showed it.
+test('the comparison shows each contractor licence as recorded or not recorded, and says a recorded number is not proof of validity', () => {
+  const strip = quoteReviewComparison([
+    quote('a', { providerLicenseNumber: 'L-12345', providerLicenseVerified: false }),
+    quote('b', { providerLicenseNumber: 'C-777', providerLicenseVerified: true }),
+    quote('c', { providerLicenseNumber: '  ', providerLicenseVerified: null }),
+  ], comparable(['a', 'b', 'c']), now);
+  assert.equal(attr(strip.options[0], 'Licence').value, 'L-12345 · recorded, not verified');
+  assert.equal(attr(strip.options[1], 'Licence').value, 'C-777 · recorded, verified');
+  assert.equal(attr(strip.options[2], 'Licence').value, 'Not recorded');
+  assert.match(strip.description, /not proof the licence is current/);
+  const none = quoteReviewComparison([quote('a'), quote('b')], comparable(['a', 'b']), now);
+  assert.equal(attr(none.options[0], 'Licence').value, 'Not recorded');
+  assert.ok(!/not proof/.test(none.description), 'no licence note when no licence is recorded');
+});
