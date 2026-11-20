@@ -44,6 +44,27 @@ export const ASK_NO_SUPPORTED_CLAIM_TEXT = `I couldn’t find anything in your h
 export const ASK_UNVERIFIABLE_ANSWER_TEXT = `I couldn’t confirm that the answer I prepared matches what you asked, so I haven’t shown it. ${ASK_NAMING_HINT}`;
 
 /**
+ * A question that joins a project's state with a contractor quote's approval ("projects in progress with unapproved contractor quotes") is a real request
+ * Ask cannot answer: there is no recorded link between a project and a quote's approval. Saying so, and offering each half separately, replaces the
+ * generic "name the appliance" advice, which implies the wording was unclear.
+ */
+const PROJECT_WORD = /\bprojects?\b/i;
+const QUOTE_APPROVAL_WORDS = /\b(?:(?:un)?approved|not approved|pending|accepted|rejected)\b.{0,40}\b(?:quotes?|bids?|proposals?|estimates?)\b|\b(?:quotes?|bids?|proposals?|estimates?)\b.{0,40}\b(?:(?:un)?approved|not approved|pending|accepted|rejected)\b/i;
+
+export const ASK_PROJECT_QUOTE_FILTER_TEXT = 'I can’t filter projects by whether their contractor quotes are approved yet, because a project isn’t linked to a quote’s approval in your home record. I can show your projects, or review your recorded contractor quotes, separately.';
+
+export function askUnsupportedProjectQuoteFilter(question: string): { body: string; actions: Array<{ id: string; label: string; interactionType: 'START_WORKFLOW'; message: string; operationId: 'PROJECT_TRACKER_PROJECTS' | 'QUOTE_COMPARISON_REVIEW'; style: 'SECONDARY' }> } | null {
+  if (!PROJECT_WORD.test(question) || !QUOTE_APPROVAL_WORDS.test(question)) return null;
+  return {
+    body: ASK_PROJECT_QUOTE_FILTER_TEXT,
+    actions: [
+      { id: 'unsupported-filter-show-projects', label: 'Show my projects', interactionType: 'START_WORKFLOW', message: 'Show my projects in the project tracker', operationId: 'PROJECT_TRACKER_PROJECTS', style: 'SECONDARY' },
+      { id: 'unsupported-filter-review-quotes', label: 'Review my contractor quotes', interactionType: 'START_WORKFLOW', message: 'Review my contractor quotes', operationId: 'QUOTE_COMPARISON_REVIEW', style: 'SECONDARY' },
+    ],
+  };
+}
+
+/**
  * True for the fallback's own "nothing in the home record answers this" result. It makes no claim about the home, so there is nothing for the
  * relevance check to verify; treating it as an unverified answer produced a dead-end question whose only option was the same fallback.
  */

@@ -15,8 +15,10 @@ import { ASK_SEMANTIC_DOMAINS, type SemanticDomainId } from '../governance/seman
 import {
   buildSliceRichPresentation,
   verifyRichPresentationPopulationEquivalence,
+  type SlicePresentationRow,
   type SliceRichPresentationEquivalenceReport,
 } from '../slice/richPresentationAdapter';
+import { OPEN_CLAIM_STATUSES, claimItemActions } from '../../handlers/claims.handler';
 import { prisma } from '../../../../lib/prisma';
 import { DATA_POINT_BY_ID } from '../../dataPoint/dataPointCatalogue';
 import { humanizeEnumTokensInCopy, humanizePresentationToken } from '../containment/presentationHumanizer';
@@ -104,6 +106,8 @@ export interface CrossDomainClaimRecord {
   readonly requiredDocumentTypes: readonly string[];
   /** Claim.type (WATER_DAMAGE, FIRE_SMOKE, STORM_WIND_HAIL, THEFT_VANDALISM, LIABILITY, ...). Absent only on fixtures; a stored claim always has one. */
   readonly claimType?: string;
+  /** The stored Claim.status (DRAFT, IN_PROGRESS, ...), which `status` collapses. Absent only on fixtures. */
+  readonly rawStatus?: string;
 }
 
 export interface CrossDomainDocumentRecord {
@@ -407,7 +411,9 @@ function finalizeReceiptAndPresentation(input: {
   readonly operationAdapter: string;
   readonly sourceType: string;
   readonly predicateIds: readonly string[];
-  readonly rows: ReadonlyArray<{ readonly id: string; readonly label: string; readonly subtitle?: string; readonly groupKey?: string }>;
+  readonly rows: ReadonlyArray<Pick<SlicePresentationRow, 'id' | 'label' | 'subtitle' | 'groupKey' | 'description' | 'meta' | 'status' | 'entityType' | 'actions'>>;
+  /** Block id of the list; the claim list uses the one the canonical claim renderer is selected by. */
+  readonly listId?: string;
   readonly title: string;
   readonly summaryBody: string;
   readonly variantId: string;
@@ -421,7 +427,7 @@ function finalizeReceiptAndPresentation(input: {
   readonly blocks: readonly AskPresentationBlock[];
 } {
   const resolvedRecordIds = input.rows.map((r) => r.id);
-  const cleanRows = input.rows.map((r) => ({ id: r.id, label: humanizeEnumTokens(r.label), ...(r.subtitle ? { subtitle: humanizeEnumTokens(r.subtitle) } : {}), ...(r.groupKey ? { groupKey: r.groupKey } : {}) }));
+  const cleanRows = input.rows.map((r) => ({ ...r, label: humanizeEnumTokens(r.label), ...(r.subtitle ? { subtitle: humanizeEnumTokens(r.subtitle) } : {}) }));
   const cleanTitle = humanizeEnumTokens(input.title);
   const cleanSummary = humanizeEnumTokens(input.summaryBody);
   const unknownCount = input.unknownCount ?? 0;
@@ -455,7 +461,8 @@ function finalizeReceiptAndPresentation(input: {
     receipt,
     title: cleanTitle,
     summaryBody: renderedBody,
-    rows: input.projection === 'COUNT' ? [] : cleanRows.map((r) => ({ id: r.id, label: r.label, subtitle: r.subtitle, groupKey: r.groupKey })),
+    ...(input.listId ? { listId: input.listId } : {}),
+    rows: input.projection === 'COUNT' ? [] : cleanRows,
   });
 
   const entailment = verifySemanticReadReceiptEntailment({
@@ -1358,7 +1365,8 @@ function executeNewStackFacet(
     const wantsOpen = atoms.some((atom) => atom.predicateId === 'predicate.claim.has_status' && atom.enumStatus === 'OPEN');
     const wantedTypes = [...new Set(atoms.filter((atom) => atom.predicateId === 'predicate.claim.has_type').map((atom) => String(atom.enumStatus)))];
     const inProperty = snapshot.claims.filter((c) => c.propertyId === snapshot.propertyId);
-    const matchesStatus = (c: CrossDomainClaimRecord) => !wantsOpen || c.status === 'OPEN';
+    // "Open" is the claims page's own definition (draft, in progress, submitted, under review), so this answer and that page agree.
+    const matchesStatus = (c: CrossDomainClaimRecord) => !wantsOpen || (c.rawStatus ? OPEN_CLAIM_STATUSES.includes(c.rawStatus) : c.status === 'OPEN');
     const untyped = wantedTypes.length > 0 ? inProperty.filter((c) => matchesStatus(c) && !c.claimType) : [];
     const openClaims = inProperty.filter((c) => matchesStatus(c) && (wantedTypes.length === 0 || (c.claimType !== undefined && wantedTypes.includes(c.claimType))));
     const CLAIM_TYPE_WORDS: Record<string, string> = {
@@ -1366,7 +1374,14 @@ function executeNewStackFacet(
     };
     const typeWords = wantedTypes.map((claimType) => CLAIM_TYPE_WORDS[claimType] ?? claimType.toLowerCase().replace(/_/g, ' ')).join(' or ');
     const kind = `${wantsOpen ? 'open ' : ''}${typeWords ? `${typeWords} ` : ''}claim`;
-    const rows = openClaims.map((c) => ({ id: c.id, label: c.title, subtitle: c.status }));
+    // The same row the claims list builds: it opens the canonical claim inline, with its legal status changes.
+    const claimActions = claimItemActions((role === 'VIEWER' ? 'VIEWER' : 'CONTRIBUTOR') as Parameters<typeof claimItemActions>[0]);
+    const rows = openClaims.map((c) => ({
+      id: c.id, label: c.title,
+      ...(c.claimType ? { description: `Filed as ${c.claimType.toLowerCase().replace(/_/g, ' ')}` } : {}),
+      meta: [(c.rawStatus ?? c.status).toLowerCase().replace(/_/g, ' ')],
+      status: c.rawStatus ?? c.status, entityType: 'CLAIM', actions: claimActions,
+    }));
     const summary = wantedTypes.length === 0
       ? `${openClaims.length} open claim(s): ${openClaims.map((c) => c.title).join(', ')}.`
       : openClaims.length === 0
@@ -1382,6 +1397,7 @@ function executeNewStackFacet(
       sourceType: 'Claim',
       predicateIds: facet.relations.length > 0 ? [...new Set(facet.relations.map((r) => r.predicateId))] : ['predicate.claim.has_status'],
       rows,
+      listId: 'incident-claim-list',
       title: wantedTypes.length === 0 ? 'Open claims' : `${kind.charAt(0).toUpperCase()}${kind.slice(1)}s`,
       summaryBody: summaryWithNote,
       variantId: 'variant.open_claims',
@@ -3028,6 +3044,7 @@ export async function loadCrossDomainPropertySnapshot(
       status: mapClaimStatus(String(claim.status)),
       requiredDocumentTypes: reqTypes,
       ...(claim.type ? { claimType: String(claim.type) } : {}),
+      ...(claim.status ? { rawStatus: String(claim.status) } : {}),
     };
   });
 

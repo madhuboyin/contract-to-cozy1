@@ -579,7 +579,7 @@ test('Phase 6 review fixes: repeated span mapping, strict calibration bound, bud
     ['propertyMaintenanceTask', () => []],
     ['document', () => []],
     ['claim', () => [
-      { id: 'claim-1', propertyId: 'prop-p6-1', title: 'Roof Hail Claim', status: 'OPEN', openedAt: new Date('2026-09-01T00:00:00Z'), estimatedLossCents: 500000, documents: [], checklistItems: [] },
+      { id: 'claim-1', propertyId: 'prop-p6-1', title: 'Roof Hail Claim', status: 'IN_PROGRESS', openedAt: new Date('2026-09-01T00:00:00Z'), estimatedLossCents: 500000, documents: [], checklistItems: [] },
     ]],
     ['quoteComparisonQuote', () => [
       {

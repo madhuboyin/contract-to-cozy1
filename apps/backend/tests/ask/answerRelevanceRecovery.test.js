@@ -97,3 +97,16 @@ test('the phrasings the messages suggest really reach an answer', () => {
     assert.ok(decision.stage === 'DETERMINISTIC' || decision.stage === 'LOCAL_CLASSIFIER', `${message} -> ${decision.stage}`);
   }
 });
+
+// Review screenshot (2026-11-19): "which projects are in progress and have unapproved contractor quotes?" ended in "name the appliance, system, task or document",
+// which implied the wording was unclear. The real gap is that a project has no recorded link to a quote's approval.
+test('projects filtered by quote approval say what cannot be filtered and offer each half, not the appliance hint', () => {
+  const validation = validateAskAnswerTrustPipeline({ question: 'which projects are in progress and have unapproved contractor quotes?', operationId: 'GROUNDED_GUIDANCE', result: unrelatedFact(), semanticEnabled: true, propertyId: 'p1' });
+  const block = validation.result.blocks[0];
+  assert.equal(validation.result.reasonCode, 'ASK_ANSWER_UNVERIFIED_NO_ALTERNATIVE');
+  assert.match(block.body, /can’t filter projects by whether their contractor quotes are approved/);
+  assert.ok(!block.body.includes('dishwasher'));
+  assert.deepEqual(block.actions.map((action) => action.operationId), ['PROJECT_TRACKER_PROJECTS', 'QUOTE_COMPARISON_REVIEW']);
+  const plain = validateAskAnswerTrustPipeline({ question: 'how many bedrooms do i have', operationId: 'GROUNDED_GUIDANCE', result: unrelatedFact(), semanticEnabled: true, propertyId: 'p1' });
+  assert.equal(plain.result.blocks[0].body, ASK_UNVERIFIABLE_ANSWER_TEXT);
+});

@@ -74,6 +74,15 @@ test('the live prompt through the real handler is filtered by the type the claim
   const text = JSON.stringify(result.blocks);
   assert.match(text, /Water damage claim/);
   assert.ok(!/Fire or smoke claim/.test(text), 'the fire claim is not a water damage claim');
+  // The row is the claims list's own: it opens the canonical claim, shows the stored status (a draft is shown as a draft) and carries its actions.
+  const list = result.blocks.find((block) => block.type === 'GROUPED_LIST');
+  assert.equal(list.id, 'incident-claim-list');
+  const item = list.sections[0].items[0];
+  assert.equal(item.entityType, 'CLAIM');
+  assert.equal(item.status, 'DRAFT');
+  assert.deepEqual(item.meta, ['draft']);
+  assert.equal(item.description, 'Filed as water damage');
+  assert.ok(item.actions.length > 0);
 });
 
 // "fire" and "smoke" were emergencies on their own in the cross-domain parser, so a fire CLAIM or a smoke-detector question was answered with the emergency card.

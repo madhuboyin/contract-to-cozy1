@@ -344,3 +344,13 @@ test('Update coverage status shows inline and launches COVERAGE_COMMAND for that
   fireEvent.click(screen.getByRole('button', { name: 'Update coverage status' }));
   expect(onAction).toHaveBeenCalledWith('INVENTORY_ITEM', 'item-0', 'Update the coverage status for this inventory item.', 'COVERAGE_COMMAND', 'MUTATE_RECORD');
 });
+
+// Row density: editability sits on the item's own header line, and the contextual action shares one cell with "View details".
+test('editability badge shares the title line and the row action shares a cell with View details', () => {
+  const enriched = blockWithEnrichedRows(1);
+  render(<InventoryResultList block={enriched} propertyId="home" onAction={jest.fn()} onFilter={() => {}} onPage={() => {}} onAccessLost={() => {}} link={(_, label) => label} />);
+  const title = screen.getByRole('button', { name: 'Appliance 0' });
+  expect(title.parentElement).toContainElement(screen.getByText('Editing available'));
+  const cell = screen.getByRole('button', { name: 'Record warranty' }).closest('td');
+  expect(cell).toContainElement(screen.getByRole('button', { name: 'View details for Appliance 0' }));
+});

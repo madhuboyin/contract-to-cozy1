@@ -10,6 +10,8 @@ export interface SlicePresentationRow {
   readonly description?: string;
   readonly meta?: readonly string[];
   readonly stateCode?: string;
+  /** The record's own status, for a renderer that shows it (the canonical claim list). */
+  readonly status?: string;
   readonly badgeLabel?: string;
   readonly groupKey?: string;
   /** Grounded entity type of this row. Set only with `actions`, so a row without a governed next step renders exactly as before. */
@@ -81,6 +83,7 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
           meta: [...(row.meta ?? [])].map(humanizeEnumTokensInCopy),
           subtitle: row.subtitle ? humanizeEnumTokensInCopy(row.subtitle) : undefined,
           description: row.description ? humanizeEnumTokensInCopy(row.description) : undefined,
+          ...(row.status ? { status: row.status } : {}),
           ...(row.entityType ? { entityType: row.entityType } : {}),
           ...(row.actions && row.actions.length > 0 ? { actions: row.actions.map((action) => ({ ...action })) } : {}),
           badge: row.stateCode
