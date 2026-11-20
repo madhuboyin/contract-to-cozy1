@@ -385,6 +385,8 @@ export function groundedSellerPrepVerdict(question: string, result: AskOperation
   if (askedNarrowing && !filtered) return fail('NARROWING_WAS_NOT_APPLIED');
   if (!askedNarrowing && filtered) return fail('FILTERED_VIEW_FOR_AN_UNFILTERED_QUESTION');
   if (SELLER_PREP_ASKS_APPLIANCES.test(question) && !/appliance/i.test(summary?.body ?? '')) return fail('APPLIANCE_NARROWING_NOT_STATED');
+  // A cost ceiling is stated as applied, or as not applied for a non-owner (cost detail is owner-only); an answer that says neither is not delivered.
+  if (SELLER_PREP_ASKS_COST_CEILING.test(question) && !/maximum estimate is below|was not applied/i.test(summary?.body ?? '')) return fail('COST_CEILING_NOT_STATED');
   return { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] };
 }
 const sellerPrepRouteGuard = (message: string): boolean => !SELLER_PREP_COMMAND.test(message) && !SELLER_PREP_OTHER_JOB.test(message);

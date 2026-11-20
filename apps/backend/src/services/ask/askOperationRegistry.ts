@@ -1315,7 +1315,6 @@ const renovationPermitPattern = /\b(?:renovation|remodel|addition|project|permit
 // suggestion text already says "Check sale readiness" verbatim, which this
 // pattern is written to catch.
 const sellerPrepChecklistPattern = /\b(?:seller prep|seller readiness|sale readiness|selling readiness|listing readiness)\b|\b(?:am i|are we|is (?:my|this|the) (?:home|house))\b.{0,25}\bready\b.{0,25}\bto (?:sell|list)\b|\b(?:repairs?|fix(?:es)?|fixing|improvements?)\b.{0,50}\bbefore (?:i |we )?(?:sell|selling|list|listing)\b|\bcheck\b.{0,15}\b(?:sale|seller|selling)\b.{0,15}\breadiness\b/i;
-const sellerPrepFilteredReadPattern = /\b(?:seller prep|sale readiness|listing readiness)\b.{0,100}\b(?:less than|under|below)\s*\$\s?\d/i;
 const compoundCapabilityFilterPattern = /\b(?:high|critical)\s+(?:failure\s+)?risk\b|\b(?:seller prep|sale readiness|listing readiness)\b.{0,100}\bhigh priority\b/i;
 // Phase 7, write-path slice (implementation plan §13; FRD §31). Requires an
 // explicit decision verb bidirectionally near "seller prep"/"sale
@@ -1920,7 +1919,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
     return resolved('SELLER_PREP_ITEM_DECISION', 0.97, 'DET_SELLER_PREP_ITEM_DECISION_01');
   }
   // A single recorded detail of the sale prep profile ("what condition is the paint in for my seller prep") is a data point; the checklist read lists items and never states the profile's own values.
-  if (sellerPrepChecklistPattern.test(message) && !sellerPrepFilteredReadPattern.test(message) && !explicitCapabilityPattern.test(message) && !(dataPointQuestionPattern.test(message) && isSaleProfileQuestion(message))) {
+  if (sellerPrepChecklistPattern.test(message) && !explicitCapabilityPattern.test(message) && !(dataPointQuestionPattern.test(message) && isSaleProfileQuestion(message))) {
     return resolved('SELLER_PREP_CHECKLIST', 0.97, 'DET_SELLER_PREP_CHECKLIST_01');
   }
   if (sellUpgradeValuePattern.test(message) && sellWordPattern.test(message) && !holdOrRentWordPattern.test(message) && !itemAttributeWriteIntentPattern.test(message.replace(/\badd(?:s|ed)? (?:the )?(?:most |more )?value\b/gi, '')) && !explicitCapabilityPattern.test(message)) {

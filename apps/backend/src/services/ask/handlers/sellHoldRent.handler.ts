@@ -516,11 +516,21 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string, mes
     actions: filteredChecklist ? [] : caseActions,
   }];
   // The note rides in the existing summary (no extra block, so the checklist keeps its declared shape).
-  if (!isOwner && hadCostDetail) (blocks[0] as { body: string }).body += ' Cost details are available to the property owner.';
+  if (!isOwner && under) (blocks[0] as { body: string }).body += ` Cost-based filtering is available to the property owner, so the $${under[1]} limit was not applied.`;
+  else if (!isOwner && hadCostDetail) (blocks[0] as { body: string }).body += ' Cost details are available to the property owner.';
+  // Says what a filter means, so a short list is not read as "no seller work" and a borderline or unestimated item's absence is explained.
+  if (filteredChecklist && !compactAppliance) {
+    const meaning = [
+      ...(highPriorityOnly ? ['it is classified as a material blocker'] : []),
+      ...(under && isOwner ? [`its recorded maximum estimate is below $${under[1]} (items with no estimate are not counted)`] : []),
+    ];
+    if (meaning.length) (blocks[0] as { body: string }).body += ` Matching means ${meaning.join(' and ')}.`;
+  }
 
   // Notable upgrades (FRD v1.443): the page's pick-list of completed projects, as-built materials and key improvements. Its own block, because the summary
   // above already holds the three actions a summary block allows. Shown to every role (a read); only a contributor gets the button.
-  const { candidates: upgradeCandidates } = await PropertySaleCaseService.getNotableUpgradeCandidates(userId, propertyId);
+  // A filtered lookup is a read of the items, so the case-level upgrade and transition blocks stay out of it.
+  const { candidates: upgradeCandidates } = filteredChecklist ? { candidates: [] } : await PropertySaleCaseService.getNotableUpgradeCandidates(userId, propertyId);
   if (upgradeCandidates.length) {
     const confirmedUpgrades = upgradeCandidates.filter((candidate) => candidate.confirmed).length;
     blocks.push({
@@ -535,7 +545,7 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string, mes
   }
 
   // Ownership transition (FRD v1.444): on a closed sale, the record of how ownership transferred. A read for every role; a contributor gets the step the transition is at.
-  if (overview.saleCase.status === 'CLOSED') {
+  if (!filteredChecklist && overview.saleCase.status === 'CLOSED') {
     const transition = (overview.transitions ?? [])[0] as { sellerRetentionDecision: string | null; buyerPackageId: string | null; completedAt: Date | null } | undefined;
     const transitionAction = (kind: 'TRANSITION_START' | 'TRANSITION' | 'COMPLETE', label: string, style: 'PRIMARY' | 'SECONDARY' = 'SECONDARY') => ({
       id: SALE_CASE_ACTION_IDS[kind], label, message: SALE_CASE_MESSAGES[kind], style, interactionType: 'START_WORKFLOW' as const, operationId: 'SELLER_PREP_CASE_COMMAND' as const,

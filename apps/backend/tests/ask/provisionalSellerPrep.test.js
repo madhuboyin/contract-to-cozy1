@@ -103,3 +103,25 @@ test('a result that is not the checklist is never grounded, whatever the questio
   const verdict = groundedSellerPrepVerdict('show my seller readiness', other);
   assert.equal(verdict.outcome, 'FAIL'); assert.ok(verdict.reasonCodes.includes('ANSWER_IS_NOT_A_VERIFIED_VARIANT'));
 });
+
+// Review screenshot (2026-11-19): "show seller prep items that cost less than $500 and are high priority" ended in "which request did you want this answer to address" with repair-or-replace as the alternative.
+{
+  const { groundedSellerPrepVerdict } = require('../../src/services/ask/support/provisionalRead.ts');
+  const { matchesSellerPrepChecklistAnswerContract } = require('../../src/services/ask/askSellerPrepIntent.ts');
+  const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
+  const summary = (title, body) => ({ type: 'SUMMARY', id: 'seller-prep-summary', title, body, tone: 'DEFAULT', actions: [] });
+  const answer = (title, body, extra = []) => ({ status: 'ANSWERED', reasonCode: 'SELLER_PREP_ITEMS_OPEN', blocks: [summary(title, body), ...extra] });
+  const question = 'show seller prep items that cost less than $500 and are high priority';
+  test('a cost-ceiling plus high-priority seller-prep read is a provisional read, and its answer must state the ceiling', () => {
+    assert.equal(resolveAskRoutingCascade(question, { propertyId: 'p1' }).stage, 'PROVISIONAL');
+    assert.equal(groundedSellerPrepVerdict(question, answer('Seller-prep items that match', '2 open items. Matching means it is classified as a material blocker and its recorded maximum estimate is below $500 (items with no estimate are not counted).')).outcome, 'PASS');
+    assert.equal(groundedSellerPrepVerdict(question, answer('Seller-prep items that match', '2 open items. Cost-based filtering is available to the property owner, so the $500 limit was not applied.')).outcome, 'PASS');
+    assert.equal(groundedSellerPrepVerdict(question, answer('Seller-prep items that match', '2 open items.')).outcome, 'FAIL');
+    assert.equal(groundedSellerPrepVerdict(question, answer('Your seller-prep checklist', '9 open items.')).outcome, 'FAIL');
+  });
+  test('the checklist answer contract accepts the optional upgrades and transition blocks the handler can add', () => {
+    const extra = ['seller-prep-upgrades', 'seller-prep-transition'].map((id) => ({ type: 'SUMMARY', id, title: 't', body: 'b', tone: 'DEFAULT', actions: [] }));
+    assert.equal(matchesSellerPrepChecklistAnswerContract(answer('Your seller-prep checklist', 'x', extra)), true);
+    assert.equal(matchesSellerPrepChecklistAnswerContract(answer('Your seller-prep checklist', 'x', [{ type: 'SUMMARY', id: 'something-else', title: 't', body: 'b', tone: 'DEFAULT', actions: [] }])), false);
+  });
+}

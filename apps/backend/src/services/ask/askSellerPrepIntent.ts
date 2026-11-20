@@ -6,6 +6,9 @@ const SELLER_PREP_CHECKLIST_BLOCK_IDS = new Set([
   'seller-prep-open-items',
   'seller-prep-evidence',
   'seller-prep-boundary',
+  // Optional blocks the checklist read adds to an unfiltered answer (FRD v1.443, v1.444): leaving them out made a valid answer read as a different request.
+  'seller-prep-upgrades',
+  'seller-prep-transition',
   'related-capabilities',
   'ask-next-actions',
 ]);
