@@ -1619,7 +1619,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "BREAK_EVEN_ANALYSIS",
   "confidence": 0.96,
   "order": 121,
-  "hash": "2d7b94c96296f1d3",
+  "hash": "0e421d846b290d4a",
   "condition": "breakEvenAnalysisPattern.test(message) && !breakEvenOtherSensePattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:breakEvenAnalysisPattern",

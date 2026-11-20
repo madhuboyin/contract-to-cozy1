@@ -15,7 +15,7 @@ export const BREAK_EVEN_WHAT_IF_LABELS: Record<keyof BreakEvenWhatIf, string> = 
   sellingCostPercent: 'Selling costs', homeValueNow: 'Home value today',
 };
 
-const FRAMING = /\b(?:what if|what would happen if|suppose|assum\w+|hypothetically|if (?:the|my|home|house|appreciation|costs?|expenses?|taxes|insurance|inflation)|with (?:an? )?(?:appreciation|growth|inflation))\b/i;
+const FRAMING = /\b(?:what if|what would happen if|suppose|assum\w+|hypothetically|if (?:the|my|home|house|appreciation|costs?|expenses?|taxes|insurance|inflation)|if (?:[a-z]+ ){1,2}(?:costs?|expenses?|taxes|premiums?|values?)|with (?:an? )?(?:appreciation|growth|inflation))\b/i;
 const PCT = String.raw`(-?\d{1,2}(?:\.\d{1,2})?)\s*(?:%|percent)`;
 const GAP = String.raw`[^\d%$.]{0,30}?`;
 /** Reads "<term> ... N%" (or "N% <term>"), bounded; returns the value and the message with that phrase removed so a later, broader term cannot reuse its number. */

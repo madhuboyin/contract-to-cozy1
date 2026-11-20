@@ -449,10 +449,30 @@ export function groundedQuoteReviewVerdict(question: string, result: AskOperatio
 }
 const quoteReviewRouteGuard = (message: string): boolean => QUOTE_TOPIC.test(message) && !QUOTE_OTHER_JOB.test(message);
 
+// ---- break-even analysis ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// A read of the ownership break-even projection (it persists only an analysis snapshot, declared DERIVED). It is delivered when (1) the question is about break-even or owning against renting and is not a command (save,
+// update, change, record, set, add), (2) the answer is the projection or the what-if comparison, and (3) a hypothetical the question stated ("what if", "if maintenance costs increase by 10%") is shown as a changed
+// assumption: a standard projection is never delivered for a question that changed an assumption (an out-of-bound or unreadable value would otherwise be dropped without saying so).
+const BREAK_EVEN_TOPIC = /\b(?:break[- ]?even|breaks even|broken even)\b|\b(?:owning|ownership|buying)\b.{0,40}\b(?:beats?|overtakes?|outperforms?|pays? off|pays? for itself|(?:becomes?|gets?|is) (?:cheaper|better) than)\b/i;
+const BREAK_EVEN_OTHER_JOB = /\b(?:save|update|change|record|set|add|create|start|refinanc\w*|solar|upgrade|renovat\w*|remodel\w*|appliance|replace\w*|quote)\b/i;
+const BREAK_EVEN_HYPOTHETICAL = /\b(?:what if|what would happen if|suppose|assum\w+|hypothetically)\b|\bif\b.{0,50}\d\s*(?:%|percent)/i;
+export function groundedBreakEvenVerdict(question: string, result: AskOperationResult): GroundedReadVerdict {
+  const fail = (code: string): GroundedReadVerdict => ({ outcome: 'FAIL', reasonCodes: ['PROVISIONAL_READ_NOT_GROUNDED', code] });
+  if (!BREAK_EVEN_TOPIC.test(question)) return fail('QUESTION_NOT_ABOUT_BREAK_EVEN');
+  if (BREAK_EVEN_OTHER_JOB.test(question)) return fail('ANOTHER_OPERATION_OWNS_THE_QUESTION');
+  if (result.status !== 'ANSWERED' && result.status !== 'READY_WITH_LIMITATIONS') return fail('ANSWER_IS_NOT_A_DELIVERABLE_STATUS');
+  const ids = result.blocks.map((block) => String((block as { id?: string }).id ?? ''));
+  const whatIf = ids.includes('break-even-what-if-comparison');
+  if (!whatIf && !ids.includes('break-even-summary')) return fail('ANSWER_IS_NOT_A_VERIFIED_VARIANT');
+  if (BREAK_EVEN_HYPOTHETICAL.test(question) && !whatIf) return fail('HYPOTHETICAL_NOT_SHOWN_AS_A_CHANGED_ASSUMPTION');
+  return { outcome: 'PASS', reasonCodes: ['PROVISIONAL_READ_GROUNDED'] };
+}
+const breakEvenRouteGuard = (message: string): boolean => BREAK_EVEN_TOPIC.test(message) && !BREAK_EVEN_OTHER_JOB.test(message);
+
 // ---- which operations may be tried provisionally --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 export type GroundedReadCheck = (question: string, result: AskOperationResult) => GroundedReadVerdict;
 /** FR-GATE-8: an operation may be tried provisionally only together with a grounded delivery check. This table IS the allowlist (fastPathCertificates derives PROVISIONAL_READ_OPERATIONS from it). */
-export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict, WARRANTY_LOOKUP: groundedWarrantyVerdict, HOME_STATUS_BOARD: groundedStatusBoardVerdict, HOME_BASICS_GUIDE: groundedHomeBasicsVerdict, PROPERTY_SUMMARY: groundedPropertySummaryVerdict, INCIDENT_CLAIM_STATUS: groundedClaimStatusVerdict, SAVED_RESULTS: groundedSavedResultsVerdict, WORK_OVERVIEW: groundedWorkOverviewVerdict, ITEM_REPLACEMENT_COST: groundedItemCostVerdict, SELLER_PREP_CHECKLIST: groundedSellerPrepVerdict, APPLIANCE_FAILURE_RISK: groundedApplianceRiskVerdict, QUOTE_COMPARISON_REVIEW: groundedQuoteReviewVerdict });
+export const GROUNDED_READ_CHECKS: Readonly<Partial<Record<AskOperationId, GroundedReadCheck>>> = Object.freeze({ DATA_POINT_READ: groundedReadVerdict, MAINTENANCE_STATUS: groundedMaintenanceVerdict, WARRANTY_LOOKUP: groundedWarrantyVerdict, HOME_STATUS_BOARD: groundedStatusBoardVerdict, HOME_BASICS_GUIDE: groundedHomeBasicsVerdict, PROPERTY_SUMMARY: groundedPropertySummaryVerdict, INCIDENT_CLAIM_STATUS: groundedClaimStatusVerdict, SAVED_RESULTS: groundedSavedResultsVerdict, WORK_OVERVIEW: groundedWorkOverviewVerdict, ITEM_REPLACEMENT_COST: groundedItemCostVerdict, SELLER_PREP_CHECKLIST: groundedSellerPrepVerdict, APPLIANCE_FAILURE_RISK: groundedApplianceRiskVerdict, QUOTE_COMPARISON_REVIEW: groundedQuoteReviewVerdict, BREAK_EVEN_ANALYSIS: groundedBreakEvenVerdict });
 
 /**
  * FR-CAP-3 Phase 1 disposition for every provisional family. FAST_PATH_RULES
@@ -475,6 +495,7 @@ export const PROVISIONAL_READ_FAMILY_DISPOSITIONS: Readonly<Record<string, {
   WORK_OVERVIEW: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'workOverviewRouteGuard', 'groundedWorkOverviewVerdict', 'operationAnswerContract'] },
   ITEM_REPLACEMENT_COST: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'itemCostRouteGuard', 'groundedItemCostVerdict', 'operationAnswerContract'] },
   SELLER_PREP_CHECKLIST: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'sellerPrepRouteGuard', 'groundedSellerPrepVerdict', 'sellerPrepHandlerBlockContract'] },
+  BREAK_EVEN_ANALYSIS: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'breakEvenRouteGuard', 'groundedBreakEvenVerdict', 'breakEvenHandlerBlockContract'] },
   QUOTE_COMPARISON_REVIEW: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'quoteReviewRouteGuard', 'groundedQuoteReviewVerdict', 'quoteReviewHandlerBlockContract'] },
   APPLIANCE_FAILURE_RISK: { disposition: 'DEMOTED_GROUNDED_ONLY', admissionEvidence: ['FAST_PATH_RULES:DEMOTED', 'applianceRiskRouteGuard', 'groundedApplianceRiskVerdict', 'applianceFilterPhrases'] },
 });
@@ -492,7 +513,7 @@ export function verifyProvisionalReadFamilyDispositions(): readonly string[] {
 }
 export const hasGroundedReadCheck = (operationId: AskOperationId): boolean => operationId in GROUNDED_READ_CHECKS;
 /** Checked before a provisional read is started: false means the rule's match is not the request this read answers, so the turn keeps the strict path. */
-export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ QUOTE_COMPARISON_REVIEW: quoteReviewRouteGuard, MAINTENANCE_STATUS: maintenanceRouteGuard, WARRANTY_LOOKUP: warrantyRouteGuard, HOME_STATUS_BOARD: statusBoardRouteGuard, HOME_BASICS_GUIDE: homeBasicsRouteGuard, PROPERTY_SUMMARY: propertySummaryRouteGuard, INCIDENT_CLAIM_STATUS: claimStatusRouteGuard, SAVED_RESULTS: savedResultsRouteGuard, WORK_OVERVIEW: workOverviewRouteGuard, ITEM_REPLACEMENT_COST: itemCostRouteGuard, SELLER_PREP_CHECKLIST: sellerPrepRouteGuard, APPLIANCE_FAILURE_RISK: applianceRiskRouteGuard });
+export const GROUNDED_READ_ROUTE_GUARDS: Readonly<Partial<Record<AskOperationId, (message: string) => boolean>>> = Object.freeze({ BREAK_EVEN_ANALYSIS: breakEvenRouteGuard, QUOTE_COMPARISON_REVIEW: quoteReviewRouteGuard, MAINTENANCE_STATUS: maintenanceRouteGuard, WARRANTY_LOOKUP: warrantyRouteGuard, HOME_STATUS_BOARD: statusBoardRouteGuard, HOME_BASICS_GUIDE: homeBasicsRouteGuard, PROPERTY_SUMMARY: propertySummaryRouteGuard, INCIDENT_CLAIM_STATUS: claimStatusRouteGuard, SAVED_RESULTS: savedResultsRouteGuard, WORK_OVERVIEW: workOverviewRouteGuard, ITEM_REPLACEMENT_COST: itemCostRouteGuard, SELLER_PREP_CHECKLIST: sellerPrepRouteGuard, APPLIANCE_FAILURE_RISK: applianceRiskRouteGuard });
 export const provisionalRouteAllowed = (operationId: AskOperationId, message: string): boolean => (GROUNDED_READ_ROUTE_GUARDS[operationId]?.(message) ?? true);
 export function groundedVerdictFor(operationId: AskOperationId, question: string, result: AskOperationResult): GroundedReadVerdict {
   const check = GROUNDED_READ_CHECKS[operationId];

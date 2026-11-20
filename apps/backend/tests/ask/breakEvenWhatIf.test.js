@@ -28,3 +28,26 @@ test('no hypothetical framing, no assumption, or an out-of-range value is not a 
   assert.equal(parse('what if selling costs are 35%'), null);
   assert.equal(parse('what if my home were worth $50'), null);
 });
+
+// Review screenshot (2026-11-19): "how long until owning beats renting if maintenance costs increase by 10%?" offered three maintenance-task options.
+{
+  const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
+  const { groundedBreakEvenVerdict } = require('../../src/services/ask/support/provisionalRead.ts');
+  const message = 'how long until owning beats renting if maintenance costs increase by 10%?';
+  test('owning-beats-renting wording with a maintenance cost what-if routes to the break-even read and keeps the 10%', () => {
+    const routed = resolveAskRoutingCascade(message, { propertyId: 'p1' });
+    assert.equal(routed.operation.operationId, 'BREAK_EVEN_ANALYSIS');
+    assert.equal(routed.stage, 'PROVISIONAL');
+    assert.deepEqual(parse(message), { maintenanceGrowthRate: 0.1 });
+    assert.deepEqual(parse('when will my home break even if maintenance costs increase by 10%'), { maintenanceGrowthRate: 0.1 });
+    assert.equal(resolveAskRoutingCascade('how long until owning beats renting', { propertyId: 'p1' }).operation.operationId, 'BREAK_EVEN_ANALYSIS');
+    assert.equal(resolveAskRoutingCascade('what maintenance is due', { propertyId: 'p1' }).operation.operationId !== 'BREAK_EVEN_ANALYSIS', true);
+  });
+  test('the grounded verdict never delivers a standard projection for a question that changed an assumption', () => {
+    const answer = (...ids) => ({ status: 'ANSWERED', blocks: ids.map((id) => ({ type: 'SUMMARY', id, title: 't', body: 'b', tone: 'DEFAULT', actions: [] })) });
+    assert.equal(groundedBreakEvenVerdict(message, answer('break-even-what-if-comparison')).outcome, 'PASS');
+    assert.equal(groundedBreakEvenVerdict(message, answer('break-even-summary')).outcome, 'FAIL');
+    assert.equal(groundedBreakEvenVerdict('when will my home break even', answer('break-even-summary')).outcome, 'PASS');
+    assert.equal(groundedBreakEvenVerdict('save maintenance growth of 10% for break even', answer('break-even-summary')).outcome, 'FAIL');
+  });
+}
