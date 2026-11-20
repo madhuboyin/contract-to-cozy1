@@ -53,7 +53,7 @@ const QUOTE_APPROVAL_WORDS = /\b(?:(?:un)?approved|not approved|pending|accepted
 
 export const ASK_PROJECT_QUOTE_FILTER_TEXT = 'I can’t filter projects by whether their contractor quotes are approved yet, because a project isn’t linked to a quote’s approval in your home record. I can show your projects, or review your recorded contractor quotes, separately.';
 
-export function askUnsupportedProjectQuoteFilter(question: string): { body: string; actions: Array<{ id: string; label: string; interactionType: 'START_WORKFLOW'; message: string; operationId: 'PROJECT_TRACKER_PROJECTS' | 'QUOTE_COMPARISON_REVIEW'; style: 'SECONDARY' }> } | null {
+export function askUnsupportedProjectQuoteFilter(question: string): { body: string; actions: Array<{ id: string; label: string; interactionType: 'START_WORKFLOW'; message: string; operationId: 'PROJECT_TRACKER_PROJECTS' | 'QUOTE_COMPARISON_REVIEW' | 'MAINTENANCE_STATUS'; style: 'SECONDARY' }> } | null {
   if (!PROJECT_WORD.test(question) || !QUOTE_APPROVAL_WORDS.test(question)) return null;
   return {
     body: ASK_PROJECT_QUOTE_FILTER_TEXT,
@@ -62,6 +62,30 @@ export function askUnsupportedProjectQuoteFilter(question: string): { body: stri
       { id: 'unsupported-filter-review-quotes', label: 'Review my contractor quotes', interactionType: 'START_WORKFLOW', message: 'Review my contractor quotes', operationId: 'QUOTE_COMPARISON_REVIEW', style: 'SECONDARY' },
     ],
   };
+}
+
+// A maintenance task records priority, risk, category and due date, but not whether a licensed professional is required, and a service category alone does
+// not prove it. A question filtered on that cannot be answered from the record, so the answer says which filter is missing instead of calling the wording unclear.
+const MAINTENANCE_WORD = /\b(?:maintenance|tasks?|chores?)\b/i;
+const PROFESSIONAL_REQUIRED = /\b(?:require|requires|required|requiring|need|needs|needing|must (?:be done by|have))\b[^.?!]{0,25}\b(?:licensed|professional|a pro|certified)\b|\b(?:licensed|professional)\b[^.?!]{0,15}\b(?:required|needed)\b/i;
+export const ASK_MAINTENANCE_PROFESSIONAL_FILTER_TEXT = 'I can’t filter maintenance tasks by whether a licensed professional is required, because that isn’t recorded on a task. I can show your maintenance by due date, or all of your tasks.';
+
+export type AskUnsupportedFilter = { body: string; actions: Array<{ id: string; label: string; interactionType: 'START_WORKFLOW'; message: string; operationId: 'PROJECT_TRACKER_PROJECTS' | 'QUOTE_COMPARISON_REVIEW' | 'MAINTENANCE_STATUS'; style: 'SECONDARY' }> };
+
+export function askUnsupportedMaintenanceProfessionalFilter(question: string): AskUnsupportedFilter | null {
+  if (!MAINTENANCE_WORD.test(question) || !PROFESSIONAL_REQUIRED.test(question)) return null;
+  return {
+    body: ASK_MAINTENANCE_PROFESSIONAL_FILTER_TEXT,
+    actions: [
+      { id: 'unsupported-filter-maintenance-due', label: 'Show what maintenance is due', interactionType: 'START_WORKFLOW', message: 'What maintenance is due?', operationId: 'MAINTENANCE_STATUS', style: 'SECONDARY' },
+      { id: 'unsupported-filter-maintenance-all', label: 'Show all maintenance tasks', interactionType: 'START_WORKFLOW', message: 'Show my maintenance tasks', operationId: 'MAINTENANCE_STATUS', style: 'SECONDARY' },
+    ],
+  };
+}
+
+/** The unsupported filter a question asks for, if any: said plainly with the halves Ask can answer. */
+export function askUnsupportedFilter(question: string): AskUnsupportedFilter | null {
+  return askUnsupportedProjectQuoteFilter(question) ?? askUnsupportedMaintenanceProfessionalFilter(question);
 }
 
 /**

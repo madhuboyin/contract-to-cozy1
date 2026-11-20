@@ -5,7 +5,7 @@ import { validateAskSemanticAnswerRelevance, type AskSemanticAnswerRelevanceResu
 import type { AskLanguageCode } from './askLanguageRegistry';
 import type { AskEntityResolutionResult } from './askEntityResolution';
 import type { HouseholdRole } from '@prisma/client';
-import { ASK_NAMING_HINT, ASK_UNVERIFIABLE_ANSWER_TEXT, askUnsupportedProjectQuoteFilter } from './askRemoteFallbackTypedClaims';
+import { ASK_NAMING_HINT, ASK_UNVERIFIABLE_ANSWER_TEXT, askUnsupportedFilter } from './askRemoteFallbackTypedClaims';
 import { clarificationLabelFor } from './support/clarificationLabels';
 import { applyAskAudiencePresentation } from './askAudiencePresentation';
 import { stripRetryFromDeterministicFailure } from './semantic/containment/presentationHumanizer';
@@ -136,9 +136,9 @@ function operationSpecificFirstBlock(operationId: AskOperationId, blocks: AskPre
   return ['SUMMARY', 'EMPTY_STATE', 'ERROR_STATE', 'BOUNDARY'].includes(first.type);
 }
 
-/** The plain "could not confirm" block; a question Ask knows it cannot filter (projects by quote approval) says so and offers each half instead. */
+/** The plain "could not confirm" block; a question Ask knows it cannot filter (projects by quote approval, tasks by professional requirement) says so and offers each half instead. */
 function unverifiedAnswerBlock(question: string): Extract<AskPresentationBlock, { type: 'SUMMARY' }> {
-  const unsupported = askUnsupportedProjectQuoteFilter(question);
+  const unsupported = askUnsupportedFilter(question);
   return unsupported
     ? { type: 'SUMMARY', id: 'answer-unsupported-filter', title: 'I can’t filter that yet', body: unsupported.body, tone: 'CAUTION', actions: unsupported.actions }
     : { type: 'SUMMARY', id: 'answer-unverified', title: 'I’m not sure that answers your question', body: ASK_UNVERIFIABLE_ANSWER_TEXT, tone: 'CAUTION', actions: [] };

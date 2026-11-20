@@ -110,3 +110,15 @@ test('projects filtered by quote approval say what cannot be filtered and offer 
   const plain = validateAskAnswerTrustPipeline({ question: 'how many bedrooms do i have', operationId: 'GROUNDED_GUIDANCE', result: unrelatedFact(), semanticEnabled: true, propertyId: 'p1' });
   assert.equal(plain.result.blocks[0].body, ASK_UNVERIFIABLE_ANSWER_TEXT);
 });
+
+// Review screenshot (2026-11-19): "show maintenance tasks scheduled for next spring that require a licensed professional" was called unclear. A maintenance task
+// does not record whether a licensed professional is required, so the answer names that missing filter and offers the halves that can be answered.
+test('maintenance tasks filtered by a licensed-professional requirement say what cannot be filtered and offer the halves that can be answered', () => {
+  const { askUnsupportedFilter, ASK_MAINTENANCE_PROFESSIONAL_FILTER_TEXT } = require('../../src/services/ask/askRemoteFallbackTypedClaims.ts');
+  const found = askUnsupportedFilter('show maintenance tasks scheduled for next spring that require a licensed professional');
+  assert.equal(found.body, ASK_MAINTENANCE_PROFESSIONAL_FILTER_TEXT);
+  assert.match(found.body, /can’t filter maintenance tasks by whether a licensed professional is required/);
+  assert.deepEqual(found.actions.map((action) => [action.operationId, action.message]), [['MAINTENANCE_STATUS', 'What maintenance is due?'], ['MAINTENANCE_STATUS', 'Show my maintenance tasks']]);
+  for (const ordinary of ['what maintenance is due this spring', 'show my maintenance tasks', 'which professional should I hire for the roof', 'show tasks that require a filter change']) assert.equal(askUnsupportedFilter(ordinary), null, ordinary);
+  assert.match(askUnsupportedFilter('which projects are in progress and have unapproved contractor quotes?').body, /projects/);
+});
