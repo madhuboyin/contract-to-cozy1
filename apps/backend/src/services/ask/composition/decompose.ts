@@ -4,7 +4,7 @@ import { COMPOSITION_PURE_VARIANTS, getAskOperationDefinition, isReadOnlyOperati
 import { resolveAskRoutingCascade } from '../askRoutingCascade';
 import { clarificationLabelFor } from '../support/clarificationLabels';
 import type { KnownName } from '../privacy/promptMinimizer';
-import { operationCoversClause, resolveClauseOperation, splitQuestionClauses, standalone, subjectOf } from '../support/alsoAnswer';
+import { operationCoversClause, resolveClauseOperation, splitQuestionClauses, standalone, subjectOf, wholeOperationCoversLaterClauses } from '../support/alsoAnswer';
 import { parseTargetDate } from '../support/targetDate';
 import { COVERAGE_DECLARATIONS, coverageSkips } from './quantities';
 import { unappliedQualifier } from './unappliedQualifiers';
@@ -79,6 +79,8 @@ export function decomposeForComposition(message: string, options: DecomposeOptio
 
   const clauses = splitQuestionClauses(message);
   if (clauses.length < 2) return { kind: 'SINGLE', reason: 'ONE_CLAUSE' };
+  // The whole message reached one operation whose answer already shows what the later parts ask for: it is one request, not two (no "part isn't answered" note).
+  if (whole.stage !== 'CLARIFICATION' && whole.stage !== 'REMOTE_FALLBACK' && wholeOperationCoversLaterClauses(whole.operation.operationId, clauses)) return { kind: 'SINGLE', reason: 'SAME_OPERATION' };
   // FR-FACET-2 / FR-DEC-1: the first MAX_COMPOSED_COMPONENTS parts are answered; every part beyond them is named as not answered (never silently truncated).
   const overflow = clauses.splice(MAX_COMPOSED_COMPONENTS);
   const overLimit: DeferredClause[] = overflow.map((part) => ({ clause: part.charAt(0).toUpperCase() + part.slice(1) + (part.endsWith('?') ? '' : '?'), reason: 'OVER_LIMIT', operationId: null }));

@@ -401,7 +401,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // The coverage-conflict state points at the coverage review.
   RISK_MITIGATION_PLAN: new Set(['risk-plan-see-coverage-review']),
   // The upgrade options answer's Manage options rows offer these to a contributor or owner.
-  HOME_UPGRADE_SCENARIOS: new Set(['home-upgrade-decide', 'home-upgrade-compute', 'home-upgrade-rename', 'home-upgrade-archive', 'home-upgrade-restore', 'home-upgrade-delete']),
+  HOME_UPGRADE_SCENARIOS: new Set(['home-upgrade-show-all', 'home-upgrade-decide', 'home-upgrade-compute', 'home-upgrade-rename', 'home-upgrade-archive', 'home-upgrade-restore', 'home-upgrade-delete']),
   // The buyer negotiation list's rows offer Start negotiating and Record the seller response to a contributor or owner.
   BUYER_NEGOTIATION_READINESS: new Set(['buyer-negotiation-start', 'buyer-negotiation-outcome']),
   HOME_DEADLINE_MONITOR: new Set(['resolve-coverage-conflict']),

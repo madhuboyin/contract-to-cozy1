@@ -232,3 +232,29 @@ test('COMPARISON is allowed for the operation in the registry and the home digit
   assert.ok(ASK_OPERATION_DEFINITIONS.HOME_UPGRADE_SCENARIOS.allowedBlockTypes.includes('COMPARISON'));
   assert.ok(getSkillForOperation('HOME_UPGRADE_SCENARIOS').allowedResultBlocks.includes('COMPARISON'));
 });
+
+// Review screenshot (2026-11-19): "compare furnace replacement options and show return on investment" answered "no saved furnace options" and then said part of the question was not answered.
+test('a furnace question with nothing saved is short, offers the unfiltered list, and one asking for ROI says payback is what the planner has', async () => {
+  const access = { propertyAccess: { role: 'OWNER', userId: 'u1', propertyId: 'p1' } };
+  HomeDigitalTwinScenarioService.prototype.listScenarios = async () => [scenario('solar', { name: 'Add solar', scenarioType: 'ADD_FEATURE' })];
+  const empty = await capabilityInvoke('HOME_UPGRADE_SCENARIOS', { userId: 'u1', propertyId: 'p1', message: 'compare furnace replacement options and show return on investment' }, access);
+  HomeDigitalTwinScenarioService.prototype.listScenarios = async () => scenarios();
+  assert.equal(empty.blocks[0].title, 'No saved furnace replacement options');
+  assert.match(empty.blocks[0].body, /nothing to compare for cost, savings or payback/);
+  assert.equal(empty.blocks[0].actions[0].id, 'home-upgrade-show-all');
+  assert.equal(empty.blocks[0].actions[0].operationId, 'HOME_UPGRADE_SCENARIOS');
+  assert.ok(!empty.blocks.some((block) => block.id === 'home-upgrade-boundary'), 'the estimates note is not shown for an answer with no estimates');
+  const asked = await capabilityInvoke('HOME_UPGRADE_SCENARIOS', { userId: 'u1', propertyId: 'p1', message: 'show my water heater options and return on investment' }, access);
+  assert.match(asked.blocks.find((block) => block.type === 'SUMMARY').body, /does not calculate a percentage return on investment/);
+  const plain = await capabilityInvoke('HOME_UPGRADE_SCENARIOS', { userId: 'u1', propertyId: 'p1', message: 'show my water heater options' }, access);
+  assert.ok(!/percentage return/.test(JSON.stringify(plain.blocks)));
+  // The action survives the answer-trust allowlist (an unlisted action id is silently stripped).
+  const { result: validated } = validateAskAnswerTrust({ question: 'compare furnace replacement options', operationId: 'HOME_UPGRADE_SCENARIOS', result: { ...empty, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'home-digital-twin.scenarios', operationId: 'HOME_UPGRADE_SCENARIOS', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-23T00:00:00.000Z' }] } } }, propertyId: 'p1' });
+  assert.equal(validated.blocks[0].actions[0]?.id, 'home-upgrade-show-all');
+});
+
+test('compare-and-ROI is one request to the planner, so no "part of your question" note; a different second part still is', () => {
+  const { decomposeForComposition } = require('../../src/services/ask/composition/decompose.ts');
+  assert.deepEqual(decomposeForComposition('compare furnace replacement options and show return on investment'), { kind: 'SINGLE', reason: 'SAME_OPERATION' });
+  assert.notEqual(decomposeForComposition('compare furnace options and show my roof quotes').kind, 'SINGLE');
+});

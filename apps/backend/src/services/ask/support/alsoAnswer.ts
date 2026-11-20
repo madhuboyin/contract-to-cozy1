@@ -88,6 +88,18 @@ export function resolveClauseOperation(clause: string): { operationId: AskOperat
 
 export interface AlsoAnswerOffer { operationId: AskOperationId; clause: string }
 
+// Operations whose answer already contains what a later part of the same message asks for. Unlike ALREADY_COVERED_CLAUSES this is judged on the whole message's routed
+// operation (the part alone may route nowhere): "compare furnace replacement options and show return on investment" reaches the Home Upgrade Planner as one request,
+// and its options already show cost, savings and payback, so "show return on investment" is not a second question.
+const WHOLE_OPERATION_COVERED_LATER_CLAUSES: Readonly<Record<string, RegExp>> = {
+  HOME_UPGRADE_SCENARIOS: /^(?:(?:also |and |then )?(?:show|give|tell|include|list)(?: me)? )?(?:the |their )?(?:estimated |expected )?(?:return on investment|roi|payback(?: period)?|savings|costs?)(?: of (?:each|them|these|those)(?: options?)?)?$/i,
+};
+/** True when every part after the first only asks for something the whole message's operation already shows. */
+export function wholeOperationCoversLaterClauses(wholeOperationId: string, clauses: readonly string[]): boolean {
+  const pattern = WHOLE_OPERATION_COVERED_LATER_CLAUSES[wholeOperationId];
+  return Boolean(pattern) && clauses.length > 1 && clauses.slice(1).every((clause) => pattern.test(clause.trim().replace(/[?.!]+$/, '')));
+}
+
 /** Whether the selected answer contract already supplies this clause's result. */
 export function operationCoversClause(answeredOperationId: AskOperationId, clauseOperationId: AskOperationId, clause: string): boolean {
   if (answeredOperationId === clauseOperationId) return true;

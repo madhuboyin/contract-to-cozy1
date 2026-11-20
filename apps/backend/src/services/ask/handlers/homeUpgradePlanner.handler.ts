@@ -220,8 +220,15 @@ async function homeUpgradeScenariosResult(propertyId: string, canChange: boolean
     const summary = result.blocks.find((block) => block.type === 'SUMMARY');
     if (summary?.type === 'SUMMARY') {
       summary.title = 'No saved furnace replacement options';
-      summary.body = 'No saved Home Upgrade Planner options match the furnace or HVAC filter.';
+      summary.body = 'There are no saved furnace or HVAC options, so there is nothing to compare for cost, savings or payback yet.';
+      // The way back is the same read without the filter. The estimates note describes figures that are not shown, so it stays out of an empty answer.
+      summary.actions = [{ id: 'home-upgrade-show-all', label: 'Show all saved upgrade options', message: 'Show my saved upgrade options', operationId: 'HOME_UPGRADE_SCENARIOS', interactionType: 'START_WORKFLOW', style: 'SECONDARY' }];
+      result.blocks = result.blocks.filter((block) => block.id !== 'home-upgrade-boundary');
     }
+  } else if (/\b(?:roi|return on investment)\b/i.test(message)) {
+    // The planner has estimated savings and payback, not a percentage return; say so rather than let payback stand in for ROI unannounced.
+    const summary = result.blocks.find((block) => block.type === 'SUMMARY');
+    if (summary?.type === 'SUMMARY') summary.body = `${summary.body} Each option shows its estimated cost, savings and payback; the planner does not calculate a percentage return on investment.`;
   }
   return withSources(result, [sourceRef('HomeDigitalTwin', twin.id), ...[...active, ...archived].map((scenario) => sourceRef('HomeTwinScenario', String(scenario.id)))]);
 }
