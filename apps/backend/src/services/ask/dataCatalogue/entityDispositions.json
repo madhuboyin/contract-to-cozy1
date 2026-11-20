@@ -2419,6 +2419,12 @@
    "disposition": "CANDIDATE",
    "reason": null,
    "proposal": true
+  },
+  "WarrantyApplicability": {
+   "domain": "warranty-insurance-claims",
+   "disposition": "CANDIDATE",
+   "reason": null,
+   "proposal": true
   }
  }
 }
