@@ -75,13 +75,13 @@ export function buildDidYouMeanResult(options: readonly AskOperationId[], langua
     status: 'NEEDS_CLARIFICATION',
     reasonCode: ASK_DID_YOU_MEAN_REASON,
     blocks: [{
-      type: 'SUMMARY', id: 'did-you-mean', title: 'Did you mean one of these?',
-      body: 'I couldn’t find an answer to that in your home record. If you meant one of these, pick it and I’ll look it up; otherwise say it another way.',
+      type: 'SUMMARY', id: 'did-you-mean', title: 'I couldn’t find that in your home record',
+      body: 'Pick the closest match, or say it another way.',
       tone: 'DEFAULT', actions: [],
     }],
     clarification: {
       version: 1,
-      question: 'Which of these did you mean?',
+      question: 'Which did you mean?',
       options: options.map((operationId) => ({ operationId, label: clarificationLabelFor(operationId, language) })),
       allowFreeText: true,
       expiresAt,

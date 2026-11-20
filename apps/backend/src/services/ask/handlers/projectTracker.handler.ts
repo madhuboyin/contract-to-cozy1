@@ -39,6 +39,7 @@ const journeyStepUnavailable = (body: string): AskOperationResult => ({
 // creating projects and recording milestones, payments, change orders and issues stay on the page.
 type TrackedProjectView = Awaited<ReturnType<typeof listTrackedProjects>>[number];
 // The page's own labels (projects/page.tsx and ProjectTrackerHelpers).
+import { matchProjectsNeedingPermit, parseProjectPermitFilter, projectPermitMonthRange, type PermitFilterMatch, type PermitFilterProject, type ProjectPermitFilter } from '../support/projectPermitFilter';
 export const PROJECT_STATUS_LABELS: Record<string, string> = {
   DRAFT: 'Draft', PLANNING: 'Planning', IN_PROGRESS: 'In Progress', PAUSED: 'Paused', COMPLETED: 'Completed', CANCELLED: 'Cancelled', DISPUTED: 'Disputed',
 };
@@ -123,6 +124,38 @@ export function trackedProjectsFromView(projects: readonly TrackedProjectView[],
 async function trackedProjectsResult(userId: string, propertyId: string, knownRole?: HouseholdRole): Promise<AskOperationResult> {
   const role = knownRole ?? (await ensurePropertyAccess(userId, propertyId)).role;
   return trackedProjectsFromView(await listTrackedProjects(propertyId), propertyId, role !== HouseholdRole.VIEWER);
+}
+
+async function projectsNeedingPermitResult(propertyId: string, filter: ProjectPermitFilter): Promise<AskOperationResult> {
+  const range = filter.month ? projectPermitMonthRange(filter.month, new Date()) : null;
+  const projects = await prisma.projectRecord.findMany({
+    where: { propertyId, permitApplicability: 'REQUIRED', status: { notIn: ['COMPLETED', 'CANCELLED'] } },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, name: true, status: true, permitApplicability: true, expectedEndDate: true, milestones: { select: { name: true, scheduledDate: true, status: true } } },
+  });
+  const matches = matchProjectsNeedingPermit(projects as unknown as PermitFilterProject[], range);
+  const scope = range ? ` with a date in ${range.label}` : '';
+  const title = matches.length
+    ? `${matches.length} project${matches.length === 1 ? '' : 's'} marked as needing a permit${scope}`
+    : `No projects marked as needing a permit${scope}`;
+  const boundary: AskPresentationBlock = {
+    type: 'BOUNDARY', id: 'project-tracker-boundary', title: 'Your records, not a permit determination',
+    body: 'Based on the permit requirement recorded on each project, and its milestone or expected finish dates. It does not say whether a permit has been issued.',
+    severity: 'INFO', suggestions: [],
+  };
+  const row = (match: PermitFilterMatch) => ({
+    id: match.project.id, title: match.project.name, description: match.reasons.length ? match.reasons.join(' · ') : null, meta: ['Permit required'],
+    status: PROJECT_STATUS_LABELS[match.project.status] ?? readableCode(match.project.status), entityType: 'PROJECT_RECORD', actions: [reviewAction(match.project.id)],
+  });
+  const sections = matches.length ? [{ id: 'project-tracker-permit-matches', title: 'Projects', count: matches.length, items: matches.map(row) }] : [];
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'project-tracker-summary', title,
+    body: range ? 'A date counts when a milestone is scheduled in that month or the project’s expected finish falls in it.' : 'Active projects whose recorded permit requirement is “required”.',
+    tone: 'DEFAULT', actions: [],
+  }];
+  if (sections.length) blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'project-tracker-projects', title: 'Projects', sections, collection: collectionDescriptor({ sourceTotal: matches.length, fetchedCount: matches.length, sections, nextPageAvailable: false }), actions: [] });
+  blocks.push(boundary);
+  return { status: 'ANSWERED', reasonCode: matches.length ? 'PROJECT_TRACKER_PROJECTS_READY' : 'PROJECT_TRACKER_NO_PROJECTS', blocks, suggestions: [] };
 }
 
 type ProjectDetailView = Awaited<ReturnType<typeof getProjectDetail>>;
@@ -248,6 +281,8 @@ registerCapabilityHandler('project-tracker.projects', async (envelope, deps) => 
   if (envelope.launchContext?.entityType === 'PROJECT_RECORD' && envelope.launchContext.entityId) {
     return trackedProjectDetailResult(envelope.userId, envelope.propertyId!, envelope.launchContext.entityId, deps.propertyAccess?.role);
   }
+  const permitFilter = parseProjectPermitFilter(envelope.message ?? '');
+  if (permitFilter) return projectsNeedingPermitResult(envelope.propertyId!, permitFilter);
   return trackedProjectsResult(envelope.userId, envelope.propertyId!, deps.propertyAccess?.role);
 });
 

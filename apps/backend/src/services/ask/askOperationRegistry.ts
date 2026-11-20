@@ -1,4 +1,5 @@
 import { resolveDataPointsMulti, isReserveFactQuestion, isDataPointDetailQuestion, isDataPointOnlyQuestion, isSaleProfileQuestion, resolveDataPoint } from './dataPoint/dataPointCatalogue';
+import { parseProjectPermitFilter } from './support/projectPermitFilter';
 import { isDataPointComputedQuery, isDataPointQuery } from './dataPoint/dataPointQueryPlan';
 import { isReaderEquivalentOperation, isWriteCapableOperation } from './support/writeCapability';
 import { isItemCostMessage, isItemFundingGoalMessage, isItemReserveAllocationMessage } from './support/itemFundingWording';
@@ -1646,7 +1647,7 @@ const pastHazardExposurePattern = /\b(?:home )?risk replay\b|\bpast (?:hazards?|
 const pastHazardOtherIntentPattern = /\b(?:claim|file|filing|insurance|insurer|policy|coverage|report(?:ing)? (?:the )?damage)\b/i;
 const environmentReportPattern = /\benvironment(?:al)? report\b|\bweather preparation(?: checklist)?\b|\b(?:air quality|us aqi|drought (?:status|monitor|conditions?)|radon (?:zone|potential|level)|hardiness zone|climate normals?|epa (?:regulated )?facilities|10[- ]day (?:weather )?forecast)\b|\b(?:weather|air quality).{0,30}\bdrought\b/i;
 const environmentReportOtherIntentPattern = /\b(?:claim|file|filing|insurance|insurer|policy|coverage|home event radar|risk replay|plant advisor|plant care)\b/i;
-const breakEvenAnalysisPattern = /\b(?:break[- ]?even|breaks even|broken even)\b|\b(?:owning|ownership of)\b.{0,40}\bpays? off\b|\b(?:owning|ownership|home|house)\b.{0,40}\b(?:pay|pays|paid) for itself\b/i;
+const breakEvenAnalysisPattern = /\b(?:break[- ]?even|breaks even|broken even)\b|\b(?:owning|ownership of)\b.{0,40}\bpays? off\b|\b(?:owning|ownership|home|house)\b.{0,40}\b(?:pay|pays|paid) for itself\b|\b(?:how long|how many years|how soon|when|what year)\b.{0,40}\b(?:owning|ownership|buying)\b.{0,25}\b(?:beats?|overtakes?|outperforms?|(?:becomes?|gets?|is) (?:cheaper|better) than)\b.{0,15}\brent(?:ing)?\b/i;
 const breakEvenOtherSensePattern = /\b(?:refinanc\w*|mortgage rate|loan estimate|solar|panels?|heat pump|insulation|upgrade|renovat\w*|remodel\w*|project|appliance|replace\w*|quote)\b/i;
 const sellHoldRentAnalysisPattern = /\b(?:should|could|would|will|is|when|benefit|better|compare|decide|planning|plan)\b.{0,55}\b(?:sell|selling|hold|holding|rent(?:ing)?(?: out)?|landlord)\b|\b(?:sell|selling)\b.{0,55}\b(?:hold|holding|rent(?:ing)?(?: out)?|landlord|good time|worth|benefit|better)\b|\b(?:hold|holding|rent(?:ing)?(?: out)?)\b.{0,55}\b(?:sell|selling|better|benefit)\b|\bwhat if\b.{0,40}\b(?:i|we)\b.{0,12}\b(?:rent(?:ed)?|sell|sold|hold|held)\b.{0,20}\b(?:it|the (?:home|house|property)|my (?:home|house|property))\b|\bhow much\b.{0,12}\b(?:rent|rental income)\b.{0,30}\b(?:charge|get|make|earn|collect|ask for|bring in|expect|receive|command|fetch)\b|\bhow much\b.{0,25}\b(?:could|can|would|should)\b.{0,20}\b(?:i|we)\b.{0,12}\b(?:rent|charge)\b|\bwhat\b.{0,20}\b(?:rent|rental income)\b.{0,25}\b(?:can|could|should|would)\b.{0,12}\b(?:i|we)\b.{0,12}\b(?:charge|get|make|earn|ask|expect|receive)\b/i;
 // Read-only "who has access" questions. Any invite/add/remove/change verb is a command and is left to HOUSEHOLD_INVITATION or the model.
@@ -1905,6 +1906,10 @@ export function resolveAskOperation(message: string): AskOperationResolution {
     return resolved('FINANCING_OVERVIEW', 0.96, 'DET_FINANCING_OVERVIEW_01');
   }
   // "Show my permits" lists the recorded permits; "do I need a permit" / "is my renovation ready" stays the readiness question below.
+  // Projects filtered by a recorded permit requirement are a project read, so this rule precedes the permit-record routes.
+  if (parseProjectPermitFilter(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('PROJECT_TRACKER_PROJECTS', 0.96, 'DET_PROJECT_TRACKER_PROJECTS_02');
+  }
   if (isPermitTrackerReadRequest(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('PERMIT_TRACKER_STATUS', 0.96, 'DET_PERMIT_TRACKER_STATUS_01');
   }

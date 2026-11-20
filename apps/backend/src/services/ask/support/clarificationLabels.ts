@@ -5,6 +5,9 @@ import { ASK_DEFAULT_LANGUAGE, type AskLanguageCode } from '../askLanguageRegist
 
 const LABEL_OVERRIDES: Readonly<Partial<Record<AskOperationId, string>>> = Object.freeze({
   GUIDANCE_JOURNEY_CONTINUE: 'View current guided journey steps',
+  // Short, comparable choices: the operation's long capability sentence would dominate the card.
+  PERMIT_TRACKER_STATUS: 'Review permit records',
+  PROJECT_TRACKER_PROJECTS: 'Review contractor projects',
   // The capital timeline accepts a 5-year or 10-year horizon (parseCapitalTimelineHorizonRequest); the upkeep budget is a yearly view.
   SELLER_PREP_CHECKLIST: 'get the home ready to sell (seller-prep checklist)',
   HOME_UPGRADE_SCENARIOS: 'see my saved upgrade options and what they would cost and save',
