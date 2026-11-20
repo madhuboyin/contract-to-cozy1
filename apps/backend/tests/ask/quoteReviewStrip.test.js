@@ -96,7 +96,7 @@ test('freshness mirrors the comparison page, and scope, warranty and missing fac
 const originals = { prisma: prismaModule.prisma, get: quoteService.getQuoteComparisonWorkspace, check: quoteService.getWorkspaceComparability };
 function install(quotes, comparability) {
   prismaModule.prisma = new Proxy({
-    quoteComparisonWorkspace: { findFirst: async () => ({ id: 'ws-1' }) },
+    quoteComparisonWorkspace: { findFirst: async () => ({ id: 'ws-1', serviceCategory: 'GENERAL_CONTRACTOR', scopeSummary: 'Kitchen remodel' }), findMany: async () => [] },
   }, {
     get(target, model) {
       if (model === 'then') return undefined;
@@ -207,4 +207,32 @@ test('the comparison shows each contractor licence as recorded or not recorded, 
   const none = quoteReviewComparison([quote('a'), quote('b')], comparable(['a', 'b']), now);
   assert.equal(attr(none.options[0], 'Licence').value, 'Not recorded');
   assert.ok(!/not proof/.test(none.description), 'no licence note when no licence is recorded');
+});
+
+// FR-FAST-10 / FR-GATE-8: the quote review may be tried provisionally, and is delivered only when its answer is grounded in what the question asked.
+const { groundedQuoteReviewVerdict, quoteQualifierWords } = require('../../src/services/ask/support/provisionalRead.ts');
+const { quoteScopeSentence } = require('../../src/services/ask/handlers/quotes.handler.ts');
+const reviewAnswer = (body, extra = []) => ({ status: 'ANSWERED', blocks: [{ type: 'SUMMARY', id: 'quote-review-summary', title: 't', body, tone: 'DEFAULT', actions: [] }, ...extra] });
+
+test('provisional quote review: routes, and the verdict checks scope, licence and command wording', () => {
+  for (const message of ['compare kitchen quotes', 'compare my quotes', 'compare kitchen quotes and show contractor license numbers']) {
+    assert.equal(resolveAskRoutingCascade(message, { propertyId: 'p1' }).stage, 'PROVISIONAL', message);
+  }
+  assert.notEqual(resolveAskRoutingCascade('negotiate my roof quote', { propertyId: 'p1' }).stage, 'PROVISIONAL');
+  assert.deepEqual(quoteQualifierWords('compare kitchen quotes and show contractor license numbers'), ['kitchen']);
+  assert.deepEqual(quoteQualifierWords('compare my quotes'), []);
+  assert.equal(quoteScopeSentence({ serviceCategory: 'GENERAL_CONTRACTOR', scopeSummary: 'Kitchen remodel' }), 'This comparison covers General Contractor: Kitchen remodel. ');
+  // A kitchen question is not answered with a roofing comparison; an unqualified one is.
+  assert.equal(groundedQuoteReviewVerdict('compare kitchen quotes', reviewAnswer('This comparison covers Roofing. ')).outcome, 'FAIL');
+  assert.equal(groundedQuoteReviewVerdict('compare kitchen quotes', reviewAnswer('This comparison covers Kitchen remodel. ')).outcome, 'PASS');
+  assert.equal(groundedQuoteReviewVerdict('compare my quotes', reviewAnswer('This comparison covers Roofing. ')).outcome, 'PASS');
+  // "unapproved" cannot be confirmed from a comparison that has no such filter.
+  assert.equal(groundedQuoteReviewVerdict('compare unapproved quotes', reviewAnswer('This comparison covers Roofing. ')).outcome, 'FAIL');
+  // A licence the question asked for must be shown when the comparison is.
+  const noLicence = { type: 'TABLE', id: 'quote-review-table', title: 't', columns: [{ key: 'vendor', label: 'Provider' }], rows: [], actions: [] };
+  const withLicence = { ...noLicence, columns: [{ key: 'vendor', label: 'Provider' }, { key: 'license', label: 'Licence' }] };
+  assert.equal(groundedQuoteReviewVerdict('compare my quotes and show license numbers', reviewAnswer('x', [noLicence])).outcome, 'FAIL');
+  assert.equal(groundedQuoteReviewVerdict('compare my quotes and show license numbers', reviewAnswer('x', [withLicence])).outcome, 'PASS');
+  // A command is never delivered from a read.
+  assert.equal(groundedQuoteReviewVerdict('add a quote', reviewAnswer('x')).outcome, 'FAIL');
 });

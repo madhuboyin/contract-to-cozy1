@@ -78,6 +78,14 @@ export function quoteLicenseLabel(quote: Pick<QuoteForReview, 'providerLicenseNu
   if (!number) return 'Not recorded';
   return `${number} · recorded, ${quote.providerLicenseVerified === true ? 'verified' : 'not verified'}`;
 }
+/** "This comparison covers Kitchen: <scope>." The workspace's own category and scope words; the scope is cut so one long description cannot swamp the answer. */
+export function quoteScopeSentence(workspace: { serviceCategory?: unknown; scopeSummary?: string | null }): string {
+  const category = workspace.serviceCategory ? titleCase(String(workspace.serviceCategory).replace(/_/g, ' ').toLowerCase()) : '';
+  const scope = (workspace.scopeSummary ?? '').trim().replace(/\s+/g, ' ');
+  const shownScope = scope.length > 120 ? `${scope.slice(0, 117)}...` : scope;
+  const parts = [category, shownScope].filter(Boolean);
+  return parts.length ? `This comparison covers ${parts.join(': ')}. ` : '';
+}
 const QUOTE_LICENSE_NOTE = ' A recorded licence number is not proof the licence is current; check it with your licensing authority.';
 
 /**
@@ -156,7 +164,7 @@ export function quoteReviewComparison(
 }
 
 async function quoteComparisonReviewResult(propertyId: string, canChange = false, isOwner = false, requestedWorkspaceId: string | null = null): Promise<AskOperationResult> {
-  const reviewSelect = { id: true, outcome: true, journeyStage: true, selectedQuoteId: true, outcomeMeasurementConsentedAt: true, outcomeMeasurementConsentRevokedAt: true };
+  const reviewSelect = { id: true, serviceCategory: true, scopeSummary: true, outcome: true, journeyStage: true, selectedQuoteId: true, outcomeMeasurementConsentedAt: true, outcomeMeasurementConsentRevokedAt: true };
   // The most recent comparison by default; a declared "Open" on one of the others (FRD v1.464) shows that one instead, with its own stage, outcome and controls.
   const shown = await prisma.quoteComparisonWorkspace.findFirst({
     where: requestedWorkspaceId ? { id: requestedWorkspaceId, propertyId } : { propertyId }, orderBy: { updatedAt: 'desc' }, select: reviewSelect,
@@ -196,7 +204,8 @@ async function quoteComparisonReviewResult(propertyId: string, canChange = false
   const viewingEarlier = Boolean(requestedWorkspaceId && mostRecent && mostRecent.id !== shown.id);
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'quote-review-summary', title: quotes.length < 2 ? 'Add another proposal before comparing' : comparability.status === 'COMPARABLE' ? `${quotes.length} proposals are ready for a scope-aligned review` : 'The recorded proposals are not safely comparable yet',
-    body: `${viewingEarlier ? 'This is an earlier comparison, not your most recent one. ' : ''}${comparability.reasons.join(' ')}${lowest != null && highest != null ? ` Recorded prices range from ${money(lowest)} to ${money(highest)}.` : ''} A lower total is not automatically a better fit; scope, exclusions, warranty, licensing, insurance, payment terms, and homeowner-confirmed facts remain material.`,
+    // Says which comparison this is, so a question naming a scope ("kitchen quotes") can be checked against what is shown.
+    body: `${viewingEarlier ? 'This is an earlier comparison, not your most recent one. ' : ''}${quoteScopeSentence(shown)}${comparability.reasons.join(' ')}${lowest != null && highest != null ? ` Recorded prices range from ${money(lowest)} to ${money(highest)}.` : ''} A lower total is not automatically a better fit; scope, exclusions, warranty, licensing, insurance, payment terms, and homeowner-confirmed facts remain material.`,
     tone: comparability.status === 'COMPARABLE' ? 'DEFAULT' : 'CAUTION',
     // A contributor or owner can record another proposal while the decision is open; a viewer is offered nothing it would refuse.
     actions: canChange && shown.outcome === 'OPEN' ? [{
