@@ -110,3 +110,23 @@ test('an ordinary warranty question through the same handler is not turned into 
   const result = await capabilityInvoke('WARRANTY_LOOKUP', { userId: 'u1', propertyId: 'p1', message: 'Show my warranties' });
   assert.notEqual(result.reasonCode, 'RECALL_WARRANTY_COMBINED');
 });
+
+test('no open recall but no model numbers: the answer leads with an incomplete check, scan-point facts and a per-item add-model action, never a clean "none"', () => {
+  const items = [item('a', 'Fridge'), item('b', 'Washer'), item('f', 'Furnace', 'HVAC')];
+  const result = recallsWithWarrantyResult(base({ items, openRecallItemIds: new Set(), unconfirmedRecallItemIds: new Set(), warrantyStatusesByItem: new Map(), missingModelItemIds: new Set(['a', 'b', 'f']), canEdit: true }), BOUNDARY);
+  assert.equal(result.reasonCode, 'RECALL_WARRANTY_CHECK_INCOMPLETE');
+  const summary = result.blocks.find((b) => b.id === 'warranty-summary');
+  assert.equal(summary.title, 'Recall check incomplete');
+  assert.deepEqual(summary.bullets.map((b) => [b.label, b.body.split(' (')[0]]), [['Open recall matches recorded', '0'], ['Appliances checked', '2'], ['Missing model numbers', '2 of 2'], ['Warranty condition', 'Not evaluated']]);
+  assert.match(summary.supportLine, /does not confirm that no recall exists/);
+  const section = result.blocks.find((b) => b.type === 'GROUPED_LIST').sections.find((s) => s.id === 'recall-warranty-missing-model');
+  assert.deepEqual(section.items.map((i) => i.id), ['a', 'b']);
+  assert.deepEqual(section.items[0].actions.map((a) => [a.id, a.label]), [['edit-inventory-item', 'Add model number']]);
+});
+
+test('a viewer gets the incomplete check without the edit action; recorded model numbers keep the ordinary answer', () => {
+  const quiet = { openRecallItemIds: new Set(), unconfirmedRecallItemIds: new Set(), warrantyStatusesByItem: new Map() };
+  const viewer = recallsWithWarrantyResult(base({ ...quiet, missingModelItemIds: new Set(['fridge']), canEdit: false }), BOUNDARY);
+  assert.deepEqual(viewer.blocks.find((b) => b.type === 'GROUPED_LIST').sections[1].items[0].actions, []);
+  assert.equal(recallsWithWarrantyResult(base({ ...quiet, missingModelItemIds: new Set() }), BOUNDARY).reasonCode, 'RECALL_WARRANTY_COMBINED');
+});

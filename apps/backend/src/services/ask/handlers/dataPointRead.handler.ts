@@ -1,6 +1,7 @@
 // DATA_POINT_READ (reliability FRD D12, Phase 1b): "what is the serial number of my fridge", "when was my furnace installed", "what did I pay for my dryer".
 // A STANDARD, read-only fact read through the one allowlisted template in dataPoint/dataPointReader.ts. No side effects; a value that is not recorded is said plainly,
 // with the authorised way to add it, and never guessed (FR-REC-2 MISSING_RECORD_DATA).
+import { recallsWithWarrantyAnswer } from './warranties.handler';
 import { clarifiedDocumentModeFrom, clarifiedQuoteIdsFrom, clarifiedReadingFrom } from '../support/clarificationContract';
 import type { NegativeOrReading } from '../semantic/deterministicSemanticParser';
 import { appliedAmountOverCents, withUnappliedAmountComparison } from '../semantic/amountComparison';
@@ -365,6 +366,10 @@ export async function dataPointReadResult(
   let orchestrationAttempted = false;
 
   if (!forcedPoint) {
+    // "appliances with open recalls and no active warranty" joins two records. The dedicated combined answer owns it; the cross-domain recall review would only
+    // answer the recall half and say the warranty half was left out.
+    const recallWarranty = await recallsWithWarrantyAnswer(propertyId, message, role !== 'VIEWER');
+    if (recallWarranty) return recallWarranty;
     const authorizedProviderContext: AuthorizedProviderContext | null = activeSemanticProvider
       ? await loadAuthorizedProviderContext(propertyId)
       : null;

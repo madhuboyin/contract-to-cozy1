@@ -389,12 +389,12 @@ function warrantiesFromRecordsInner(input: {
  * FR-PLAN-5 (live prompt #61): items with an OPEN recall match, split by whether an active warranty applies. A warranty applies to an item when it is linked by
  * Warranty.inventoryItemId or a whole-home plan is marked COVERED for it; status is the Warranties page's own (`warrantyStatus`), so "active" means the same thing here.
  */
-async function recallsWithWarrantyAnswer(propertyId: string, message: string): Promise<AskOperationResult | null> {
+export async function recallsWithWarrantyAnswer(propertyId: string, message: string, canEdit = false): Promise<AskOperationResult | null> {
   const ask = parseRecallWarrantyAsk(message);
   if (!ask) return null;
   const now = new Date();
   const [items, recallMatches, applicability] = await Promise.all([
-    prisma.inventoryItem.findMany({ where: { propertyId }, select: { id: true, name: true, category: true } }),
+    prisma.inventoryItem.findMany({ where: { propertyId }, select: { id: true, name: true, category: true, modelNumber: true } }),
     prisma.recallMatch.findMany({ where: { propertyId, inventoryItemId: { not: null }, status: { in: ['OPEN', 'NEEDS_CONFIRMATION'] } }, select: { inventoryItemId: true, status: true } }),
     prisma.warrantyApplicability.findMany({ where: { propertyId, status: 'COVERED', inventoryItemId: { not: null } }, select: { warrantyId: true, inventoryItemId: true } }),
   ]);
@@ -415,14 +415,14 @@ async function recallsWithWarrantyAnswer(propertyId: string, message: string): P
   for (const row of applicability) if (row.inventoryItemId) add(row.inventoryItemId, row.warrantyId);
   const idsWith = (status: string) => new Set(recallMatches.filter((match) => match.status === status && match.inventoryItemId).map((match) => match.inventoryItemId as string));
   return recallsWithWarrantyResult({
-    ask, items, openRecallItemIds: idsWith('OPEN'), unconfirmedRecallItemIds: idsWith('NEEDS_CONFIRMATION'), warrantyStatusesByItem: statuses,
+    ask, items, canEdit, missingModelItemIds: new Set(items.filter((item) => !item.modelNumber?.trim()).map((item) => item.id)), openRecallItemIds: idsWith('OPEN'), unconfirmedRecallItemIds: idsWith('NEEDS_CONFIRMATION'), warrantyStatusesByItem: statuses,
   }, BOUNDARY);
 }
 
 async function warrantiesResult(userId: string, propertyId: string, message: string, priorViewState?: AskViewState | null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   if (!containsFilterContinuation(message)) {
-    const combined = await recallsWithWarrantyAnswer(propertyId, message);
+    const combined = await recallsWithWarrantyAnswer(propertyId, message, access.role !== HouseholdRole.VIEWER);
     if (combined) return combined;
   }
   const canWrite = access.role !== HouseholdRole.VIEWER;

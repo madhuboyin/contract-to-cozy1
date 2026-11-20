@@ -3,6 +3,7 @@
 // Pure: the loader and the status function are passed in, so every rule is tested without a database.
 import type { AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import type { AskOperationResult } from '../askOperationRegistry';
+import { inventoryCorrectionItemActions } from './inventory.handler';
 
 export type RecallWarrantyPolarity = 'WITHOUT_ACTIVE_WARRANTY' | 'WITH_ACTIVE_WARRANTY';
 export interface RecallWarrantyAsk { polarity: RecallWarrantyPolarity; appliancesOnly: boolean }
@@ -30,6 +31,10 @@ export interface RecallWarrantyInput {
   unconfirmedRecallItemIds: ReadonlySet<string>;
   /** The status of every warranty that applies to the item (linked directly, or by a whole-home plan marked COVERED). */
   warrantyStatusesByItem: ReadonlyMap<string, readonly LinkedWarrantyStatus[]>;
+  /** Inventory item ids with no model number recorded: they cannot be matched against recalls, so "no match" says nothing about them. */
+  missingModelItemIds?: ReadonlySet<string>;
+  /** Whether the person may edit inventory; the "add model number" row action is offered only then. */
+  canEdit?: boolean;
 }
 
 export interface RecallWarrantyClassification {
@@ -73,13 +78,37 @@ export function recallsWithWarrantyResult(input: RecallWarrantyInput, boundary: 
     found.needsReview.length > 0 ? `${plural(found.needsReview.length, 'open-recall item has a warranty whose dates need review and is', 'open-recall items have warranties whose dates need review and are')} listed separately, not counted either way.` : null,
     found.unconfirmedOnly.length > 0 ? `${plural(found.unconfirmedOnly.length, 'more has a possible recall that still needs your confirmation and is', 'more have possible recalls that still need your confirmation and are')} not counted as open.` : null,
   ].filter((note): note is string => Boolean(note));
+  const inScope = input.items.filter((item) => !ask.appliancesOnly || item.category === 'APPLIANCE');
+  const missingModel = inScope.filter((item) => input.missingModelItemIds?.has(item.id));
+  // Nothing open AND some items unmatchable: "no recall" would read as a clean result, so the answer leads with what could not be checked.
+  const incomplete = found.openRecallCount === 0 && missingModel.length > 0;
+  const addModelAction = inventoryCorrectionItemActions(Boolean(input.canEdit))?.slice(0, 1).map((action) => ({ ...action, label: 'Add model number' })) ?? [];
   const row = (item: RecallWarrantyItem, description: string) => ({ id: item.id, title: item.name, entityType: 'INVENTORY_ITEM' as const, href: null, description, meta: [], actions: [] });
   const sections = [
     { id: 'recall-warranty-matches', title: ask.polarity === 'WITHOUT_ACTIVE_WARRANTY' ? 'Open recall, no active warranty' : 'Open recall, active warranty', count: found.matches.length,
       items: found.matches.slice(0, 20).map((item) => row(item, ask.polarity === 'WITHOUT_ACTIVE_WARRANTY' ? 'Open recall recorded; no active warranty is linked to this item.' : 'Open recall recorded; an active warranty is linked to this item.')) },
+    ...(incomplete ? [{ id: 'recall-warranty-missing-model', title: 'No model number recorded', count: missingModel.length,
+      items: missingModel.slice(0, 20).map((item) => ({ ...row(item, 'Cannot be matched against recalls until a model number is recorded.'), actions: addModelAction })) }] : []),
     ...(found.needsReview.length > 0 ? [{ id: 'recall-warranty-needs-review', title: 'Open recall, warranty dates need review', count: found.needsReview.length,
       items: found.needsReview.slice(0, 20).map((item) => row(item, 'Open recall recorded; the linked warranty’s dates need review, so coverage is not assumed either way.')) }] : []),
   ];
+  if (incomplete) {
+    const limitation = 'Zero recorded matches does not confirm that no recall exists.';
+    const bullets = [
+      { label: 'Open recall matches recorded', body: '0' },
+      { label: `${ask.appliancesOnly ? 'Appliances' : 'Items'} checked`, body: String(inScope.length) },
+      { label: 'Missing model numbers', body: `${missingModel.length} of ${inScope.length}` },
+      { label: 'Warranty condition', body: 'Not evaluated (no open recall to apply it to)' },
+    ];
+    return {
+      status: 'READY_WITH_LIMITATIONS', reasonCode: 'RECALL_WARRANTY_CHECK_INCOMPLETE',
+      blocks: [{
+        type: 'SUMMARY', id: 'warranty-summary', title: 'Recall check incomplete', headline: 'Recall check incomplete', supportLine: limitation, bullets,
+        body: `${bullets.map((b) => `${b.label}: ${b.body}.`).join(' ')} ${limitation}`, tone: 'CAUTION', actions: [],
+      }, { type: 'GROUPED_LIST', filters: [], id: 'warranty-results', title: 'Recorded items', sections, actions: [] }, boundary],
+      suggestions: [],
+    };
+  }
   return {
     status: 'ANSWERED', reasonCode: 'RECALL_WARRANTY_COMBINED',
     blocks: [{
