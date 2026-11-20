@@ -27,8 +27,9 @@ export interface LegacyReadCandidateSpec {
 export function verifyLegacyCandidateGrammarAgreement(
   message: string,
   candidate: LegacyReadCandidateSpec,
+  options?: { readonly namedLabels?: readonly string[] },
 ): LegacyGrammarAgreement {
-  const plan = parseDeterministicSemanticRequest(message);
+  const plan = parseDeterministicSemanticRequest(message, options?.namedLabels?.length ? { namedLabels: options.namedLabels } : undefined);
   const facet = plan.outcome === 'MATCH' && plan.facets.length === 1 ? plan.facets[0] : null;
   if (!facet) return { outcome: 'DISAGREE', reasonCode: 'GRAMMAR_DID_NOT_MATCH', plan, facet };
   if (!facet.confidenceSignals.grammarComplete) return { outcome: 'DISAGREE', reasonCode: 'GRAMMAR_HAS_UNRESOLVED_MEANING', plan, facet };
@@ -72,7 +73,7 @@ export const PRISMA_ENTITY_TO_BASIC_READ_SUBJECT: Readonly<Record<string, string
   Warranty: 'entity.warranty',
   InsurancePolicy: 'entity.insurance_policy',
   PropertyTaxBillRecord: 'entity.tax_bill',
-  PropertyTaxAssessmentRecord: 'entity.tax_bill',
+  PropertyTaxAssessmentRecord: 'entity.tax_assessment',
   HomeReserveFund: 'entity.reserve_fund',
   PropertyRecord: 'entity.property_record',
   PropertyRecordVersion: 'entity.property_record',
@@ -82,6 +83,12 @@ export const PRISMA_ENTITY_TO_BASIC_READ_SUBJECT: Readonly<Record<string, string
   SaleReadinessItem: 'entity.sale_readiness_item',
   Claim: 'entity.claim',
   HomeBuyerChecklist: 'entity.buyer_checklist',
+  ClaimChecklistItem: 'entity.claim_checklist_item',
+  ClaimTimelineEvent: 'entity.claim_timeline_event',
+  ClaimDocument: 'entity.claim_document',
+  BuyerJourneyMilestone: 'entity.buyer_milestone',
+  PropertySalePrepProfile: 'entity.sale_prep_profile',
+  PropertySaleCase: 'entity.sale_case',
 });
 
 export function dataPointReadGrammarAgreement(
@@ -91,6 +98,7 @@ export function dataPointReadGrammarAgreement(
     readonly projection: 'DETAIL' | 'LIST' | 'COUNT' | 'EXISTS';
     readonly polarity?: 'POSITIVE' | 'NEGATIVE';
   },
+  options?: { readonly namedLabels?: readonly string[] },
 ): LegacyGrammarAgreement | null {
   let subjectEntityId = PRISMA_ENTITY_TO_BASIC_READ_SUBJECT[spec.prismaEntity];
   if (!subjectEntityId) return null;
@@ -105,7 +113,7 @@ export function dataPointReadGrammarAgreement(
     subjectEntityId,
     polarity: spec.polarity ?? 'POSITIVE',
     projection: spec.projection,
-  });
+  }, options);
 }
 
 export function savedResultsGrammarAgreement(

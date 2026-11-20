@@ -370,9 +370,10 @@ test('v5 read: parent first (property-scoped), child only through it, capped; th
   const calls = []; taskStub('VIEWER', { tasks: [bTask({}), bTask({ id: 'bt2', title: 'Book movers', dueAt: null, status: 'PENDING' })] }, calls);
   const r = await dataPointReadResult('u1', 'p1', 'when is my buyer task order inspection due');
   assert.equal(r.status, 'ANSWERED'); assert.match(r.blocks[0].body, /Your buyer task is due /);
-  assert.deepEqual(calls[0], ['parent', { where: { propertyId: 'p1' }, select: { id: true, status: true }, take: 5 }]);
-  assert.deepEqual(calls[1][1].where, { checklistId: { in: ['cl1'] }, applicability: { not: 'NOT_APPLICABLE' } }); assert.equal(calls[1][1].take, 50);
-  assert.deepEqual(Object.keys(calls[1][1].select).sort(), ['checklistId', 'dueAt', 'id', 'status', 'title'], 'the task status and parent key are always selected so lifecycle limitations can be applied');
+  const rc = calls.slice(2); // the grammar gate first reads the property's own record names (the buyer journey and its tasks); the assertions below are about the reader's queries
+  assert.deepEqual(rc[0], ['parent', { where: { propertyId: 'p1' }, select: { id: true, status: true }, take: 5 }]);
+  assert.deepEqual(rc[1][1].where, { checklistId: { in: ['cl1'] }, applicability: { not: 'NOT_APPLICABLE' } }); assert.equal(rc[1][1].take, 50);
+  assert.deepEqual(Object.keys(rc[1][1].select).sort(), ['checklistId', 'dueAt', 'id', 'status', 'title'], 'the task status and parent key are always selected so lifecycle limitations can be applied');
   assert.ok(!JSON.stringify(r).includes('Order inspection') && !JSON.stringify(r).includes('Book movers'), 'the title is not a returned value');
   // asking for another field about a titled task does not echo the title either
   const pr = await dataPointReadResult('u1', 'p1', 'what is the priority of my buyer task book movers');
@@ -457,10 +458,11 @@ test('v6 read: parent first, only structured columns selected (never customLabel
   const calls = []; msStub('VIEWER', { rows: [ms({}), ms({ id: 'm2', type: 'INSPECTION_CONTINGENCY', dueAt: new Date('2026-11-25T12:00:00Z') })] }, calls);
   const r = await dataPointReadResult('u1', 'p1', 'when is my buyer milestone inspection contingency due');
   assert.equal(r.status, 'ANSWERED'); assert.match(r.blocks[0].body, /Your inspection contingency milestone is due .*25/);
-  assert.deepEqual(calls[0], ['parent', { where: { propertyId: 'p1' }, select: { id: true, status: true }, take: 5 }]);
-  assert.deepEqual(calls[1][1].where, { checklistId: { in: ['cl1'] } }); assert.equal(calls[1][1].take, 50);
-  assert.deepEqual(Object.keys(calls[1][1].select).sort(), ['checklistId', 'dueAt', 'id', 'status', 'type']);
-  for (const banned of ['customLabel', 'notes', 'responsibleUserId', 'sourceEntityId', 'sourceDocumentId']) assert.ok(!(banned in calls[1][1].select), banned);
+  const rc = calls.slice(2); // the grammar gate first reads the property's own record names (the buyer journey and its milestones); the assertions below are about the reader's queries
+  assert.deepEqual(rc[0], ['parent', { where: { propertyId: 'p1' }, select: { id: true, status: true }, take: 5 }]);
+  assert.deepEqual(rc[1][1].where, { checklistId: { in: ['cl1'] } }); assert.equal(rc[1][1].take, 50);
+  assert.deepEqual(Object.keys(rc[1][1].select).sort(), ['checklistId', 'dueAt', 'id', 'status', 'type']);
+  for (const banned of ['customLabel', 'notes', 'responsibleUserId', 'sourceEntityId', 'sourceDocumentId']) assert.ok(!(banned in rc[1][1].select), banned);
   assert.match((await dataPointReadResult('u1', 'p1', 'when is my buyer milestone inspection due')).blocks[0].body, /Your inspection milestone is due .*22/);
   const t = await dataPointReadResult('u1', 'p1', 'what type is my buyer milestone inspection contingency');
   assert.match(t.blocks[0].body, /is of type inspection contingency/);
@@ -517,9 +519,10 @@ test('v7 read: parent (sale case) first; only structured columns selected; the t
   const calls = []; siStub('VIEWER', { rows: [si({}), si({ id: 's2', title: 'Paint porch', status: 'PURSUING', dueAt: new Date('2026-12-09T12:00:00Z'), detail: 'SECRET-DETAIL', estimatedCostMinCents: 999900 })] }, calls);
   const r = await dataPointReadResult('u1', 'p1', 'when is my sale item paint porch due');
   assert.equal(r.status, 'ANSWERED'); assert.match(r.blocks[0].body, /sale-readiness item is due .*9/);
-  assert.deepEqual(calls[0], ['parent', { where: { propertyId: 'p1' }, select: { id: true, status: true }, take: 5 }]);
-  assert.deepEqual(calls[1][1].where, { saleCaseId: { in: ['sc1'] } });
-  assert.deepEqual(Object.keys(calls[1][1].select).sort(), ['dueAt', 'id', 'saleCaseId', 'status', 'title']);
+  const rc = calls.slice(2); // the grammar gate first reads the property's own record names (the sale case and its items); the assertions below are about the reader's queries
+  assert.deepEqual(rc[0], ['parent', { where: { propertyId: 'p1' }, select: { id: true, status: true }, take: 5 }]);
+  assert.deepEqual(rc[1][1].where, { saleCaseId: { in: ['sc1'] } });
+  assert.deepEqual(Object.keys(rc[1][1].select).sort(), ['dueAt', 'id', 'saleCaseId', 'status', 'title']);
   const text = JSON.stringify(r); for (const s of SECRET_SALE) assert.ok(!text.includes(s), s); assert.ok(!text.includes('Paint porch'), 'the title is not echoed');
   assert.deepEqual(r.parameters.sources, [{ sourceType: 'SaleReadinessItem', sourceId: 's2' }]);
   assert.equal((await dataPointReadResult('u1', 'p1', 'when is my sale item due')).reasonCode, 'DATA_POINT_AMBIGUOUS');
@@ -575,10 +578,11 @@ test('v8 read: the record is named and role-filtered first; only metadata column
   const calls = []; rvStub('VIEWER', {}, calls);
   const r = await dataPointReadResult('u1', 'p1', 'what is the scan status of my roof inspection record version');
   assert.equal(r.status, 'ANSWERED'); assert.match(r.blocks[0].body, /Roof inspection version 2 has scan status clean/i);
-  assert.equal(calls[0][1].where.visibility, 'HOUSEHOLD'); assert.equal(calls[0][1].where.lifecycleStatus, 'ACTIVE'); assert.equal(calls[0][1].where.trashedAt, null); assert.equal(calls[0][1].where.propertyId, 'p1');
-  assert.deepEqual(calls[1][1].where, { recordId: 'r1' });
-  assert.deepEqual(Object.keys(calls[1][1].select).sort(), ['id', 'scanStatus', 'versionNumber']);
-  for (const banned of ['storageKey', 'originalFileName', 'sha256', 'extractedText', 'uploadedByUserId']) assert.ok(!(banned in calls[1][1].select), banned);
+  const rc = calls.slice(1); // the grammar gate first reads the property's own record names (the record titles); the assertions below are about the reader's queries
+  assert.equal(rc[0][1].where.visibility, 'HOUSEHOLD'); assert.equal(rc[0][1].where.lifecycleStatus, 'ACTIVE'); assert.equal(rc[0][1].where.trashedAt, null); assert.equal(rc[0][1].where.propertyId, 'p1');
+  assert.deepEqual(rc[1][1].where, { recordId: 'r1' });
+  assert.deepEqual(Object.keys(rc[1][1].select).sort(), ['id', 'scanStatus', 'versionNumber']);
+  for (const banned of ['storageKey', 'originalFileName', 'sha256', 'extractedText', 'uploadedByUserId']) assert.ok(!(banned in rc[1][1].select), banned);
   assert.deepEqual(r.parameters.sources, [{ sourceType: 'CurrentPropertyRecordVersion', sourceId: 'v2' }], 'a default read selected the version AS CURRENT');
   const old = await dataPointReadResult('u1', 'p1', 'what is the scan status of my roof inspection record version 1');
   assert.deepEqual(old.parameters.sources, [{ sourceType: 'PropertyRecordVersion', sourceId: 'v1' }], 'an explicit historical version needs only membership, not currency');
@@ -728,8 +732,9 @@ test('v10 checklist: the claim is named first; a step is chosen by number; free-
   const calls = []; ccStub('CONTRIBUTOR', { steps: [stp(1, { status: 'DONE', completedAt: new Date('2026-09-10T12:00:00Z') }), stp(2, { required: false })] }, calls);
   const st = await dataPointReadResult('u1', 'p1', 'what is the status of claim checklist step 1 on my basement flood claim');
   assert.equal(st.status, 'ANSWERED'); assert.match(st.blocks[0].body, /water damage claim checklist step 1 has status done/i);
-  assert.equal(calls[0][1].where.propertyId, 'p1'); assert.deepEqual(calls[1][1].where, { claimId: 'c1' });
-  assert.deepEqual(Object.keys(calls[1][1].select).sort(), ['id', 'orderIndex', 'status']);
+  const rc = calls.slice(1); // the grammar gate first reads the property's own record names (the claim titles); the assertions below are about the reader's queries
+  assert.equal(rc[0][1].where.propertyId, 'p1'); assert.deepEqual(rc[1][1].where, { claimId: 'c1' });
+  assert.deepEqual(Object.keys(rc[1][1].select).sort(), ['id', 'orderIndex', 'status']);
   assert.deepEqual(st.parameters.sources, [{ sourceType: 'ClaimChecklistItem', sourceId: 'c1~s1', minRole: 'CONTRIBUTOR' }]);
   assert.match((await dataPointReadResult('u1', 'p1', 'is claim checklist step 2 required')).blocks[0].body, /is required: no/);
   assert.match((await dataPointReadResult('u1', 'p1', 'when was claim checklist step 1 completed')).blocks[0].body, /was completed .*10/);

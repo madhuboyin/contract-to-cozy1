@@ -15,13 +15,13 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { humanDate, money } from '../askFormatting';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { ALTERNATE_POINT, audienceFloorCopy, DATA_POINT_BY_ID, resolveDataPoint, resolveDataPointsMulti, roleMayRead, type DataPointDefinition } from '../dataPoint/dataPointCatalogue';
-import { namedTaxYears, readDataPoint } from '../dataPoint/dataPointReader';
+import { loadAuthorizedNamedLabels, namedTaxYears, readDataPoint } from '../dataPoint/dataPointReader';
 import { planDataPointQuery, pointOf, type QueryPlan } from '../dataPoint/dataPointQueryPlan';
 import { prisma } from '../../../lib/prisma';
 import { safeTimezone } from '../support/propertyContext';
 import { runDataPointQuery } from '../dataPoint/dataPointQueryRunner';
 import { applyLaunchHints } from '../dataPoint/dataPointLaunchHints';
-import { dataPointReadGrammarAgreement, type LegacyGrammarAgreement } from '../semantic/legacyGrammarAgreement';
+import { dataPointReadGrammarAgreement, PRISMA_ENTITY_TO_BASIC_READ_SUBJECT, type LegacyGrammarAgreement } from '../semantic/legacyGrammarAgreement';
 import { buildSemanticReadReceipt } from '../semantic/semanticExecutionReceipt';
 import { verifySemanticReadReceiptEntailment } from '../semantic/semanticReceiptEntailment';
 import { humanizePresentationToken } from '../semantic/containment/presentationHumanizer';
@@ -325,6 +325,22 @@ async function tryExecuteWithSemanticOrchestration(input: {
   return null;
 }
 
+/** Data points read by naming one of the household's records (a claim, record, task, milestone or item). */
+const RECORD_NAMED_ENTITIES: ReadonlySet<string> = new Set(['PropertyRecord', 'PropertyRecordVersion', 'Claim', 'ClaimChecklistItem', 'ClaimTimelineEvent', 'ClaimDocument', 'HomeBuyerTask', 'BuyerJourneyMilestone', 'SaleReadinessItem']);
+const MAX_UNKNOWN_NAME_TOKENS = 8;
+
+/** True only when the typed grammar agreed on the entity, a field and a single-value read, and the one thing it could not resolve is a contiguous run of words (the record's name). */
+function unknownRecordName(agreement: LegacyGrammarAgreement | null, point: DataPointDefinition): boolean {
+  if (!agreement || agreement.outcome !== 'DISAGREE' || agreement.reasonCode !== 'GRAMMAR_HAS_UNRESOLVED_MEANING' || !RECORD_NAMED_ENTITIES.has(point.entity)) return false;
+  const facet = agreement.facet;
+  const spans = agreement.plan.unresolvedSpans;
+  if (!facet || !facet.fields.length || facet.projection !== 'DETAIL' || facet.requestClass !== 'DATA_QUERY' || !spans.length || spans.length > MAX_UNKNOWN_NAME_TOKENS) return false;
+  if (facet.subject?.entityId !== PRISMA_ENTITY_TO_BASIC_READ_SUBJECT[point.entity]) return false;
+  const ordered = [...spans].sort((left, right) => left.start - right.start);
+  // one run: only whitespace or a joining word between consecutive unresolved words ("will and trust"), so a stray unrelated word elsewhere in the question still fails closed
+  return ordered.every((span, index) => index === 0 || /^\s*(?:(?:and|or|of|the|a|an|for|to|in|on|&)\s+)*$/i.test(agreement.plan.rawText.slice(ordered[index - 1].end, span.start)));
+}
+
 export async function dataPointReadResult(
   userId: string,
   propertyId: string,
@@ -532,11 +548,22 @@ export async function dataPointReadResult(
   }
   let singlePointAgreement: LegacyGrammarAgreement | null = null;
   if (!forcedPoint) {
+    // The household's own record titles resolve the words of a named record ("my roof permit"); nothing else about the question is forgiven.
+    const namedLabels = await loadAuthorizedNamedLabels(propertyId, role, point);
     singlePointAgreement = dataPointReadGrammarAgreement(message, {
       prismaEntity: point.entity,
       projection: 'DETAIL',
-    });
+    }, namedLabels.length ? { namedLabels } : undefined);
     if (!singlePointAgreement || singlePointAgreement.outcome !== 'AGREE') {
+      // The grammar understood the whole question except one run of words, and the point is read by naming a record ("what type of document is my gazebo plan"): the
+      // household has no record under that name that this role may see, so say exactly that. Nothing is read or answered, and a record the role may not see reads the
+      // same as one that does not exist.
+      if (unknownRecordName(singlePointAgreement, point)) {
+        const where = ENTITY_COPY[point.entity];
+        // No record of this kind is visible to this role at all: the same "none recorded yet" answer the reader gives (a hidden record reads exactly like an empty list).
+        if (!namedLabels.length) return notice('DATA_POINT_NO_INVENTORY', 'data-point-no-inventory', where.none ?? `No ${where.plural} are recorded yet`, where.none ? 'Add it to your home record and I can tell you.' : `Add it to your home record and I can tell you its details.`);
+        return notice('DATA_POINT_ITEM_NOT_FOUND', 'data-point-item-not-found', `I don’t see that in your ${where.collection}`, `${point.label} comes from the ${where.singular} record. Name one you have recorded, or add it first.`);
+      }
       return deferredProviderFailure
         ?? notice('DATA_POINT_SEMANTIC_AGREEMENT_REQUIRED', 'data-point-semantic-agreement-required', agreementRefusalCopy(message).title, agreementRefusalCopy(message).body);
     }

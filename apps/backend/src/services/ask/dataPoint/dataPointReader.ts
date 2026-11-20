@@ -218,3 +218,44 @@ export async function readDataPoint(propertyId: string, role: string, point: Dat
 }
 
 
+
+/**
+ * The names a question about this data point may use for a specific record: the titles (or structured type words) of the property's own records that this
+ * role could actually be answered from. The typed-grammar agreement gate treats exactly these strings as resolved wording, so an invented title stays unresolved.
+ *
+ * Mirrors readDataPoint's own scoping (property-scoped, parent first, the canonical Home Records visibility rule applied to the query) and never returns a value:
+ * a record this role may not see contributes no name, so it is indistinguishable from one that does not exist. A failed read yields no names, which keeps the gate closed.
+ */
+export async function loadAuthorizedNamedLabels(propertyId: string, role: string, point: DataPointDefinition): Promise<string[]> {
+  const spec = ENTITY_SPECS[point.entity];
+  if (!spec || spec.mode === 'SINGLETON' || spec.mode === 'LATEST_TAX_YEAR') return [];
+  try {
+    const db = prisma as any;
+    const labelsOf = (rows: any[], labels: (r: any) => unknown[]) => rows.flatMap((r) => labels(r)).map((v) => String(v ?? '').trim()).filter(Boolean);
+    if (spec.mode === 'RECORD_VERSION') {
+      const parent = ENTITY_SPECS.PropertyRecord;
+      const records: any[] = await db[parent.delegate].findMany({ where: { propertyId, ...(parent.roleWhere?.(role) ?? {}) }, select: { title: true }, take: DATA_POINT_ITEM_ROW_CAP });
+      return labelsOf(records, (r) => [r.title]);
+    }
+    if (spec.mode === 'CLAIM_CHILD') {
+      const claims: any[] = await db.claim.findMany({ where: { propertyId }, select: { id: true, title: true }, take: DATA_POINT_ITEM_ROW_CAP });
+      const names = labelsOf(claims, (r) => [r.title]);
+      if (point.entity === 'ClaimChecklistItem' || !claims.length) return names;
+      // An event or document is chosen by its structured type, read only through this property's claims.
+      const children: any[] = await db[spec.delegate].findMany({ where: { claimId: { in: claims.map((c) => String(c.id)) } }, select: { type: true }, take: 100 });
+      return [...names, ...labelsOf(children, (r) => [typeWords(r.type)])];
+    }
+    if (spec.mode === 'RELATION_CHILD') {
+      const path = RELATION_ENTITIES[point.entity];
+      if (!path) return [];
+      const parents: any[] = await db[path.parentDelegate].findMany({ where: { propertyId }, select: { id: true }, take: DATA_POINT_RELATION_PARENT_CAP });
+      if (!parents.length) return [];
+      const children: any[] = await db[spec.delegate].findMany({ where: { [path.key]: { in: parents.map((p) => String(p.id)) }, ...(spec.where ?? {}) }, select: { ...spec.extraSelect }, take: DATA_POINT_RELATION_CHILD_CAP });
+      return labelsOf(children, spec.labels);
+    }
+    const rows: any[] = await db[spec.delegate].findMany({ where: { propertyId, ...(spec.roleWhere?.(role) ?? {}), ...(spec.where ?? {}) }, select: { ...spec.extraSelect }, take: DATA_POINT_ITEM_ROW_CAP });
+    return labelsOf(rows, spec.labels);
+  } catch {
+    return [];
+  }
+}

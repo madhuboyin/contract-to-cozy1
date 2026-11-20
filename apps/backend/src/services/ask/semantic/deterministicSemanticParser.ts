@@ -36,6 +36,17 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function findNamedLabelSpans(rawText: string, labels: readonly string[] | undefined): SemanticSourceSpan[] {
+  if (!labels?.length) return [];
+  const spans: SemanticSourceSpan[] = [];
+  for (const label of new Set(labels.map((value) => value.trim()).filter((value) => value.length >= 2))) {
+    for (const match of rawText.matchAll(new RegExp(`\\b${escapeRegExp(label)}\\b`, 'gi'))) {
+      spans.push({ start: match.index ?? 0, end: (match.index ?? 0) + match[0].length, text: match[0] });
+    }
+  }
+  return spans;
+}
+
 function findMatchedDynamicRooms(
   rawText: string,
   dynamicEntities?: readonly DynamicPlaceholderEntityCandidate[]
@@ -131,12 +142,18 @@ function annotate(raw: string, tokens: readonly SemanticSourceSpan[]): Annotatio
   const normalizedTokens = tokens.map((token) => token.text.toLocaleLowerCase('en-US').replace('’', "'"));
   const annotations: Annotation[] = [];
   const occupiedByRole = new Map<string, Set<number>>();
+  // "status", "due date" and "completed" are one phrase with a different field per owner entity (a claim's status, a buyer task's status). Identical phrases at the
+  // same position all annotate; the entity the question names, or the single owner they share, decides which field is meant (never the first one registered).
+  const phraseAt = new Set<string>();
   for (const lexeme of ASK_SHARED_SEMANTIC_LEXICON) {
     const phraseTokens = lexeme.phrase.split(' ');
     for (let index = 0; index <= normalizedTokens.length - phraseTokens.length; index += 1) {
       if (!phraseTokens.every((token, offset) => tokensMatch(normalizedTokens[index + offset], token))) continue;
       const occupied = occupiedByRole.get(lexeme.role) ?? new Set<number>();
-      if (phraseTokens.some((_, offset) => occupied.has(index + offset))) continue;
+      const sharedKey = `${lexeme.role}|${index}|${lexeme.phrase}`;
+      const sharesPhrase = lexeme.role === 'FIELD' && phraseAt.has(sharedKey);
+      if (!sharesPhrase && phraseTokens.some((_, offset) => occupied.has(index + offset))) continue;
+      if (lexeme.role === 'FIELD') phraseAt.add(sharedKey);
       phraseTokens.forEach((_, offset) => occupied.add(index + offset));
       occupiedByRole.set(lexeme.role, occupied);
       const start = tokens[index].start;
@@ -207,10 +224,36 @@ const ENTITY_TO_DOMAIN_AND_JOB: Readonly<Record<string, { domainId: string; jobI
   'entity.home_event': { domainId: 'domain.timeline_events_monitoring', jobId: 'query.home_event.list', defaultProjection: 'LIST' },
   'entity.buyer_task': { domainId: 'domain.transactions_projects', jobId: 'query.buyer_task.list', defaultProjection: 'LIST' },
   'entity.sale_readiness_item': { domainId: 'domain.transactions_projects', jobId: 'query.sale_readiness_item.list', defaultProjection: 'LIST' },
+  'entity.claim': { domainId: 'domain.protection', jobId: 'query.claim.detail', defaultProjection: 'DETAIL' },
+  'entity.claim_checklist_item': { domainId: 'domain.protection', jobId: 'query.claim_checklist_item.detail', defaultProjection: 'DETAIL' },
+  'entity.claim_timeline_event': { domainId: 'domain.protection', jobId: 'query.claim_timeline_event.detail', defaultProjection: 'DETAIL' },
+  'entity.claim_document': { domainId: 'domain.protection', jobId: 'query.claim_document.detail', defaultProjection: 'DETAIL' },
+  'entity.buyer_milestone': { domainId: 'domain.transactions_projects', jobId: 'query.buyer_milestone.detail', defaultProjection: 'DETAIL' },
+  'entity.buyer_checklist': { domainId: 'domain.transactions_projects', jobId: 'query.buyer_checklist.detail', defaultProjection: 'DETAIL' },
+  'entity.sale_case': { domainId: 'domain.transactions_projects', jobId: 'query.sale_case.detail', defaultProjection: 'DETAIL' },
+  'entity.sale_prep_profile': { domainId: 'domain.transactions_projects', jobId: 'query.sale_prep_profile.detail', defaultProjection: 'DETAIL' },
 });
 
-/** Words that only restate the home-profile subject when a home-profile field is named ("what year was my house built"). */
-const PROPERTY_SUBJECT_NOISE: ReadonlySet<string> = new Set(['home', 'house', 'property', 'year']);
+/**
+ * Words that only restate an entity's own subject once one of its fields is named ("what year was my house built", "the retention date of my roof permit record").
+ * They are forgiven only for that owner and only when it is not an inventory question; with no field named they stay unresolved.
+ */
+const OWNER_SUBJECT_NOISE: Readonly<Record<string, ReadonlySet<string>>> = Object.freeze({
+  'entity.property': new Set(['home', 'house', 'property', 'year']),
+  'entity.property_record': new Set(['record', 'records', 'document', 'documents', 'version', 'versions']),
+});
+
+const STRICT_COMPLETE_GRAMMAR_ENTITIES: ReadonlySet<string> = new Set([
+  'entity.maintenance_task', 'entity.claim', 'entity.claim_checklist_item', 'entity.claim_timeline_event', 'entity.claim_document',
+  'entity.buyer_milestone', 'entity.buyer_checklist', 'entity.sale_case', 'entity.sale_prep_profile',
+]);
+
+const FIELD_GROUP_OWNER: Readonly<Record<string, string>> = Object.freeze({
+  claim: 'entity.claim', buyer_task: 'entity.buyer_task', buyer_milestone: 'entity.buyer_milestone', sale_item: 'entity.sale_readiness_item',
+  claim_checklist: 'entity.claim_checklist_item', sale_case: 'entity.sale_case', tax_bill: 'entity.tax_bill', tax_assessment: 'entity.tax_assessment',
+  sale_prep: 'entity.sale_prep_profile', buyer_checklist: 'entity.buyer_checklist', record: 'entity.property_record', record_version: 'entity.property_record',
+  claim_event: 'entity.claim_timeline_event', claim_document: 'entity.claim_document',
+});
 
 const FIELD_OWNER_ENTITY: Readonly<Record<string, string>> = Object.freeze({
   'field.property.year_built': 'entity.property',
@@ -225,6 +268,22 @@ const FIELD_OWNER_ENTITY: Readonly<Record<string, string>> = Object.freeze({
   'field.property.roof_type': 'entity.property',
   'field.property.heating_type': 'entity.property',
   'field.property.cooling_type': 'entity.property',
+  ...Object.fromEntries([
+    ['claim', ['status', 'deductible', 'type', 'incident_date', 'opened_date', 'submitted_date', 'closed_date', 'next_follow_up', 'estimated_loss', 'settlement', 'claim_number']],
+    ['buyer_task', ['status', 'completed_date', 'priority']],
+    ['buyer_milestone', ['status', 'due_date', 'completed_date', 'type']],
+    ['sale_item', ['status', 'due_date', 'category', 'requirement_class']],
+    ['claim_checklist', ['status', 'completed_date', 'required']],
+    ['sale_case', ['status', 'target_list_date', 'target_close_date']],
+    ['tax_bill', ['effective_rate', 'issue_date']],
+    ['tax_assessment', ['total_assessed_value', 'taxable_value', 'land_value', 'improvement_value', 'assessment_date']],
+    ['sale_prep', ['paint', 'curb_appeal', 'flooring', 'kitchen', 'bathroom', 'staging']],
+    ['buyer_checklist', ['stage', 'target_close_date', 'move_in_date']],
+    ['record', ['type', 'verification', 'effective_to', 'retain_until']],
+    ['record_version', ['number', 'uploaded_date', 'scan_status', 'integrity_status']],
+    ['claim_event', ['occurred_date']],
+    ['claim_document', ['attached_date']],
+  ].flatMap(([group, names]) => (names as string[]).map((name) => [`field.${group}.${name}`, FIELD_GROUP_OWNER[group as string]]))),
   'field.inventory_item.purchase_cost': 'entity.inventory_item',
   'field.inventory_item.replacement_cost': 'entity.inventory_item',
   'field.inventory_item.serial_number': 'entity.inventory_item',
@@ -245,6 +304,8 @@ export function parseDeterministicSemanticRequest(
   rawText: string,
   options?: {
     readonly dynamicEntities?: readonly DynamicPlaceholderEntityCandidate[];
+    /** Titles and structured labels of records this household has and this role may see (claims, tasks, milestones, records). They only resolve wording; they are never returned. */
+    readonly namedLabels?: readonly string[];
     /**
      * The homeowner's answer to the "no A or B" question (see describeNegativeOrAmbiguity): EITHER_OR is "no A, or B" (the negation belongs to the first condition and
      * the second stands on its own), NEITHER_NOR is "neither A nor B". Without it a bare "no A or B" is the ambiguous shape and is asked, never guessed.
@@ -266,7 +327,10 @@ export function parseDeterministicSemanticRequest(
   };
   if (!tokens.length) return SemanticRequestPlanSchema.parse({ ...base, outcome: 'INSUFFICIENT_TEXT', facets: [], unresolvedSpans: [] });
 
-  const annotations = annotate(rawText, tokens);
+  // A title the household really has ("basement flood", "roof permit") owns its own words: "basement" there is not a room and "roof" is not the home profile.
+  const namedSpans = findNamedLabelSpans(rawText, options?.namedLabels);
+  const annotations = annotate(rawText, tokens).filter((annotation) => !namedSpans.some((span) => annotation.start >= span.start && annotation.end <= span.end
+    && (annotation.lexeme.role === 'ENTITY' || annotation.lexeme.role === 'FIELD')));
   const inventorySubject = annotations.find((annotation) => annotation.lexeme.semanticId === 'entity.inventory_item');
   const warrantyRelation = annotations.find((annotation) => annotation.lexeme.semanticId === 'relation.inventory_item.warranty');
   const maintenanceRelation = annotations.find((annotation) => annotation.lexeme.semanticId === 'relation.inventory_item.maintenance_task');
@@ -287,13 +351,34 @@ export function parseDeterministicSemanticRequest(
     text: rawText.slice(entry.rawStart, entry.rawEnd),
   }));
   const agePhrase = findAgePhrase(rawText);
-  // "what year was my house built", "how many bedrooms does my home have": once a home-profile field is named, the possessive subject ("my house/home/property")
-  // and the "what year" lead-in are that field's own wording, not unresolved meaning. Without a named field they stay unresolved (a bare "my home" asks nothing).
-  const propertyFieldNamed = annotations.some((annotation) => annotation.lexeme.role === 'FIELD' && FIELD_OWNER_ENTITY[annotation.lexeme.semanticId] === 'entity.property');
-  const propertySubjectSpans: SemanticSourceSpan[] = propertyFieldNamed && !inventorySubject
-    ? tokens.filter((token) => PROPERTY_SUBJECT_NOISE.has(token.text.toLocaleLowerCase('en-US')))
+  // Once a field is named, the owner's own subject words are that field's wording, not unresolved meaning (see OWNER_SUBJECT_NOISE).
+  const namedFieldOwners = new Set(annotations
+    .filter((annotation) => annotation.lexeme.role === 'FIELD')
+    .map((annotation) => FIELD_OWNER_ENTITY[annotation.lexeme.semanticId])
+    .filter((owner): owner is string => Boolean(owner)));
+  const subjectNoiseWords = new Set([...namedFieldOwners].flatMap((owner) => [...(OWNER_SUBJECT_NOISE[owner] ?? [])]));
+  const propertySubjectSpans: SemanticSourceSpan[] = subjectNoiseWords.size && !inventorySubject
+    ? tokens.filter((token) => subjectNoiseWords.has(token.text.toLocaleLowerCase('en-US')))
     : [];
-  const unresolvedSpans = unresolved(tokens, annotations, [...dynamicSpans, ...(agePhrase ? [agePhrase.span] : []), ...propertySubjectSpans]);
+  // Names the household really has (claim, task, record, milestone titles loaded for this property and role) resolve their own words; a checklist step
+  // number and a tax year are values, not unresolved meaning. Nothing else is forgiven: an invented title stays unresolved.
+  const valueSpans: SemanticSourceSpan[] = [];
+  if (annotations.some((annotation) => /checklist step|claim step/.test(annotation.lexeme.phrase))) {
+    for (const match of rawText.matchAll(/\bstep\s+(\d{1,3})\b/gi)) {
+      const start = (match.index ?? 0) + match[0].length - match[1].length;
+      valueSpans.push({ start, end: start + match[1].length, text: match[1] });
+    }
+  }
+  if (annotations.some((annotation) => annotation.lexeme.semanticId.startsWith('field.record_version.') || /record version|document version|file version/.test(annotation.lexeme.phrase))) {
+    for (const match of rawText.matchAll(/\bversion\s+(\d{1,3})\b/gi)) {
+      const start = (match.index ?? 0) + match[0].length - match[1].length;
+      valueSpans.push({ start, end: start + match[1].length, text: match[1] });
+    }
+  }
+  if (annotations.some((annotation) => annotation.lexeme.semanticId.startsWith('field.tax_') || annotation.lexeme.semanticId.startsWith('entity.tax_'))) {
+    for (const match of rawText.matchAll(/\b(?:19|20|21)\d{2}\b/g)) valueSpans.push({ start: match.index ?? 0, end: (match.index ?? 0) + 4, text: match[0] });
+  }
+  const unresolvedSpans = unresolved(tokens, annotations, [...dynamicSpans, ...(agePhrase ? [agePhrase.span] : []), ...propertySubjectSpans, ...namedSpans, ...valueSpans]);
   const facetId = `facet-${createHash('sha256').update(`${rawText}:0`).digest('hex').slice(0, 12)}`;
 
   // 0A. Phase 2A analysis capability: replacement guidance
@@ -622,7 +707,9 @@ export function parseDeterministicSemanticRequest(
   const primaryField = fieldAnnotations[0];
   const entityAnnotations = annotations.filter((annotation) => annotation.lexeme.role === 'ENTITY');
   const explicitEntity = entityAnnotations.find((annotation) => annotation.lexeme.semanticId in ENTITY_TO_DOMAIN_AND_JOB);
-  const inferredEntityId = explicitEntity?.lexeme.semanticId ?? (primaryField ? FIELD_OWNER_ENTITY[primaryField.lexeme.semanticId] : undefined);
+  // Without a named entity, the fields name it only when they all belong to one entity ("closing date"); shared wording like a bare "status" names none.
+  const fieldOwners = new Set(fieldAnnotations.map((annotation) => FIELD_OWNER_ENTITY[annotation.lexeme.semanticId]).filter(Boolean));
+  const inferredEntityId = explicitEntity?.lexeme.semanticId ?? (fieldOwners.size === 1 ? [...fieldOwners][0] : undefined);
 
   if (!inferredEntityId || !(inferredEntityId in ENTITY_TO_DOMAIN_AND_JOB)) {
     return SemanticRequestPlanSchema.parse({ ...base, outcome: 'NONE_FITS', facets: [], unresolvedSpans });
@@ -661,7 +748,8 @@ export function parseDeterministicSemanticRequest(
     && /^show$/i.test(projectionAnnotation.text)
     && fields.length > 0
     && !/\b(?:list|all|warranties|policies|items|appliances|tasks|bills|records|events|rooms)\b/i.test(rawText);
-  const scalarPropertyRead = inferredEntityId === 'entity.property' && fields.length > 0;
+  // One named field with no list/count/exists cue is a single value, however the entity lists by default ("when is my buyer milestone due", "how many bedrooms").
+  const scalarPropertyRead = fields.length > 0 && (inferredEntityId === 'entity.property' || !projectionAnnotation);
   const projection = scalarPropertyRead ? 'DETAIL' : projectionAnnotation?.lexeme.semanticId === 'projection.count' ? 'COUNT'
     : projectionAnnotation?.lexeme.semanticId === 'projection.detail' || showScalarDetail ? 'DETAIL'
     : projectionAnnotation?.lexeme.semanticId === 'projection.exists' ? 'EXISTS'
@@ -669,7 +757,9 @@ export function parseDeterministicSemanticRequest(
     : fields.length > 0 && meta.defaultProjection === 'DETAIL' ? 'DETAIL' : meta.defaultProjection;
   const polarity = polarityAnnotation?.lexeme.semanticId === 'polarity.negative' ? 'NEGATIVE' : 'POSITIVE';
   const grammarComplete = unresolvedSpans.length === 0;
-  if (inferredEntityId === 'entity.maintenance_task' && !grammarComplete) {
+  // Entities that only a complete, fully-resolved question may select: a leftover word is a meaning this grammar does not know ("what claims are still open"), so the
+  // question stays unmatched instead of being read as a nearby, simpler one.
+  if (STRICT_COMPLETE_GRAMMAR_ENTITIES.has(inferredEntityId) && !grammarComplete) {
     return SemanticRequestPlanSchema.parse({ ...base, outcome: 'NONE_FITS', facets: [], unresolvedSpans });
   }
   const maintenanceTime: SemanticTimeConstraint | null = inferredEntityId === 'entity.maintenance_task' && timeAnnotation
