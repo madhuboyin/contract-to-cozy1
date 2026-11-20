@@ -216,19 +216,20 @@ async function homeUpgradeScenariosResult(propertyId: string, canChange: boolean
   }
   // FR-AUT-1: the twin and the saved options listed.
   const result = homeUpgradeScenariosFromView(active, propertyId, new Date(), { canChange, archived });
+  // The planner has estimated savings and payback, not a percentage return; say so rather than let payback stand in for ROI unannounced (also when nothing is saved).
+  const ROI_NOTE = 'The planner shows each option\'s estimated cost, savings and payback; it does not calculate a percentage return on investment.';
+  const asksRoi = /\b(?:roi|return on investment)\b/i.test(message);
+  const summary = result.blocks.find((block) => block.type === 'SUMMARY');
   if (hvacOnly && active.length === 0) {
-    const summary = result.blocks.find((block) => block.type === 'SUMMARY');
     if (summary?.type === 'SUMMARY') {
       summary.title = 'No saved furnace replacement options';
-      summary.body = 'There are no saved furnace or HVAC options, so there is nothing to compare for cost, savings or payback yet.';
+      summary.body = `There are no saved furnace or HVAC options, so there is nothing to compare for cost, savings or payback yet.${asksRoi ? ` ${ROI_NOTE}` : ''}`;
       // The way back is the same read without the filter. The estimates note describes figures that are not shown, so it stays out of an empty answer.
       summary.actions = [{ id: 'home-upgrade-show-all', label: 'Show all saved upgrade options', message: 'Show my saved upgrade options', operationId: 'HOME_UPGRADE_SCENARIOS', interactionType: 'START_WORKFLOW', style: 'SECONDARY' }];
       result.blocks = result.blocks.filter((block) => block.id !== 'home-upgrade-boundary');
     }
-  } else if (/\b(?:roi|return on investment)\b/i.test(message)) {
-    // The planner has estimated savings and payback, not a percentage return; say so rather than let payback stand in for ROI unannounced.
-    const summary = result.blocks.find((block) => block.type === 'SUMMARY');
-    if (summary?.type === 'SUMMARY') summary.body = `${summary.body} Each option shows its estimated cost, savings and payback; the planner does not calculate a percentage return on investment.`;
+  } else if (asksRoi && summary?.type === 'SUMMARY') {
+    summary.body = `${summary.body} ${ROI_NOTE}`;
   }
   return withSources(result, [sourceRef('HomeDigitalTwin', twin.id), ...[...active, ...archived].map((scenario) => sourceRef('HomeTwinScenario', String(scenario.id)))]);
 }

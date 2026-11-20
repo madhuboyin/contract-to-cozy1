@@ -241,6 +241,10 @@ test('a furnace question with nothing saved is short, offers the unfiltered list
   HomeDigitalTwinScenarioService.prototype.listScenarios = async () => scenarios();
   assert.equal(empty.blocks[0].title, 'No saved furnace replacement options');
   assert.match(empty.blocks[0].body, /nothing to compare for cost, savings or payback/);
+  // The exact screenshot case: nothing saved AND ROI asked. Payback must not stand in for ROI here either.
+  assert.match(empty.blocks[0].body, /does not calculate a percentage return on investment/);
+  const emptyNoRoi = await capabilityInvoke('HOME_UPGRADE_SCENARIOS', { userId: 'u1', propertyId: 'p1', message: 'compare furnace replacement options' }, access);
+  assert.ok(!/percentage return/.test(emptyNoRoi.blocks[0].body), 'no ROI sentence unless ROI was asked');
   assert.equal(empty.blocks[0].actions[0].id, 'home-upgrade-show-all');
   assert.equal(empty.blocks[0].actions[0].operationId, 'HOME_UPGRADE_SCENARIOS');
   assert.ok(!empty.blocks.some((block) => block.id === 'home-upgrade-boundary'), 'the estimates note is not shown for an answer with no estimates');
