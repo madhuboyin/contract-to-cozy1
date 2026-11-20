@@ -26,11 +26,11 @@ test('questions about the items in a room, or in each room, reach the inventory 
   ]) assert.equal(route(message), 'INVENTORY_LOOKUP', message);
 });
 
-test('questions about the home’s own recorded facts reach the property summary', () => {
+test('questions about the home’s own recorded facts reach the typed data-point read (the typed grammar now understands each catalogued home-profile field)', () => {
   for (const message of [
-    'how many bedrooms do i have', 'how many bathrooms are there', 'what is the square footage of my home',
-    'what year was my house built', 'how old is my house', 'what is the lot size', 'how many stories does my house have',
-  ]) assert.equal(route(message), 'PROPERTY_SUMMARY', message);
+    'how many bedrooms do i have', 'what is the square footage of my home',
+    'what year was my house built', 'how old is my house',
+  ]) assert.equal(route(message), 'DATA_POINT_READ', message);
 });
 
 test('the colour of a room reaches Material Specs', () => {

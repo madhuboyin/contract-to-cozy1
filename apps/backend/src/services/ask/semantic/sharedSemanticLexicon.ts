@@ -4,7 +4,7 @@
  * remain attached to stable semantic identities instead of handler routes.
  * Warranty, insurance, policy, coverage, and claim tokens are strictly disjoint.
  */
-export const ASK_SHARED_LEXICON_VERSION = 'phase1-subset-1.1.0' as const;
+export const ASK_SHARED_LEXICON_VERSION = 'phase1-subset-1.2.0' as const;
 
 export type SemanticLexemeRole =
   | 'DOMAIN'
@@ -63,9 +63,18 @@ const BASIC_READ_REGISTRY_LEXEMES: readonly RegistryLexeme[] = [
   { role: 'FIELD', semanticId: 'field.inventory_item.serial_number', canonicalLabel: 'serial number', reviewedAliases: ['serial'] },
   { role: 'FIELD', semanticId: 'field.inventory_item.model_number', canonicalLabel: 'model number', reviewedAliases: ['model'] },
   { role: 'FIELD', semanticId: 'field.inventory_item.installed_on', canonicalLabel: 'install date', reviewedAliases: ['installed on', 'installation date', 'when was installed', 'how old', 'installed', 'installation'] },
-  { role: 'FIELD', semanticId: 'field.property.year_built', canonicalLabel: 'year built', reviewedAliases: ['built year', 'when was built'] },
-  { role: 'FIELD', semanticId: 'field.property.living_area', canonicalLabel: 'living area', reviewedAliases: ['square footage', 'sq ft', 'square feet'] },
-  { role: 'FIELD', semanticId: 'field.property.roof_replacement_year', canonicalLabel: 'roof replacement year', reviewedAliases: ['roof age', 'when was roof replaced'] },
+  { role: 'FIELD', semanticId: 'field.property.year_built', canonicalLabel: 'year built', reviewedAliases: ['built year', 'when was built', 'built', 'year of construction', 'construction year', 'how old is my home', 'how old is my house', 'age of my home', 'age of my house', 'age of the home', 'age of the house'] },
+  { role: 'FIELD', semanticId: 'field.property.living_area', canonicalLabel: 'living area', reviewedAliases: ['square footage', 'sq ft', 'square feet', 'square foot', 'sqft', 'how big is my home', 'how big is my house', 'how large is my home', 'how large is my house', 'size of my home', 'size of my house'] },
+  { role: 'FIELD', semanticId: 'field.property.roof_replacement_year', canonicalLabel: 'roof replacement year', reviewedAliases: ['roof age', 'when was roof replaced', 'roof replaced', 'roof replacement', 'roof installed', 'roof install year', 'age of my roof', 'age of the roof', 'how old is my roof', 'how old is the roof', 'when was my roof', 'when was the roof'] },
+  { role: 'FIELD', semanticId: 'field.property.bedrooms', canonicalLabel: 'bedroom count', reviewedAliases: ['bedrooms', 'number of bedrooms'] },
+  { role: 'FIELD', semanticId: 'field.property.bathrooms', canonicalLabel: 'bathroom count', reviewedAliases: ['bathrooms', 'number of bathrooms'] },
+  { role: 'FIELD', semanticId: 'field.property.address', canonicalLabel: 'property address', reviewedAliases: ['home address', 'house address', 'street address', 'what is my address', 'my address'] },
+  { role: 'FIELD', semanticId: 'field.property.zip_code', canonicalLabel: 'zip code', reviewedAliases: ['zip', 'postal code'] },
+  { role: 'FIELD', semanticId: 'field.property.county', canonicalLabel: 'county', reviewedAliases: ['what county'] },
+  { role: 'FIELD', semanticId: 'field.property.home_type', canonicalLabel: 'home type', reviewedAliases: ['type of home', 'kind of home', 'type of house', 'kind of house', 'house type', 'dwelling type', 'property type', 'type of property', 'type of dwelling'] },
+  { role: 'FIELD', semanticId: 'field.property.roof_type', canonicalLabel: 'roof type', reviewedAliases: ['type of roof', 'kind of roof'] },
+  { role: 'FIELD', semanticId: 'field.property.heating_type', canonicalLabel: 'heating type', reviewedAliases: ['type of heating', 'kind of heating', 'type of heating system', 'kind of heating system'] },
+  { role: 'FIELD', semanticId: 'field.property.cooling_type', canonicalLabel: 'cooling type', reviewedAliases: ['type of cooling', 'kind of cooling', 'type of cooling system', 'kind of cooling system', 'type of air conditioning', 'kind of air conditioning'] },
   { role: 'FIELD', semanticId: 'field.maintenance_task.next_due_date', canonicalLabel: 'next due date', reviewedAliases: ['due date', 'due', 'overdue', 'pending'] },
   { role: 'FIELD', semanticId: 'field.maintenance_task.priority', canonicalLabel: 'priority', reviewedAliases: ['urgent', 'high priority'] },
   { role: 'FIELD', semanticId: 'field.warranty.expiry_date', canonicalLabel: 'warranty expiration date', reviewedAliases: ['warranty expiry', 'warranty expires'] },

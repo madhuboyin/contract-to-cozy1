@@ -209,10 +209,22 @@ const ENTITY_TO_DOMAIN_AND_JOB: Readonly<Record<string, { domainId: string; jobI
   'entity.sale_readiness_item': { domainId: 'domain.transactions_projects', jobId: 'query.sale_readiness_item.list', defaultProjection: 'LIST' },
 });
 
+/** Words that only restate the home-profile subject when a home-profile field is named ("what year was my house built"). */
+const PROPERTY_SUBJECT_NOISE: ReadonlySet<string> = new Set(['home', 'house', 'property', 'year']);
+
 const FIELD_OWNER_ENTITY: Readonly<Record<string, string>> = Object.freeze({
   'field.property.year_built': 'entity.property',
   'field.property.living_area': 'entity.property',
   'field.property.roof_replacement_year': 'entity.property',
+  'field.property.bedrooms': 'entity.property',
+  'field.property.bathrooms': 'entity.property',
+  'field.property.address': 'entity.property',
+  'field.property.zip_code': 'entity.property',
+  'field.property.county': 'entity.property',
+  'field.property.home_type': 'entity.property',
+  'field.property.roof_type': 'entity.property',
+  'field.property.heating_type': 'entity.property',
+  'field.property.cooling_type': 'entity.property',
   'field.inventory_item.purchase_cost': 'entity.inventory_item',
   'field.inventory_item.replacement_cost': 'entity.inventory_item',
   'field.inventory_item.serial_number': 'entity.inventory_item',
@@ -275,7 +287,13 @@ export function parseDeterministicSemanticRequest(
     text: rawText.slice(entry.rawStart, entry.rawEnd),
   }));
   const agePhrase = findAgePhrase(rawText);
-  const unresolvedSpans = unresolved(tokens, annotations, agePhrase ? [...dynamicSpans, agePhrase.span] : dynamicSpans);
+  // "what year was my house built", "how many bedrooms does my home have": once a home-profile field is named, the possessive subject ("my house/home/property")
+  // and the "what year" lead-in are that field's own wording, not unresolved meaning. Without a named field they stay unresolved (a bare "my home" asks nothing).
+  const propertyFieldNamed = annotations.some((annotation) => annotation.lexeme.role === 'FIELD' && FIELD_OWNER_ENTITY[annotation.lexeme.semanticId] === 'entity.property');
+  const propertySubjectSpans: SemanticSourceSpan[] = propertyFieldNamed && !inventorySubject
+    ? tokens.filter((token) => PROPERTY_SUBJECT_NOISE.has(token.text.toLocaleLowerCase('en-US')))
+    : [];
+  const unresolvedSpans = unresolved(tokens, annotations, [...dynamicSpans, ...(agePhrase ? [agePhrase.span] : []), ...propertySubjectSpans]);
   const facetId = `facet-${createHash('sha256').update(`${rawText}:0`).digest('hex').slice(0, 12)}`;
 
   // 0A. Phase 2A analysis capability: replacement guidance
@@ -643,7 +661,8 @@ export function parseDeterministicSemanticRequest(
     && /^show$/i.test(projectionAnnotation.text)
     && fields.length > 0
     && !/\b(?:list|all|warranties|policies|items|appliances|tasks|bills|records|events|rooms)\b/i.test(rawText);
-  const projection = projectionAnnotation?.lexeme.semanticId === 'projection.count' ? 'COUNT'
+  const scalarPropertyRead = inferredEntityId === 'entity.property' && fields.length > 0;
+  const projection = scalarPropertyRead ? 'DETAIL' : projectionAnnotation?.lexeme.semanticId === 'projection.count' ? 'COUNT'
     : projectionAnnotation?.lexeme.semanticId === 'projection.detail' || showScalarDetail ? 'DETAIL'
     : projectionAnnotation?.lexeme.semanticId === 'projection.exists' ? 'EXISTS'
     : projectionAnnotation?.lexeme.semanticId === 'projection.list' ? 'LIST'

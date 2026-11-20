@@ -88,13 +88,15 @@ export const SELECTED_BASIC_READ_FAMILIES: readonly SelectedBasicReadFamily[] = 
     requestClass: 'DATA_QUERY',
     supportedProjections: ['DETAIL'],
     supportedPolarities: ['POSITIVE'],
-    relationOrFieldOrJobId: 'field.property.year_built|field.property.living_area|field.property.roof_replacement_year',
+    relationOrFieldOrJobId: 'field.property.year_built|field.property.living_area|field.property.roof_replacement_year|field.property.bedrooms|field.property.bathrooms|field.property.address|field.property.zip_code|field.property.county|field.property.home_type|field.property.roof_type|field.property.heating_type|field.property.cooling_type',
     canonicalAdapterKey: 'data-point-read.read',
     falseDeclineCategory: null,
-    selectionRationale: 'Safe single-point canonical read over Property scalar facts (yearBuilt, livingArea, roofReplacementYear).',
+    selectionRationale: 'Safe single-point canonical read over Property scalar facts (yearBuilt, livingArea, roofReplacementYear, bedrooms, bathrooms, address, zipCode, county, home type, roof type, heating type, cooling type). A count-phrased question about one of them ("how many bedrooms") is still a single value, so it is a DETAIL read.',
     representativeExamples: [
       'what is the year built of my home profile',
       'show details of the living area for my home profile',
+      'what year was my house built',
+      'how many bedrooms do i have',
     ],
   },
   {
