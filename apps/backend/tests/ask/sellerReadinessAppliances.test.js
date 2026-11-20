@@ -50,8 +50,9 @@ test('the appliance filter keeps appliance-record items and appliance warranties
   const result = await ask('show seller readiness items that involve appliances');
   assert.deepEqual(rowIds(result), ['dishwasher-open', 'fridge-warranty']);
   const summary = result.blocks.find((b) => b.id === 'seller-prep-summary');
-  assert.equal(summary.title, 'Seller-prep items that match');
-  assert.match(summary.body, /2 open items, limited to items from an appliance record or its warranty/);
+  assert.equal(summary.title, '2 appliance-related seller-prep items');
+  assert.match(summary.body, /appliance records and their warranties/);
+  assert.deepEqual(summary.actions, []);
 });
 
 test('without the appliance word the checklist is unfiltered', async () => {

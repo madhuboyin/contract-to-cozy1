@@ -373,7 +373,7 @@ function projectAgingSystems(agingItems: AgingInventoryItem[]): ProjectedItem[] 
     category: 'SYSTEMS_MAINTENANCE' as const,
     requirementClass: item.pastExpectedLife ? 'VERIFICATION_NEEDED' as const : 'OPTIONAL_IMPROVEMENT' as const,
     title: `${item.name}: ${item.pastExpectedLife ? 'past' : 'nearing'} typical replacement age`,
-    detail: `About ${item.ageYears.toFixed(0)} years old — typical expected life for this type is around ${item.expectedLifespanYears} years. Buyers and inspectors often ask about aging systems like this before closing.`,
+    detail: `Age: about ${item.ageYears.toFixed(0)} years\nTypical life: about ${item.expectedLifespanYears} years\nWhy it matters: buyers and inspectors often ask about aging systems.`,
   }));
 }
 

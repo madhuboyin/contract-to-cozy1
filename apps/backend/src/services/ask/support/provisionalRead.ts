@@ -380,7 +380,7 @@ export function groundedSellerPrepVerdict(question: string, result: AskOperation
   const ids = result.blocks.map(warrantyBlockId);
   if (!ids.includes('seller-prep-summary') || !SELLER_PREP_REASONS.has(result.reasonCode ?? '')) return fail('ANSWER_IS_NOT_A_VERIFIED_VARIANT');
   const summary = result.blocks.find((block) => warrantyBlockId(block) === 'seller-prep-summary') as { title?: string; body?: string } | undefined;
-  const filtered = summary?.title === 'Seller-prep items that match';
+  const filtered = summary?.title !== undefined && summary.title !== 'Your seller-prep checklist';
   const askedNarrowing = SELLER_PREP_ASKS_COST_CEILING.test(question) || SELLER_PREP_ASKS_HIGH_PRIORITY.test(question) || SELLER_PREP_ASKS_APPLIANCES.test(question);
   if (askedNarrowing && !filtered) return fail('NARROWING_WAS_NOT_APPLIED');
   if (!askedNarrowing && filtered) return fail('FILTERED_VIEW_FOR_AN_UNFILTERED_QUESTION');

@@ -488,6 +488,8 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string, mes
     existing.push(item);
     grouped.set(item.category, existing);
   }
+  // One narrowing, applied, with results: the title carries the count and the filter, so the body does not repeat them.
+  const compactAppliance = appliancesOnly && !(under && isOwner) && !highPriorityOnly && openItems.length > 0;
   const row = (item: typeof openItems[number]) => ({
     id: item.id,
     title: item.title,
@@ -503,14 +505,15 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string, mes
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY',
     id: 'seller-prep-summary',
-    title: filteredChecklist ? 'Seller-prep items that match' : 'Your seller-prep checklist',
-    body: openItems.length
+    title: compactAppliance ? `${openItems.length} appliance-related seller-prep item${openItems.length === 1 ? '' : 's'}` : filteredChecklist ? 'Seller-prep items that match' : 'Your seller-prep checklist',
+    body: compactAppliance ? 'From appliance records and their warranties.' : openItems.length
       ? `${openItems.length} open item${openItems.length === 1 ? '' : 's'}${pursuingItems.length ? `, ${pursuingItems.length} already in progress` : ''}${waivedCount ? `, ${waivedCount} waived` : ''}${appliancesOnly ? ', limited to items from an appliance record or its warranty' : ''}.`
       : filteredChecklist ? `No checklist items match all of those filters${appliancesOnly ? ' (items count as involving an appliance when they come from an appliance record or its warranty)' : ''}.` : `No open items right now${waivedCount ? ` (${waivedCount} waived)` : ''}. This home is in good shape to list.`,
     tone: 'DEFAULT',
     // This response is the canonical sale-readiness checklist, including progress, item details and every supported decision,
     // and (FRD v1.338) the case's own dates, budget range and stage. No CTA that exits Ask for the desktop rendering of the same data.
-    actions: caseActions,
+    // A filtered lookup is a read of the items, not a visit to the sale case, so the case-level actions stay out of it.
+    actions: filteredChecklist ? [] : caseActions,
   }];
   // The note rides in the existing summary (no extra block, so the checklist keeps its declared shape).
   if (!isOwner && hadCostDetail) (blocks[0] as { body: string }).body += ' Cost details are available to the property owner.';
@@ -604,7 +607,7 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string, mes
       title: openItems.length ? 'Open items' : 'Checklist items',
       // IW-PRES-014 / IW-PRES-022: the checklist renders as shelves (FRD v1.84); the live item detail keeps its decisions.
       presentation: { pattern: 'SHELVES' },
-      description: 'Repairs, records, and presentation work recommended before listing, grouped by category. Open an item to see it and decide on it.',
+      ...(filteredChecklist ? {} : { description: 'Repairs, records, and presentation work recommended before listing, grouped by category. Open an item to see it and decide on it.' }),
       sections,
       collection: collectionDescriptor({ sourceTotal: openItems.length + pursuingItems.length + waivedItems.length, fetchedCount: openItems.length + pursuingItems.length + waivedItems.length, sections, nextPageAvailable: false }),
       actions: [],
@@ -620,8 +623,8 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string, mes
     }],
   });
   blocks.push({
-    type: 'BOUNDARY', id: 'seller-prep-boundary', title: 'Preparation guidance—not a listing or disclosure determination', severity: 'INFO',
-    body: 'Checklist priorities and cost ranges organize the recorded sale-preparation work. They do not establish market value, guarantee buyer response, replace required disclosures, or substitute for advice from qualified real-estate, legal, tax, inspection, or repair professionals.',
+    type: 'BOUNDARY', id: 'seller-prep-boundary', title: 'Planning guidance only', severity: 'INFO',
+    body: 'Not a listing, disclosure, market-value, or professional determination.',
     suggestions: [],
   });
 

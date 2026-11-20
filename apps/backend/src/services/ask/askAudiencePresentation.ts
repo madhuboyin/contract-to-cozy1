@@ -117,6 +117,8 @@ function lifecycleFraming(ownershipState: OnboardingOwnershipState | null): stri
 const FRAMED_FAMILIES = new Set(['DECISION_ANALYSIS', 'GENERAL_HOME_GUIDANCE', 'WORKFLOW_GUIDANCE']);
 export function isLifecycleFramingAnswer(operationId: AskOperationId | null | undefined, result: AskOperationResult): boolean {
   if (!operationId) return true;
+  // The seller-prep checklist is a read of recorded work (even when filtered), not stage-based advice.
+  if (result.blocks.some((block) => block.id === 'seller-prep-summary')) return false;
   if (!['ANSWERED', 'READY_WITH_LIMITATIONS'].includes(result.status)) return false;
   if (result.reasonCode && /NO_ANSWER|NO_SUPPORTED|UNVERIFIED|NOT_RECORDED|NOT_IN_HOME_RECORD|NO_ITEM/i.test(result.reasonCode)) return false;
   return FRAMED_FAMILIES.has(getAskOperationDefinition(operationId).family);

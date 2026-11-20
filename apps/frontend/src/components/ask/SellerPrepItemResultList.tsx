@@ -194,7 +194,9 @@ export function SellerPrepItemResultList({ block, propertyId, disabled, onAction
                   <span className="text-base font-semibold leading-6 text-slate-950 group-hover:text-teal-800">{item.title}</span>
                   {item.status && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{STATUS_LABELS[item.status] ?? item.status.replace(/_/g, ' ')}</span>}
                 </span>
-                {item.description && <span className="mt-1.5 block max-w-4xl text-sm leading-6 text-slate-600">{item.description}</span>}
+                {item.description && (item.description.includes('\n')
+                  ? <span className="mt-1.5 block max-w-4xl text-sm leading-6 text-slate-600">{item.description.split('\n').map((line) => <span key={line} className="block">• {line}</span>)}</span>
+                  : <span className="mt-1.5 block max-w-4xl text-sm leading-6 text-slate-600">{item.description}</span>)}
                 {facts.length > 0 && <span className="mt-3 flex flex-wrap gap-2">{facts.map((fact) => <span key={fact} className="rounded-lg bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">{fact}</span>)}</span>}
               </span>
               <span className="mt-1 hidden shrink-0 items-center gap-1 text-sm font-semibold text-teal-700 sm:inline-flex">View details<ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" /></span>
