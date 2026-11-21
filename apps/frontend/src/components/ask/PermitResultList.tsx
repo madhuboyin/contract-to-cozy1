@@ -1,7 +1,7 @@
 'use client';
 
 import { useContext, useEffect, useRef, useState } from 'react';
-import { Loader2, X } from 'lucide-react';
+import { ChevronRight, Loader2, X } from 'lucide-react';
 import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { api } from '@/lib/api/client';
@@ -106,8 +106,9 @@ export function PermitResultList({ block, propertyId, disabled, onAction, onAcce
     <div className="border-b border-slate-100 p-4"><h3 className="font-semibold text-slate-950">{block.title}</h3>{block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}</div>
     {block.sections.map((section) => <div key={section.id} className="border-b border-slate-100 p-4">
       <h4 className="font-semibold">{section.title} · {section.count}</h4>
-      <ul className="mt-2 grid gap-2 sm:grid-cols-2">{section.items.map((item) => <li key={item.id} className={cn('rounded-xl border px-3 py-2.5', detailId === item.id ? 'border-teal-600 bg-teal-50' : 'border-slate-200 bg-white')}>
-        <button type="button" data-permit-detail-trigger={item.id} aria-expanded={detailId === item.id} aria-controls={`permit-detail-${item.id}`} onClick={() => open(item)} className="group min-h-9 text-left font-semibold text-slate-950 hover:text-teal-800"><span className="group-hover:underline">{item.title}</span><span className="ml-2 text-xs font-medium text-teal-700">View details</span></button>
+      {section.items.length === 0 && <p className="mt-2 text-sm text-slate-600">No pending permit records were found in this home record.</p>}
+      <ul className="mt-2 divide-y divide-slate-200 border-y border-slate-200">{section.items.map((item) => <li key={item.id} className={cn('px-1 py-2.5', detailId === item.id && 'bg-teal-50')}>
+        <button type="button" data-permit-detail-trigger={item.id} aria-expanded={detailId === item.id} aria-controls={`permit-detail-${item.id}`} onClick={() => open(item)} className="group flex min-h-10 w-full items-center justify-between gap-3 text-left font-semibold text-slate-950 hover:text-teal-800"><span className="truncate group-hover:underline">{item.title}</span><ChevronRight className={cn('h-4 w-4 shrink-0 transition-transform', detailId === item.id && 'rotate-90')} aria-hidden="true" /></button>
         {item.description && <p className="mt-0.5 text-sm text-slate-600">{item.description}</p>}
       </li>)}</ul>
     </div>)}

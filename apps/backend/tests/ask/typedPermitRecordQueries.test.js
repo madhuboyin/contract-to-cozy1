@@ -81,10 +81,11 @@ test('no permits recorded says so without claiming nothing was permitted; none o
 test('open claims or pending permits answers both parts', async () => {
   const { execution, result, summary } = await ask('Are there any open claims or pending permits for this home?');
   assert.deepEqual(execution.facetResults.map((f) => f.owner.owner === 'UNRESOLVED'), [false, false]);
-  assert.match(summary, /open claim\(s\)/);
-  assert.match(summary, /3 open permit\(s\)/);
+  assert.match(summary, /open claims?/);
+  assert.match(summary, /3 pending permits/);
   assert.doesNotMatch(summary, /couldn’t answer/);
-  assert.equal(result.blocks[0].title, 'Claims and Permits');
+  assert.equal(result.blocks[0].title, 'Open claims and pending permits');
+  assert.match(result.blocks[0].body, /^\d+ open claims? · 3 pending permits\.$/);
   const records = result.blocks.filter((block) => block.type === 'GROUPED_LIST');
   assert.deepEqual(records.map((block) => block.id), ['incident-claim-list', 'permit-tracker-permits']);
   assert.deepEqual(records.flatMap((block) => block.sections.flatMap((section) => section.items.map((item) => item.entityType))), [
@@ -92,6 +93,18 @@ test('open claims or pending permits answers both parts', async () => {
     ...Array(execution.facetResults[1].recordIds.length).fill('PERMIT_RECORD'),
   ]);
   assert.ok(records.every((block) => block.listDensity === 'DENSE'));
+});
+
+test('the compound answer keeps an explicit empty permits section and separates the record-availability limitation', async () => {
+  const { result } = await ask('Are there any open claims or pending permits for this home?', { ...base, permits: [] });
+  assert.match(result.blocks[0].body, /^\d+ open claims? · No recorded pending permits\.$/);
+  const permitList = result.blocks.find((block) => block.type === 'GROUPED_LIST' && block.id === 'permit-tracker-permits');
+  assert.equal(permitList.title, 'Pending permits');
+  assert.equal(permitList.sections[0].count, 0);
+  assert.deepEqual(permitList.sections[0].items, []);
+  const limitation = result.blocks.find((block) => block.type === 'BOUNDARY' && block.id === 'permit-record-availability');
+  assert.match(limitation.body, /local permitting office/);
+  assert.doesNotMatch(result.blocks[0].body, /permitting office/);
 });
 
 test('what the rule cannot answer is named, not dropped; a bare permits question and the project question keep their routes', async () => {

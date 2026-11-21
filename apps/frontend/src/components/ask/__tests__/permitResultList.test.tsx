@@ -25,6 +25,7 @@ test('a permit row opens a fresh property-scoped permit detail inline', async ()
   });
 
   render(<PermitResultList block={block} propertyId="home-1" onAccessLost={() => {}} />);
+  expect(screen.queryByText('View details')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /Electrical permit E-100/ }));
 
   await waitFor(() => expect(screen.getByText('Panel replacement')).toBeInTheDocument());
@@ -32,4 +33,11 @@ test('a permit row opens a fresh property-scoped permit detail inline', async ()
   expect(screen.getByText('Bright Electric')).toBeInTheDocument();
   expect(screen.getByText('$2,500.00')).toBeInTheDocument();
   expect(screen.getByText('1')).toBeInTheDocument();
+});
+
+test('an empty pending-permits section is explicit and compact', () => {
+  const empty = { ...block, title: 'Pending permits', sections: [{ ...block.sections[0], title: 'Pending permits', count: 0, items: [] }] };
+  render(<PermitResultList block={empty} propertyId="home-1" onAccessLost={() => {}} />);
+  expect(screen.getByText('Pending permits · 0')).toBeInTheDocument();
+  expect(screen.getByText('No pending permit records were found in this home record.')).toBeInTheDocument();
 });

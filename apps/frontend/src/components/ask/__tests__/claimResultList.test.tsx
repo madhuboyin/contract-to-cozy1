@@ -63,6 +63,7 @@ test('the legal next statuses come from the canonical lifecycle', () => {
 
 test('a claim row opens canonical detail inline', async () => {
   await open(claim());
+  expect(screen.queryByText('View details')).not.toBeInTheDocument();
   expect(mockedGetClaim).toHaveBeenCalledWith('home', 'claim-1');
   expect(screen.getByText('Acme Insurance')).toBeInTheDocument();
   expect(screen.getByText(/Checklist: 1 of 2 done \(50%\)/)).toBeInTheDocument();

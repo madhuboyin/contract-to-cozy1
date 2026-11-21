@@ -3528,31 +3528,40 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
     }
   } else {
     const answerDomains = [...new Set(execution.facetResults.map(facetTitle))];
-    const answerTitle = answerDomains.length === 1
+    const claimFacet = execution.facetResults.find((facet) => facet.jobMatch?.startsWith('query.claim.'));
+    const permitFacet = execution.facetResults.find((facet) => facet.jobMatch?.startsWith('query.permit.'));
+    const isClaimsAndPermits = Boolean(claimFacet && permitFacet && execution.facetResults.length === 2);
+    const answerTitle = isClaimsAndPermits
+      ? 'Open claims and pending permits'
+      : answerDomains.length === 1
       ? answerDomains[0]
       : answerDomains.length === 2
         ? `${answerDomains[0]} and ${answerDomains[1]}`
         : answerDomains.length > 2
           ? `${answerDomains.slice(0, -1).join(', ')}, and ${answerDomains.at(-1)}`
           : execution.facetResults.length > 1 ? 'Home record results' : 'Home record result';
+    const answerBody = isClaimsAndPermits && claimFacet && permitFacet
+      ? `${claimFacet.recordIds.length} open ${claimFacet.recordIds.length === 1 ? 'claim' : 'claims'} · ${permitFacet.recordIds.length > 0 ? `${permitFacet.recordIds.length} pending ${permitFacet.recordIds.length === 1 ? 'permit' : 'permits'}` : 'No recorded pending permits'}.`
+      : humanizeEnumTokens(execution.answer);
     blocks.push({
       type: 'SUMMARY',
       // Preserve the receipt's declared answer variant at the final Ask boundary. The provisional delivery gate verifies this identity.
       id: primaryReceipt?.answerVariantId ?? 'cross-domain-summary',
       title: answerTitle,
-      body: humanizeEnumTokens(execution.answer),
+      body: answerBody,
       tone: execution.status === 'PARTIAL' ? 'CAUTION' : 'DEFAULT',
       actions: [],
     });
     const listSections = execution.facetResults
-      .filter((f) => f.recordIds.length > 0 && f.receipt && f.receipt.projection !== 'COUNT')
+      // Claims and permits retain symmetric sections in a compound answer, including an explicit zero-record section.
+      .filter((f) => (f.recordIds.length > 0 || f.jobMatch?.startsWith('query.claim.') || f.jobMatch?.startsWith('query.permit.')) && f.receipt && f.receipt.projection !== 'COUNT')
       .map((facetResult) => {
         const rowById = new Map((facetResult.rows ?? []).map((row) => [row.id, row]));
         const sourceType = facetResult.receipt?.provenance.sourceType;
         const entityType = sourceType === 'Claim' ? 'CLAIM' : sourceType === 'PropertyPermitRecord' ? 'PERMIT_RECORD' : undefined;
         return {
           id: `section-${facetResult.facetId}`,
-          title: facetTitle(facetResult),
+          title: isClaimsAndPermits && sourceType === 'Claim' ? 'Open claims' : isClaimsAndPermits && sourceType === 'PropertyPermitRecord' ? 'Pending permits' : facetTitle(facetResult),
           count: facetResult.recordIds.length,
           sourceType,
           items: facetResult.recordIds.map((id) => {
@@ -3594,6 +3603,12 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
         actions: [],
         filters: [],
         listDensity: 'DENSE',
+      });
+    }
+    if (isClaimsAndPermits && permitFacet?.summary.startsWith('No permits are recorded for this home.')) {
+      blocks.push({
+        type: 'BOUNDARY', id: 'permit-record-availability', title: 'About permit records', severity: 'INFO',
+        body: 'Permit records may exist with the local permitting office even when they have not been added to this home record.', suggestions: [],
       });
     }
     blocks.push({
