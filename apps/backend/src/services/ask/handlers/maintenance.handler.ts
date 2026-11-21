@@ -63,7 +63,7 @@ function maintenanceDate(value: Date, timeZone: string): string {
 const SEASON_WINDOW_PHRASE = /\b(next|this|coming)\s+(spring|summer|fall|autumn)\b/i;
 const SEASON_MONTHS: Record<string, [number, number]> = { spring: [3, 5], summer: [6, 8], fall: [9, 11] };
 
-function resolveMaintenanceTimeframe(message: string, now: Date, timeZone: string, purchaseDate: Date | null): { timeframe: MaintenanceTimeframe | null; missingPurchaseDate: boolean } {
+export function resolveMaintenanceTimeframe(message: string, now: Date, timeZone: string, purchaseDate: Date | null): { timeframe: MaintenanceTimeframe | null; missingPurchaseDate: boolean } {
   const explicitDates = [...message.matchAll(/\b(\d{4}-\d{2}-\d{2})\b/g)].map((match) => match[1]);
   if (explicitDates.length >= 2) {
     const [start, end] = explicitDates[0] <= explicitDates[1] ? explicitDates : [explicitDates[1], explicitDates[0]];
