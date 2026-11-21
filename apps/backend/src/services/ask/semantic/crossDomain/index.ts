@@ -625,7 +625,9 @@ export async function runCrossDomainAcceptanceBenchmarks(): Promise<{
 
   // ROW_26: which active projects still need a permit?
   await expectRow('ROW_26', ['domain.projects_quotes_vendors'], 'which active projects still need a permit?', (r) =>
-    r.facetResults[0]?.recordIds.length === 2 && r.facetResults[0]?.receipt?.population.unknownCount === 1
+    // Confirmed and unknown are separate collections: one confirmed id, one unknown record listed apart, the confirmed-not-required project excluded.
+    r.facetResults[0]?.recordIds.length === 1 && r.facetResults[0]?.receipt?.population.confirmedCount === 1 && r.facetResults[0]?.receipt?.population.unknownCount === 1
+      && r.facetResults[0]?.blocks?.some((b) => b.type === 'GROUPED_LIST' && b.id.endsWith('-needs-confirmation') && b.sections.flatMap((section) => section.items).length === 1)
       ? null
       : 'expected confirmed=1, unknown=1, excluding confirmed not required');
 

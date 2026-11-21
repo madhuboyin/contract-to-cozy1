@@ -712,14 +712,16 @@ test('production dataPointReadResult loads live manual/receipt links, canonical 
       drivers: [{ factor: 'Equity growth', impact: 'POSITIVE' }],
     });
     const canonicalNoOverride = await dataPointReadResult('user-1', 'prop-ny-1', 'how long until owning beats renting?');
-    assert.equal(canonicalNoOverride.status, 'ANSWERED');
+    // The saved Sell/Hold/Rent result is a different comparison, so without a tenant rent the own-vs-rent answer is a limitation, not a verdict. The monthly rent must NOT be
+    // derived from netRentCents / (years * 12): it stays missing, and the saved result appears only as separate context.
+    assert.equal(canonicalNoOverride.status, 'READY_WITH_LIMITATIONS');
     const canonicalFacet = canonicalNoOverride.parameters.crossDomainExecution.facetResults[0];
-    assert.equal(canonicalFacet.metrics.monthlyRentCents, null);
-    assert.equal(canonicalFacet.metrics.crossoverYear, null);
-    assert.equal(canonicalFacet.metrics.breaksEvenWithinHorizon, true);
-    assert.equal(canonicalFacet.metrics.ownAdvantageAtHorizonCents, 3000000);
+    assert.equal(canonicalFacet.status, 'PARTIAL_MISSING_SLOTS');
+    assert.ok(canonicalFacet.missingSlots.includes('monthlyRentCents'));
+    assert.equal(canonicalFacet.metrics, undefined);
+    assert.match(canonicalFacet.summary, /^I can’t determine the owning-versus-renting break-even yet\./);
+    assert.match(canonicalFacet.summary, /Your saved Sell\/Hold\/Rent analysis is a different comparison/);
     assert.doesNotMatch(canonicalFacet.summary, /starting in year/i);
-    assert.match(canonicalFacet.summary, /requires a monthly-rent assumption/i);
 
     // 9. Live multi-quote ambiguity returns NEEDS_CLARIFICATION, while named pair resolves & executes
     prisma.quoteComparisonQuote.findMany = async () => [
@@ -949,7 +951,7 @@ test('Semantic receipts use domain-appropriate predicates, quote comparison resp
   assert.deepEqual(directNamedQuoteExec.facetResults[0].recordIds, ['quote-1', 'quote-3']);
   assert.equal(directNamedQuoteExec.facetResults[0].metrics.deltaCents, -140000);
 
-  // Authoritative persisted RENT analysis must never be overridden by fallback crossover model
+  // A saved Sell/Hold/Rent result (here RENT) compares different options, so it never supplies the own-vs-rent verdict: with a tenant rent and a home value the crossover model answers.
   const persistedRentWins = await executeCrossDomainSnapshot({
     rawText: 'how long until owning beats renting?',
     snapshot: {
@@ -966,12 +968,9 @@ test('Semantic receipts use domain-appropriate predicates, quote comparison resp
   });
   assert.equal(persistedRentWins.status, 'ANSWERED');
   const rentWinsFacet = persistedRentWins.facetResults[0];
-  assert.equal(rentWinsFacet.metrics.breaksEvenWithinHorizon, false);
-  assert.equal(rentWinsFacet.metrics.crossoverYear, null);
-  assert.equal(rentWinsFacet.metrics.ownAdvantageAtHorizonCents, -4000000);
-  assert.equal(rentWinsFacet.metrics.sellHoldRentWinner, 'RENT');
-  assert.match(rentWinsFacet.summary, /^Owning does not beat renting/i);
-  assert.doesNotMatch(rentWinsFacet.summary, /starting in year/i);
+  assert.notEqual(rentWinsFacet.metrics.ownAdvantageAtHorizonCents, -4000000);
+  assert.equal(rentWinsFacet.metrics.sellHoldRentWinner, undefined);
+  assert.doesNotMatch(rentWinsFacet.summary, /saved Sell\/Hold\/Rent|persisted analysis/i);
 
   // 3. Rich list presentation renders real titles for claims & projects instead of raw IDs
   const claimsAndProjects = await executeCrossDomainSnapshot({
@@ -982,11 +981,19 @@ test('Semantic receipts use domain-appropriate predicates, quote comparison resp
   });
   assert.equal(claimsAndProjects.status, 'ANSWERED');
   const richOp = buildOperationResultFromCrossDomainExecution(claimsAndProjects);
-  const richList = richOp.blocks.find((b) => b.type === 'GROUPED_LIST');
-  assert.ok(richList && richList.type === 'GROUPED_LIST');
-  const renderedTitles = richList.sections.flatMap((s) => s.items.map((i) => i.title));
+  // A compound answer is several lists (claims, matching projects, and the records that need confirmation); read them all.
+  const richLists = richOp.blocks.filter((b) => b.type === 'GROUPED_LIST');
+  assert.ok(richLists.length >= 2);
+  const titlesOf = (lists) => lists.flatMap((list) => list.sections.flatMap((s) => s.items.map((i) => i.title)));
+  const unconfirmedLists = richLists.filter((b) => b.id.endsWith('-needs-confirmation'));
+  const matchLists = richLists.filter((b) => !b.id.endsWith('-needs-confirmation'));
+  const renderedTitles = titlesOf(matchLists);
   assert.ok(renderedTitles.includes('Water-damage claim'), `Missing claim title in ${JSON.stringify(renderedTitles)}`);
   assert.ok(renderedTitles.includes('200A Electrical Panel Upgrade'), `Missing project title in ${JSON.stringify(renderedTitles)}`);
+  // A project whose permit requirement is not recorded is listed apart, never among the matches; one confirmed as not needing a permit is not shown.
+  assert.ok(!renderedTitles.includes('Mudroom Built-In Shelving'), 'an unconfirmed project must not be listed as a match');
+  assert.deepEqual(titlesOf(unconfirmedLists), ['Mudroom Built-In Shelving']);
+  assert.ok(!titlesOf(richLists).includes('Primary Bedroom Repaint'), 'a project confirmed as not needing a permit is not shown');
   assert.ok(!renderedTitles.includes('claim-water-damage'), 'Raw claim ID must not be rendered as title');
   assert.ok(!renderedTitles.includes('proj-panel-upgrade'), 'Raw project ID must not be rendered as title');
 });

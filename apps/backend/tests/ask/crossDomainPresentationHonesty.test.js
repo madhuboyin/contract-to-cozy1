@@ -31,20 +31,25 @@ test('#4 a category question keeps the month: a plumbing task due in another mon
   assert.deepEqual(ids, ['plumb-next-month']);
 });
 
-test('#9 the saved Sell/Hold/Rent result is said in words, with what it does and does not compare', async () => {
+test('#9 the saved Sell/Hold/Rent result never answers own-vs-rent: without a tenant rent the answer says it cannot be worked out, and the saved result is separate context', async () => {
   const base = buildSeededCrossDomainSnapshot();
-  const sell = await run('how long until owning beats renting?', { financeSlots: { ...base.financeSlots, netHoldCents: 8000000, netRentCents: 31300000, sellHoldRentWinner: 'SELL' } });
-  assert.match(sell.summary, /your saved analysis favors selling now/);
-  assert.match(sell.summary, /renting it out beats keeping the home by \$/);
-  assert.match(sell.summary, /compares selling now, keeping the home to live in, and renting it out; it does not compare owning with renting a home as a tenant/);
-  assert.ok(!/winner: SELL/.test(sell.summary), 'the raw enum token is not shown');
-  assert.ok(!/-\$/.test(sell.summary), 'no signed dollar figure');
-  // With rent and home-value inputs present a HOLD result is answered by the computed crossover model, whose figures are not the saved analysis': no note there.
+  const sell = await run('how long until owning beats renting?', { financeSlots: { ...base.financeSlots, monthlyRentCents: null, netHoldCents: 8000000, netRentCents: 31300000, sellHoldRentWinner: 'SELL' } });
+  assert.match(sell.summary, /^I can’t determine the owning-versus-renting break-even yet\./);
+  assert.match(sell.summary, /needs the monthly rent for a comparable home you would rent as a tenant/);
+  assert.match(sell.summary, /Your saved Sell\/Hold\/Rent analysis is a different comparison/);
+  assert.match(sell.summary, /it favors selling now/);
+  assert.match(sell.summary, /renting it out beats keeping the home by \$233,000 over 5 years/);
+  assert.ok(!/Owning (?:does not beat|beats) renting/.test(sell.summary), 'the saved result is not presented as the own-vs-rent verdict');
+  assert.ok(!/winner: SELL|monthlyRentCents/.test(sell.summary), 'no raw enum token or slot name');
+  assert.equal(sell.execution.facetResults[0].status, 'PARTIAL_MISSING_SLOTS');
+  assert.deepEqual(sell.execution.facetResults[0].missingSlots, ['monthlyRentCents']);
+  // With rent and home-value inputs the computed crossover model answers, whatever the saved analysis says, and the saved analysis is not mentioned.
   const computed = await run('how long until owning beats renting?', { financeSlots: { ...base.financeSlots, netHoldCents: 9000000, netRentCents: 4000000, sellHoldRentWinner: 'HOLD' } });
   assert.ok(!/saved Sell\/Hold\/Rent analysis/.test(computed.summary));
+  assert.match(computed.summary, /^Owning beats renting starting in year \d+/);
   const hold = await run('how long until owning beats renting?', { financeSlots: { ...base.financeSlots, monthlyRentCents: null, netHoldCents: 9000000, netRentCents: 4000000, sellHoldRentWinner: 'HOLD' } });
-  assert.match(hold.summary, /favors keeping the home to live in/);
-  assert.match(hold.summary, /keeping the home beats renting it out by \$/);
+  assert.match(hold.summary, /it favors keeping the home to live in/);
+  assert.match(hold.summary, /keeping the home beats renting it out by \$50,000 over 5 years/);
 });
 
 test('#9 a computed (non-persisted) own-vs-rent answer is unchanged and carries no Sell/Hold/Rent note', async () => {

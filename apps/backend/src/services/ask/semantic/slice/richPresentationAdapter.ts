@@ -3,6 +3,9 @@ import type { SemanticReadReceipt } from '../semanticExecutionReceipt';
 import type { EnrichmentRowAction } from '../../actionEnrichment/actionEnrichmentRows';
 import { humanizeEnumTokensInCopy, humanizePresentationText, humanizePresentationToken } from '../containment/presentationHumanizer';
 
+/** Block-id suffix of the separate collection of unconfirmed records. */
+export const UNCONFIRMED_LIST_SUFFIX = '-needs-confirmation';
+
 export interface SlicePresentationRow {
   readonly id: string;
   readonly label: string;
@@ -25,6 +28,12 @@ export interface SliceRichPresentationInput {
   readonly title: string;
   readonly summaryBody: string;
   readonly rows: readonly SlicePresentationRow[];
+  /**
+   * Records the answer could not confirm (their state is unknown). They are a separate collection under their own heading and never part of `rows`, so a record that
+   * was not confirmed cannot be shown, counted or described as a match (UI review 2026-11-21, P0 #2). Their number must equal the receipt's unknownCount.
+   */
+  readonly unconfirmedRows?: readonly SlicePresentationRow[];
+  readonly unconfirmedTitle?: string;
   readonly listId?: string;
   readonly listTitle?: string;
   readonly listDescription?: string;
@@ -98,6 +107,32 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
     });
   }
 
+  if (input.unconfirmedRows && input.unconfirmedRows.length > 0) {
+    blocks.push({
+      type: 'GROUPED_LIST',
+      id: `${receipt.answerVariantId}${UNCONFIRMED_LIST_SUFFIX}`,
+      title: humanizeEnumTokensInCopy(input.unconfirmedTitle ?? 'Needs confirmation'),
+      description: '',
+      sections: [{
+        id: `${receipt.answerVariantId}-unconfirmed-section`,
+        title: humanizeEnumTokensInCopy(input.unconfirmedTitle ?? 'Needs confirmation'),
+        count: input.unconfirmedRows.length,
+        items: input.unconfirmedRows.map((row) => ({
+          id: row.id,
+          title: humanizeEnumTokensInCopy(row.label),
+          meta: [...(row.meta ?? [])].map(humanizeEnumTokensInCopy),
+          subtitle: row.subtitle ? humanizeEnumTokensInCopy(row.subtitle) : undefined,
+          description: row.description ? humanizeEnumTokensInCopy(row.description) : undefined,
+          ...(row.status ? { status: row.status } : {}),
+          ...(row.entityType ? { entityType: row.entityType } : {}),
+          badge: row.stateCode ? humanizePresentationToken(row.stateCode) : row.badgeLabel ? humanizePresentationToken(row.badgeLabel) : undefined,
+        })),
+      }],
+      actions: [],
+      filters: [],
+    });
+  }
+
   if (receipt.population.conflictedCount > 0 || receipt.population.unknownCount > 0) {
     // The uncertainty note is about whatever relation the answer reads. Warranty wording only appears on warranty answers; any other
     // job (project permits, recalls, ...) gets a neutral note instead of a misleading "warranty" heading.
@@ -151,7 +186,14 @@ export function verifyRichPresentationPopulationEquivalence(
     }
   }
 
-  const listBlock = blocks.find((block) => block.type === 'GROUPED_LIST');
+  const listBlock = blocks.find((block) => block.type === 'GROUPED_LIST' && !block.id.endsWith(UNCONFIRMED_LIST_SUFFIX));
+  const unconfirmedBlock = blocks.find((block) => block.type === 'GROUPED_LIST' && block.id.endsWith(UNCONFIRMED_LIST_SUFFIX));
+  if (unconfirmedBlock && unconfirmedBlock.type === 'GROUPED_LIST') {
+    const unconfirmedItems = unconfirmedBlock.sections.flatMap((section) => section.items);
+    if (unconfirmedItems.length !== receipt.population.unknownCount) reasons.push(`unconfirmed_count_mismatch:${unconfirmedItems.length}!=${receipt.population.unknownCount}`);
+    const confirmedIds = new Set(receipt.resolvedRecordIds);
+    for (const item of unconfirmedItems) if (confirmedIds.has(item.id)) reasons.push(`unconfirmed_listed_as_confirmed:${item.id}`);
+  }
   const renderedItems = listBlock && listBlock.type === 'GROUPED_LIST'
     ? listBlock.sections.flatMap((section) => section.items)
     : [];

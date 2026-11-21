@@ -261,6 +261,16 @@ const CLAIMS_CLEAR_MESSAGE = 'Now show all records with no filters';
 const atStart = (phrase: string) => new RegExp(`(?:^|[.!?]\\s+)\\s*${phrase}\\b`, 'i');
 const CLAIMS_CLEAR_PATTERN = atStart('now show all records with no filters');
 
+/**
+ * The state this question asks about, from its own words (a fresh question; nothing is remembered). "Which claims are still open" reads open records only, so the records
+ * fetched, the headline and the active status chip all agree (UI review 2026-11-21, P0 #3). Asking for open and closed, or neither, reads both.
+ */
+export function claimsStateFromWords(message: string): ClaimsState {
+  const open = /\b(?:open|still open|active|pending|unresolved|outstanding|in progress|ongoing|not (?:yet )?(?:closed|resolved|settled))\b/i.test(message);
+  const closed = /\b(?:closed|resolved|settled|finished|completed|past|historical|old)\b/i.test(message) && !/\bnot (?:yet )?(?:closed|resolved|settled)\b/i.test(message);
+  return open && !closed ? 'OPEN' : closed && !open ? 'CLOSED' : 'ALL';
+}
+
 /** The scope this question asks about, from its own words (a fresh question; nothing is remembered). */
 export function claimsScopeFromWords(message: string): ClaimsScope {
   const claims = /\bclaims?\b/i.test(message);
@@ -333,7 +343,7 @@ async function incidentClaimStatusResult(
     };
   }
   const scope: ClaimsScope = claimsAllowed ? askedScope : 'INCIDENTS';
-  const state: ClaimsState = refinement ? refinement.state : 'ALL';
+  const state: ClaimsState = refinement ? refinement.state : emergencyFollowUp ? 'ALL' : claimsStateFromWords(message);
   const claimFocus = scope === 'CLAIMS';
   const incidentFocus = scope === 'INCIDENTS';
   const wantIncidents = scope !== 'CLAIMS';

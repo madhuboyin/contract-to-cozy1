@@ -13,6 +13,7 @@ import {
 import { ASK_SEMANTIC_PLAN_VERSION, type SemanticFacet, type SemanticRequestPlan, type SemanticWhereExpression } from '../semanticRequestPlan';
 import { ASK_SEMANTIC_DOMAINS, type SemanticDomainId } from '../governance/semanticOntologyBaseline';
 import {
+  UNCONFIRMED_LIST_SUFFIX,
   buildSliceRichPresentation,
   verifyRichPresentationPopulationEquivalence,
   type SlicePresentationRow,
@@ -318,6 +319,8 @@ export interface CrossDomainFacetExecutionResult {
   readonly summary: string;
   readonly recordIds: readonly string[];
   readonly rows?: ReadonlyArray<{ readonly id: string; readonly label: string; readonly subtitle?: string; readonly entityType?: string; readonly actions?: ReadonlyArray<Record<string, unknown>> }>;
+  /** Records the answer could not confirm. Never part of `recordIds` or the receipt's confirmed population; a compound answer shows them as their own collection. */
+  readonly unconfirmedRows?: ReadonlyArray<{ readonly id: string; readonly label: string; readonly subtitle?: string }>;
   readonly missingSlots: readonly string[];
   readonly redactedFieldIds: readonly string[];
   readonly receipt: SemanticReadReceipt | null;
@@ -1649,60 +1652,55 @@ function executeNewStackFacet(
     const slots = snapshot.financeSlots;
     const missingSlots: string[] = [];
     if (job === 'job.finance.own_rent_break_even') {
-      const hasPersistedNet =
-        typeof slots?.netHoldCents === 'number'
-        && Number.isFinite(slots.netHoldCents)
-        && typeof slots?.netRentCents === 'number'
-        && Number.isFinite(slots.netRentCents);
-      const hasPersistedOutcome =
-        hasPersistedNet
-        || (typeof slots?.sellHoldRentWinner === 'string' && slots.sellHoldRentWinner.trim().length > 0);
+      // The saved Sell/Hold/Rent analysis compares selling now, keeping the home to live in, and renting it OUT. It is not the owning-versus-renting-as-a-tenant comparison
+      // this question asks for, so it never supplies the verdict (live UI review 2026-11-21, P0 #1). The verdict comes from the crossover model, which needs the rent a tenant
+      // would pay for a comparable home and the home's value; without them the answer says plainly that it cannot be worked out yet and shows the saved analysis only as
+      // separate context.
+      const hasSavedNet =
+        typeof slots?.netHoldCents === 'number' && Number.isFinite(slots.netHoldCents)
+        && typeof slots?.netRentCents === 'number' && Number.isFinite(slots.netRentCents);
+      const savedWinner = typeof slots?.sellHoldRentWinner === 'string' && slots.sellHoldRentWinner.trim().length > 0 ? slots.sellHoldRentWinner.toUpperCase() : null;
 
       if (!slots?.horizonYears) missingSlots.push('horizonYears');
-      if (!hasPersistedOutcome) {
-        if (!slots?.monthlyRentCents) missingSlots.push('monthlyRentCents');
-        if (!slots?.homeValueCents) missingSlots.push('homeValueCents');
-      }
+      if (!slots?.monthlyRentCents) missingSlots.push('monthlyRentCents');
+      if (!slots?.homeValueCents) missingSlots.push('homeValueCents');
 
-      const ownRentResult = missingSlots.length === 0 && slots ? computeOwnVsRentBreakEven(slots) : null;
+      const ownRentResult = missingSlots.length === 0 && slots
+        ? computeOwnVsRentBreakEven({ ...slots, netHoldCents: null, netRentCents: null, sellHoldRentWinner: null })
+        : null;
       const status = missingSlots.length > 0 ? 'PARTIAL_MISSING_SLOTS' : 'EXECUTED';
       const formatSignedDollars = (cents: number): string =>
         cents < 0 ? `-$${(Math.abs(cents) / 100).toFixed(2)}` : `$${(cents / 100).toFixed(2)}`;
-      // The persisted outcome is a Sell/Hold/Rent analysis: HOLD keeps the home to live in, RENT keeps it and rents it OUT, SELL sells now. The raw token and the
-      // signed dollar figure mean nothing to a homeowner, so both are said in words, and the answer says what the analysis does and does not compare.
+      // The saved analysis, said in words and kept apart from the answer: HOLD keeps the home to live in, RENT keeps it and rents it OUT, SELL sells now.
       const winnerWords: Record<string, string> = {
-        SELL: 'your saved analysis favors selling now',
-        HOLD: 'your saved analysis favors keeping the home to live in',
-        RENT: 'your saved analysis favors keeping the home and renting it out',
+        SELL: 'it favors selling now',
+        HOLD: 'it favors keeping the home to live in',
+        RENT: 'it favors keeping the home and renting it out',
       };
-      const advantageWords = (cents: number): string => cents < 0
-        ? `renting it out beats keeping the home by $${(Math.abs(cents) / 100).toFixed(2)} over ${ownRentResult?.horizonYears} years`
-        : `keeping the home beats renting it out by $${(cents / 100).toFixed(2)} over ${ownRentResult?.horizonYears} years`;
-      const persistedMeta = ownRentResult && (ownRentResult.sellHoldRentWinner || ownRentResult.ownAdvantageAtHorizonCents !== null)
-        ? ` (${[
-            ownRentResult.sellHoldRentWinner
-              ? (winnerWords[ownRentResult.sellHoldRentWinner.toUpperCase()] ?? `saved analysis winner: ${ownRentResult.sellHoldRentWinner}`)
-              : null,
-            ownRentResult.ownAdvantageAtHorizonCents !== null ? advantageWords(ownRentResult.ownAdvantageAtHorizonCents) : null,
-          ].filter(Boolean).join('; ')})`
+      const wholeDollars = (cents: number): string => `$${Math.round(cents / 100).toLocaleString('en-US')}`;
+      const savedHorizon = Math.max(1, Math.round(slots?.horizonYears ?? 5));
+      const savedAdvantageWords = hasSavedNet
+        ? (slots!.netHoldCents! - slots!.netRentCents!) < 0
+          ? `renting it out beats keeping the home by ${wholeDollars(Math.abs(slots!.netHoldCents! - slots!.netRentCents!))} over ${savedHorizon} years`
+          : `keeping the home beats renting it out by ${wholeDollars(slots!.netHoldCents! - slots!.netRentCents!)} over ${savedHorizon} years`
+        : null;
+      const savedAnalysisContext = savedWinner || hasSavedNet
+        ? ` Your saved Sell/Hold/Rent analysis is a different comparison (selling now, living in the home, or renting it out): ${[savedWinner ? (winnerWords[savedWinner] ?? `winner ${savedWinner}`) : null, savedAdvantageWords].filter(Boolean).join('; ')}.`
         : '';
-      const persistedScopeNote = ' This comes from your saved Sell/Hold/Rent analysis, which compares selling now, keeping the home to live in, and renting it out; it does not compare owning with renting a home as a tenant.';
+      const missingWords: Record<string, string> = {
+        horizonYears: 'how many years you plan to stay',
+        monthlyRentCents: 'the monthly rent for a comparable home you would rent as a tenant',
+        homeValueCents: 'your home’s value',
+      };
 
       const baseSummary = ownRentResult === null
-        ? `Cannot compute own-vs-rent break-even without missing required financial inputs: ${missingSlots.join(', ')}.`
-        : ownRentResult.hasPersistedOutcome && !ownRentResult.breaksEvenWithinHorizon
-          ? `Owning does not beat renting within your ${ownRentResult.horizonYears}-year horizon per persisted analysis${persistedMeta}.`
-          : ownRentResult.hasPersistedOutcome && ownRentResult.crossoverYear === null
-            ? `Persisted analysis favors owning over renting within your ${ownRentResult.horizonYears}-year horizon${persistedMeta}; an exact crossover year requires a monthly-rent assumption.`
-            : ownRentResult.crossoverYear === null
-              ? `Owning does not beat renting within the 30-year analysis window at $${(slots!.monthlyRentCents! / 100).toFixed(2)}/mo rent and $${(slots!.homeValueCents! / 100).toFixed(2)} home value (estimated ${ownRentResult.horizonYears}-year net advantage ${ownRentResult.ownAdvantageAtHorizonCents !== null ? formatSignedDollars(ownRentResult.ownAdvantageAtHorizonCents) : 'unavailable'}).`
-              : ownRentResult.breaksEvenWithinHorizon
-                ? `Owning beats renting starting in year ${ownRentResult.crossoverYear} (within your ${ownRentResult.horizonYears}-year horizon${ownRentResult.ownAdvantageAtHorizonCents !== null && ownRentResult.cumulativeRentAtHorizonCents !== null ? `; estimated net owning advantage ${formatSignedDollars(ownRentResult.ownAdvantageAtHorizonCents)} vs $${(ownRentResult.cumulativeRentAtHorizonCents / 100).toFixed(2)} cumulative rent` : ''}).`
-                : `Owning beats renting in year ${ownRentResult.crossoverYear}, which is beyond your ${ownRentResult.horizonYears}-year horizon.`;
-      // The note belongs only to the two branches that state the saved analysis' result; a persisted outcome that also had rent and home-value inputs is answered by
-      // the computed crossover model, whose figures do not come from the saved analysis.
-      const statesSavedAnalysis = Boolean(ownRentResult?.hasPersistedOutcome && (!ownRentResult.breaksEvenWithinHorizon || ownRentResult.crossoverYear === null));
-      const summary = statesSavedAnalysis ? `${baseSummary}${persistedScopeNote}` : baseSummary;
+        ? `I can’t determine the owning-versus-renting break-even yet. It needs ${missingSlots.map((slot) => missingWords[slot] ?? slot).join(', ')}.${savedAnalysisContext}`
+        : ownRentResult.crossoverYear === null
+          ? `Owning does not beat renting within the 30-year analysis window at $${(slots!.monthlyRentCents! / 100).toFixed(2)}/mo rent and $${(slots!.homeValueCents! / 100).toFixed(2)} home value (estimated ${ownRentResult.horizonYears}-year net advantage ${ownRentResult.ownAdvantageAtHorizonCents !== null ? formatSignedDollars(ownRentResult.ownAdvantageAtHorizonCents) : 'unavailable'}).`
+          : ownRentResult.breaksEvenWithinHorizon
+            ? `Owning beats renting starting in year ${ownRentResult.crossoverYear} (within your ${ownRentResult.horizonYears}-year horizon${ownRentResult.ownAdvantageAtHorizonCents !== null && ownRentResult.cumulativeRentAtHorizonCents !== null ? `; estimated net owning advantage ${formatSignedDollars(ownRentResult.ownAdvantageAtHorizonCents)} vs $${(ownRentResult.cumulativeRentAtHorizonCents / 100).toFixed(2)} cumulative rent` : ''}).`
+            : `Owning beats renting in year ${ownRentResult.crossoverYear}, which is beyond your ${ownRentResult.horizonYears}-year horizon.`;
+      const summary = baseSummary;
 
       const rows = status === 'EXECUTED'
         ? [{
@@ -2092,11 +2090,20 @@ function executeNewStackFacet(
 
   if (job === 'query.project.needs_permit') {
     const active = snapshot.projects.filter((p) => p.propertyId === snapshot.propertyId && p.status === 'ACTIVE');
-    const needsOrUnknown = active.filter((p) => p.permitStatus === 'NEEDS_PERMIT' || p.permitStatus === 'UNKNOWN');
-    const unknownCount = needsOrUnknown.filter((p) => p.permitStatus === 'UNKNOWN').length;
-    const confirmedNeedsCount = needsOrUnknown.filter((p) => p.permitStatus === 'NEEDS_PERMIT').length;
-    const rows = needsOrUnknown.map((p) => ({ id: p.id, label: p.title, subtitle: p.permitStatus }));
-    const summary = `${confirmedNeedsCount} project(s) confirmed needing permit, ${unknownCount} permit requirement(s) unknown (confirmed not-required excluded).`;
+    // Confirmed and unknown are separate collections (UI review 2026-11-21, P0 #2): only a project confirmed as needing a permit is a match; one whose permit requirement is not
+    // recorded is listed apart under its own heading and never counted as confirmed. Projects confirmed as not needing a permit are not shown.
+    const confirmedProjects = active.filter((p) => p.permitStatus === 'NEEDS_PERMIT');
+    const unknownProjects = active.filter((p) => p.permitStatus === 'UNKNOWN');
+    const unknownCount = unknownProjects.length;
+    const confirmedNeedsCount = confirmedProjects.length;
+    const rows = confirmedProjects.map((p) => ({ id: p.id, label: p.title, subtitle: 'Permit needed' }));
+    const unconfirmedRows = unknownProjects.map((p) => ({ id: p.id, label: p.title, subtitle: 'Permit requirement not recorded' }));
+    const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
+    const summary = confirmedNeedsCount > 0
+      ? `${plural(confirmedNeedsCount, 'project needs', 'projects need')} a permit.${unknownCount > 0 ? ` ${plural(unknownCount, 'more has', 'more have')} no permit requirement recorded.` : ''}`
+      : unknownCount > 0
+        ? `No projects are confirmed as needing a permit. ${plural(unknownCount, 'has', 'have')} no permit requirement recorded.`
+        : 'No active projects need a permit.';
     const receipt = buildSemanticReadReceipt({
       facetId: facet.id,
       requestClass: 'DATA_QUERY',
@@ -2120,6 +2127,7 @@ function executeNewStackFacet(
       title: 'Project permit requirements',
       summaryBody: summary,
       rows: rows.map((r) => ({ id: r.id, label: r.label, subtitle: r.subtitle })),
+      unconfirmedRows,
     });
     const entailment = verifySemanticReadReceiptEntailment({
       status: 'ANSWERED',
@@ -2137,6 +2145,7 @@ function executeNewStackFacet(
       summary,
       recordIds: rows.map((r) => r.id),
       rows,
+      unconfirmedRows,
       missingSlots: [],
       redactedFieldIds,
       receipt,
@@ -3600,6 +3609,29 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
         id: 'cross-domain-grouped-list',
         title: 'Matching home records',
         sections: genericSections,
+        actions: [],
+        filters: [],
+        listDensity: 'DENSE',
+      });
+    }
+    // Records a facet could not confirm are their own collection under their own heading, never mixed into the matches above.
+    for (const facetResult of execution.facetResults) {
+      if (!facetResult.unconfirmedRows || facetResult.unconfirmedRows.length === 0) continue;
+      blocks.push({
+        type: 'GROUPED_LIST',
+        id: `section-${facetResult.facetId}${UNCONFIRMED_LIST_SUFFIX}`,
+        title: 'Needs confirmation',
+        sections: [{
+          id: `section-${facetResult.facetId}-unconfirmed`,
+          title: 'Needs confirmation',
+          count: facetResult.unconfirmedRows.length,
+          items: facetResult.unconfirmedRows.map((row) => ({
+            id: row.id,
+            title: row.label && row.label.trim().length > 0 ? row.label : 'Record',
+            ...(row.subtitle ? { description: row.subtitle } : {}),
+            meta: [] as string[],
+          })),
+        }],
         actions: [],
         filters: [],
         listDensity: 'DENSE',
