@@ -3,6 +3,7 @@ import { isReaderEquivalentOperation, isWriteCapableOperation } from '../support
 import { GROUNDED_READ_CHECKS, provisionalRouteAllowed } from '../support/provisionalRead';
 import { FAST_PATH_RULE_MANIFEST } from './ruleManifest.generated';
 import { FAST_PATH_ADJACENCY } from './adjacencyManifest.generated';
+import { GENERATED_FAST_PATH_CERTIFICATES } from './certificates.generated';
 
 export type FastPathStatus = 'UNCERTIFIED' | 'CERTIFIED' | 'DEMOTED';
 export interface FastPathEvidence {
@@ -25,8 +26,8 @@ export interface FastPathRule {
 // declarations it references), so editing one pattern invalidates the certificate of the rules that use it and of no others. Both come from the generated manifest (scripts/ask-fast-path-rules.js).
 const safety = (operationId: string) => ASK_OPERATION_DEFINITIONS[operationId as AskOperationId].safetyClass.endsWith('_BOUNDARY');
 
-/** Certificates by rule id. A certificate names the rule version it was issued for; a rule whose hash has changed since is demoted until re-certified. Empty: nothing has been certified. */
-export const FAST_PATH_CERTIFICATES: Readonly<Record<string, { readonly version: string; readonly evidence: FastPathEvidence }>> = Object.freeze({});
+/** Certificates by rule id. A certificate names the rule version it was issued for; a rule whose hash has changed since is demoted until re-certified. Written only by scripts/ask-fast-path-certify.js from a human-confirmed sealed set; empty until a pool passes. */
+export const FAST_PATH_CERTIFICATES: Readonly<Record<string, { readonly version: string; readonly evidence: FastPathEvidence }>> = Object.freeze({ ...(GENERATED_FAST_PATH_CERTIFICATES as unknown as Record<string, { version: string; evidence: FastPathEvidence }>) });
 
 /** Safety boundaries intercept independently under FR-DEC-0; every other message-routable deterministic rule is governed here. */
 export const FAST_PATH_RULES: readonly FastPathRule[] = Object.freeze(FAST_PATH_RULE_MANIFEST
