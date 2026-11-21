@@ -39,15 +39,17 @@ function canonicalItem(overrides: Partial<InventoryItem> = {}): InventoryItem {
 }
 beforeEach(() => { window.sessionStorage.clear(); jest.restoreAllMocks(); });
 
-test('inventory collections render as a responsive semantic table with one row per item', () => {
+test('inventory collections render a compact responsive semantic table with one row per item', () => {
   render(<List response={execution()} />);
   const table = screen.getByRole('table', { name: 'Living Home Record inventory items' });
   expect(table).toBeInTheDocument();
   expect(screen.getAllByRole('row')).toHaveLength(4);
-  expect(screen.getByRole('columnheader', { name: 'Room / category' })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Details' })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Condition' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Water heater' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'View details for Water heater' })).toBeInTheDocument();
-  expect(screen.getAllByText('View only')).toHaveLength(3);
+  expect(screen.queryByText('View only')).not.toBeInTheDocument();
+  expect(screen.queryByText('Editing available')).not.toBeInTheDocument();
 });
 
 test('clicking an inventory item title opens canonical detail inline without navigating', async () => {
@@ -59,7 +61,9 @@ test('clicking an inventory item title opens canonical detail inline without nav
   fireEvent.click(screen.getByRole('button', { name: 'Water heater' }));
 
   await waitFor(() => expect(screen.getByText('Tank-style, in basement utility closet.')).toBeInTheDocument());
-  expect(screen.getAllByText('Rheem')).toHaveLength(2);
+  expect(screen.getByText('View only')).toBeInTheDocument();
+  expect(screen.getByText('Basement · Rheem')).toBeInTheDocument();
+  expect(screen.getByText('Rheem')).toBeInTheDocument();
   expect(screen.getByText('$850')).toBeInTheDocument();
   expect(window.location.pathname).toBe('/dashboard/ask');
   expect(window.location.search).toContain('sessionId=session');
@@ -201,7 +205,7 @@ test('an incomplete inventory row exposes Add missing details and dispatches the
     return <ResultViewContext.Provider value={controls}><InventoryResultList block={incomplete} propertyId="home" onAction={onAction} onFilter={() => {}} onPage={() => {}} onAccessLost={() => {}} link={(_, label) => label} /></ResultViewContext.Provider>;
   }
   render(<Harness />);
-  expect(screen.getByText('Editing available')).toBeInTheDocument();
+  expect(screen.queryByText('Editing available')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Add missing details' }));
   expect(onAction).toHaveBeenCalledWith('INVENTORY_ITEM', 'item-0', 'Complete the missing details for this inventory item.', 'INVENTORY_ITEM_CORRECT', 'MUTATE_RECORD');
 });
@@ -345,12 +349,29 @@ test('Update coverage status shows inline and launches COVERAGE_COMMAND for that
   expect(onAction).toHaveBeenCalledWith('INVENTORY_ITEM', 'item-0', 'Update the coverage status for this inventory item.', 'COVERAGE_COMMAND', 'MUTATE_RECORD');
 });
 
-// Row density: editability sits on the item's own header line, and the contextual action shares one cell with "View details".
-test('editability badge shares the title line and the row action shares a cell with View details', () => {
+// Row density: editability moves to detail, the row keeps one contextual action, and details remain keyboard-accessible through a quiet control.
+test('a compact row omits editability copy and keeps its action with an accessible detail control', () => {
   const enriched = blockWithEnrichedRows(1);
   render(<InventoryResultList block={enriched} propertyId="home" onAction={jest.fn()} onFilter={() => {}} onPage={() => {}} onAccessLost={() => {}} link={(_, label) => label} />);
-  const title = screen.getByRole('button', { name: 'Appliance 0' });
-  expect(title.parentElement).toContainElement(screen.getByText('Editing available'));
+  expect(screen.queryByText('Editing available')).not.toBeInTheDocument();
+  expect(screen.queryByText('View only')).not.toBeInTheDocument();
   const cell = screen.getByRole('button', { name: 'Record warranty' }).closest('td');
   expect(cell).toContainElement(screen.getByRole('button', { name: 'View details for Appliance 0' }));
+  expect(screen.queryByText('View details')).not.toBeInTheDocument();
+});
+
+test('a warranty result labels the status directly and removes repeated shared scope and missing metadata', () => {
+  const warrantyBlock: typeof block = {
+    ...block,
+    sections: [{ ...block.sections[0], title: 'Kitchen', count: 2, items: [
+      { ...block.sections[0].items[0], title: 'Oven range', meta: ['Kitchen', 'Not recorded'], status: 'NO_LINK_RECORDED', actions: [recordWarranty] },
+      { ...block.sections[0].items[1], title: 'Refrigerator', meta: ['Kitchen', 'Not recorded'], status: 'NO_LINK_RECORDED', actions: [recordWarranty] },
+    ] }],
+  };
+  render(<InventoryResultList block={warrantyBlock} propertyId="home" onAction={jest.fn()} onFilter={() => {}} onPage={() => {}} onAccessLost={() => {}} link={(_, label) => label} />);
+  expect(screen.getByRole('columnheader', { name: 'Warranty' })).toBeInTheDocument();
+  expect(screen.queryByRole('columnheader', { name: 'Details' })).not.toBeInTheDocument();
+  expect(screen.getAllByText('Not recorded')).toHaveLength(2);
+  expect(screen.getByText('Kitchen · 2')).toBeInTheDocument();
+  expect(screen.queryByText('Kitchen')).not.toBeInTheDocument();
 });

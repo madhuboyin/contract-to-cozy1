@@ -3,7 +3,7 @@
 import { sectionHasNextPage } from '@/features/ask/collectionStatus';
 import { useCalmAnswer, useCalmChrome } from './blocks/calmContext';
 import { ReactNode, useContext, useEffect, useRef, useState } from 'react';
-import { ChevronRight, ExternalLink, Loader2, LockKeyhole, Pencil, X } from 'lucide-react';
+import { ChevronRight, ExternalLink, Loader2, X } from 'lucide-react';
 import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { api } from '@/lib/api/client';
@@ -58,6 +58,25 @@ function fieldLabel(value: string | null | undefined): string {
   return value ? value.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase()) : 'Not recorded';
 }
 
+const WARRANTY_STATES = new Set(['NO_LINK_RECORDED', 'EXPLICIT_NO_COVERAGE', 'UNKNOWN', 'CONFLICTED_LINKS', 'PROPERTY_PLAN_LINKED', 'ITEM_WARRANTY_LINKED', 'BOTH_CONSISTENT']);
+
+function compactStatus(value: string | null | undefined, warrantyResult: boolean): string {
+  if (!value) return 'Not recorded';
+  if (!warrantyResult) return fieldLabel(value);
+  if (value === 'NO_LINK_RECORDED') return 'Not recorded';
+  if (value === 'EXPLICIT_NO_COVERAGE') return 'No coverage recorded';
+  if (value === 'UNKNOWN') return 'Unknown';
+  if (value === 'CONFLICTED_LINKS') return 'Conflicting records';
+  return 'Recorded';
+}
+
+function usefulMeta(item: Item, sharedScope: string | null): string[] {
+  return item.meta.filter((value, index) => {
+    if (!value || /^not recorded$/i.test(value)) return false;
+    return !(index === 0 && sharedScope && value.trim().toLowerCase() === sharedScope);
+  });
+}
+
 export function InventoryItemDetail({ itemId, expectedPropertyId, fallbackItem, disabled, onAction, onAccessLost, onClose, backLabel }: {
   itemId: string;
   expectedPropertyId?: string;
@@ -68,6 +87,7 @@ export function InventoryItemDetail({ itemId, expectedPropertyId, fallbackItem, 
   onClose: () => void;
   backLabel?: string;
 }) {
+  const canEdit = Boolean(onAction && fallbackItem.actions !== undefined);
   const [item, setItem] = useState<InventoryItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +135,7 @@ export function InventoryItemDetail({ itemId, expectedPropertyId, fallbackItem, 
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700">Item detail</p>
           <h4 ref={headingRef} tabIndex={-1} id={`inventory-detail-${itemId}`} className="mt-1 text-lg font-semibold text-slate-950 outline-none">{item?.name ?? fallbackItem.title}</h4>
+          <p className="mt-0.5 text-xs font-medium text-slate-500">{canEdit ? 'Editing available' : 'View only'}</p>
         </div>
         <button type="button" onClick={onClose} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl px-2 text-sm font-semibold text-slate-600 hover:bg-white" aria-label={backLabel ?? `Close item detail for ${fallbackItem.title}`}>{backLabel ? <><ChevronRight className="h-4 w-4 rotate-180" aria-hidden="true" />{backLabel}</> : <X className="h-4 w-4" />}</button>
       </div>
@@ -220,31 +241,31 @@ export function InventoryResultList({ block, propertyId, disabled, onAction, onF
     {block.sections.map((section) => {
       const offset = section.offset ?? 0;
       const visible = controls?.view.visibleCounts[section.id] ?? 5;
+      const normalizedSectionTitle = section.title.replace(/\s*·.*$/, '').trim().toLowerCase();
+      const sharedScope = section.items.length > 0 && section.items.every((item) => item.meta[0]?.trim().toLowerCase() === normalizedSectionTitle) ? normalizedSectionTitle : null;
+      const warrantyResult = section.items.some((item) => Boolean(item.status && WARRANTY_STATES.has(item.status)));
+      const showDetailsColumn = section.items.some((item) => usefulMeta(item, sharedScope).length > 0);
       return <div key={section.id} className="border-b border-slate-100 p-4">
         <h4 className="font-semibold">{section.title} · {section.count}</h4>
         {section.items.length === 0 && <p className="mt-2 text-sm text-slate-500">No matching items.</p>}
         <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
           <table className="block w-full text-left text-sm md:table" aria-label={`${section.title} inventory items`}>
             <thead className="hidden bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 md:table-header-group">
-              <tr><th scope="col" className="px-3 py-2.5">Item</th><th scope="col" className="px-3 py-2.5">Room / category</th><th scope="col" className="px-3 py-2.5">Brand / model</th><th scope="col" className="px-3 py-2.5">Condition</th><th scope="col" className="px-3 py-2.5"><span className="sr-only">Details</span></th></tr>
+              <tr><th scope="col" className="px-3 py-2.5">Item</th>{showDetailsColumn && <th scope="col" className="px-3 py-2.5">Details</th>}<th scope="col" className="px-3 py-2.5">{warrantyResult ? 'Warranty' : 'Condition'}</th><th scope="col" className="px-3 py-2.5"><span className="sr-only">Next step and details</span></th></tr>
             </thead>
             <tbody className="block divide-y divide-slate-200 bg-white md:table-row-group">
           {section.items.slice(0, controls ? visible : section.items.length).map((item) => {
             const selected = controls?.view.selectedTaskId === item.id;
             const directActions = (item.actions ?? []).filter((action) => action.id === COMPLETE_MISSING_DETAILS_ACTION_ID || action.id === REVIEW_COVERAGE_ACTION_ID || (ENRICHMENT_ROW_ACTION_IDS.has(action.id) && inlineEnrichedRowIds.has(item.id)));
-            const canEdit = Boolean(onAction && item.actions !== undefined);
+            const meta = usefulMeta(item, sharedScope);
             return <tr key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('block p-3 outline-offset-2 md:table-row md:p-0', selected && 'bg-teal-50')}>
               <th scope="row" className="block md:table-cell md:px-3 md:py-3 md:align-top">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                  <button type="button" data-inventory-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={detailItemId === item.id} aria-controls={`inventory-detail-${item.id}`} onClick={() => openDetail(item)} className="min-h-10 text-left md:min-h-0 md:py-1 font-semibold text-slate-950 underline-offset-4 hover:text-teal-800 hover:underline">{item.title}</button>
-                  <span className={cn('inline-flex items-center gap-1 text-xs font-medium', canEdit ? 'text-teal-700' : 'text-slate-500')}>{canEdit ? <Pencil className="h-3 w-3" aria-hidden="true" /> : <LockKeyhole className="h-3 w-3" aria-hidden="true" />}{canEdit ? 'Editing available' : 'View only'}</span>
-                </div>
+                <button type="button" data-inventory-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={detailItemId === item.id} aria-controls={`inventory-detail-${item.id}`} onClick={() => openDetail(item)} className="min-h-10 text-left md:min-h-0 md:py-1 font-semibold text-slate-950 underline-offset-4 hover:text-teal-800 hover:underline">{item.title}</button>
                 {item.description && <p className="font-normal text-xs leading-5 text-slate-500">{item.description}</p>}
               </th>
-              <td className="mt-1 block text-slate-600 md:mt-0 md:table-cell md:px-3 md:py-3 md:align-top"><span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">Room / category:</span>{item.meta[0] ?? 'Not recorded'}</td>
-              <td className="mt-1 block text-slate-600 md:mt-0 md:table-cell md:px-3 md:py-3 md:align-top"><span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">Brand / model:</span>{item.meta[1] ?? 'Not recorded'}</td>
-              <td className="mt-1 block md:mt-0 md:table-cell md:px-3 md:py-3 md:align-top"><span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">Condition:</span><span className="text-xs font-semibold text-slate-600">{item.status?.replace(/_/g, ' ') ?? 'Not recorded'}</span></td>
-              <td className="mt-2 block md:mt-0 md:table-cell md:px-3 md:py-3 md:text-right md:align-top"><div className="flex flex-wrap items-center gap-x-3 gap-y-1 md:justify-end">{directActions.length > 0 && onAction && <>{directActions.map((action) => <button key={action.id} type="button" disabled={disabled} onClick={() => onAction(item.entityType, item.id, action.message, action.operationId, action.interactionType)} className={cn('inline-flex min-h-9 items-center rounded-lg px-3 py-1.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60', action.id === COMPLETE_MISSING_DETAILS_ACTION_ID ? 'bg-teal-700 text-white hover:bg-teal-800' : 'border border-slate-200 bg-white text-slate-800 hover:bg-slate-50')}>{action.label}</button>)}</>}<button type="button" aria-label={`View details for ${item.title}`} onClick={() => openDetail(item)} className="inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-teal-800">View details <ChevronRight className={cn('h-4 w-4 transition-transform', detailItemId === item.id && 'rotate-90')} aria-hidden="true" /></button></div></td>
+              {showDetailsColumn && <td className="mt-1 block text-slate-600 md:mt-0 md:table-cell md:px-3 md:py-3 md:align-top"><span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">Details:</span>{meta.length > 0 ? meta.join(' · ') : '—'}</td>}
+              <td className="mt-1 block md:mt-0 md:table-cell md:px-3 md:py-3 md:align-top"><span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">{warrantyResult ? 'Warranty' : 'Condition'}:</span><span className="text-xs font-semibold text-slate-600">{compactStatus(item.status, warrantyResult)}</span></td>
+              <td className="mt-2 block md:mt-0 md:table-cell md:px-3 md:py-3 md:text-right md:align-top"><div className="flex flex-wrap items-center gap-x-2 gap-y-1 md:justify-end">{directActions.length > 0 && onAction && directActions.map((action) => <button key={action.id} type="button" disabled={disabled} onClick={() => onAction(item.entityType, item.id, action.message, action.operationId, action.interactionType)} className={cn('inline-flex min-h-9 items-center rounded-lg px-3 py-1.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60', action.id === COMPLETE_MISSING_DETAILS_ACTION_ID ? 'bg-teal-700 text-white hover:bg-teal-800' : 'border border-slate-200 bg-white text-slate-800 hover:bg-slate-50')}>{action.label}</button>)}<button type="button" aria-label={`View details for ${item.title}`} onClick={() => openDetail(item)} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg text-teal-800 hover:bg-teal-50"><ChevronRight className={cn('h-4 w-4 transition-transform', detailItemId === item.id && 'rotate-90')} aria-hidden="true" /></button></div></td>
             </tr>;
           })}
             </tbody>

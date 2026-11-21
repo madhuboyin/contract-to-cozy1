@@ -232,6 +232,16 @@ function isOlderThanYears(item: SliceInventoryItemRecord, years: number, asOfDat
   return `${installed[1]}-${installed[2]}-${installed[3]}` < cutoff;
 }
 
+/** Whole calendar years since the recorded install date, for the result row's user-facing age label. */
+function installedAgeYears(item: SliceInventoryItemRecord, asOfDate: string): number | null {
+  const installed = /^(\d{4})-(\d{2})-(\d{2})/.exec(item.installedOn ?? '');
+  const asOf = /^(\d{4})-(\d{2})-(\d{2})/.exec(asOfDate);
+  if (!installed || !asOf) return null;
+  let years = Number(asOf[1]) - Number(installed[1]);
+  if (`${asOf[2]}-${asOf[3]}` < `${installed[2]}-${installed[3]}`) years -= 1;
+  return Math.max(0, years);
+}
+
 /** The condition tree in the homeowner's words, so an either-or answer says what each match satisfied instead of describing only the warranty half. */
 function describeWhere(expr: SemanticWhereExpression, snapshot: SlicePropertySnapshot, negated = false): string {
   if (expr.kind === 'NOT') return describeWhere(expr.operand, snapshot, !negated);
@@ -964,7 +974,10 @@ function executeValidatedSlicePlan(input: {
           label: item.name,
           subtitle: parts.join(' · '),
           description: ageInPlay
-            ? `Installed: ${item.installedOn ?? 'not recorded'}`
+            ? (() => {
+              const age = installedAgeYears(item, snapshot.asOfDate);
+              return age === null ? 'Age not recorded' : `${age} ${age === 1 ? 'year' : 'years'} old · Installed ${item.installedOn}`;
+            })()
             : undefined,
           meta: [
             room?.name ?? item.category,
@@ -1087,9 +1100,8 @@ function executeValidatedSlicePlan(input: {
     listTitle: projection === 'COUNT'
       ? title
       : `${matched.length} matching ${plural(matched.length, 'appliance', 'appliances')}`,
-    listDescription: projection === 'COUNT'
-      ? undefined
-      : `${matched.length} ${plural(matched.length, 'appliance', 'appliances')} · Open any item for its full home-record details`,
+    // The summary and section heading already state the count. Repeating it with an "open any item" instruction made the compact result visually top-heavy.
+    listDescription: undefined,
   });
 
   const operationResult: AskOperationResult = {
