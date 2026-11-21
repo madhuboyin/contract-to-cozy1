@@ -223,9 +223,10 @@ async function homeUpgradeScenariosResult(propertyId: string, canChange: boolean
   if (hvacOnly && active.length === 0) {
     if (summary?.type === 'SUMMARY') {
       summary.title = 'No saved furnace replacement options';
-      summary.body = `There are no saved furnace or HVAC options, so there is nothing to compare for cost, savings or payback yet.${asksRoi ? ` ${ROI_NOTE}` : ''}`;
+      summary.body = `You haven't saved any furnace or HVAC options yet, so there is nothing to compare.${asksRoi ? ' Each saved option shows its estimated cost, savings and payback; Cozy does not calculate a percentage return on investment.' : ''}`;
       // The way back is the same read without the filter. The estimates note describes figures that are not shown, so it stays out of an empty answer.
-      summary.actions = [{ id: 'home-upgrade-show-all', label: 'Show all saved upgrade options', message: 'Show my saved upgrade options', operationId: 'HOME_UPGRADE_SCENARIOS', interactionType: 'START_WORKFLOW', style: 'SECONDARY' }];
+      // A way to create the missing option: the repair-or-replace decision is the same question the homeowner would ask (hvacDecision.handler.ts), owner-only like every start.
+      summary.actions = [...(canChange ? [{ id: 'hvac-decision-start', label: 'Compare repair vs replace for my furnace', message: 'Should I repair or replace my furnace?', operationId: 'HVAC_DECISION_START' as const, interactionType: 'START_WORKFLOW' as const, style: 'PRIMARY' as const }] : []), { id: 'home-upgrade-show-all', label: 'Show all saved upgrade options', message: 'Show my saved upgrade options', operationId: 'HOME_UPGRADE_SCENARIOS', interactionType: 'START_WORKFLOW', style: 'SECONDARY' }];
       result.blocks = result.blocks.filter((block) => block.id !== 'home-upgrade-boundary');
     }
   } else if (asksRoi && summary?.type === 'SUMMARY') {

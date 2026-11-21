@@ -240,13 +240,16 @@ test('a furnace question with nothing saved is short, offers the unfiltered list
   const empty = await capabilityInvoke('HOME_UPGRADE_SCENARIOS', { userId: 'u1', propertyId: 'p1', message: 'compare furnace replacement options and show return on investment' }, access);
   HomeDigitalTwinScenarioService.prototype.listScenarios = async () => scenarios();
   assert.equal(empty.blocks[0].title, 'No saved furnace replacement options');
-  assert.match(empty.blocks[0].body, /nothing to compare for cost, savings or payback/);
+  assert.match(empty.blocks[0].body, /haven't saved any furnace or HVAC options yet, so there is nothing to compare/);
   // The exact screenshot case: nothing saved AND ROI asked. Payback must not stand in for ROI here either.
   assert.match(empty.blocks[0].body, /does not calculate a percentage return on investment/);
+  assert.doesNotMatch(empty.blocks[0].body, /planner/i, 'no jargon');
   const emptyNoRoi = await capabilityInvoke('HOME_UPGRADE_SCENARIOS', { userId: 'u1', propertyId: 'p1', message: 'compare furnace replacement options' }, access);
   assert.ok(!/percentage return/.test(emptyNoRoi.blocks[0].body), 'no ROI sentence unless ROI was asked');
-  assert.equal(empty.blocks[0].actions[0].id, 'home-upgrade-show-all');
-  assert.equal(empty.blocks[0].actions[0].operationId, 'HOME_UPGRADE_SCENARIOS');
+  const { resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');
+  assert.deepEqual(empty.blocks[0].actions.map((action) => action.id), ['hvac-decision-start', 'home-upgrade-show-all']);
+  assert.equal(empty.blocks[0].actions[0].operationId, resolveAskOperation(empty.blocks[0].actions[0].message).operationId, 'the button runs the operation its message routes to');
+  assert.equal(empty.blocks[0].actions[1].operationId, 'HOME_UPGRADE_SCENARIOS');
   assert.ok(!empty.blocks.some((block) => block.id === 'home-upgrade-boundary'), 'the estimates note is not shown for an answer with no estimates');
   const asked = await capabilityInvoke('HOME_UPGRADE_SCENARIOS', { userId: 'u1', propertyId: 'p1', message: 'show my water heater options and return on investment' }, access);
   assert.match(asked.blocks.find((block) => block.type === 'SUMMARY').body, /does not calculate a percentage return on investment/);
@@ -254,7 +257,7 @@ test('a furnace question with nothing saved is short, offers the unfiltered list
   assert.ok(!/percentage return/.test(JSON.stringify(plain.blocks)));
   // The action survives the answer-trust allowlist (an unlisted action id is silently stripped).
   const { result: validated } = validateAskAnswerTrust({ question: 'compare furnace replacement options', operationId: 'HOME_UPGRADE_SCENARIOS', result: { ...empty, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'home-digital-twin.scenarios', operationId: 'HOME_UPGRADE_SCENARIOS', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-23T00:00:00.000Z' }] } } }, propertyId: 'p1' });
-  assert.equal(validated.blocks[0].actions[0]?.id, 'home-upgrade-show-all');
+  assert.deepEqual(validated.blocks[0].actions.map((action) => action.id), ['hvac-decision-start', 'home-upgrade-show-all']);
 });
 
 test('compare-and-ROI is one request to the planner, so no "part of your question" note; a different second part still is', () => {
