@@ -2729,6 +2729,7 @@
     "SUMMARY:room-create-review",
     "SUMMARY:room-rename-review",
     "SUMMARY:warranty-add-input",
+    "SUMMARY:warranty-add-item-missing",
     "SUMMARY:warranty-add-permission",
     "SUMMARY:warranty-not-owned",
     "SUMMARY:warranty-update-review"
@@ -5177,7 +5178,9 @@
    "emittedBlockIds": [
     "BOUNDARY:saved-results-boundary",
     "BOUNDARY:saved-results-partial",
+    "EMPTY_STATE:saved-results-entailment-failed",
     "EMPTY_STATE:saved-results-restricted",
+    "EMPTY_STATE:saved-results-semantic-agreement-required",
     "GROUPED_LIST:saved-results-list",
     "SUMMARY:saved-results-summary"
    ],
@@ -5198,7 +5201,10 @@
      "work-overview-results",
      "work-overview-summary"
     ],
-    "emittedNotDeclared": [],
+    "emittedNotDeclared": [
+     "saved-results-entailment-failed",
+     "saved-results-semantic-agreement-required"
+    ],
     "declaredNeverEmitted": [
      "ask-next-actions",
      "related-capabilities",
@@ -5400,7 +5406,9 @@
      "seller-prep-evidence",
      "seller-prep-open-items",
      "seller-prep-progress",
-     "seller-prep-summary"
+     "seller-prep-summary",
+     "seller-prep-transition",
+     "seller-prep-upgrades"
     ],
     "emittedNotDeclared": [
      "sell-hold-rent-assumptions",
@@ -5417,9 +5425,7 @@
      "sell-hold-rent-what-if-summary",
      "seller-prep-decision-no-case",
      "seller-prep-item-review",
-     "seller-prep-no-case",
-     "seller-prep-transition",
-     "seller-prep-upgrades"
+     "seller-prep-no-case"
     ],
     "declaredNeverEmitted": [
      "ask-next-actions",
@@ -5569,15 +5575,23 @@
    "emittedBlockIds": [
     "BOUNDARY:warranty-boundary",
     "EVIDENCE:warranty-evidence",
+    "GROUPED_LIST:warranty-results",
     "SUMMARY:warranty-empty",
-    "SUMMARY:warranty-item-empty",
-    "SUMMARY:warranty-item-missing",
-    "SUMMARY:warranty-no-match",
     "SUMMARY:warranty-summary"
    ],
    "typedContract": null,
    "contract": null,
-   "evidenceTier": "SOURCE_SCAN_ONLY",
+   "evidenceTier": "CODE_PATH_CONTRACT",
+   "realPath": {
+    "test": "tests/ask/realPath.warrantyLookup.test.js",
+    "variants": [
+     "recallWarrantyCheckIncomplete",
+     "recallWarrantyCombined",
+     "recallWarrantyNoneMatching",
+     "warrantyEmpty",
+     "warrantyList"
+    ]
+   },
    "attribution": "EXCLUSIVE_FILE"
   },
   {

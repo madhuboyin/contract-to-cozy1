@@ -49,6 +49,23 @@
     "SUMMARY:property-summary",
     "TABLE:property-summary-facts"
    ]
+  },
+  "WARRANTY_LOOKUP": {
+   "test": "tests/ask/realPath.warrantyLookup.test.js",
+   "variants": [
+    "recallWarrantyCheckIncomplete",
+    "recallWarrantyCombined",
+    "recallWarrantyNoneMatching",
+    "warrantyEmpty",
+    "warrantyList"
+   ],
+   "observedBlocks": [
+    "BOUNDARY:warranty-boundary",
+    "EVIDENCE:warranty-evidence",
+    "GROUPED_LIST:warranty-results",
+    "SUMMARY:warranty-empty",
+    "SUMMARY:warranty-summary"
+   ]
   }
  }
 }
