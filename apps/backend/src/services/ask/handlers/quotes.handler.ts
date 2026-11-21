@@ -9,6 +9,7 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { NEGOTIATION_QUOTE_WORKSPACE_ACTION_ID, NEGOTIATION_QUOTE_WORKSPACE_MESSAGE } from '../support/negotiationShieldStart';
 import { getQuoteComparisonWorkspace, getWorkspaceComparability } from '../../quoteComparison.service';
 import { money, humanDate, titleCase } from '../askFormatting';
+import { quoteQualifierWords } from '../support/provisionalRead';
 import { askContextFingerprint, durableFreeTextClarification, QuoteWorkspaceCommandInputSchema, ensurePropertyAccess } from '../askHandlerSupport';
 import { PRICE_COMMAND_ACTION_IDS, PRICE_COMMAND_MESSAGES } from '../support/priceFinalizationCommand';
 import { SERVICE_QUOTE_OUTCOME_CONSENT_COPY } from '../../quoteOutcomeConsentCopy';
@@ -163,12 +164,24 @@ export function quoteReviewComparison(
   };
 }
 
-async function quoteComparisonReviewResult(propertyId: string, canChange = false, isOwner = false, requestedWorkspaceId: string | null = null): Promise<AskOperationResult> {
+async function quoteComparisonReviewResult(propertyId: string, canChange = false, isOwner = false, requestedWorkspaceId: string | null = null, message = ''): Promise<AskOperationResult> {
   const reviewSelect = { id: true, serviceCategory: true, scopeSummary: true, outcome: true, journeyStage: true, selectedQuoteId: true, outcomeMeasurementConsentedAt: true, outcomeMeasurementConsentRevokedAt: true };
   // The most recent comparison by default; a declared "Open" on one of the others (FRD v1.464) shows that one instead, with its own stage, outcome and controls.
-  const shown = await prisma.quoteComparisonWorkspace.findFirst({
+  const latest = await prisma.quoteComparisonWorkspace.findFirst({
     where: requestedWorkspaceId ? { id: requestedWorkspaceId, propertyId } : { propertyId }, orderBy: { updatedAt: 'desc' }, select: reviewSelect,
   });
+  // A question naming a scope ("kitchen quotes") is answered with the comparison for that scope, not just the latest one; when none of them is, the latest is shown and the answer says so.
+  const qualifier = requestedWorkspaceId ? [] : quoteQualifierWords(message);
+  let shown = latest;
+  let scopeNotRecorded = false;
+  if (latest && qualifier.length) {
+    const recent = await prisma.quoteComparisonWorkspace.findMany({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, take: 10, select: reviewSelect });
+    const named = recent.find((workspace: { serviceCategory?: unknown; scopeSummary?: string | null }) => {
+      const text = `${String(workspace.serviceCategory ?? '').replace(/_/g, ' ')} ${workspace.scopeSummary ?? ''}`.toLowerCase();
+      return qualifier.every((word) => text.includes(word));
+    });
+    if (named) shown = named; else scopeNotRecorded = true;
+  }
   if (requestedWorkspaceId && !shown) {
     return {
       status: 'NOT_APPLICABLE', reasonCode: 'QUOTE_WORKSPACE_NOT_FOUND',
@@ -205,7 +218,7 @@ async function quoteComparisonReviewResult(propertyId: string, canChange = false
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'quote-review-summary', title: quotes.length < 2 ? 'Add another proposal before comparing' : comparability.status === 'COMPARABLE' ? `${quotes.length} proposals are ready for a scope-aligned review` : 'The recorded proposals are not safely comparable yet',
     // Says which comparison this is, so a question naming a scope ("kitchen quotes") can be checked against what is shown.
-    body: `${viewingEarlier ? 'This is an earlier comparison, not your most recent one. ' : ''}${quoteScopeSentence(shown)}${comparability.reasons.join(' ')}${lowest != null && highest != null ? ` Recorded prices range from ${money(lowest)} to ${money(highest)}.` : ''} A lower total is not automatically a better fit; scope, exclusions, warranty, licensing, insurance, payment terms, and homeowner-confirmed facts remain material.`,
+    body: `${viewingEarlier ? 'This is an earlier comparison, not your most recent one. ' : ''}${scopeNotRecorded ? `None of your recorded comparisons is for ${qualifier.join(' ')}, so this is the most recent one. ` : ''}${quoteScopeSentence(shown)}${comparability.reasons.join(' ')}${lowest != null && highest != null ? ` Recorded prices range from ${money(lowest)} to ${money(highest)}.` : ''} A lower total is not automatically a better fit; scope, exclusions, warranty, licensing, insurance, payment terms, and homeowner-confirmed facts remain material.`,
     tone: comparability.status === 'COMPARABLE' ? 'DEFAULT' : 'CAUTION',
     // A contributor or owner can record another proposal while the decision is open; a viewer is offered nothing it would refuse.
     actions: canChange && shown.outcome === 'OPEN' ? [{
@@ -318,5 +331,5 @@ registerCapabilityHandler('quote-comparison.review', async (envelope, deps) => {
   // A focused read: the declared Open on one comparison carries its workspace as the entity, and a refresh keeps that focus.
   const launch = envelope.launchContext;
   const requested = launch?.entityType === QUOTE_WORKSPACE_ENTITY_TYPE && typeof launch.entityId === 'string' && launch.entityId.trim() ? launch.entityId : null;
-  return quoteComparisonReviewResult(envelope.propertyId!, access.role !== 'VIEWER', access.role === 'OWNER', requested);
+  return quoteComparisonReviewResult(envelope.propertyId!, access.role !== 'VIEWER', access.role === 'OWNER', requested, envelope.message ?? '');
 });

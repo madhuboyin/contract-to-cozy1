@@ -90,9 +90,10 @@ export interface AlsoAnswerOffer { operationId: AskOperationId; clause: string }
 
 // Operations whose answer already contains what a later part of the same message asks for. Unlike ALREADY_COVERED_CLAUSES this is judged on the whole message's routed
 // operation (the part alone may route nowhere): "compare furnace replacement options and show return on investment" reaches the Home Upgrade Planner as one request,
-// and its options already show cost, savings and payback, so "show return on investment" is not a second question.
+// and its options already show cost, savings and payback, so "show return on investment" is not a second question. Likewise the quote comparison shows each contractor's licence, so "show contractor license numbers" is not.
 const WHOLE_OPERATION_COVERED_LATER_CLAUSES: Readonly<Record<string, RegExp>> = {
   HOME_UPGRADE_SCENARIOS: /^(?:(?:also |and |then )?(?:show|give|tell|include|list)(?: me)? )?(?:the |their )?(?:estimated |expected )?(?:return on investment|roi|payback(?: period)?|savings|costs?)(?: of (?:each|them|these|those)(?: options?)?)?$/i,
+  QUOTE_COMPARISON_REVIEW: /^(?:(?:also |and |then )?(?:show|give|tell|include|list)(?: me)? )?(?:the |their |each |every )?(?:contractors?'?s? |providers?'?s? |vendors?'?s? )?licen[cs]e(?: numbers?| details| info(?:rmation)?)?$/i,
 };
 /** True when every part after the first only asks for something the whole message's operation already shows. */
 export function wholeOperationCoversLaterClauses(wholeOperationId: string, clauses: readonly string[]): boolean {

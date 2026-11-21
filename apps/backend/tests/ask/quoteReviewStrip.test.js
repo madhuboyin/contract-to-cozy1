@@ -236,3 +236,39 @@ test('provisional quote review: routes, and the verdict checks scope, licence an
   // A command is never delivered from a read.
   assert.equal(groundedQuoteReviewVerdict('add a quote', reviewAnswer('x')).outcome, 'FAIL');
 });
+
+// Review screenshot (2026-11-20): "compare kitchen quotes and show contractor license numbers" ended in "I'm not sure that answers your question" plus a note that part of it was not answered.
+// A question naming a scope is answered with the comparison for that scope; when none exists, the latest is shown and the answer says so (which the grounded check accepts, since the answer states what it read).
+test('a kitchen question shows the kitchen comparison, or says none exists and shows the latest, and licence numbers are in either', async () => {
+  const extras = { updatedAt: now, _count: { quotes: 2 } };
+  const roofing = { ...extras, id: 'ws-r', serviceCategory: 'ROOFING', scopeSummary: 'Roof replacement', outcome: 'OPEN', journeyStage: 'COMPARING', selectedQuoteId: null };
+  const kitchen = { ...extras, id: 'ws-k', serviceCategory: 'GENERAL_CONTRACTOR', scopeSummary: 'Kitchen remodel', outcome: 'OPEN', journeyStage: 'COMPARING', selectedQuoteId: null };
+  const run = async (workspaces) => {
+    prismaModule.prisma = new Proxy({ quoteComparisonWorkspace: { findFirst: async () => workspaces[0], findMany: async () => workspaces } }, { get(target, model) { if (model === 'then') return undefined; if (model in target) return target[model]; throw new Error(`Unexpected prisma.${String(model)} access`); } });
+    let asked = null;
+    quoteService.getQuoteComparisonWorkspace = async (_property, id) => { asked = id; return { id, serviceCategory: 'GENERAL_CONTRACTOR', inventoryItemId: null, updatedAt: now, quotes: [quote('a', { providerLicenseNumber: 'K-1234' }), quote('b')] }; };
+    quoteService.getWorkspaceComparability = async () => comparable(['a', 'b']);
+    const question = 'compare kitchen quotes and show contractor license numbers';
+    const result = await capabilityInvoke('QUOTE_COMPARISON_REVIEW', { userId: 'u1', propertyId: 'p1', message: question }, { propertyAccess: { role: 'OWNER', userId: 'u1', propertyId: 'p1' } });
+    return { result, asked, verdict: groundedQuoteReviewVerdict(question, result) };
+  };
+  // The latest comparison is roofing, an earlier one is the kitchen: the kitchen one is shown, with no "earlier" or "none" wording.
+  const found = await run([roofing, kitchen]);
+  assert.equal(found.asked, 'ws-k');
+  const foundSummary = found.result.blocks.find((block) => block.id === 'quote-review-summary');
+  assert.ok(!/None of your recorded comparisons/.test(foundSummary.body));
+  assert.equal(found.verdict.outcome, 'PASS');
+  // No kitchen comparison at all: the latest is shown and the answer says so, so the delivery check passes it.
+  const none = await run([roofing]);
+  assert.equal(none.asked, 'ws-r');
+  assert.match(none.result.blocks.find((block) => block.id === 'quote-review-summary').body, /None of your recorded comparisons is for kitchen, so this is the most recent one\./);
+  assert.equal(none.verdict.outcome, 'PASS');
+  // The licence is shown by the comparison either way.
+  for (const { result } of [found, none]) assert.ok(JSON.stringify(result.blocks).includes('Licence'));
+});
+
+test('"show contractor license numbers" after a quote comparison is part of the same answer, not a second question', () => {
+  const { decomposeForComposition } = require('../../src/services/ask/composition/decompose.ts');
+  assert.deepEqual(decomposeForComposition('compare kitchen quotes and show contractor license numbers'), { kind: 'SINGLE', reason: 'SAME_OPERATION' });
+  assert.notDeepEqual(decomposeForComposition('compare kitchen quotes and show my warranties'), { kind: 'SINGLE', reason: 'SAME_OPERATION' });
+});
