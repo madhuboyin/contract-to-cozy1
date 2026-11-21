@@ -60,6 +60,9 @@ function maintenanceDate(value: Date, timeZone: string): string {
   }).format(value);
 }
 
+const SEASON_WINDOW_PHRASE = /\b(next|this|coming)\s+(spring|summer|fall|autumn)\b/i;
+const SEASON_MONTHS: Record<string, [number, number]> = { spring: [3, 5], summer: [6, 8], fall: [9, 11] };
+
 function resolveMaintenanceTimeframe(message: string, now: Date, timeZone: string, purchaseDate: Date | null): { timeframe: MaintenanceTimeframe | null; missingPurchaseDate: boolean } {
   const explicitDates = [...message.matchAll(/\b(\d{4}-\d{2}-\d{2})\b/g)].map((match) => match[1]);
   if (explicitDates.length >= 2) {
@@ -75,6 +78,17 @@ function resolveMaintenanceTimeframe(message: string, now: Date, timeZone: strin
       : { timeframe: null, missingPurchaseDate: true };
   }
   const current = dateParts(now, timeZone);
+  const season = message.match(SEASON_WINDOW_PHRASE);
+  if (season) {
+    const [startMonth, endMonth] = SEASON_MONTHS[season[2].toLowerCase() === 'autumn' ? 'fall' : season[2].toLowerCase()];
+    // "next <season>" is the next one to begin; "this <season>" is the one under way, or else the next to begin.
+    const underway = current.month >= startMonth && current.month <= endMonth;
+    const startYear = current.year + (current.month < startMonth || (underway && !/next/i.test(season[1])) ? 0 : 1);
+    return { timeframe: { label: `${season[1].toLowerCase()} ${season[2].toLowerCase()}`, matches: (date) => {
+      const part = dateParts(date, timeZone);
+      return part.year === startYear && part.month >= startMonth && part.month <= endMonth;
+    } }, missingPurchaseDate: false };
+  }
   if (/\btoday\b/i.test(message)) return {
     timeframe: { label: 'today', matches: (date) => localDateKey(date, timeZone) === localDateKey(now, timeZone) }, missingPurchaseDate: false,
   };
@@ -115,7 +129,7 @@ function maintenanceScopeTerms(message: string): string[] {
     [/\b(?:plumbing|water heater|pipe|drain)\b/i, ['plumbing', 'water heater', 'pipe', 'drain']],
     [/\b(?:electrical|breaker|panel|outlet)\b/i, ['electrical', 'breaker', 'panel', 'outlet']],
     [/\b(?:refrigerator|fridge)\b/i, ['refrigerator', 'fridge']],
-    [/\b(?:seasonal|winter|spring|summer|fall|autumn)\b/i, ['seasonal', 'winter', 'spring', 'summer', 'fall', 'autumn']],
+    [/\b(?:seasonal|winter|spring|summer|fall|autumn)\b/i, SEASON_WINDOW_PHRASE.test(message) ? [] : ['seasonal', 'winter', 'spring', 'summer', 'fall', 'autumn']],
     [/\b(?:safety|smoke detector|carbon monoxide|co detector)\b/i, ['safety', 'smoke detector', 'carbon monoxide', 'co detector']],
   ];
   return aliases.find(([pattern]) => pattern.test(message))?.[1] ?? [];

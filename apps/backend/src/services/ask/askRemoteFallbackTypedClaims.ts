@@ -74,9 +74,14 @@ export type AskUnsupportedFilter = { body: string; actions: Array<{ id: string; 
 
 export function askUnsupportedMaintenanceProfessionalFilter(question: string): AskUnsupportedFilter | null {
   if (!MAINTENANCE_WORD.test(question) || !PROFESSIONAL_REQUIRED.test(question)) return null;
+  const season = question.match(/\b(?:next|this|coming)\s+(?:spring|summer|fall|autumn)\b/i)?.[0].toLowerCase();
+  const seasonAction = season
+    ? [{ id: 'unsupported-filter-maintenance-season', label: `Show maintenance for ${season}`, interactionType: 'START_WORKFLOW' as const, message: `Show maintenance tasks scheduled for ${season}`, operationId: 'MAINTENANCE_STATUS' as const, style: 'SECONDARY' as const }]
+    : [];
   return {
-    body: ASK_MAINTENANCE_PROFESSIONAL_FILTER_TEXT,
+    body: season ? `I can show maintenance scheduled for ${season}, but I can’t narrow it to tasks that need a licensed professional, because that isn’t recorded on a task.` : ASK_MAINTENANCE_PROFESSIONAL_FILTER_TEXT,
     actions: [
+      ...seasonAction,
       { id: 'unsupported-filter-maintenance-due', label: 'Show what maintenance is due', interactionType: 'START_WORKFLOW', message: 'What maintenance is due?', operationId: 'MAINTENANCE_STATUS', style: 'SECONDARY' },
       { id: 'unsupported-filter-maintenance-all', label: 'Show all maintenance tasks', interactionType: 'START_WORKFLOW', message: 'Show my maintenance tasks', operationId: 'MAINTENANCE_STATUS', style: 'SECONDARY' },
     ],

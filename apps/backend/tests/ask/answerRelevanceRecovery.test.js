@@ -116,9 +116,12 @@ test('projects filtered by quote approval say what cannot be filtered and offer 
 test('maintenance tasks filtered by a licensed-professional requirement say what cannot be filtered and offer the halves that can be answered', () => {
   const { askUnsupportedFilter, ASK_MAINTENANCE_PROFESSIONAL_FILTER_TEXT } = require('../../src/services/ask/askRemoteFallbackTypedClaims.ts');
   const found = askUnsupportedFilter('show maintenance tasks scheduled for next spring that require a licensed professional');
-  assert.equal(found.body, ASK_MAINTENANCE_PROFESSIONAL_FILTER_TEXT);
-  assert.match(found.body, /can’t filter maintenance tasks by whether a licensed professional is required/);
-  assert.deepEqual(found.actions.map((action) => [action.operationId, action.message]), [['MAINTENANCE_STATUS', 'What maintenance is due?'], ['MAINTENANCE_STATUS', 'Show my maintenance tasks']]);
+  assert.deepEqual(found.actions.map((action) => [action.operationId, action.message]), [['MAINTENANCE_STATUS', 'Show maintenance tasks scheduled for next spring'], ['MAINTENANCE_STATUS', 'What maintenance is due?'], ['MAINTENANCE_STATUS', 'Show my maintenance tasks']]);
+  assert.match(found.body, /I can show maintenance scheduled for next spring, but I can’t narrow it to tasks that need a licensed professional/);
+  const undated = askUnsupportedFilter('show maintenance tasks that require a licensed professional');
+  assert.equal(undated.body, ASK_MAINTENANCE_PROFESSIONAL_FILTER_TEXT);
+  assert.match(undated.body, /can’t filter maintenance tasks by whether a licensed professional is required/);
+  assert.equal(undated.actions.length, 2);
   for (const ordinary of ['what maintenance is due this spring', 'show my maintenance tasks', 'which professional should I hire for the roof', 'show tasks that require a filter change']) assert.equal(askUnsupportedFilter(ordinary), null, ordinary);
   assert.match(askUnsupportedFilter('which projects are in progress and have unapproved contractor quotes?').body, /projects/);
 });
