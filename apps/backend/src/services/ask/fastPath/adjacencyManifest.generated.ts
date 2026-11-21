@@ -68,7 +68,11 @@ export const FAST_PATH_ADJACENCY: Readonly<Record<string, Readonly<Record<string
    "Help me prepare to file an insurance claim"
   ]
  },
- "CLAIM_FILE": {},
+ "CLAIM_FILE": {
+  "COVERAGE_GAPS": [
+   "Which items lack coverage?"
+  ]
+ },
  "CLAIM_TRANSITION": {
   "CLAIM_FILE": [
    "Create a new insurance claim"

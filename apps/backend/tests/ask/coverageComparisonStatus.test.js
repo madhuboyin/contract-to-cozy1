@@ -142,3 +142,20 @@ test('the coverage skill manifest declares both operations and both adapters', (
   );
   assert.deepEqual(new Set(COVERAGE_SKILL.consumerPolicy[0].operations), new Set(['COVERAGE_GAPS', 'COVERAGE_COMPARISON_STATUS']));
 });
+
+test('a coverage-gap question about appliances routes to COVERAGE_GAPS, not inventory or a comparison clarification', () => {
+  const { resolveAskOperation, hasCoverageComparisonWording } = require('../../src/services/ask/askOperationRegistry.ts');
+  for (const message of [
+    'show appliances lacking protection coverage',
+    'show appliances lacking coverage',
+    'show appliances missing protection',
+    'what appliances lack warranty coverage',
+  ]) {
+    assert.equal(resolveAskOperation(message).operationId, 'COVERAGE_GAPS', message);
+    assert.equal(hasCoverageComparisonWording(message), false, message);
+  }
+  assert.equal(resolveAskOperation('show my appliances').operationId, 'INVENTORY_LOOKUP');
+  // A missing-field filter is a computed data-point read, so the data-point read claims it, not the coverage or inventory list.
+  assert.equal(resolveAskOperation('which appliances have no warranty').operationId, 'DATA_POINT_READ');
+  assert.equal(hasCoverageComparisonWording('compare my insurance with another quote'), true);
+});

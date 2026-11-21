@@ -1,6 +1,17 @@
 {
  "version": 1,
  "knownGood": {
+  "APPLIANCE_FAILURE_RISK": [
+   "what are the most risky items in my home inventory",
+   "what are the riskiest appliances i own",
+   "which appliances are about to fail"
+  ],
+  "BREAK_EVEN_ANALYSIS": [
+   "break even point for my home",
+   "breakeven analysis",
+   "how long until owning beats renting",
+   "when do i break even on this house"
+  ],
   "BUYER_COST_READINESS": [
    "explain my near term purchase costs",
    "recorded purchase costs",
@@ -66,6 +77,9 @@
    "what is the condition of my appliances",
    "which systems need action"
   ],
+  "HOME_UPGRADE_SCENARIOS": [
+   "compare solar vs heat pump upgrades"
+  ],
   "HOME_WORK_ITEMS": [
    "list my open work items"
   ],
@@ -94,14 +108,16 @@
   "INSPECTION_REPORT_COMPARE": [
    "compare inspections",
    "compare my latest inspection to the previous one",
-   "inspection report comparison"
+   "inspection report comparison",
+   "what changed since the last inspection"
   ],
   "INSPECTION_REPORT_FINDINGS": [
    "findings for this inspection"
   ],
   "INTELLIGENCE_ENVELOPE_QUERY": [
    "any new intelligence on my house",
-   "list the latest home intelligence"
+   "list the latest home intelligence",
+   "what insights do you have about my home"
   ],
   "INVENTORY_LOOKUP": [
    "how old is my water heater",
@@ -124,6 +140,7 @@
    "what repairs should i expect soon"
   ],
   "MAINTENANCE_STATUS": [
+   "am i caught up on upkeep",
    "list the maintenance i finished",
    "show my pending home tasks"
   ],
@@ -152,6 +169,12 @@
   "PROPERTY_TAX_APPEAL_READINESS": [
    "can i appeal my property taxes"
   ],
+  "QUOTE_COMPARISON_REVIEW": [
+   "compare these two contractor quotes",
+   "review my quote comparison",
+   "show my bids",
+   "which contractor bid is better"
+  ],
   "REFINANCE_COMMAND": [
    "add a refinance scenario",
    "change my refinance alert settings",
@@ -172,7 +195,12 @@
   ],
   "SELLER_PREP_CHECKLIST": [
    "how do i get my house ready to sell",
-   "show the checklist for selling"
+   "seller prep checklist",
+   "show the checklist for selling",
+   "what should i fix before i list the house"
+  ],
+  "SERVICE_PRICE_CHECKS": [
+   "how does my roofing quote compare to market"
   ],
   "WARRANTY_LOOKUP": [
    "is my dishwasher still under warranty",
@@ -214,7 +242,6 @@
    "household access"
   ],
   "HVAC_PREFERENCE_SAVE": [
-   "note that i want a quiet furnace",
    "set my hvac decision preference"
   ],
   "INSPECTION_REPORT_FINDINGS": [
@@ -222,9 +249,6 @@
   ],
   "INTELLIGENCE_ENVELOPE_QUERY": [
    "what has the system noticed about my home"
-  ],
-  "MAINTENANCE_STATUS": [
-   "am i caught up on upkeep"
   ],
   "PLANT_CARE_OUTLOOK": [
    "which plants need attention"

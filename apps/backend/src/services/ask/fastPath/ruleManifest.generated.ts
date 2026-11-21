@@ -252,7 +252,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "BUYER_FINDING_DISPOSITION",
   "confidence": 0.96,
   "order": 20,
-  "hash": "b50f10d5f862c8d0",
+  "hash": "8c4abee77733cba1",
   "condition": "buyerFindingDispositionPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:buyerFindingDispositionPattern"
@@ -296,10 +296,11 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "BUYER_INSURANCE_READINESS",
   "confidence": 0.94,
   "order": 24,
-  "hash": "3169f45685b3be5e",
-  "condition": "buyerInsuranceReadinessPattern.test(message)",
+  "hash": "edd9b17324e7d267",
+  "condition": "buyerInsuranceReadinessPattern.test(message) && !coverageComparisonPattern.test(message) && !/\\bstatus\\b/i.test(message)",
   "references": [
-   "askOperationRegistry.ts:buyerInsuranceReadinessPattern"
+   "askOperationRegistry.ts:buyerInsuranceReadinessPattern",
+   "askOperationRegistry.ts:coverageComparisonPattern"
   ]
  },
  {
@@ -448,7 +449,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "ROOM_RENAME",
   "confidence": 0.97,
   "order": 37,
-  "hash": "80cc14fd6661341a",
+  "hash": "6ef53fae281fc3bd",
   "condition": "roomRenamePattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -460,7 +461,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "WARRANTY_UPDATE",
   "confidence": 0.97,
   "order": 38,
-  "hash": "18d940b5825c21fc",
+  "hash": "b2e011c91d207eba",
   "condition": "warrantyCorrectPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -472,7 +473,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "MATERIAL_SPEC_UPDATE",
   "confidence": 0.97,
   "order": 39,
-  "hash": "0d05da4c1c1c090c",
+  "hash": "356287769944071e",
   "condition": "materialSpecUpdatePattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -484,7 +485,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "HOME_EVENT_UPDATE",
   "confidence": 0.97,
   "order": 40,
-  "hash": "4bc60df8049b06ab",
+  "hash": "ab818ca8afff8c23",
   "condition": "homeEventUpdatePattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -496,7 +497,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "HOME_EVENT_CORRECT",
   "confidence": 0.97,
   "order": 41,
-  "hash": "3841d101006b21b9",
+  "hash": "a36decd977d55527",
   "condition": "homeEventCorrectPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -508,7 +509,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "HOME_EVENT_VISIBILITY",
   "confidence": 0.97,
   "order": 42,
-  "hash": "858667a50268b3b3",
+  "hash": "b3edefe10997da3a",
   "condition": "homeEventVisibilityPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -542,7 +543,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "INVENTORY_ITEM_CORRECT",
   "confidence": 0.97,
   "order": 45,
-  "hash": "6e97abb60a387727",
+  "hash": "b71da19885431761",
   "condition": "inventoryItemCorrectPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -554,7 +555,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "RESERVE_FUND_COMMAND",
   "confidence": 0.97,
   "order": 46,
-  "hash": "11a592df1edff570",
+  "hash": "b2fc14c549d0725a",
   "condition": "parseReserveFundMessage(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -585,7 +586,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "QUOTE_COMPARISON_CREATE",
   "confidence": 0.97,
   "order": 47,
-  "hash": "ce5eb35e987a641b",
+  "hash": "e7eeeef373fca692",
   "condition": "quoteComparisonCreatePattern.test(message)",
   "references": [
    "askOperationRegistry.ts:quoteComparisonCreatePattern"
@@ -596,7 +597,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "INVENTORY_ITEM_CREATE",
   "confidence": 0.97,
   "order": 48,
-  "hash": "0a44137975fd4cc9",
+  "hash": "3a7a6b109202127b",
   "condition": "inventoryCreatePattern.test(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -609,7 +610,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "MAINTENANCE_TASK_COMPLETE",
   "confidence": 0.97,
   "order": 49,
-  "hash": "006b5025f0990fa2",
+  "hash": "cf7de8bd476a67dd",
   "condition": "(maintenanceCompletePattern.test(message) || maintenanceCompletePassivePattern.test(message)) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -636,7 +637,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "GUIDANCE_JOURNEY_CREATE",
   "confidence": 0.97,
   "order": 51,
-  "hash": "d91a214b5e014458",
+  "hash": "22137463dd3db580",
   "condition": "guidanceJourneyCreatePattern.test(message)",
   "references": [
    "askOperationRegistry.ts:guidanceJourneyCreatePattern"
@@ -647,7 +648,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "NEGOTIATION_SHIELD_CASE_START",
   "confidence": 0.96,
   "order": 52,
-  "hash": "11689665ab08c7cc",
+  "hash": "232943cfd8d52c7e",
   "condition": "isNegotiationShieldStartRequest(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -672,7 +673,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "QUOTE_COMPARISON_REVIEW",
   "confidence": 0.97,
   "order": 54,
-  "hash": "6217112afc345ad3",
+  "hash": "38b3f5a510faa5fc",
   "condition": "quoteComparisonReviewPattern.test(message) && !explicitCapabilityPattern.test(message) && !/\\bcan you help me\\b/i.test(message) && !quote...",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -704,7 +705,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "PROPERTY_TAX_APPEAL_READINESS",
   "confidence": 0.98,
   "order": 56,
-  "hash": "93d704d6a4635d12",
+  "hash": "7b41eaf916a33114",
   "condition": "propertyTaxAppealPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -716,7 +717,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "ITEM_RESERVE_ALLOCATION",
   "confidence": 0.96,
   "order": 57,
-  "hash": "da69db1f4c0b33a7",
+  "hash": "8e03a5f970819105",
   "condition": "isItemReserveAllocationMessage(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -745,7 +746,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "CAPITAL_ITEM_FUNDING_GOAL",
   "confidence": 0.97,
   "order": 58,
-  "hash": "73b623758ba5c2f2",
+  "hash": "55f5fcce7634333f",
   "condition": "isItemFundingGoalMessage(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -776,7 +777,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "ITEM_REPLACEMENT_COST",
   "confidence": 0.95,
   "order": 59,
-  "hash": "4bd79316a6517dc6",
+  "hash": "f2bf00ebc5f59b4d",
   "condition": "isItemCostMessage(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -797,7 +798,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "CAPITAL_RESERVE_PLAN",
   "confidence": 0.97,
   "order": 60,
-  "hash": "69eae962e1c83ae0",
+  "hash": "b4667263226c48ac",
   "condition": "capitalReservePattern.test(message) && !explicitCapabilityPattern.test(message) && !(dataPointQuestionPattern.test(message) && isReserveF...",
   "references": [
    "askOperationRegistry.ts:capitalReservePattern",
@@ -817,7 +818,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "APPLIANCE_FAILURE_RISK",
   "confidence": 0.96,
   "order": 61,
-  "hash": "9b1dc9ceba2498ba",
+  "hash": "b9eb77181c6e0312",
   "condition": "applianceFailureRiskPattern.test(message) && !applianceFailureRiskOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(mes...",
   "references": [
    "askOperationRegistry.ts:applianceFailureRiskOtherIntentPattern",
@@ -830,7 +831,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "MAINTENANCE_BUDGET_FORECAST",
   "confidence": 0.96,
   "order": 62,
-  "hash": "0fe912326df11341",
+  "hash": "96dcac5a2560194f",
   "condition": "(maintenanceBudgetPattern.test(message) || (maintenanceBudgetWordingPattern.test(message) && !multiYearHorizonPattern.test(message))) && ...",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -845,7 +846,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "DO_NOTHING_SIMULATION",
   "confidence": 0.96,
   "order": 63,
-  "hash": "171a70d19e90a5e9",
+  "hash": "d509d9065d86d47d",
   "condition": "doNothingPattern.test(message) && !doNothingOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:doNothingOtherIntentPattern",
@@ -858,7 +859,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "PRICE_FINALIZATIONS_LIST",
   "confidence": 0.96,
   "order": 64,
-  "hash": "cfd0f40418ea9195",
+  "hash": "214d88ad955d559c",
   "condition": "priceFinalizationsPattern.test(message) && !priceFinalizationsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -871,7 +872,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "HOA_COMPLIANCE_STATUS",
   "confidence": 0.96,
   "order": 65,
-  "hash": "c1d70ea934b13e2a",
+  "hash": "b8352f4f10dd2f07",
   "condition": "hoaCompliancePattern.test(message) && !hoaComplianceOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -884,7 +885,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "RENOVATION_CASE_START",
   "confidence": 0.96,
   "order": 66,
-  "hash": "334d305f8d65a5ac",
+  "hash": "b3ce6a2ddf5d9fe8",
   "condition": "isRenovationCaseStartRequest(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -897,7 +898,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "FINANCING_OVERVIEW",
   "confidence": 0.96,
   "order": 67,
-  "hash": "0f3c063838842505",
+  "hash": "a3938634a427c3e8",
   "condition": "isFinancingRequest(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -911,7 +912,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "PROJECT_TRACKER_PROJECTS",
   "confidence": 0.96,
   "order": 68,
-  "hash": "edbaa5cc81e13e33",
+  "hash": "f56a17fbb1dc58ac",
   "condition": "parseProjectPermitFilter(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -928,7 +929,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "PERMIT_TRACKER_STATUS",
   "confidence": 0.96,
   "order": 69,
-  "hash": "1ac9c0033f78bceb",
+  "hash": "b9afd321d7921832",
   "condition": "isPermitTrackerReadRequest(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -941,7 +942,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "RENOVATION_PERMIT_READINESS",
   "confidence": 0.97,
   "order": 70,
-  "hash": "89054208cb432f17",
+  "hash": "2db2f13238e5c6c1",
   "condition": "(renovationPermitPattern.test(message) || isRenovationCaseOverviewRequest(message) || isRenovationRequirementsRequest(message) || isRenov...",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -961,7 +962,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "SELLER_PREP_ITEM_DECISION",
   "confidence": 0.97,
   "order": 71,
-  "hash": "7d86062e5e0bd813",
+  "hash": "10cbdba68033ba63",
   "condition": "sellerPrepItemDecisionPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -973,7 +974,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "SELLER_PREP_CHECKLIST",
   "confidence": 0.97,
   "order": 72,
-  "hash": "72b86105f6ef67c4",
+  "hash": "4c9c7ad17e9be815",
   "condition": "sellerPrepChecklistPattern.test(message) && !explicitCapabilityPattern.test(message) && !(dataPointQuestionPattern.test(message) && isSal...",
   "references": [
    "askOperationRegistry.ts:dataPointQuestionPattern",
@@ -993,7 +994,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "SELLER_PREP_CHECKLIST",
   "confidence": 0.95,
   "order": 73,
-  "hash": "6320dcd1616ead4c",
+  "hash": "1412d143e6d2406b",
   "condition": "sellUpgradeValuePattern.test(message) && sellWordPattern.test(message) && !holdOrRentWordPattern.test(message) && !itemAttributeWriteInte...",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1019,7 +1020,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "MAINTENANCE_TASK_CREATE",
   "confidence": 0.97,
   "order": 75,
-  "hash": "fc67d5b02a710911",
+  "hash": "c5250921eda520c5",
   "condition": "maintenanceCreatePattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1031,7 +1032,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "MAINTENANCE_FORECAST",
   "confidence": 0.96,
   "order": 76,
-  "hash": "b2ccf02eebf926d9",
+  "hash": "d4ae215818388155",
   "condition": "maintenanceForecastPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1043,7 +1044,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "RISK_MITIGATION_PLAN",
   "confidence": 0.96,
   "order": 77,
-  "hash": "428418c32b124e2d",
+  "hash": "f7052d9f0cc4a27f",
   "condition": "isRiskMitigationPlanRequest(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1056,7 +1057,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "COVERAGE_REVIEW_STATUS",
   "confidence": 0.96,
   "order": 78,
-  "hash": "da011ea97185a582",
+  "hash": "4bf3c3f31df7fe56",
   "condition": "coverageReviewPattern.test(message) && !coverageComparisonPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:coverageComparisonPattern",
@@ -1069,7 +1070,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "COVERAGE_COMPARISON_STATUS",
   "confidence": 0.96,
   "order": 79,
-  "hash": "6a053c778530bb69",
+  "hash": "3b74276bc604e7d3",
   "condition": "coverageComparisonPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:coverageComparisonPattern",
@@ -1081,7 +1082,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "DATA_POINT_READ",
   "confidence": 0.93,
   "order": 80,
-  "hash": "f1ad46399984b643",
+  "hash": "67fc8a41b7d59d56",
   "condition": "isDataPointComputedQuery(message) && !compoundCapabilityFilterPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "../homeRecordsAccess.ts:visibleRecordWhere",
@@ -1119,7 +1120,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "DATA_POINT_READ",
   "confidence": 0.93,
   "order": 81,
-  "hash": "9b54f76a1dea80f8",
+  "hash": "c2ce2e73c03e9d09",
   "condition": "dataPointQuestionPattern.test(message) && isDataPointOnlyQuestion(message) && !compoundCapabilityFilterPattern.test(message) && !explicit...",
   "references": [
    "askOperationRegistry.ts:compoundCapabilityFilterPattern",
@@ -1145,7 +1146,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "WARRANTY_LOOKUP",
   "confidence": 0.96,
   "order": 82,
-  "hash": "77f51d7bdc1e02eb",
+  "hash": "5f6ddc44ad2a5654",
   "condition": "warrantyLookupPattern.test(message) && !warrantyLookupOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1158,8 +1159,8 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "COVERAGE_GAPS",
   "confidence": 0.96,
   "order": 83,
-  "hash": "0cfc491fc16a5ab4",
-  "condition": "insurancePoliciesPattern.test(message) && !insurancePoliciesOtherIntentPattern.test(message)",
+  "hash": "0cddd99e0329a300",
+  "condition": "insurancePoliciesPattern.test(message) && !insurancePoliciesOtherIntentPattern.test(message) && !/\\bdocuments?\\b/i.test(message)",
   "references": [
    "support/insurancePolicyCommand.ts:insurancePoliciesOtherIntentPattern",
    "support/insurancePolicyCommand.ts:insurancePoliciesPattern"
@@ -1170,7 +1171,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "COVERAGE_GAPS",
   "confidence": 0.96,
   "order": 84,
-  "hash": "48347d77ee1baa2b",
+  "hash": "add4ef3c222d2a7a",
   "condition": "coveragePattern.test(message)",
   "references": [
    "askOperationRegistry.ts:coveragePattern"
@@ -1215,7 +1216,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "INCIDENT_CLAIM_STATUS",
   "confidence": 0.95,
   "order": 88,
-  "hash": "75ec53ef82933f24",
+  "hash": "63753f11ae50984a",
   "condition": "incidentClaimStatusPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1249,8 +1250,8 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "INSPECTION_REPORTS",
   "confidence": 0.95,
   "order": 91,
-  "hash": "794f929874d76e6f",
-  "condition": "inspectionReportsPattern.test(message)",
+  "hash": "2e502d8ab985a84d",
+  "condition": "inspectionReportsPattern.test(message) && !/\\b(?:findings?|issues?|what(?:'s| is) in)\\b/i.test(message)",
   "references": [
    "askOperationRegistry.ts:inspectionReportsPattern"
   ]
@@ -1289,9 +1290,10 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "NOTIFICATION_SETTINGS_OVERVIEW",
   "confidence": 0.96,
   "order": 94,
-  "hash": "83c33efe8820ebd0",
-  "condition": "isNotificationSettingsOverviewRequest(message)",
+  "hash": "cd419394fae5033a",
+  "condition": "isNotificationSettingsOverviewRequest(message) && !settingsChangeWording.test(message)",
   "references": [
+   "askOperationRegistry.ts:settingsChangeWording",
    "support/notificationConversation.ts:isNotificationSettingsOverviewRequest"
   ]
  },
@@ -1345,7 +1347,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "RECALL_REVIEW",
   "confidence": 0.96,
   "order": 99,
-  "hash": "cb2dfee5f76d5764",
+  "hash": "16b49180999170b7",
   "condition": "recallReviewPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1368,7 +1370,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "DOCUMENT_PROMOTION_REVIEW",
   "confidence": 0.96,
   "order": 101,
-  "hash": "3bbbf884e44c9463",
+  "hash": "001bd843171f9da3",
   "condition": "documentPromotionReviewPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:documentPromotionReviewPattern"
@@ -1379,7 +1381,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "DOCUMENT_LOOKUP",
   "confidence": 0.95,
   "order": 102,
-  "hash": "ff9a4370f2769006",
+  "hash": "0523aaa41f1d1564",
   "condition": "documentLookupPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:documentLookupPattern",
@@ -1402,7 +1404,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "DIY_PROJECTS",
   "confidence": 0.96,
   "order": 104,
-  "hash": "73098be515c6f440",
+  "hash": "f996679a356440de",
   "condition": "(diyProjectsBrowseWordingPattern.test(message) || (diyProjectsPattern.test(message) && !diyProjectsOtherIntentPattern.test(message))) && ...",
   "references": [
    "askOperationRegistry.ts:diyProjectsBrowseWordingPattern",
@@ -1416,7 +1418,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "GUIDANCE_JOURNEYS_LIST",
   "confidence": 0.96,
   "order": 105,
-  "hash": "f1439efdd40bbfbd",
+  "hash": "66f7ce6ca11d0a65",
   "condition": "guidanceJourneysPattern.test(message) && !guidanceJourneysOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1429,7 +1431,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "PROPERTY_BRIEFS_LIST",
   "confidence": 0.96,
   "order": 106,
-  "hash": "bbe1da7634e29cde",
+  "hash": "592e13af45133edd",
   "condition": "propertyBriefsPattern.test(message) && !propertyBriefsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1442,7 +1444,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "MATERIAL_SPECS_LIST",
   "confidence": 0.96,
   "order": 107,
-  "hash": "bdcaf6199e234f98",
+  "hash": "151d895070629378",
   "condition": "(materialSpecsPattern.test(message) || materialSpecsRoomColourPattern.test(message)) && !materialSpecsOtherIntentPattern.test(message) &&...",
   "references": [
    "askOperationRegistry.ts:ROOM_NAME",
@@ -1457,7 +1459,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "HOME_TIMELINE_EVENTS",
   "confidence": 0.96,
   "order": 108,
-  "hash": "a2cc840bdc8307b9",
+  "hash": "0c2e825d02267749",
   "condition": "homeTimelinePattern.test(message) && !homeTimelineOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1470,7 +1472,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "SERVICE_PRICE_CHECKS",
   "confidence": 0.96,
   "order": 109,
-  "hash": "9c1f865508db3843",
+  "hash": "d7e758f223b53fbd",
   "condition": "servicePriceChecksPattern.test(message) && !servicePriceChecksOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1483,7 +1485,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "PROJECT_TRACKER_PROJECTS",
   "confidence": 0.96,
   "order": 110,
-  "hash": "86456f5494dfa7d0",
+  "hash": "8d16a81de43e8633",
   "condition": "trackedProjectsPattern.test(message) && !trackedProjectsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1496,7 +1498,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "HOME_UPGRADE_SCENARIOS",
   "confidence": 0.96,
   "order": 111,
-  "hash": "1e6424c944cfa9b1",
+  "hash": "24859e969844897f",
   "condition": "homeUpgradeScenariosPattern.test(message) && !homeUpgradeScenariosOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(mes...",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1509,7 +1511,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "NEGOTIATION_SHIELD_CASES",
   "confidence": 0.96,
   "order": 112,
-  "hash": "b0d21b24ab2ca7bb",
+  "hash": "102486fb637bd987",
   "condition": "negotiationShieldCasesPattern.test(message) && !negotiationShieldOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(mess...",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1522,7 +1524,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "ROOM_PLANT_RECOMMENDATIONS",
   "confidence": 0.98,
   "order": 113,
-  "hash": "8f13abf17b7328ac",
+  "hash": "33568f2a8ed02d04",
   "condition": "roomPlantRecommendationPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1534,7 +1536,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "PLANT_CARE_OUTLOOK",
   "confidence": 0.96,
   "order": 114,
-  "hash": "f9e5f9e5c3e2438a",
+  "hash": "fd1407494ad4c4e4",
   "condition": "plantCareOutlookPattern.test(message) && !plantCareOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1547,7 +1549,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "HOME_DIGITAL_WILL",
   "confidence": 0.96,
   "order": 115,
-  "hash": "ec21065a473883c0",
+  "hash": "eee3dd02bf067516",
   "condition": "homeDigitalWillPattern.test(message) && !homeDigitalWillOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1560,7 +1562,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "HOME_HABITS",
   "confidence": 0.96,
   "order": 116,
-  "hash": "856cb87577fc766e",
+  "hash": "bbb841e7265a668c",
   "condition": "homeHabitsPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1572,7 +1574,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "HOME_BRIEFING_VIEW",
   "confidence": 0.96,
   "order": 117,
-  "hash": "0c16cc2d74ac519c",
+  "hash": "a7bffe39ce81204c",
   "condition": "homeBriefingPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1584,7 +1586,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "HOME_STATUS_BOARD",
   "confidence": 0.96,
   "order": 118,
-  "hash": "823b2a502b3fa2c3",
+  "hash": "f691043e4ad559f0",
   "condition": "homeStatusBoardPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1596,7 +1598,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "PAST_HAZARD_EXPOSURE",
   "confidence": 0.96,
   "order": 119,
-  "hash": "5e2cfc8452fc52bc",
+  "hash": "6df4149d1aa3ccec",
   "condition": "pastHazardExposurePattern.test(message) && !pastHazardOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1609,7 +1611,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "ENVIRONMENT_REPORT",
   "confidence": 0.96,
   "order": 120,
-  "hash": "5e940e4a02d6cd55",
+  "hash": "2483542ee5c0f790",
   "condition": "environmentReportPattern.test(message) && !environmentReportOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:environmentReportOtherIntentPattern",
@@ -1622,7 +1624,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "NEIGHBORHOOD_CHANGE_FEED",
   "confidence": 0.96,
   "order": 121,
-  "hash": "abd0c357c178c8ef",
+  "hash": "f4e969ee1c0bf671",
   "condition": "neighborhoodChangePattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1635,7 +1637,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "BREAK_EVEN_ANALYSIS",
   "confidence": 0.96,
   "order": 122,
-  "hash": "0e421d846b290d4a",
+  "hash": "684d7d8fa0829c03",
   "condition": "breakEvenAnalysisPattern.test(message) && !breakEvenOtherSensePattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:breakEvenAnalysisPattern",
@@ -1659,7 +1661,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "OWNERSHIP_COSTS",
   "confidence": 0.97,
   "order": 124,
-  "hash": "6ae8d742cfb0fbd5",
+  "hash": "6bac0a9e5980ef9a",
   "condition": "(ownershipCostsPattern.test(message) || ownershipExpensesPattern.test(message)) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1672,7 +1674,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "HOME_EVENT_RADAR_FEED",
   "confidence": 0.96,
   "order": 125,
-  "hash": "d600b8010f2ec516",
+  "hash": "615dcf0512787e23",
   "condition": "homeEventRadarFeedPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1695,7 +1697,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "PROPERTY_SUMMARY",
   "confidence": 0.96,
   "order": 127,
-  "hash": "bff240dba2f5e17e",
+  "hash": "de4ab71ceb53ac0a",
   "condition": "propertyFactQuestionPattern.test(message) && !propertyFactOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1708,7 +1710,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "INVENTORY_LOOKUP",
   "confidence": 0.96,
   "order": 128,
-  "hash": "380c6c0bd44b0cb2",
+  "hash": "668fb64586828b6b",
   "condition": "(roomContentsPattern.test(message) || (EACH_ROOM_PATTERN.test(message) && roomItemWordsPattern.test(message))) && !roomContentsOtherInten...",
   "references": [
    "askOperationRegistry.ts:ROOM_NAME",
@@ -1724,7 +1726,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "INVENTORY_LOOKUP",
   "confidence": 0.96,
   "order": 129,
-  "hash": "ae238d24e912dd7a",
+  "hash": "b299f65389492e35",
   "condition": "itemHistoryPattern.test(message) && !itemAttributeWriteIntentPattern.test(message) && !explicitCapabilityPattern.test(message) && !repair...",
   "references": [
    "askOperationRegistry.ts:ITEM_ATTRIBUTE_ITEM",
@@ -1740,12 +1742,13 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "INVENTORY_LOOKUP",
   "confidence": 0.96,
   "order": 130,
-  "hash": "11bb931d07f47c28",
+  "hash": "e2b68bdd84c65ef3",
   "condition": "inventoryLookupPattern.test(message) && !compoundCapabilityFilterPattern.test(message) && !explicitCapabilityPattern.test(message) && !re...",
   "references": [
    "askOperationRegistry.ts:compoundCapabilityFilterPattern",
    "askOperationRegistry.ts:explicitCapabilityPattern",
    "askOperationRegistry.ts:inventoryLookupPattern",
+   "askOperationRegistry.ts:missingFieldFilterWording",
    "askOperationRegistry.ts:repairRecordWritePattern"
   ]
  },
@@ -1765,7 +1768,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "PROPERTY_SUMMARY",
   "confidence": 0.96,
   "order": 132,
-  "hash": "250077207c972b86",
+  "hash": "2f5c5e470050b58b",
   "condition": "(propertySummaryPattern.test(message) || roomSummaryPattern.test(message) || isPropertyCompletenessRequest(message)) && !explicitCapabili...",
   "references": [
    "askOperationRegistry.ts:PROPERTY_COMPLETENESS_PATTERNS",
@@ -1780,7 +1783,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "HOME_ACTIONS",
   "confidence": 0.96,
   "order": 133,
-  "hash": "af217e62cb2fb840",
+  "hash": "47c4b742cd539716",
   "condition": "(homeActionsPattern.test(message) || (homeConcernsPattern.test(message) && !homeConcernsOtherSubjectPattern.test(message))) && !explicitC...",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1795,7 +1798,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "SEASONAL_HOME_CARE",
   "confidence": 0.98,
   "order": 134,
-  "hash": "b3638f035c1220d1",
+  "hash": "13d3e9ce80619152",
   "condition": "seasonalHomeCarePattern.test(message) && !seasonalHomeCareRecordedIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1808,7 +1811,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "HOME_BASICS_GUIDE",
   "confidence": 0.97,
   "order": 135,
-  "hash": "0952562fccfa86a0",
+  "hash": "a72619823b85993d",
   "condition": "homeBasicsGuidePattern.test(message) && !seasonalHomeCareRecordedIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1821,12 +1824,13 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "MAINTENANCE_STATUS",
   "confidence": 0.94,
   "order": 136,
-  "hash": "6b7a77b28cbc4217",
-  "condition": "maintenancePattern.test(message) && !maintenanceBudgetWordingPattern.test(message) && !explicitCapabilityPattern.test(message)",
+  "hash": "fc4d7c864a3c01b6",
+  "condition": "maintenancePattern.test(message) && !maintenanceBudgetWordingPattern.test(message) && !snoozeDeferWording.test(message) && !explicitCapab...",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
    "askOperationRegistry.ts:maintenanceBudgetWordingPattern",
-   "askOperationRegistry.ts:maintenancePattern"
+   "askOperationRegistry.ts:maintenancePattern",
+   "askOperationRegistry.ts:snoozeDeferWording"
   ]
  },
  {
@@ -1834,8 +1838,8 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "HOME_CHANGE_SUMMARY",
   "confidence": 0.9,
   "order": 137,
-  "hash": "9c079ec061798460",
-  "condition": "homeChangeSummaryPattern.test(message) && !explicitCapabilityPattern.test(message) && !/\\bdecision\\b/i.test(message)",
+  "hash": "9012f761a3f90171",
+  "condition": "homeChangeSummaryPattern.test(message) && !explicitCapabilityPattern.test(message) && !/\\b(?:decision|inspection)\\b/i.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
    "askOperationRegistry.ts:homeChangeSummaryPattern"
@@ -1846,7 +1850,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "REPLACEMENT_GUIDANCE",
   "confidence": 0.95,
   "order": 138,
-  "hash": "90a0851bd0efab3f",
+  "hash": "085a78eec60e1efc",
   "condition": "itemKeepOrReplacePattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:KEEP_OR_REPLACE_INTENT",
@@ -1871,7 +1875,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "REPLACEMENT_GUIDANCE",
   "confidence": 0.95,
   "order": 140,
-  "hash": "61a2495567d80c60",
+  "hash": "66630f3a11e637cb",
   "condition": "itemReplacementCostPattern.test(message) && !itemAttributeWriteIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:ITEM_ATTRIBUTE_ITEM",
@@ -1886,7 +1890,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "INVENTORY_LOOKUP",
   "confidence": 0.96,
   "order": 141,
-  "hash": "fa927954e5e08650",
+  "hash": "6f95f09c87063038",
   "condition": "itemAttributePattern.test(message) && !itemAttributeWriteIntentPattern.test(message) && !explicitCapabilityPattern.test(message) && !repa...",
   "references": [
    "askOperationRegistry.ts:ITEM_ATTRIBUTE_ITEM",
@@ -1925,7 +1929,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "SELL_HOLD_RENT_ANALYSIS",
   "confidence": 0.96,
   "order": 144,
-  "hash": "2970e241d8f351f4",
+  "hash": "287dce4138dae4a6",
   "condition": "sellHoldRentAnalysisPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1948,7 +1952,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "HOUSEHOLD_ACCESS_SUMMARY",
   "confidence": 0.96,
   "order": 146,
-  "hash": "c079d673daa087dc",
+  "hash": "09ddabc2ec8d0dc3",
   "condition": "householdAccessSummaryPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
@@ -1960,7 +1964,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "CAPABILITY_DISCOVERY",
   "confidence": 0.88,
   "order": 147,
-  "hash": "30b6af95adf46da0",
+  "hash": "8d5db5f6c952b04f",
   "condition": "explicitCapabilityPattern.test(message) || capabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:capabilityPattern",
@@ -1972,7 +1976,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "COMMUNITY_UPDATES",
   "confidence": 0.95,
   "order": 148,
-  "hash": "7b8e5ae512ea7a3a",
+  "hash": "ea67f9e0ceeb3083",
   "condition": "communityPattern.test(message) && !communityOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",

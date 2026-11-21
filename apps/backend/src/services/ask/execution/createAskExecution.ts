@@ -11,7 +11,7 @@ import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type CreateAskE
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
 import { askCompositionTotal, askRecoveryOutcomeTotal, askTurnStageDurationSeconds, askTurnFailuresTotal, type AskTurnStage, askExecutionDurationSeconds, askExecutionsTotal, askInlineCapturesTotal, askRoutingDecisionsTotal, askUnansweredRecoveryTotal, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../../lib/metrics';
 import { type AskAccountRole } from '../askAccountEligibility';
-import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
+import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, hasCoverageComparisonWording, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
 import { runConversationalCaptureForTurn } from '../conversationalUnderstanding/conversationalCapture';
 import { asInputJson, askFailureBlocks, askFailureStatus, assertSkillResultBlocksAllowed, audienceTelemetryFor, discoverableAskOperationIds, ensureAskServiceAccountEligibility, ensurePropertyAccess, enterAskPropertyTimezoneContext, mapPersistedExecution, maybeSynthesizeDeterministicResult, preservedExecutionHistory, propertySummary, recordAskAnswerTrustMetrics, terminalStatus, withAskTimeout } from '../askHandlerSupport';
 import { executeOperation } from '../execution/executeOperation';
@@ -584,7 +584,10 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       language: routingDecision.language,
       operation: routingDecision.operation,
       stage: 'CLARIFICATION',
-      candidates: [...new Map(skillAmbiguityOperations.map((candidate) => [candidate.operationId, candidate])).values()].slice(0, 3),
+      // A comparison is offered only when the message has comparison wording; sharing the word "coverage" with a coverage-gap question is not that.
+      candidates: [...new Map(skillAmbiguityOperations.map((candidate) => [candidate.operationId, candidate])).values()]
+        .filter((candidate) => candidate.operationId !== 'COVERAGE_COMPARISON_STATUS' || hasCoverageComparisonWording(routingMessage))
+        .slice(0, 3),
       requiresClarification: true,
       entityResolution: null,
     };

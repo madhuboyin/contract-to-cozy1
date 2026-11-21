@@ -1205,7 +1205,7 @@ const buyerNegotiationReadinessPattern = /\bwhat should i discuss\b.{0,40}\b(?:m
 const buyerInsuranceReadinessPattern = /\b(?:insurance (?:binder|quotes?)|(?:homeowners?|home) insurance (?:readiness|requirements?)|insurance (?:requirements?|proof|quotes?) (?:for|before) (?:my )?(?:closing|purchase)|(?:closing|purchase) insurance)\b/i;
 const buyerLoanEstimatesPattern = /\b(?:purchase|mortgage) loan estimates?\b|\b(?:my|the|compare|show|review)\b.{0,20}\b(?:lender|mortgage|loan) offers?\b|\bcompare\b.{0,20}\b(?:my )?loan estimates?\b|\b(?:show|review|list)\b.{0,15}\b(?:my )?loan estimates?\b/i;
 const buyerCostReadinessPattern = /\bwhat could cost me money\b.{0,40}\b(?:first 90 days|closing|move[- ]in)\b|\bnear[- ]term costs?\b.{0,40}\bpurchase\b|\bwhat (?:will|could)\b.{0,30}\bcost\b.{0,40}\bthis (?:purchase|closing)\b|\bwhat (?:will|could)\b.{0,20}\bthis (?:purchase|closing)\b.{0,20}\bcost\b/i;
-const buyerFindingDispositionPattern = /\b(?:move|classify|mark)\b.{0,50}\bfinding\b.{0,50}\b(?:post[- ]close|negotiation|dismiss|verified)\b|\bfinding\b.{0,50}\binto (?:my )?post[- ]close plan\b/i;
+const buyerFindingDispositionPattern = /\b(?:dismiss|accept|resolve|close)\b.{0,30}\binspection (?:findings?|issues?)\b.{0,40}\b(?:purchase|closing|buying|negotiation)\b|\b(?:move|classify|mark)\b.{0,50}\bfinding\b.{0,50}\b(?:post[- ]close|negotiation|dismiss|verified)\b|\bfinding\b.{0,50}\binto (?:my )?post[- ]close plan\b/i;
 const buyerLifecycleUpdatePattern = /\bcancel\b.{0,40}\b(?:this|my)\b.{0,20}\b(?:purchase|buyer plan|closing)\b|\bwe closed today\b|\b(?:change|update|move)\b.{0,40}\b(?:target )?closing date\b.{0,40}\bto\b|\b(?:pause|resume)\b.{0,40}\b(?:this|my)\b.{0,20}\b(?:purchase|buyer plan|deal)\b|^\s*(?:please\s+)?(?:change|update|move)\s+(?:my |the )?(?:target )?closing date[.!?\s]*$/i;
 
 // A CO alarm/detector is an emergency only as an event; a routine-maintenance noun after it ("Smoke & CO Detector Check", the Home Actions
@@ -1237,7 +1237,7 @@ const maintenanceCreatePattern = /\b(?:create|add|schedule|set up)\b.{0,80}\b(?:
 // otherwise swallow this) -- requires a forecast/predict/upcoming word
 // paired with maintenance, or an explicit "when will X need service"
 // phrasing.
-const maintenanceForecastPattern = /\b(?:forecast|predict(?:ed|ion|ive)?|upcoming|coming up)\b.{0,50}\bmaintenance\b|\bmaintenance\b.{0,50}\b(?:forecast|predict(?:ed|ion|ive)?|upcoming|coming up|should i expect)\b|\bwhen will (?:my |the )?(?:hvac|furnace|water heater|roof|boiler) need (?:service|maintenance|replacement|attention)\b/i;
+const maintenanceForecastPattern = /\b(?:forecast|predict(?:ed|ion|ive)?|upcoming|coming up)\b.{0,50}\bmaintenance\b|\bmaintenance\b.{0,50}\b(?:forecast|predict(?:ed|ion|ive)?|upcoming|coming up|should i expect)\b|\bwhen will (?:my |the )?(?:hvac|furnace|water heater|roof|boiler) need (?:service|maintenance|replacement|replacing|attention)\b/i;
 const maintenanceCompletePattern = /^\s*(?:please\s+)?(?:(?:mark|set)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair)\b.{0,100}\b(?:complete|completed|done)|(?:complete|finish|(?:check|tick|cross) off)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair))\b|\b(?:i|we) (?:completed|finished)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair)\b/i;
 // First-party collection continuation. It is a read/select step, not a create or blind update: the inventory handler
 // resolves canonical item identity and exposes only that item's missing, supported correction fields.
@@ -1295,8 +1295,8 @@ const remindMeToPattern = /^\s*(?:please\s+)?remind me to\b/i;
 // "What if I delay the gutters" asks about consequences; it does not ask to reschedule anything.
 const hypotheticalQuestionPattern = /^\s*(?:what|how)\b.{0,15}\bif\b/i;
 const maintenanceUpdatePattern = /\b(?:reschedule|move|change|update|edit|assign|unassign|archive|cancel|reopen|restore|postpone|defer|delay|push (?:back|out))\b.{0,100}\b(?:maintenance|task|gutter|filter|service|inspection|cleaning|repair)\b|\b(?:maintenance|task|gutter|filter|service|inspection|cleaning|repair)\b.{0,100}\b(?:reschedule|assign|archive|cancel|reopen|priority|due date)\b/i;
-const guidanceJourneyCreatePattern = /\b(?:start|create|open|begin)\b.{0,50}\b(?:guided plan|guidance journey|guided journey|step-by-step plan)\b/i;
-const quoteComparisonCreatePattern = /\b(?:create|start|open|set up|new)\b.{0,50}\b(?:(?:quote|bid|estimate|proposal)s? comparison|comparison workspace|workspace for (?:my )?(?:quotes|bids|proposals))\b|\b(?:i|we) (?:have|got|received)\b.{0,40}\b(?:quotes?|bids?|estimates?|proposals?)\b.{0,40}\bto compare\b/i;
+const guidanceJourneyCreatePattern = /\bhelp me plan\b.{0,60}\bstep[- ]by[- ]step\b|\b(?:start|create|open|begin)\b.{0,50}\b(?:guided plan|guidance journey|guided journey|step-by-step plan)\b/i;
+const quoteComparisonCreatePattern = /\bcompare\b.{0,40}\b(?:quotes?|bids?|estimates?|proposals?)\b.{0,30}\bside by side\b|(?<!\bcan you )\bhelp me compare\b.{0,40}\b(?:quotes?|bids?|estimates?|proposals?)\b|\b(?:create|start|open|set up|new)\b.{0,50}\b(?:(?:quote|bid|estimate|proposal)s? comparison|comparison workspace|workspace for (?:my )?(?:quotes|bids|proposals))\b|\b(?:i|we) (?:have|got|received)\b.{0,40}\b(?:quotes?|bids?|estimates?|proposals?)\b.{0,40}\bto compare\b/i;
 // Quote wording that another operation owns: an HVAC quote is a decision scenario, a finalized quote is a price finalization, an insurance policy is a coverage comparison.
 const quoteReviewOtherOwnerPattern = /\b(?:hvac|furnace|a\/c|ac|air conditioner|heat pump|boiler)\b|\bfinali[sz]ed\b|\b(?:insurance|policy|policies|coverage)\b/i;
 const quoteComparisonReviewPattern = /\b(?:compare|review|show|evaluate|which)\b.{0,70}\b(?:quotes?|bids?|proposals?|estimates?)\b|\b(?:quotes?|bids?|proposals?)\b.{0,70}\b(?:compare|comparison|best|cheapest|differences?|review)\b/i;
@@ -1356,7 +1356,7 @@ const warrantyLookupPattern = new RegExp([
 const warrantyLookupOtherIntentPattern = /\b(?:claims?|(?:file|filing) (?:a|an|my|our)|add|new|create|record a|save|buy|purchase|renew|cancel|extend|extended|register|transfer|correct|fix|change|update|edit|rename|delete|remove|missing|without|uncovered|gaps?|lack(?:s|ing)?|exposure|insurance|policy|premium|repair|replace|worth|should i|remind|notify|alert|warn|monitor|price|cost|quote|compare|coverage (?:analysis|review))\b/i;
 // The policy review: the questions worth asking about the confirmed facts on the household's policy (not item coverage gaps, not a comparison).
 const coverageReviewPattern = /\b(?:coverage analysis|coverage review|insurance review|policy review|review (?:my )?(?:homeowners? |home )?(?:insurance|policy|coverage)|questions? (?:to|should i) ask (?:my )?(?:insurer|insurance|agent)|what should i ask my (?:insurer|insurance|agent))\b/i;
-const coveragePattern = /\b(missing coverage|coverage gaps?|uncovered|warranty coverage|insurance coverage|items? (?:without|missing) (?:a )?(?:warranty|coverage)|warrant(?:y|ies) (?:are )?(?:expire|expiring|expiry)|coverage (?:is )?(?:expire|expiring|expiry)|evidence (?:for|of) (?:my )?(?:expensive|high[ -]?value)? ?(?:appliances?|items?|systems?)|gaps? (?:have|with|show(?:ing)?) (?:the )?(?:largest|highest|biggest|most) exposure)\b|\b(?:am i|are we) (?:properly |fully |adequately |well )?(?:insured|covered|protected)\b(?!.{0,40}\b(?:closing|purchase|escrow)\b)|\bwhat (?:isn'?t|is not|aren'?t|are not) (?:covered|protected|insured)\b|\bwhich\b.{0,25}\b(?:aren'?t|are not|isn'?t|is not)\b.{0,10}\b(?:covered|protected|insured)\b/i;
+const coveragePattern = /\b(missing coverage|coverage gaps?|uncovered|warranty coverage|insurance coverage|items? (?:without|missing) (?:a )?(?:warranty|coverage)|warrant(?:y|ies) (?:are )?(?:expire|expiring|expiry)|coverage (?:is )?(?:expire|expiring|expiry)|evidence (?:for|of) (?:my )?(?:expensive|high[ -]?value)? ?(?:appliances?|items?|systems?)|gaps? (?:have|with|show(?:ing)?) (?:the )?(?:largest|highest|biggest|most) exposure)\b|\b(?:am i|are we) (?:properly |fully |adequately |well )?(?:insured|covered|protected)\b(?!.{0,40}\b(?:closing|purchase|escrow)\b)|\b(?:appliances?|items?|systems?|equipment)\b.{0,30}\b(?:lack(?:s|ing)?|without|missing)\s+(?:any\s+|a\s+|an\s+)?(?:protection|coverage|insurance)\b|\bwhat (?:isn'?t|is not|aren'?t|are not) (?:covered|protected|insured)\b|\bwhich\b.{0,25}\b(?:aren'?t|are not|isn'?t|is not)\b.{0,10}\b(?:covered|protected|insured)\b/i;
 // Deliberately checked before coveragePattern in the cascade below:
 // "compare my insurance coverage" contains coveragePattern's own bare
 // "insurance coverage" alternative, but a compare/switch/shop/equivalent
@@ -1364,6 +1364,8 @@ const coveragePattern = /\b(missing coverage|coverage gaps?|uncovered|warranty c
 // Bare coverage-gap phrasing with no such verb still falls through to
 // coveragePattern untouched.
 const coverageComparisonPattern = /\b(?:compar(?:e|ison)|switch(?:ing)?|shop(?:ping)? (?:for|around)|equivalent)\b.{0,50}\b(?:insurance|policy|policies|coverage)\b|\b(?:insurance|policy|policies|coverage)\b.{0,50}\b(?:compar(?:e|ison)|switch(?:ing)?|shop(?:ping)?|equivalent)\b|\bcoverage comparison\b|\bkeep or (?:switch|change) (?:my )?(?:insurance|policy)\b/i;
+/** True when the message asks to compare, switch or shop insurance or coverage; a clarification offers the comparison only then. */
+export function hasCoverageComparisonWording(message: string): boolean { return coverageComparisonPattern.test(message); }
 // Record-query status of already-recorded canonical Incident/Claim rows
 // (§9.2 requires "active projects, incidents, claims, permits, and
 // inspections" coverage). Deliberately distinct from majorEventPattern's
@@ -1391,7 +1393,7 @@ const inspectionFindingsPattern = /\b(?:show|review|list|what|open|unresolved)\b
 const recallMatchUpdatePattern = /\b(?:confirm|dismiss|resolve|close)\b.{0,80}\brecall(?:s|ed|ing)?\b|\brecall(?:s|ed|ing)?\b.{0,80}\b(?:confirm|dismiss|resolve|close)\b/i;
 const recallReviewPattern = /\b(?:show|review|list|what|open|unresolved|any|has|have|been)\b.{0,60}\brecall(?:s|ed|ing)?\b|\brecall(?:s|ed|ing)?\b.{0,60}\b(?:show|review|list|open|unresolved|affect(?:ed|ing)? (?:me|us|this home))\b|\b(?:is|has|have)\b.{0,40}\b(?:my|this|our)\b.{0,40}\brecalled\b/i;
 const documentPromotionConfirmPattern = /\b(?:confirm|reject|promote|apply)\b.{0,80}\b(?:document|extraction|extracted|policy fact|inspection report)\b/i;
-const documentPromotionReviewPattern = /(?:\b(?:show|review|list|what)\b.{0,80}\b(?:document|documnt|extraction|extracted)\b.{0,50}\b(?:review|confirmation|pending|promotion|facts?)\b|\b(?:review|show|list)\b.{0,40}\bpending\b.{0,40}\b(?:document|documnt|extraction)\b)/i;
+const documentPromotionReviewPattern = /(?:\bwhat did you (?:find|extract)\b.{0,40}\b(?:documents?|uploads?)\b|\b(?:show|review|list|what)\b.{0,80}\b(?:document|documnt|extraction|extracted)\b.{0,50}\b(?:review|confirmation|pending|promotion|facts?)\b|\b(?:review|show|list)\b.{0,40}\bpending\b.{0,40}\b(?:document|documnt|extraction)\b)/i;
 // Checked after documentPromotionConfirm/ReviewPattern above (both require
 // extra review/confirmation/pending/promotion/facts wording this bare
 // vault-lookup phrasing never carries) -- "show my documents" is the
@@ -1451,7 +1453,7 @@ const homeEventRadarFeedPattern = /\b(?:home event radar|radar feed|radar matche
 // keyword for hvacDecisionContinuePattern to key off; routing it into this
 // generic operation would be a worse answer than today's existing fallback,
 // so it's left alone for a future phase with real conversational context.
-const homeChangeSummaryPattern = /\bwhat(?:'s| is|s)?\s+(?:changed|new)\b|\banything\s+(?:new|changed)\b|\bany\s+(?:recent\s+)?(?:changes|updates)\b|\brecent(?:ly)?\s+(?:changes|updates)\b|\bwhat happened\s+(?:recently|lately)\b|\bwhat'?s different\b/i;
+const homeChangeSummaryPattern = /\bwhat(?:'s| is|s)?\s+changed\b|\bwhat(?:'s| is|s)?\s+new\b(?!\s+(?:for|with|about)\b)|\banything\s+(?:new|changed)\b|\bany\s+(?:recent\s+)?(?:changes|updates)\b|\brecent(?:ly)?\s+(?:changes|updates)\b|\bwhat happened\s+(?:recently|lately)\b|\bwhat'?s different\b/i;
 // Appliances and systems a repair-or-replace question can be about. HVAC systems are included on purpose: REPLACEMENT_GUIDANCE hands an
 // HVAC item to the HVAC decision itself, so the natural wording reaches the same place for every item.
 const REPLACEABLE_NON_HVAC_ITEM = '(?:microwave|oven|stove|cooktop|refrigerator|fridge|freezer|dishwasher|washer|washing machine|dryer|water heater|garbage disposal|roof|garage door|sump pump|dehumidifier)';
@@ -1572,7 +1574,7 @@ const applianceFailureRiskOtherIntentPattern = /\b(?:buy|recommend\w*|brand|mode
 // Forward-looking money wording about upkeep: "how much budget I need to allocate for home maintenance", "the minimum to set aside for repairs". The broad word
 // "maintenance" otherwise sent these to the maintenance-status list (review screenshots, 2026-11-07). A multi-year horizon is not the upkeep budget's (it is a
 // yearly view; the capital reserve plan takes 5 or 10 years), so those are left to the clarification between the two instead of being routed here.
-const maintenanceBudgetWordingPattern = /\b(?:budget|allocat\w*|set aside|put aside|afford)\b.{0,70}\b(?:maintenance|upkeep|repairs?)\b|\b(?:maintenance|upkeep|repairs?)\b.{0,40}\b(?:budget|allocation)\b|\b(?:should|need to|ought to|minimum|at least)\b.{0,20}\bspend\b.{0,40}\b(?:maintenance|upkeep|repairs?)\b/i;
+const maintenanceBudgetWordingPattern = /\b(?:yearly|annual|monthly)\s+(?:maintenance|upkeep|repair)\s+(?:costs?|spend\w*|estimates?)\b|\b(?:budget|allocat\w*|set aside|put aside|afford)\b.{0,70}\b(?:maintenance|upkeep|repairs?)\b|\b(?:maintenance|upkeep|repairs?)\b.{0,40}\b(?:budget|allocation)\b|\b(?:should|need to|ought to|minimum|at least)\b.{0,20}\bspend\b.{0,40}\b(?:maintenance|upkeep|repairs?)\b/i;
 const multiYearHorizonPattern = /\b\d+\s*(?:-\s*)?(?:years?|yrs?)\b|\b(?:five|ten|several|many|multi)[- ]years?\b/i;
 const maintenanceBudgetPattern = /\bbudget planner\b|\b(?:home |house )?(?:maintenance|upkeep|repair) budget\b|\bbudget forecast\b|\bhow much (?:should|do|will) (?:i|we) (?:need to )?(?:budget|set aside|save)\b.{0,50}\b(?:maintenance|upkeep|repairs?)\b/i;
 const maintenanceBudgetOtherIntentPattern = /\b(?:create|add|log|record|change|update|set up|renovation|remodel|closing|mortgage)\b/i;
@@ -1652,8 +1654,16 @@ const sellHoldRentAnalysisPattern = /\b(?:should|could|would|will|is|when|benefi
 // Read-only "who has access" questions. Any invite/add/remove/change verb is a command and is left to HOUSEHOLD_INVITATION or the model.
 const householdAccessSummaryPattern = /^(?!.*\b(?:invite|add|remove|delete|change|update|revoke|promote|demote|share)\b).*(?:\bwho (?:has|have|can (?:see|access)) (?:access|my home|this home|my home record)\b|\bwho(?:'s| is| are) (?:in|on) (?:my|our|the) household\b|\b(?:show|list|see|view)\b.{0,20}\b(?:my |our |the )?household (?:members?|access)\b|\bhousehold (?:members?|access)\b.{0,20}\b(?:list|summary)\b|\bwho (?:all )?(?:has|have) access\b)/i;
 const householdInvitationPattern = /\b(?:invite|add|share (?:my|the) home with)\b.{0,50}\b(?:wife|husband|spouse|partner|family member|household member|someone|person)\b|\bhousehold\b.{0,40}\b(?:invite|invitation|add (?:a )?member)\b/i;
-const explicitCapabilityPattern = /\b(?:tool|something (?:available|to help)|anything (?:available|to help)|what can help|do you have|feature available)\b/i;
-const capabilityPattern = /\b(tool|something available|what can help|do you have|help me (?:with|plan)|refinanc|sell.*rent|compare.{0,40}(?:quotes?|bids?|proposals?|estimates?)|organize.{0,40}(?:records?|documents?|paperwork)|track.{0,40}(?:permits?|projects?)|plan.{0,40}(?:renovation|remodel|replacement)|savings?|rebates?|monitor)\b/i;
+// "What insights do you have about my home" asks about the home, not about which tools exist: "do you have" names a capability only when it is not followed by "about ...".
+const explicitCapabilityPattern = /\b(?:tool|something (?:available|to help)|anything (?:available|to help)|what can help|do you have(?!.{0,30}\babout\b)|feature available)\b/i;
+// Fast-path precision guards (2026-11-21 baseline, scripts/ask-fast-path-certify.js report): wording a broader rule must not claim. Each one leaves the turn to the understanding layer or to the rule that owns it.
+// Snoozing or deferring work is a change to a work item, and "which tasks are snoozed" is a work-item read; neither is the maintenance status read.
+const snoozeDeferWording = /\b(?:snooz\w*|defer\w*|postpon\w*)\b/i;
+// "Which appliances have no serial number / warranty" filters inventory on a missing field; that is a computed data-point read, not the inventory list.
+const missingFieldFilterWording = /\b(?:no|missing|without|lack(?:s|ing)?)\s+(?:a\s+|any\s+)?(?:serial|model|warrant(?:y|ies)|receipts?|photos?)\b/i;
+// A request to change settings is a command, not the settings overview.
+const settingsChangeWording = /^\s*(?:please\s+)?(?:change|update|set|turn|enable|disable|edit|switch)\b/i;
+const capabilityPattern = /\b(tool|something available|what can help|do you have(?!.{0,30}\babout\b)|help me with|refinanc|sell.*rent|compare.{0,40}(?:quotes?|bids?|proposals?|estimates?)|organize.{0,40}(?:records?|documents?|paperwork)|track.{0,40}(?:permits?|projects?)|plan.{0,40}(?:renovation|remodel|replacement)|savings?|rebates?|monitor)\b/i;
 
 /** A question frame (what/when/who/which/how much/how old/tell me) about "my"/"the" something; the detail itself is decided by the reviewed catalogue, not by this pattern. */
 const dataPointQuestionPattern = /^\s*(?:what(?:'s|s)?|when(?:'s)?|who|which|how (?:much|old|long|many|big|large)|tell me|show me)\b.*\b(?:my|our|the|i|we)\b/i;
@@ -1743,7 +1753,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (buyerNegotiationReadinessPattern.test(message)) {
     return resolved('BUYER_NEGOTIATION_READINESS', 0.95, 'DET_BUYER_NEGOTIATION_READINESS_01');
   }
-  if (buyerInsuranceReadinessPattern.test(message)) {
+  if (buyerInsuranceReadinessPattern.test(message) && !coverageComparisonPattern.test(message) && !/\bstatus\b/i.test(message)) {
     return resolved('BUYER_INSURANCE_READINESS', 0.94, 'DET_BUYER_INSURANCE_READINESS_01');
   }
   if (buyerLoanEstimatesPattern.test(message) && !/\brefinanc|\brefi\b/i.test(message)) {
@@ -1953,7 +1963,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
     return resolved('WARRANTY_LOOKUP', 0.96, 'DET_WARRANTY_LOOKUP_01');
   }
   // The homeowner's own insurance policies as records (list, add, edit, delete); comparison, review, monitor, claim and savings phrasing matched above.
-  if (insurancePoliciesPattern.test(message) && !insurancePoliciesOtherIntentPattern.test(message)) return resolved('COVERAGE_GAPS', 0.96, 'DET_COVERAGE_GAPS_01');
+  if (insurancePoliciesPattern.test(message) && !insurancePoliciesOtherIntentPattern.test(message) && !/\bdocuments?\b/i.test(message)) return resolved('COVERAGE_GAPS', 0.96, 'DET_COVERAGE_GAPS_01');
   if (coveragePattern.test(message)) {
     return resolved('COVERAGE_GAPS', 0.96, 'DET_COVERAGE_GAPS_02');
   }
@@ -1966,10 +1976,10 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (inspectionFindingUpdatePattern.test(message)) return resolved('INSPECTION_FINDING_UPDATE', 0.98, 'DET_INSPECTION_FINDING_UPDATE_01');
   if (inspectionFindingsPattern.test(message)) return resolved('INSPECTION_FINDINGS', 0.96, 'DET_INSPECTION_FINDINGS_01');
-  if (inspectionReportsPattern.test(message)) return resolved('INSPECTION_REPORTS', 0.95, 'DET_INSPECTION_REPORTS_01');
+  if (inspectionReportsPattern.test(message) && !/\b(?:findings?|issues?|what(?:'s| is) in)\b/i.test(message)) return resolved('INSPECTION_REPORTS', 0.95, 'DET_INSPECTION_REPORTS_01');
   if (homeWorkItemsPattern.test(message)) return resolved('HOME_WORK_ITEMS', 0.95, 'DET_HOME_WORK_ITEMS_01');
   if (isNotificationSettingsCommandRequest(message)) return resolved('NOTIFICATION_SETTINGS_COMMAND', 0.96, 'DET_NOTIFICATION_SETTINGS_COMMAND_01');
-  if (isNotificationSettingsOverviewRequest(message)) return resolved('NOTIFICATION_SETTINGS_OVERVIEW', 0.96, 'DET_NOTIFICATION_SETTINGS_OVERVIEW_01');
+  if (isNotificationSettingsOverviewRequest(message) && !settingsChangeWording.test(message)) return resolved('NOTIFICATION_SETTINGS_OVERVIEW', 0.96, 'DET_NOTIFICATION_SETTINGS_OVERVIEW_01');
   if (isNotificationsOverviewRequest(message)) return resolved('NOTIFICATIONS_OVERVIEW', 0.95, 'DET_NOTIFICATIONS_OVERVIEW_01');
   if (workOverviewPattern.test(message)) return resolved('WORK_OVERVIEW', 0.95, 'DET_WORK_OVERVIEW_01');
   if (savedResultsPattern.test(message)) return resolved('SAVED_RESULTS', 0.95, 'DET_SAVED_RESULTS_01');
@@ -2060,13 +2070,13 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (itemHistoryPattern.test(message) && !itemAttributeWriteIntentPattern.test(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message)) {
     return resolved('INVENTORY_LOOKUP', 0.96, 'DET_INVENTORY_LOOKUP_03');
   }
-  if (inventoryLookupPattern.test(message) && !compoundCapabilityFilterPattern.test(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message)) {
+  if (inventoryLookupPattern.test(message) && !compoundCapabilityFilterPattern.test(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message) && !missingFieldFilterWording.test(message) && !/\b(?:paperwork|uploaded|documents?)\b/i.test(message)) {
     return resolved('INVENTORY_LOOKUP', 0.96, 'DET_INVENTORY_LOOKUP_04');
   }
   if (propertyAreaCaptureCommandPattern.test(message)) {
     return resolved('PROPERTY_CONTEXT_AREA_CAPTURE', 1, 'DET_PROPERTY_CONTEXT_AREA_CAPTURE_01');
   }
-  if ((propertySummaryPattern.test(message) || roomSummaryPattern.test(message) || isPropertyCompletenessRequest(message)) && !explicitCapabilityPattern.test(message)) {
+  if ((propertySummaryPattern.test(message) || roomSummaryPattern.test(message) || isPropertyCompletenessRequest(message)) && !explicitCapabilityPattern.test(message) && !/\b(?:intelligence|signals?|insights?)\b/i.test(message)) {
     return resolved('PROPERTY_SUMMARY', 0.96, 'DET_PROPERTY_SUMMARY_02');
   }
   if ((homeActionsPattern.test(message) || (homeConcernsPattern.test(message) && !homeConcernsOtherSubjectPattern.test(message))) && !explicitCapabilityPattern.test(message) && !maintenancePattern.test(message)) {
@@ -2078,10 +2088,10 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (homeBasicsGuidePattern.test(message) && !seasonalHomeCareRecordedIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('HOME_BASICS_GUIDE', 0.97, 'DET_HOME_BASICS_GUIDE_01');
   }
-  if (maintenancePattern.test(message) && !maintenanceBudgetWordingPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+  if (maintenancePattern.test(message) && !maintenanceBudgetWordingPattern.test(message) && !snoozeDeferWording.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('MAINTENANCE_STATUS', 0.94, 'DET_MAINTENANCE_STATUS_01');
   }
-  if (homeChangeSummaryPattern.test(message) && !explicitCapabilityPattern.test(message) && !/\bdecision\b/i.test(message)) {
+  if (homeChangeSummaryPattern.test(message) && !explicitCapabilityPattern.test(message) && !/\b(?:decision|inspection)\b/i.test(message)) {
     return resolved('HOME_CHANGE_SUMMARY', 0.9, 'DET_HOME_CHANGE_SUMMARY_01');
   }
   if (itemKeepOrReplacePattern.test(message) && !explicitCapabilityPattern.test(message)) {
