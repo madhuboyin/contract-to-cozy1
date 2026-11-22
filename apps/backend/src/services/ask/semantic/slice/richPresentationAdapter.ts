@@ -1,7 +1,12 @@
-import type { AskPresentationBlock } from '../../../../productFramework/ask/ask.contract';
+import type { AskListRecordKind, AskPresentationBlock, AskPresentationFamily } from '../../../../productFramework/ask/ask.contract';
 import type { SemanticReadReceipt } from '../semanticExecutionReceipt';
 import type { EnrichmentRowAction } from '../../actionEnrichment/actionEnrichmentRows';
 import { humanizeEnumTokensInCopy, humanizePresentationText, humanizePresentationToken } from '../containment/presentationHumanizer';
+
+/** The row `entityType` each list kind's canonical renderer expects (the same value the registry handlers emit). */
+export const ENTITY_TYPE_OF_RECORD_KIND: Readonly<Record<AskListRecordKind, string>> = {
+  INVENTORY_ITEM: 'INVENTORY_ITEM', MAINTENANCE_TASK: 'MAINTENANCE_TASK', CLAIM: 'CLAIM', PERMIT: 'PERMIT_RECORD', WARRANTY: 'WARRANTY', DOCUMENT: 'DOCUMENT', HOME_EVENT: 'HOME_EVENT',
+};
 
 /** Block-id suffix of the separate collection of unconfirmed records. */
 export const UNCONFIRMED_LIST_SUFFIX = '-needs-confirmation';
@@ -12,6 +17,8 @@ export interface SlicePresentationRow {
   readonly subtitle?: string;
   readonly description?: string;
   readonly meta?: readonly string[];
+  /** Why this record is in the answer, in the homeowner's words. */
+  readonly matchReason?: string;
   readonly stateCode?: string;
   /** The record's own status, for a renderer that shows it (the canonical claim list). */
   readonly status?: string;
@@ -33,6 +40,10 @@ export interface SliceRichPresentationInput {
    * was not confirmed cannot be shown, counted or described as a match (UI review 2026-11-21, P0 #2). Their number must equal the receipt's unknownCount.
    */
   readonly unconfirmedRows?: readonly SlicePresentationRow[];
+  /** The family of this answer; derived from the rows when omitted (a list when there are records, a direct answer when there are none). */
+  readonly family?: AskPresentationFamily;
+  /** The kind of record the list carries, so the client renders the canonical domain list whatever the block id. */
+  readonly recordKind?: AskListRecordKind;
   readonly unconfirmedTitle?: string;
   readonly listId?: string;
   readonly listTitle?: string;
@@ -64,6 +75,7 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
       title: humanizeEnumTokensInCopy(input.title),
       body: humanizeEnumTokensInCopy(input.summaryBody),
       tone: receipt.population.conflictedCount > 0 ? 'CAUTION' : 'DEFAULT',
+      presentationFamily: input.family ?? (rows.length > 0 || (input.unconfirmedRows?.length ?? 0) > 0 ? 'ENTITY_LIST' : 'DIRECT_ANSWER'),
       actions: [],
     },
   ];
@@ -80,6 +92,7 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
     blocks.push({
       type: 'GROUPED_LIST',
       id: input.listId ?? `${receipt.answerVariantId}-list`,
+      ...(input.recordKind ? { recordKind: input.recordKind } : {}),
       title: humanizeEnumTokensInCopy(input.listTitle ?? input.title),
       description: [input.listDescription ?? `Showing ${rows.length} of ${receipt.population.totalMatchCount} confirmed matches`, input.overflowNote].filter(Boolean).join(' '),
       sections: [...grouped.entries()].map(([groupTitle, groupRows], index) => ({
@@ -93,7 +106,8 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
           subtitle: row.subtitle ? humanizeEnumTokensInCopy(row.subtitle) : undefined,
           description: row.description ? humanizeEnumTokensInCopy(row.description) : undefined,
           ...(row.status ? { status: row.status } : {}),
-          ...(row.entityType ? { entityType: row.entityType } : {}),
+          ...(row.entityType ? { entityType: row.entityType } : input.recordKind ? { entityType: ENTITY_TYPE_OF_RECORD_KIND[input.recordKind] } : {}),
+          ...(row.matchReason ? { matchReason: humanizeEnumTokensInCopy(row.matchReason) } : {}),
           ...(row.actions && row.actions.length > 0 ? { actions: row.actions.map((action) => ({ ...action })) } : {}),
           badge: row.stateCode
             ? humanizePresentationToken(row.stateCode)

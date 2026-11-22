@@ -25,7 +25,8 @@ const snapshot = () => ({
 // Internal shapes that must never reach a homeowner: dotted registry ids, snake/screaming ids, adapter ids, cents.
 const INTERNAL = /\b(?:domain|entity|field|relation|predicate|path|query|job|variant)\.[a-z_.]+\b|\b[a-z]+(?:-[a-z]+){2,}-(?:executor|adapter)\b|\b[A-Z]{3,}_[A-Z0-9_]{2,}\b|\b[a-z]{3,}_[a-z_]{3,}\b|\b\d+\s+cents?\b/;
 const copyOf = (blocks) => JSON.stringify(blocks.map((b) => {
-  const { id, type, actions, filters, ...rest } = b; // ids are structural, not copy
+  // ids and the declared presentation metadata (family, record kind) are structural, not copy
+  const { id, type, actions, filters, presentationFamily, recordKind, ...rest } = b;
   if (b.sections) rest.sections = b.sections.map((s) => ({ title: s.title, items: s.items.map((i) => ({ title: i.title, description: i.description, subtitle: i.subtitle, badge: i.badge, meta: i.meta })) }));
   return rest;
 }));

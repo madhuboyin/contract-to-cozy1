@@ -12,7 +12,9 @@ import {
 } from '../semanticReceiptEntailment';
 import { ASK_SEMANTIC_PLAN_VERSION, type SemanticFacet, type SemanticRequestPlan, type SemanticWhereExpression } from '../semanticRequestPlan';
 import { ASK_SEMANTIC_DOMAINS, type SemanticDomainId } from '../governance/semanticOntologyBaseline';
+import type { AskListRecordKind, AskPresentationFamily } from '../../../../productFramework/ask/ask.contract';
 import {
+  ENTITY_TYPE_OF_RECORD_KIND,
   UNCONFIRMED_LIST_SUFFIX,
   buildSliceRichPresentation,
   verifyRichPresentationPopulationEquivalence,
@@ -406,6 +408,11 @@ function weekWindowYmd(referenceDate: string, timeZone: string): { startYmd: str
 
 const humanizeEnumTokens = humanizeEnumTokensInCopy;
 
+/** The list kind whose canonical domain renderer a source type's rows belong to. Source types without one render through the shared list. */
+const RECORD_KIND_OF_SOURCE_TYPE: Readonly<Record<string, AskListRecordKind>> = {
+  InventoryItem: 'INVENTORY_ITEM', PropertyMaintenanceTask: 'MAINTENANCE_TASK', Claim: 'CLAIM', PropertyPermitRecord: 'PERMIT', Warranty: 'WARRANTY', HomeEvent: 'HOME_EVENT',
+};
+
 function finalizeReceiptAndPresentation(input: {
   readonly facet: SemanticFacet;
   readonly snapshot: CrossDomainPropertySnapshot;
@@ -422,6 +429,8 @@ function finalizeReceiptAndPresentation(input: {
   readonly variantId: string;
   readonly unknownCount?: number;
   readonly conflictedCount?: number;
+  /** Declared for analyses and comparisons; a list or a direct answer is derived from the rows. */
+  readonly family?: AskPresentationFamily;
 }): {
   readonly receipt: SemanticReadReceipt;
   readonly entailment: SemanticReceiptEntailmentVerdict;
@@ -465,6 +474,8 @@ function finalizeReceiptAndPresentation(input: {
     title: cleanTitle,
     summaryBody: renderedBody,
     ...(input.listId ? { listId: input.listId } : {}),
+    ...(RECORD_KIND_OF_SOURCE_TYPE[input.sourceType] ? { recordKind: RECORD_KIND_OF_SOURCE_TYPE[input.sourceType] } : {}),
+    ...(input.family ? { family: input.family } : input.projection === 'COUNT' || input.projection === 'AGGREGATE' || input.projection === 'EXISTS' ? { family: 'DIRECT_ANSWER' as const } : {}),
     rows: input.projection === 'COUNT' ? [] : cleanRows,
   });
 
@@ -1723,6 +1734,7 @@ function executeNewStackFacet(
         title: 'Own-vs-rent break-even analysis',
         summaryBody: summary,
         variantId: 'variant.finance_break_even',
+        family: 'ANALYSIS',
         unknownCount: missingSlots.length > 0 ? missingSlots.length : 0,
       });
       return {
@@ -1798,6 +1810,7 @@ function executeNewStackFacet(
       title: 'Refinance break-even analysis',
       summaryBody: summary,
       variantId: 'variant.finance_break_even',
+      family: 'ANALYSIS',
       unknownCount: missingSlots.length > 0 ? missingSlots.length : 0,
     });
     return {
@@ -2204,6 +2217,7 @@ function executeNewStackFacet(
       title: 'Contractor quote comparison',
       summaryBody: summary,
       variantId: 'variant.quote_comparison',
+      family: 'COMPARISON',
       unknownCount,
     });
     return {
@@ -3558,6 +3572,7 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
       id: primaryReceipt?.answerVariantId ?? 'cross-domain-summary',
       title: answerTitle,
       body: answerBody,
+      presentationFamily: 'ENTITY_LIST',
       tone: execution.status === 'PARTIAL' ? 'CAUTION' : 'DEFAULT',
       actions: [],
     });
@@ -3567,7 +3582,7 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
       .map((facetResult) => {
         const rowById = new Map((facetResult.rows ?? []).map((row) => [row.id, row]));
         const sourceType = facetResult.receipt?.provenance.sourceType;
-        const entityType = sourceType === 'Claim' ? 'CLAIM' : sourceType === 'PropertyPermitRecord' ? 'PERMIT_RECORD' : undefined;
+        const entityType = sourceType === 'Claim' ? 'CLAIM' : sourceType === 'PropertyPermitRecord' ? 'PERMIT_RECORD' : sourceType && RECORD_KIND_OF_SOURCE_TYPE[sourceType] ? ENTITY_TYPE_OF_RECORD_KIND[RECORD_KIND_OF_SOURCE_TYPE[sourceType]] : undefined;
         return {
           id: `section-${facetResult.facetId}`,
           title: isClaimsAndPermits && sourceType === 'Claim' ? 'Open claims' : isClaimsAndPermits && sourceType === 'PropertyPermitRecord' ? 'Pending permits' : facetTitle(facetResult),
@@ -3593,6 +3608,7 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
       blocks.push({
         type: 'GROUPED_LIST',
         id: section.sourceType === 'Claim' ? 'incident-claim-list' : 'permit-tracker-permits',
+        recordKind: section.sourceType === 'Claim' ? 'CLAIM' : 'PERMIT',
         title: section.title,
         sections: [{ id: section.id, title: section.title, count: section.count, items: section.items }],
         actions: [],
@@ -3600,13 +3616,16 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
         listDensity: 'DENSE',
       });
     }
-    const genericSections = listSections
-      .filter((candidate) => candidate.sourceType !== 'Claim' && candidate.sourceType !== 'PropertyPermitRecord')
-      .map(({ sourceType: _sourceType, ...section }) => section);
+    const genericCandidates = listSections.filter((candidate) => candidate.sourceType !== 'Claim' && candidate.sourceType !== 'PropertyPermitRecord');
+    // One record kind across the generic sections means the canonical renderer for that kind applies, whatever this block's id is.
+    const genericKinds = new Set(genericCandidates.map((candidate) => RECORD_KIND_OF_SOURCE_TYPE[candidate.sourceType ?? ''] ?? null));
+    const genericKind = genericKinds.size === 1 ? [...genericKinds][0] : null;
+    const genericSections = genericCandidates.map(({ sourceType: _sourceType, ...section }) => section);
     if (genericSections.length > 0) {
       blocks.push({
         type: 'GROUPED_LIST',
         id: 'cross-domain-grouped-list',
+        ...(genericKind ? { recordKind: genericKind } : {}),
         title: 'Matching home records',
         sections: genericSections,
         actions: [],

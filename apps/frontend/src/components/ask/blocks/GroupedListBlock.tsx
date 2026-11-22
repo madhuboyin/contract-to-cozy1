@@ -1,7 +1,7 @@
 'use client';
 
 import { useContext, useState, type ComponentType } from 'react';
-import type { AskCollectionDescriptor, AskPresentationBlock } from '@/features/ask/types';
+import type { AskCollectionDescriptor, AskListRecordKind, AskPresentationBlock } from '@/features/ask/types';
 import { cn } from '@/lib/utils';
 import { formatLegacyAskMaintenanceItem } from '@/features/ask/presentationCompatibility';
 import { resolveGroupedListView, type GroupedListPresentationPreference } from '@/features/ask/adaptivePresentation';
@@ -908,7 +908,19 @@ const HOME_EVENT_DETAIL_BLOCK_IDS = new Set(['inventory-history', 'property-rece
 // ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (IW-PRES-014/015/019/022, FRD v1.72): a grouped list whose server declared a
 // shared pattern, and whose data fits it, renders through that pattern. The homeowner can switch it to the plain
 // list and back; the choice is kept with the result like the other view choices.
-export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
+// The canonical list id of each record kind whose domain renderer is selected by block id. A producer that declares the kind (`recordKind`) gets that renderer whatever its own block id is, so a
+// cross-domain answer with a generated id no longer falls to the generic list (UI review 2026-11-21, slice 2). Maintenance and documents are deliberately not mapped: their renderers need
+// paging and grouping metadata a generated list does not carry.
+const CANONICAL_LIST_ID_OF_RECORD_KIND: Partial<Record<AskListRecordKind, string>> = {
+  CLAIM: 'incident-claim-list', PERMIT: 'permit-tracker-permits', WARRANTY: 'warranty-results', INVENTORY_ITEM: 'inventory-results', HOME_EVENT: 'inventory-history',
+};
+export function withCanonicalListId<P extends { block: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }> }>(props: P): P {
+  const canonical = props.block.recordKind ? CANONICAL_LIST_ID_OF_RECORD_KIND[props.block.recordKind] : undefined;
+  return canonical && props.block.id !== canonical ? { ...props, block: { ...props.block, id: canonical } } : props;
+}
+
+export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (rawProps) => {
+  const props = withCanonicalListId(rawProps);
   const controls = useContext(ResultViewContext);
   const preference = controls?.view.groupedListModes[props.block.id] ?? 'AUTO';
   const resolved = resolveGroupedListPattern(props.block, preference);

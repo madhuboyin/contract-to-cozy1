@@ -43,6 +43,10 @@ export interface AskCollectionDescriptor {
   deliveryTruncated: boolean;
 }
 
+/** Mirrors the backend contract: the one presentation family an answer selects, and the kind of record a list carries (so its canonical renderer is chosen without reading a block id). */
+export type AskPresentationFamily = 'DIRECT_ANSWER' | 'ENTITY_LIST' | 'ANALYSIS' | 'COMPARISON' | 'CLARIFICATION' | 'BOUNDARY' | 'WORKFLOW';
+export type AskListRecordKind = 'INVENTORY_ITEM' | 'MAINTENANCE_TASK' | 'CLAIM' | 'PERMIT' | 'WARRANTY' | 'DOCUMENT' | 'HOME_EVENT';
+
 export interface AskGroupedListItemAction {
   id: string;
   label: string;
@@ -73,6 +77,8 @@ export interface AskPropertyBriefSummary {
 }
 export interface AskGroupedListItem {
   id: string;
+  /** Why this record is in the answer, in the homeowner's words. */
+  matchReason?: string | null;
   title: string;
   description?: string | null;
   condition?: string | null;
@@ -126,9 +132,9 @@ export type AskPresentationBlock =
     /** One entry per step, in order. Presence of an outline is what makes a TASK_GUIDE a stepped guide ("guide mode"). */
     outline?: AskTaskGuideOutlineEntry[];
   }
-  | { type: 'SUMMARY'; id: string; title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL'; actions: AskAction[]; chips?: AskAnswerChip[]; headline?: string; supportLine?: string; bullets?: Array<{ label?: string; body: string }>; propertyBrief?: AskPropertyBriefSummary }
+  | { type: 'SUMMARY'; id: string; title: string; body: string; presentationFamily?: AskPresentationFamily; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL'; actions: AskAction[]; chips?: AskAnswerChip[]; headline?: string; supportLine?: string; bullets?: Array<{ label?: string; body: string }>; propertyBrief?: AskPropertyBriefSummary }
   | { type: 'PROACTIVE_INSIGHT'; id: string; title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL'; triggerSource: string; actions: AskAction[] }
-  | { type: 'GROUPED_LIST'; id: string; title: string; description?: string | null; listDensity?: 'DENSE'; sections: Array<{ id: string; title: string; caption?: string | null; count: number; offset?: number; initialVisibleCount?: number; items: AskGroupedListItem[] }>; actions: AskAction[]; filters: AskGroupedListFilter[]; presentation?: AskGroupedListPresentation; collection?: AskCollectionDescriptor }
+  | { type: 'GROUPED_LIST'; id: string; title: string; description?: string | null; recordKind?: AskListRecordKind; listDensity?: 'DENSE'; sections: Array<{ id: string; title: string; caption?: string | null; count: number; offset?: number; initialVisibleCount?: number; items: AskGroupedListItem[] }>; actions: AskAction[]; filters: AskGroupedListFilter[]; presentation?: AskGroupedListPresentation; collection?: AskCollectionDescriptor }
   | { type: 'TABLE'; id: string; title: string; description?: string | null; preferredPresentation?: 'AUTO' | 'TABLE' | 'CARDS'; columns: Array<{ key: string; label: string }>; rows: Array<{ id: string; values: Record<string, string> }>; totalCount?: number; actions: AskAction[] }
   | { type: 'CAPABILITY_LIST'; id: string; title: string; description?: string | null; capabilities: Array<{ id: string; label: string; description: string; expectedOutput: string; href: string | null; inlineLaunch: { interactionType: 'CONVERSATION_CONTINUE'; operationId: string; message: string } | null; inlineBoundary: string; readiness: 'READY' | 'NEEDS_PROPERTY' | 'NEEDS_CONTEXT' | 'UNAVAILABLE' | 'AVAILABLE'; readinessLabel: string | null; readinessReasons: string[]; releaseStage: 'ACTIVE' | 'BETA' }> }
   | { type: 'EVIDENCE'; id: string; title: string; items: Array<{ label: string; source: string | null; observedAt: string | null; claim?: { targetBlockId: string; targetItemId: string | null; text: string } | null }> }

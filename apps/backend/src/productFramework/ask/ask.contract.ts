@@ -85,11 +85,21 @@ const AskSummaryBulletSchema = z.object({
   body: z.string().trim().min(1).max(240),
 });
 
+// UI review 2026-11-21 (slice 2): every answer selects ONE presentation family, so the client chooses a layout from the answer's meaning and not from the shape of its
+// data. A response is not a list merely because it contains a row.
+export const ASK_PRESENTATION_FAMILIES = ['DIRECT_ANSWER', 'ENTITY_LIST', 'ANALYSIS', 'COMPARISON', 'CLARIFICATION', 'BOUNDARY', 'WORKFLOW'] as const;
+export type AskPresentationFamily = (typeof ASK_PRESENTATION_FAMILIES)[number];
+// The kind of record a list carries, for lists that have a canonical domain renderer. Declared by the producer so the client never has to infer it from a block id.
+export const ASK_LIST_RECORD_KINDS = ['INVENTORY_ITEM', 'MAINTENANCE_TASK', 'CLAIM', 'PERMIT', 'WARRANTY', 'DOCUMENT', 'HOME_EVENT'] as const;
+export type AskListRecordKind = (typeof ASK_LIST_RECORD_KINDS)[number];
+
 const SummaryBlockSchema = z.object({
   type: z.literal('SUMMARY'),
   id: z.string(),
   title: z.string(),
   body: z.string(),
+  // The presentation family of the whole answer (see ASK_PRESENTATION_FAMILIES). Optional so existing producers are unchanged.
+  presentationFamily: z.enum(ASK_PRESENTATION_FAMILIES).optional(),
   tone: z.enum(['DEFAULT', 'POSITIVE', 'CAUTION', 'CRITICAL']).default('DEFAULT'),
   actions: z.array(AskActionSchema).max(3).default([]),
   // IW-PRES-013 (answer first): up to four number chips taken from the same records as the result. Optional so
@@ -187,6 +197,8 @@ const GroupedListItemSchema = z.object({
   status: z.string().nullable().optional(),
   href: z.string().nullable().optional(),
   entityType: z.string().trim().min(1).max(60).nullable().optional(),
+  // Why this record is in the answer, in the homeowner's words ("no manual on file"). Distinct from `description` (the next step) and `condition`.
+  matchReason: z.string().trim().min(1).max(200).nullable().optional(),
   // This row is the one place a photo or document can be attached to `entityType`/`id` (FRD 1.400); the composer offers the upload for it.
   evidenceTarget: z.boolean().optional(),
   // The entity's parent record, when the inline detail must re-read it through its parent (an inspection finding is
@@ -322,6 +334,8 @@ const GroupedListBlockSchema = z.object({
   id: z.string(),
   title: z.string(),
   description: z.string().nullable().optional(),
+  // The kind of record this list carries. When set, the client renders the canonical domain list for that kind whatever the block id is.
+  recordKind: z.enum(ASK_LIST_RECORD_KINDS).optional(),
   // Producer-owned density for factual/action rows that should scan like a conversational list rather than cards.
   listDensity: z.literal('DENSE').optional(),
   sections: z.array(z.object({
