@@ -1277,7 +1277,12 @@ function documentsJourneyExecution(state: DocumentsJourneyState, options: { empt
     question: state.revision === 1 ? 'Show my documents journey' : 'Refined documents',
     viewState: { resultId: 'documents-journey-result', domainScopePhrase: state.kind, dateScopePhrase: null, statusFilter: state.verification, selectedTaskId: null, revision: state.revision },
     blocks: [
-      { type: 'SUMMARY', id: 'document-lookup-summary', title, body: 'Nothing recorded needs review.', tone: 'DEFAULT', actions: [{ id: 'open-documents', label: 'Open Home Records', href, style: 'SECONDARY' }] },
+      // A filter that matches nothing is its own answer in the producer (documents.handler.ts, DOCUMENT_FILTER_NO_MATCH): it says so and keeps the way back.
+      matched.length === 0 && isFiltered
+        ? { type: 'SUMMARY', id: 'document-lookup-summary', title: 'No recorded documents match these filters', headline: 'No documents match these filters.',
+          supportLine: `This home has ${DOCUMENTS_JOURNEY_ITEMS.length} recorded documents. Widen or clear a filter to see them.`,
+          body: `This home has ${DOCUMENTS_JOURNEY_ITEMS.length} recorded documents, but none match the selected filters.`, tone: 'DEFAULT', actions: [] }
+        : { type: 'SUMMARY', id: 'document-lookup-summary', title, body: 'Nothing recorded needs review.', tone: 'DEFAULT', actions: [{ id: 'open-documents', label: 'Open Home Records', href, style: 'SECONDARY' }] },
       { type: 'GROUPED_LIST', id: 'document-lookup-groups', title: 'Documents by type', filters: chips,
         sections: matched.length === 0 ? [{ id: 'documents', title: 'Documents', count: 0, items: [] }] : [...grouped.entries()].sort(([left], [right]) => DOCUMENTS_KIND_LABELS[left].localeCompare(DOCUMENTS_KIND_LABELS[right])).map(([kind, items]) => ({
           id: `document-lookup-${kind.toLowerCase()}`, title: DOCUMENTS_KIND_LABELS[kind], count: items.length,
@@ -2870,6 +2875,9 @@ function execution(kind: 'refrigerator' | 'refinance', captured = false) {
 // The calm presentation is the default (FRD v1.111). Every spec that checks the previous presentation pins the setting off
 // for each page load; `calm.spec.ts` asks for the default instead.
 export async function installAskContext(context: BrowserContext, options: { calm?: 'legacy' | 'default' } = {}) {
+  // The cookie-consent dialog (src/components/system/CookieConsentBanner.tsx) appears on a first visit. A spec that asserts "no dialog opened" would otherwise count it, and it covers the page's
+  // lower edge. Every Ask acceptance run starts as a returning visitor who has already chosen.
+  await context.addInitScript(() => { try { window.localStorage.setItem('c2c_consent_v1', JSON.stringify({ decided: true, analytics: false })); } catch { /* storage unavailable */ } });
   if ((options.calm ?? 'legacy') === 'legacy') {
     await context.addInitScript(() => { try { window.localStorage.setItem('ctc:ask-calm-answers', '0'); } catch { /* storage unavailable */ } });
   }
@@ -3090,6 +3098,8 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
   await page.route(`${apiOrigin}/api/properties/${propertyId}/inventory/rooms/room-property-summary/insights`, (route) => fulfill(route, { success: true, data: {
     room: { id: 'room-property-summary', name: 'Kitchen', type: 'KITCHEN', profile: null },
     stats: { itemCount: 8, replacementTotalCents: 1250000, coverageGapsCount: 1, appliancesCount: 4, docsLinkedCount: 3 },
+    // The room insights DTO always carries its items (first 20) and whether more exist (roomInsights.service.ts); the room detail reads them unguarded.
+    items: [{ id: 'item-room-dishwasher', name: 'Dishwasher', category: 'APPLIANCE', condition: 'GOOD' }, { id: 'item-room-range', name: 'Range', category: 'APPLIANCE', condition: null }], itemsTruncated: false,
     healthScore: { score: 82, band: 'GOOD', label: 'Good', evaluationState: 'SCORED', badges: [], improvements: [] },
     kitchen: { missingAppliances: [], quickWins: [] },
   } }));
@@ -3134,10 +3144,10 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
     priorityList: {
       state: 'AVAILABLE', rankingPolicyVersion: 'acceptance-v1', generatedAt: new Date(FIXTURE_NOW).toISOString(), truncated: false, href: `/dashboard?propertyId=${propertyId}`,
       items: [options.heatAttention
-        ? { homeActionId: 'heat-action-1', title: 'Multi-day heat risk ahead preparation', askQuestion: 'How should I prepare for the multi-day heat risk at this home?', askCategoryId: 'PROTECT', askCategoryLabel: 'Protect', subject: { kind: 'CHECKLIST', id: 'heat-checklist-1', label: 'Multi-day heat preparation' }, consumerPriority: 'PLAN_SOON', comparativeReasonCodes: ['SAFETY_IMPACT'], confidenceLabel: 'HIGH', deadlineAt: '2026-08-20T12:00:00.000Z', cta: { label: 'Open preparation checklist', href: `/dashboard/properties/${propertyId}/environment-report/preparation?insightId=heat-1` }, watchState: null, suppressed: false, completed: false, unavailable: false, stale: false }
+        ? { homeActionId: 'heat-action-1', title: 'Multi-day heat risk ahead preparation', askQuestion: 'How should I prepare for the multi-day heat risk at this home?', askCategoryId: 'PROTECT', askCategoryLabel: 'Protect', subject: { kind: 'CHECKLIST', id: 'heat-checklist-1', label: 'Multi-day heat preparation' }, rawPriority: 'SOON', consumerPriority: 'PLAN_SOON', comparativeReasonCodes: ['SAFETY_IMPACT'], confidenceLabel: 'HIGH', deadlineAt: '2026-08-20T12:00:00.000Z', cta: { label: 'Open preparation checklist', href: `/dashboard/properties/${propertyId}/environment-report/preparation?insightId=heat-1` }, watchState: null, suppressed: false, completed: false, unavailable: false, stale: false }
         : options.duplicateRefrigerator
-          ? { homeActionId: 'refrigerator-action-1', title: 'Plan ahead for Refrigerator', askQuestion: 'What should I do next for “Plan ahead for Refrigerator”?', askCategoryId: 'MAINTAIN', askCategoryLabel: 'Maintain', subject: { kind: 'INVENTORY_ITEM', id: 'refrigerator-1', label: 'Refrigerator' }, consumerPriority: 'PLAN_SOON', comparativeReasonCodes: ['COST_AVOIDANCE'], confidenceLabel: 'HIGH', deadlineAt: '2026-09-01T12:00:00.000Z', cta: { label: 'Review action', href: '/dashboard/actions/refrigerator-action-1' }, watchState: null, suppressed: false, completed: false, unavailable: false, stale: false }
-          : { homeActionId: 'action-1', title: 'Schedule HVAC service', askQuestion: 'What should I do next for “Schedule HVAC service”?', askCategoryId: 'MAINTAIN', askCategoryLabel: 'Maintain', subject: { kind: 'WORK_ITEM', id: 'hvac-service-1', label: 'HVAC service' }, consumerPriority: 'PLAN_SOON', comparativeReasonCodes: ['COST_AVOIDANCE'], confidenceLabel: 'HIGH', deadlineAt: '2026-09-01T12:00:00.000Z', cta: { label: 'Review action', href: '/dashboard/actions/action-1' }, watchState: null, suppressed: false, completed: false, unavailable: false, stale: false }],
+          ? { homeActionId: 'refrigerator-action-1', title: 'Plan ahead for Refrigerator', askQuestion: 'What should I do next for “Plan ahead for Refrigerator”?', askCategoryId: 'MAINTAIN', askCategoryLabel: 'Maintain', subject: { kind: 'INVENTORY_ITEM', id: 'refrigerator-1', label: 'Refrigerator' }, rawPriority: 'SOON', consumerPriority: 'PLAN_SOON', comparativeReasonCodes: ['COST_AVOIDANCE'], confidenceLabel: 'HIGH', deadlineAt: '2026-09-01T12:00:00.000Z', cta: { label: 'Review action', href: '/dashboard/actions/refrigerator-action-1' }, watchState: null, suppressed: false, completed: false, unavailable: false, stale: false }
+          : { homeActionId: 'action-1', title: 'Schedule HVAC service', askQuestion: 'What should I do next for “Schedule HVAC service”?', askCategoryId: 'MAINTAIN', askCategoryLabel: 'Maintain', subject: { kind: 'WORK_ITEM', id: 'hvac-service-1', label: 'HVAC service' }, rawPriority: 'SOON', consumerPriority: 'PLAN_SOON', comparativeReasonCodes: ['COST_AVOIDANCE'], confidenceLabel: 'HIGH', deadlineAt: '2026-09-01T12:00:00.000Z', cta: { label: 'Review action', href: '/dashboard/actions/action-1' }, watchState: null, suppressed: false, completed: false, unavailable: false, stale: false }],
     },
     changes: { state: 'AVAILABLE', windowDays: 30, items: [{ id: 'change-1', source: 'Home action', summary: 'Home action updated.', materiality: 'MEANINGFUL', detectedAt: new Date(FIXTURE_NOW).toISOString(), effectiveAt: null }], href: `/dashboard/ask?propertyId=${propertyId}` },
     decisions: options.noDecision
@@ -3542,7 +3552,7 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
       await fulfill(route, { success: true, data: response }, 201);
       return;
     }
-    if (/show next maintenance results/i.test(body.message)) {
+    if (/show next (maintenance )?results/i.test(body.message)) {
       const response = maintenanceExecution();
       response.executionId = 'execution-maintenance-page-2';
       response.question = body.message;

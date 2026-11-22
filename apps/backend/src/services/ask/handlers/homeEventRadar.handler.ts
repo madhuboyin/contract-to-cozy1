@@ -541,7 +541,7 @@ export function radarFeedbackConfirmation(detail: Record<string, any>, input: z.
     fields: [{ label: 'Event', value: String(detail.title) }],
     editableFields: [
       { key: 'feedbackType', label: 'Reason', type: 'SELECT' as const, value: input.feedbackType ?? '', options: [...RADAR_FEEDBACK_OPTIONS] },
-      { key: 'comment', label: `Comment (optional, up to ${RADAR_FEEDBACK_COMMENT_MAX_LENGTH} characters)`, type: 'TEXTAREA' as const, value: input.comment ?? '' },
+      { key: 'comment', label: `Comment (optional, up to ${RADAR_FEEDBACK_COMMENT_MAX_LENGTH} characters)`, type: 'TEXTAREA' as const, value: input.comment ?? '', optional: true },
     ],
     confirmLabel: 'Send feedback',
     consentText: 'I want to send this feedback to Home Event Radar.',

@@ -236,7 +236,7 @@ export function ConfirmationCard({ executionId, confirmation, onCompleted, autoF
     setEditValues(Object.fromEntries(confirmation.editableFields.map((field) => [field.key, field.value])));
     // A field with no value yet (e.g. a reschedule with no date chosen) opens
     // straight into its picker instead of waiting for an "Edit" click.
-    setEditingKey(confirmation.editableFields.find((field) => !field.value)?.key ?? null); setEditError(null);
+    setEditingKey(confirmation.editableFields.find((field) => !field.optional && !field.value)?.key ?? null); setEditError(null);
     // External review finding (CONF-003): editing must invalidate the
     // previous confirmation's consent, not just its version/idempotency
     // key. Without this, a homeowner who had already checked the consent
@@ -354,7 +354,7 @@ export function ConfirmationCard({ executionId, confirmation, onCompleted, autoF
       {editError && <p className="mt-2 text-sm text-red-700" role="alert">{editError}</p>}
       <label className={calm ? 'flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200/90 bg-slate-50/70 px-3 py-2.5 text-sm text-slate-700 transition-colors hover:border-teal-300/80' : 'mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-violet-200 bg-white p-3 text-sm text-slate-700'}><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-700" /><span>{confirmation.consentText}</span></label>
       {expired && <p className="mt-3 text-sm text-amber-700">This review expired. Ask again to use current settings.</p>}{error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3"><button type="button" disabled={saving} onClick={() => void cancel()} className="min-h-10 rounded-xl px-3.5 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Cancel</button><button type="button" disabled={!consent || saving || expired || Boolean(editingKey) || confirmation.editableFields.some((field) => !field.value)} onClick={() => void confirm()} className="min-h-10 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? 'Working…' : confirmation.confirmLabel}</button></div>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3"><button type="button" disabled={saving} onClick={() => void cancel()} className="min-h-10 rounded-xl px-3.5 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Cancel</button><button type="button" disabled={!consent || saving || expired || Boolean(editingKey) || confirmation.editableFields.some((field) => !field.optional && !field.value)} onClick={() => void confirm()} className="min-h-10 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? 'Working…' : confirmation.confirmLabel}</button></div>
     </section>
   );
 }

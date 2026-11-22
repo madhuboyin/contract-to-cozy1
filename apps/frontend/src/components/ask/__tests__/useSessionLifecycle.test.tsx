@@ -204,8 +204,21 @@ describe('back and forward', () => {
     expect(fns.setExecutions).toHaveBeenLastCalledWith([exec('e9', { sessionId: 'sOld' })]);
   });
 
-  it('to an address with no session starts a fresh one', () => {
+  it('to an address with no session keeps a conversation that has no answers yet, and the draft in its composer', () => {
+    // Closing Explore with Cozy goes Back to the bare Ask address; a draft typed before opening it must survive.
     const { fns, refs } = setup({ mode: 'page' });
+    const before = refs.activeSessionRef.current;
+    fns.setSessionId.mockClear(); fns.setInput.mockClear(); fns.setExecutions.mockClear();
+    window.history.replaceState(null, '', '/dashboard/ask');
+    pop();
+    expect(refs.activeSessionRef.current).toBe(before);
+    expect(fns.setSessionId).not.toHaveBeenCalled();
+    expect(fns.setInput).not.toHaveBeenCalled();
+    expect(fns.setExecutions).not.toHaveBeenCalled();
+  });
+
+  it('to an address with no session starts a fresh one when the current conversation has answers', () => {
+    const { fns, refs } = setup({ mode: 'page', executions: [exec('e1')] });
     const before = refs.activeSessionRef.current;
     window.history.replaceState(null, '', '/dashboard/ask');
     refs.activeSessionRef.current = 'something';

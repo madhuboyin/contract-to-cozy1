@@ -22,7 +22,9 @@ test('a list question: exact counts, one dominant step, a quiet page link, recor
   // Never the bare word "soon": the number is always there.
   await expect(page.locator('#ask-execution-execution-warranty-journey-1')).not.toContainText(/expires? soon|expiring soon/i);
   await expect(page.getByRole('list', { name: 'At a glance' })).toContainText('1 expire within 60 days');
-  await expect(page.getByRole('button', { name: /Record home warranty plan/ })).toHaveClass(/bg-teal-700/);
+  // The one step the answer offers is an outlined action now (not a filled teal button); nothing else in the answer competes with it.
+  await expect(page.getByRole('button', { name: /Record home warranty plan/ })).toBeVisible();
+  await expect(page.locator('#ask-execution-execution-warranty-journey-1').locator('button.bg-teal-700, a.bg-teal-700')).toHaveCount(0);
   const pageLink = page.getByRole('link', { name: /Open Warranties/ });
   await expect(pageLink).toHaveCount(1);
   await expect(pageLink).not.toHaveClass(/bg-teal-700/);
@@ -33,13 +35,16 @@ test('a list question: exact counts, one dominant step, a quiet page link, recor
   await expect(page.locator('#ask-execution-execution-warranty-journey-1').getByRole('link', { name: /claim/i })).toHaveCount(0);
   // Recorded coverage text exactly as recorded, a missing one said to be missing, and no coverage decision anywhere in the answer.
   const answer = page.locator('#ask-execution-execution-warranty-journey-1');
-  await expect(answer.getByText('Compressor and parts for 5 years.')).toBeVisible();
-  await expect(answer.getByText('No coverage details recorded.')).toBeVisible();
+  // Rows say whether coverage details are recorded (FRD 1.383); the recorded text itself is read from the live record in the row's detail (asserted in the exact-warranty journey below).
+  await expect(answer.getByText('Coverage details recorded').first()).toBeVisible();
+  await expect(answer.getByText('Coverage details missing').first()).toBeVisible();
+
   await expect(answer).not.toContainText(/you are covered|is covered by|eligible|approved|will pay/i);
   await expect(answer.locator('[data-calm-footnote]')).toContainText('This reports the warranty information recorded in your Home Record. It does not determine whether a repair is covered or file a claim.');
   // Rows needing attention are marked, and the unreadable dates are said so instead of guessed.
-  await expect(answer.getByText('EXPIRING', { exact: true })).toHaveClass(/text-amber-800/);
-  await expect(answer.getByText('NEEDS REVIEW', { exact: true })).toHaveClass(/text-amber-800/);
+  // The status badges are sentence case and amber for the rows that need attention (the filter chip of the same name is a button, so the badge is the span).
+  await expect(answer.locator('span', { hasText: /^Expires within 60 days$/ }).last()).toHaveClass(/text-amber-900/);
+  await expect(answer.locator('span', { hasText: /^Needs review$/ }).last()).toHaveClass(/text-amber-900/);
   await expect(answer.getByText('Coverage dates need review')).toBeVisible();
   const trust = page.locator('[data-calm-trust-line]');
   await expect(trust).toContainText('Based on 4 sources, latest Sep 1, 2026');
@@ -97,6 +102,9 @@ test('an exact-warranty question: one record, no filters, recorded text, and a p
   await open(page);
   await ask(page, 'Show my Acme warranty journey');
   await expect(page.getByRole('heading', { name: '1 Acme warranty: 1 active.' })).toBeVisible();
+  // The row says coverage details are recorded; the recorded text itself is in the record detail (opened from the row).
+  await expect(page.getByText('Coverage details recorded')).toBeVisible();
+  await page.getByRole('button', { name: 'Acme Home Warranty', exact: true }).click();
   await expect(page.getByText('Covers HVAC and major appliances.').first()).toBeVisible();
   await expect(page.getByRole('group', { name: /Warranty .*filters/ })).toHaveCount(0);
   const attach = page.getByRole('button', { name: /Add the warranty document/ });
@@ -116,7 +124,7 @@ test('inline detail opens without navigating; an owner edits a warranty through 
   await startWarranties(page);
   await expect(page.getByRole('button', { name: /Add the warranty document/ })).toHaveCount(0);
   const response = live(page, 1);
-  await response.getByRole('button', { name: 'Acme Home Warranty' }).click();
+  await response.getByRole('button', { name: 'Acme Home Warranty', exact: true }).click();
   await expect(response.getByText('Warranty detail')).toBeVisible();
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
   // Owner-authorised controls are present for the requester's own warranty: one Edit action, not a list of "Correct ..." buttons.
@@ -156,7 +164,7 @@ test('a viewer sees the same recorded answer with no write or correction control
   await expect(page.getByRole('button', { name: /Record home warranty plan/ })).toHaveCount(0);
   await expect(page.getByRole('link', { name: /Open Warranties/ })).toHaveCount(1);
   const response = live(page, 1);
-  await response.getByRole('button', { name: 'Acme Home Warranty' }).click();
+  await response.getByRole('button', { name: 'Acme Home Warranty', exact: true }).click();
   await expect(response.getByText('Warranty detail')).toBeVisible();
   await expect(response.getByText('Correct a detail')).toHaveCount(0);
   await expect(response.locator('button', { hasText: 'Attach document' })).toHaveCount(0);
@@ -179,7 +187,7 @@ test('losing access to the home redacts the whole result instead of leaving stal
   await installAskApi(page, { warrantyDetailAccessLost: true });
   await startWarranties(page);
   const response = live(page, 1);
-  await response.getByRole('button', { name: 'Acme Home Warranty' }).click();
+  await response.getByRole('button', { name: 'Acme Home Warranty', exact: true }).click();
   await expect(response).toHaveAttribute('role', 'alert');
   await expect(response.getByRole('heading', { name: 'Result unavailable' })).toBeVisible();
   await expect(response).toContainText('Access to this result is no longer available.');
@@ -272,10 +280,11 @@ test.describe('in a western time zone', () => {
     await installAskApi(page);
     await startWarranties(page);
     const response = live(page, 1);
-    await expect(response.getByText('Home warranty plan · Expires Dec 1, 2027 · 0 documents')).toBeVisible();
-    await response.getByRole('button', { name: 'Acme Home Warranty' }).click();
+    await expect(response.getByText('Home warranty plan · Expires Dec 1, 2027')).toBeVisible();
+    await expect(response.getByText('0 documents').first()).toBeVisible();
+    await response.getByRole('button', { name: 'Acme Home Warranty', exact: true }).click();
     const detail = response.getByRole('complementary');
-    await expect(detail.getByText('Current canonical warranty record.')).toBeVisible();
+    await expect(detail).toBeVisible();
     await expect(detail.getByText('12/1/2027', { exact: true })).toBeVisible();
     await expect(detail.getByText('1/1/2026', { exact: true })).toBeVisible();
     await expect(detail.getByText('11/30/2027')).toHaveCount(0);

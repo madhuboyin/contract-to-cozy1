@@ -16,15 +16,14 @@ test('ACUI-001/002/003: the launch names the home and its state, each entry can 
   // ACUI-001: home identity, a state headline, and a placeholder that names the home.
   // The address is not repeated in the content: it is in the property selector and named by the composer placeholder below.
   await expect(page.locator('[data-calm-property]')).toHaveCount(0);
-  await expect(page.locator('[data-calm-headline="state"]')).toHaveText(/^Nothing urgent · 1 to plan soon/);
-  await expect(page.locator('[data-calm-headline="state"]')).toContainText('plan soon');
+  await expect(page.locator('[data-calm-headline="state"]')).toHaveText('1 item needs attention');
   await expect(page.getByPlaceholder('Ask anything about Acceptance Home…')).toBeVisible();
-  await expect(page.getByRole('list', { name: 'Needs your attention' }).locator('[data-strip-chip]')).not.toHaveCount(0);
-  await expect(page.getByRole('list', { name: 'Needs your attention' }).locator('[data-strip-chip]')).toHaveCount(2);
+  await expect(page.getByRole('list', { name: 'Home priorities' }).locator('[data-strip-chip]')).not.toHaveCount(0);
+  await expect(page.getByRole('list', { name: 'Home priorities' }).locator('[data-strip-chip]')).toHaveCount(2);
 
   // Prototype-parity visual contract: the desktop cards are side by side,
   // precede the large composer, and use a bold sans-serif headline.
-  const attentionCards = page.getByRole('list', { name: 'Needs your attention' }).locator(':scope > li');
+  const attentionCards = page.getByRole('list', { name: 'Home priorities' }).locator(':scope > li');
   const firstCard = await attentionCards.nth(0).boundingBox();
   const secondCard = await attentionCards.nth(1).boundingBox();
   const composerBox = await composer(page).locator('..').boundingBox();
@@ -33,13 +32,14 @@ test('ACUI-001/002/003: the launch names the home and its state, each entry can 
   expect(firstCard && composerBox && firstCard.y + firstCard.height < composerBox.y).toBe(true);
   // The Google-like composer stays as wide as the cards while using a compact single-line pill.
   expect(composerBox && composerBox.height >= 56 && composerBox.height <= 72).toBe(true);
-  const cardsBox = await page.getByRole('list', { name: 'Needs your attention' }).boundingBox();
+  const cardsBox = await page.getByRole('list', { name: 'Home priorities' }).boundingBox();
   expect(cardsBox && composerBox && Math.abs(cardsBox.width - composerBox.width) < 2 && Math.abs(cardsBox.x - composerBox.x) < 2).toBe(true);
   // The summary is one line above the cards, and the suggestions stay on one row.
   const headlineBox = await page.locator('[data-calm-headline="state"]').boundingBox();
   expect(headlineBox && headlineBox.height < 48 && cardsBox && headlineBox.y + headlineBox.height + 24 <= cardsBox.y).toBe(true);
   const suggestions = await page.getByRole('list', { name: 'Suggestions' }).evaluate((el) => Array.from(el.children).map((child) => Math.round(child.getBoundingClientRect().top)));
-  expect(new Set(suggestions).size).toBe(1);
+  // Four suggestion pills now wrap onto at most two rows (a long "Continue: …" pill leads), never three.
+  expect(new Set(suggestions).size).toBeLessThanOrEqual(2);
   await expect(page.locator('[data-calm-headline="state"]')).toHaveCSS('font-weight', '600');
   await expect(page).toHaveScreenshot('ask-cozy-prototype-desktop.png', { animations: 'disabled', fullPage: true, mask: [page.locator('[data-calm-date]')] });
 
@@ -49,7 +49,7 @@ test('ACUI-001/002/003: the launch names the home and its state, each entry can 
   await expect(why).toHaveAttribute('aria-expanded', 'false');
   await why.click();
   await expect(why).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.locator('[data-why-panel]').first()).toContainText('ranked “plan soon”');
+  await expect(page.locator('[data-why-panel]').first()).toContainText('It is in “What needs attention” on your Home dashboard.');
   await expect(composer(page)).toHaveValue('half-typed question');
   await why.click();
   await expect(page.locator('[data-why-panel]').first()).toBeHidden();
@@ -143,11 +143,11 @@ test('ACUI-006: a fresh landing puts unfinished work first and keeps history one
   await expect(nav).toHaveCount(0);
   await toggle.click();
   await expect(nav.getByPlaceholder('Search conversations')).toBeVisible();
-  // History is a secondary drawer; closing it leaves the prototype navigation in place.
+  // History is a docked, secondary panel; its own control closes it and the rail's actions stay in place.
   await nav.getByPlaceholder('Search conversations').fill('boiler');
-  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Hide history', exact: true }).click();
   await expect(nav).toHaveCount(0);
-  await expect(page.getByRole('navigation', { name: 'Ask Cozy sections' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Conversation actions' })).toBeVisible();
   await page.reload();
   await expect(nav).toHaveCount(0);
   await unfinished.getByRole('button', { name: 'Dismiss' }).click();
@@ -160,7 +160,7 @@ test('ACUI-001..006 on a phone: nothing scrolls sideways, the explanation, trust
   await open(page);
   await expect(page.locator('[data-calm-headline="state"]')).toBeVisible();
   await noSidewaysScroll(page);
-  const mobileCards = page.getByRole('list', { name: 'Needs your attention' }).locator(':scope > li');
+  const mobileCards = page.getByRole('list', { name: 'Home priorities' }).locator(':scope > li');
   const mobileFirst = await mobileCards.nth(0).boundingBox();
   const mobileSecond = await mobileCards.nth(1).boundingBox();
   expect(mobileFirst && mobileSecond && mobileSecond.y > mobileFirst.y + mobileFirst.height).toBe(true);
@@ -168,11 +168,8 @@ test('ACUI-001..006 on a phone: nothing scrolls sideways, the explanation, trust
   await page.getByRole('button', { name: 'Why this appeared' }).first().click();
   await expect(page.locator('[data-why-panel]').first()).toBeVisible();
   await noSidewaysScroll(page);
-  // The desktop rail does not exist here; the header button opens the sheet.
+  // The desktop rail does not exist here. Reaching history on a phone is the parked test below (open decision W-3).
   await expect(page.locator('#ask-history-toggle')).toBeHidden();
-  await page.getByRole('button', { name: 'Open conversation history' }).click();
-  await expect(page.getByRole('dialog', { name: 'Ask Cozy conversations' }).getByPlaceholder('Search conversations')).toBeVisible();
-  await page.keyboard.press('Escape');
 
   await ask(page, 'Show my maintenance tasks with sources');
   await expect(page.locator('[data-calm-trust-line]')).toBeVisible();
@@ -181,6 +178,17 @@ test('ACUI-001..006 on a phone: nothing scrolls sideways, the explanation, trust
   const box = await create.boundingBox();
   expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
   await noSidewaysScroll(page);
+});
+
+// OPEN DECISION W-3: the calm shell hides the header (no top bar, owner direction 2026-10-20), and that header held the only phone button that opens
+// the conversation history sheet, so on a phone history cannot be reached from the landing. Un-fixme once the owner picks where it lives.
+test.fixme('on a phone, history is reachable and opens the existing sheet', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page, { recentSessions: true });
+  await open(page);
+  await page.getByRole('button', { name: /history/i }).first().click();
+  await expect(page.getByRole('dialog', { name: 'Ask Cozy conversations' }).getByPlaceholder('Search conversations')).toBeVisible();
+  await page.keyboard.press('Escape');
 });
 
 test('accessibility: keyboard reaches and operates the explanation, the status region announces the answer, and controls have names', async ({ page }) => {

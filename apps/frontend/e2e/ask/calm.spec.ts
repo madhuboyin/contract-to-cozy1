@@ -18,8 +18,11 @@ test('calm landing: greeting, composer and one row of suggestions, and no helper
   await expect(page.getByRole('heading', { name: 'Popular ways to use Ask Cozy' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'For your attention' })).toHaveCount(0);
   await expect(page.locator('[data-calm-landing]')).toBeVisible();
-  await expect(page.getByRole('list', { name: 'Needs your attention' }).getByRole('button', { name: /to plan soon/ })).toBeVisible();
-  await expect(page.getByRole('list', { name: 'Needs your attention' }).getByRole('button', { name: /to plan soon/ })).toContainText('Schedule HVAC service');
+  // The landing's priorities are two entries (what needs attention, and plan ahead) in one list; the first names the top item.
+  const priorities = page.getByRole('list', { name: 'Home priorities' });
+  await expect(page.getByRole('heading', { level: 2, name: '1 item needs attention' })).toBeVisible();
+  await expect(priorities.getByRole('button', { name: /^What needs attention/ })).toContainText('Schedule HVAC service');
+  await expect(priorities.getByRole('button', { name: /^Plan ahead/ })).toContainText('Nothing to plan right now.');
   // Shell parity (1d3194ec): the calm landing no longer carries the capability-explorer chip.
   await expect(page.getByRole('button', { name: /More ideas/ })).toHaveCount(0);
   await expect(page.getByText('Top priority')).toHaveCount(0);
@@ -31,11 +34,11 @@ test('calm landing: greeting, composer and one row of suggestions, and no helper
   await expect(conversationNav.getByText('Your home assistant')).toHaveCount(0);
   await expect(conversationNav.getByText(/navigation remains available above/)).toHaveCount(0);
   await expect(conversationNav.getByPlaceholder('Search conversations')).toBeVisible();
-  // History is a secondary surface (shell parity): close it before using the landing.
-  await page.keyboard.press('Escape');
+  // History is a docked, secondary surface: its own "Hide history" control closes it before using the landing (Escape no longer does).
+  await page.getByRole('button', { name: 'Hide history', exact: true }).click();
   await expect(conversationNav).toHaveCount(0);
 
-  const chip = page.getByRole('list', { name: 'Needs your attention' }).getByRole('button').first();
+  const chip = priorities.getByRole('button', { name: /^What needs attention/ });
   await chip.click();
   await expect.poll(() => api.executionBodies.length).toBe(1);
 });
@@ -98,9 +101,10 @@ test('calm desktop: no second title band, the status dot sits in the rail, and t
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   await expect(page.getByRole('heading', { level: 1, name: 'Ask Cozy' })).toHaveCount(1);
-  // The shell header (brand + home selector) is the one visible band; the workspace's own title header stays hidden.
-  await expect(page.getByRole('banner', { name: 'Ask Cozy header' }).or(page.locator('header[aria-label="Ask Cozy header"]'))).toHaveCount(1);
+  // Ask has no title band at all (owner direction 2026-10-20: no top navigation bar; the left rail carries the actions): no banner, and the workspace's own title header stays hidden.
+  await expect(page.getByRole('banner')).toHaveCount(0);
   await expect(page.locator('header:visible').filter({ hasText: 'Conversations' })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Conversation actions' })).toBeVisible();
 });
 
 test('?calm=0 returns to the previous presentation and is remembered', async ({ page }) => {
@@ -220,21 +224,22 @@ test('with ?calm=0 there is no pending turn: the previous behavior is kept', asy
   await expect(page.getByRole('heading', { name: 'Popular ways to use Ask Cozy' })).toBeVisible();
 });
 
-test('history drawer (ACUI-006): primary navigation stays in place while History opens and closes as a secondary surface', async ({ page }) => {
+test('history (ACUI-006): the left rail stays in place while History opens and closes as a docked, secondary surface', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   const nav = page.getByRole('navigation', { name: 'Ask Cozy conversations' });
-  const toggle = page.locator('#ask-history-toggle');
-  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  const actions = page.getByRole('navigation', { name: 'Conversation actions' });
   await expect(nav).toHaveCount(0);
-  await toggle.click();
+  await expect(actions).toBeVisible();
+  await page.getByRole('button', { name: 'History', exact: true }).click();
   await expect(nav).toBeVisible();
-  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-  await page.keyboard.press('Escape');
+  const hide = page.getByRole('button', { name: 'Hide history', exact: true });
+  await expect(hide).toHaveAttribute('aria-expanded', 'true');
+  await hide.click();
   await expect(nav).toHaveCount(0);
-  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  // The prototype navigation remains present rather than being replaced by history.
-  await expect(page.getByRole('navigation', { name: 'Ask Cozy sections' })).toBeVisible();
+  // The rail's own actions remain rather than being replaced by history, and there is no separate top navigation (owner direction 2026-10-20).
+  await expect(actions).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Ask Cozy sections' })).toHaveCount(0);
   await page.reload();
   await expect(nav).toHaveCount(0);
 });

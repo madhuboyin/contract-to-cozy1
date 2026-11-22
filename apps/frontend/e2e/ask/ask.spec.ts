@@ -320,7 +320,7 @@ test('a contributor corrects an inventory item purchase cost inline through the 
 test('a contributor renames a room inline through the TEXT field', async ({ page }) => {
   const api = await installAskApi(page);
   await correctionFlow(page, api, {
-    block: 'Rooms', recordButton: 'Kitchen', detailText: 'Good · 82/100', actionLabel: /^Rename room/,
+    block: 'Rooms', recordButton: 'Kitchen', detailText: 'Kitchen · 8 recorded items', actionLabel: /^Rename room/,
     actionMessage: 'Rename this room.', entityType: 'INVENTORY_ROOM', entityId: 'room-property-summary',
     confirmationTitle: 'Rename "Kitchen"?', fieldLabel: 'New room name', newValue: 'Chef kitchen', confirmLabel: 'Save room name',
     consentText: /I authorize this rename of the shared home record/, receiptTitle: 'Room renamed',
@@ -330,7 +330,7 @@ test('a contributor renames a room inline through the TEXT field', async ({ page
 test('a contributor changes a room type inline through a dropdown', async ({ page }) => {
   const api = await installAskApi(page);
   await correctionFlow(page, api, {
-    block: 'Rooms', recordButton: 'Kitchen', detailText: 'Good · 82/100', actionLabel: /^Change room type/,
+    block: 'Rooms', recordButton: 'Kitchen', detailText: 'Kitchen · 8 recorded items', actionLabel: /^Change room type/,
     actionMessage: 'Change the type of this room.', entityType: 'INVENTORY_ROOM', entityId: 'room-property-summary', select: true,
     confirmationTitle: 'Change the type of "Kitchen"?', fieldLabel: 'New type', newValue: 'OFFICE', shownValue: 'OFFICE', confirmLabel: 'Save type',
     consentText: /I authorize this type change to the shared home record/, receiptTitle: 'Room updated',
@@ -340,7 +340,7 @@ test('a contributor changes a room type inline through a dropdown', async ({ pag
 test('a contributor changes a room floor level inline through the TEXT field', async ({ page }) => {
   const api = await installAskApi(page);
   await correctionFlow(page, api, {
-    block: 'Rooms', recordButton: 'Kitchen', detailText: 'Good · 82/100', actionLabel: /^Change floor level/,
+    block: 'Rooms', recordButton: 'Kitchen', detailText: 'Kitchen · 8 recorded items', actionLabel: /^Change floor level/,
     actionMessage: 'Change the floor level of this room.', entityType: 'INVENTORY_ROOM', entityId: 'room-property-summary',
     confirmationTitle: 'Change the floor level of "Kitchen"?', fieldLabel: 'New floor level', newValue: '-1', confirmLabel: 'Save floor level',
     consentText: /I authorize this floor level change to the shared home record/, receiptTitle: 'Room updated',
@@ -576,8 +576,10 @@ test('Property Summary rooms open canonical detail inline with the full Rooms co
   await expect(response.getByRole('link', { name: /Open Rooms/ })).toHaveAttribute('href', new RegExp(`^/dashboard/properties/${propertyId}/rooms\\?backTo=`));
 
   await response.getByRole('button', { name: 'Kitchen' }).click();
-  await expect(response.getByText('Good · 82/100')).toBeVisible();
-  await expect(response.getByText('$12,500')).toBeVisible();
+  await expect(response.getByText('Kitchen · 8 recorded items')).toBeVisible();
+  // The detail lists the room's own items (the replacement-cost total and score were removed by the streamlined room response, 2026-09-28).
+  await expect(response.getByRole('heading', { name: 'Items in this room' })).toBeVisible();
+  await expect(response.getByText('Dishwasher')).toBeVisible();
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
@@ -645,7 +647,7 @@ test('inventory item detail: item-not-found is scoped to the detail panel, disti
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Systems and inventory', exact: true }) });
-  await response.getByRole('button', { name: 'Water heater' }).click();
+  await response.getByRole('button', { name: 'Water heater', exact: true }).click();
   await expect(response.getByText('Item no longer exists')).toBeVisible();
   await expect(response.getByText('This item was removed after the Ask result was created.')).toBeVisible();
   // Scoped to this one detail panel -- the rest of the result, including other collections, stays intact.
@@ -660,7 +662,7 @@ test('inventory item detail access loss (a different 404 error code) redacts the
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-property-summary');
-  await response.getByRole('button', { name: 'Water heater' }).click();
+  await response.getByRole('button', { name: 'Water heater', exact: true }).click();
 
   await expect(response).toHaveAttribute('role', 'alert');
   await expect(response.getByRole('heading', { name: 'Result unavailable' })).toBeVisible();
@@ -683,7 +685,7 @@ test('an ambiguous inventory question opens the matching item inline instead of 
 
   // IW-PRIN-002: selecting an ambiguous match opens inline canonical detail (same InventoryResultList as
   // inventory-results), not an implicit navigation to /inventory before the homeowner confirmed which item they meant.
-  await response.getByRole('button', { name: 'Kitchen smoke detector' }).click();
+  await response.getByRole('button', { name: 'Kitchen smoke detector', exact: true }).click();
   // exact: true -- the list item's own description ("Kidde brand") also contains the substring "Kidde";
   // the detail's <dd> is the only node whose full text is "Kidde".
   await expect(response.getByText('Kidde', { exact: true })).toBeVisible();
@@ -759,11 +761,12 @@ test('Home Capital Timeline: a reserve allocation opens canonical detail inline,
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Active reserve allocations', exact: true }) });
   await expect(response.getByRole('link', { name: 'Water heater' })).toHaveCount(0);
-  await expect(response.getByRole('link', { name: /Open Reserve Fund/ })).toHaveAttribute('href', new RegExp(`^/dashboard/properties/${propertyId}/tools/reserve-fund\\?backTo=`));
+  await expect(response.getByRole('link', { name: /Open reserve fund/i })).toHaveAttribute('href', new RegExp(`^/dashboard/properties/${propertyId}/tools/reserve-fund\\?backTo=`));
 
-  await response.getByRole('button', { name: 'Water heater' }).click();
+  await response.getByRole('button', { name: 'Water heater', exact: true }).click();
   await expect(response.getByText('Typical service life for this water heater type is 10-12 years; it was installed 5 years ago.')).toBeVisible();
-  await expect(response.getByText('$1,200', { exact: true })).toBeVisible();
+  // The amount is in the row and again in the opened detail.
+  await expect(response.getByText('$1,200', { exact: true })).toHaveCount(2);
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
@@ -787,7 +790,7 @@ test('Home Capital Timeline: a TABLE row opens canonical capital-window detail i
   await response.getByRole('button', { name: /Close capital window detail/ }).click();
   await expect(response.getByText('Typical service life for asphalt shingle roofing')).toHaveCount(0);
   await expect(response.getByRole('button', { name: 'Roof replacement' })).toBeFocused();
-  await expect(response.getByRole('button', { name: 'Water heater' })).toBeVisible();
+  await expect(response.getByRole('button', { name: 'Water heater', exact: true })).toBeVisible();
 });
 
 test('Home Capital Timeline: re-running with a different horizon dispatches the same operation and shows the new result inline (planning/refinement follow-up)', async ({ page }) => {
@@ -1092,28 +1095,27 @@ test('seller-prep checklist items show as category shelves; a card opens the liv
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-seller-prep-shelves');
-  await expect(response.getByRole('list', { name: 'Presentation, 1 item' })).toBeVisible();
+  // The category is a heading with its count, over the list of items.
+  await expect(response.getByRole('heading', { name: 'Presentation', level: 4 })).toBeVisible();
+  await expect(response.getByText('1 item', { exact: true })).toBeVisible();
   const card = response.getByRole('button', { name: /Paint the front door/ });
   await expect(card).toContainText('$200–$400 estimated');
   await card.click();
-  const drawer = page.getByRole('dialog', { name: 'Item detail: Paint the front door' });
-  await expect(drawer.getByText('A fresh front door is a low-cost first impression.')).toBeVisible();
+  // A one-item result is a list whose item opens its detail inline (the drawer belongs to the shelves layout; 2026-11-18 single-result modernization).
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(response.getByText('A fresh front door is a low-cost first impression.')).toBeVisible();
   // The list said OPEN, but the live item is already pursued, so only "Stop pursuing" is offered.
-  await expect(drawer.locator('[data-sale-item-action]')).toHaveCount(1);
-  const box = await drawer.boundingBox();
-  expect(box && box.x + box.width).toBeGreaterThan(1430);
-  await drawer.getByRole('button', { name: 'Stop pursuing' }).click();
+  await expect(response.locator('[data-sale-item-action]')).toHaveCount(1);
+  await response.getByRole('button', { name: 'Stop pursuing' }).click();
   await expect.poll(() => api.executionBodies.at(-1)).toEqual(expect.objectContaining({
     message: 'Stop pursuing this seller-prep checklist item.',
     launchContext: expect.objectContaining({ entityType: 'SALE_READINESS_ITEM', entityId: 'item-door', operationId: 'SELLER_PREP_ITEM_DECISION', sourceExecutionId: 'execution-seller-prep-shelves' }),
   }));
 
-  await response.getByRole('button', { name: 'List', exact: true }).click();
-  await expect(response.getByRole('button', { name: 'Paint the front door' })).toBeVisible();
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
-test('on a phone, seller-prep shelves stay inside the screen and an item opens as a bottom sheet (FRD v1.84)', async ({ page }) => {
+test('on a phone, the seller-prep list stays inside the screen and an item opens its detail inline (FRD v1.84, single-result list)', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
@@ -1121,15 +1123,14 @@ test('on a phone, seller-prep shelves stay inside the screen and an item opens a
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-seller-prep-shelves');
-  await expect(response.getByRole('list', { name: 'Presentation, 1 item' })).toBeVisible();
+  // The category is a heading with its count, over the list of items.
+  await expect(response.getByRole('heading', { name: 'Presentation', level: 4 })).toBeVisible();
+  await expect(response.getByText('1 item', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await response.getByRole('button', { name: /Paint the front door/ }).click();
-  const sheet = page.getByRole('dialog', { name: 'Item detail: Paint the front door' });
-  await expect(sheet.getByText('A fresh front door is a low-cost first impression.')).toBeVisible();
-  const box = await sheet.boundingBox();
-  expect(box && Math.round(box.y + box.height)).toBeGreaterThanOrEqual(843);
-  await sheet.getByRole('button', { name: 'Close item detail for Paint the front door' }).click();
-  await expect(sheet).toBeHidden();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(response.getByText('A fresh front door is a low-cost first impression.')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 test('a contributor attaches a document to an inventory item and to a warranty inline, each with its own message and a confirmation naming the record (FRD v1.99)', async ({ page }) => {
@@ -1139,7 +1140,7 @@ test('a contributor attaches a document to an inventory item and to a warranty i
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Systems and inventory' }) });
-  await response.getByRole('button', { name: 'Water heater' }).click();
+  await response.getByRole('button', { name: 'Water heater', exact: true }).click();
   await expect(response.getByText('Tank-style, in basement utility closet.')).toBeVisible();
   await expect(response.locator('button', { hasText: 'Attach a document' })).toBeVisible();
   await response.getByLabel('Attach evidence file for Water heater').setInputFiles({ name: 'receipt.pdf', mimeType: 'application/pdf', buffer: Buffer.from('fixture receipt bytes') });
@@ -1188,7 +1189,7 @@ test('on a phone, the attach control on an inventory item fits the screen (FRD v
   await page.getByPlaceholder(/^Ask anything about /).fill('Give me a correctable summary of my home record.');
   await page.getByRole('button', { name: 'Send question' }).click();
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Systems and inventory' }) });
-  await response.getByRole('button', { name: 'Water heater' }).click();
+  await response.getByRole('button', { name: 'Water heater', exact: true }).click();
   const control = response.locator('button', { hasText: 'Attach a document' });
   await expect(control).toBeVisible();
   const box = await control.boundingBox();
@@ -1272,7 +1273,8 @@ test('weather attention answers inline with the complete preparation checklist b
   expect(askUrl.searchParams.get('sessionId')).toBeTruthy();
   expect(askUrl.searchParams.get('executionId')).toBe('execution-heat-preparation');
   const response = page.locator('#ask-execution-execution-heat-preparation');
-  await expect(response.getByRole('heading', { name: 'Prepare this home' })).toBeVisible();
+  // The guidance title is the small label above the steps (a paragraph), under the answer's own heading.
+  await expect(response.getByText('Prepare this home', { exact: true })).toBeVisible();
   await expect(response.getByText('Inspect the HVAC filter before the heat arrives.')).toBeVisible();
   await expect(response.getByText('Keep the outdoor condenser area clear.')).toBeVisible();
   await expect(response.getByText('Use shades and avoid peak-hour heat-generating activities.')).toBeVisible();
@@ -1284,10 +1286,11 @@ test('weather attention answers inline with the complete preparation checklist b
   const checklistUrl = new URL(checklistHref!, 'http://localhost');
   expect(checklistUrl.searchParams.get('from')).toBe('ask');
   expect(checklistUrl.searchParams.get('backTo')).toContain('executionId=execution-heat-preparation');
-  await expect.poll(async () => (await response.boundingBox())?.y ?? 0).toBeGreaterThan(80);
+  // The answer is scrolled into view: its top is inside the window (the page header is not sticky, so nothing sits over it).
+  await expect.poll(async () => (await response.boundingBox())?.y ?? -1).toBeGreaterThanOrEqual(0);
 });
 
-test('maintenance task titles open canonical detail inline and keep traditional navigation optional', async ({ page }) => {
+test('maintenance task titles open the canonical task in a drawer, and the answer offers no link to a desktop page', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   await page.getByPlaceholder(/^Ask anything about /).fill('What maintenance tasks are due this month?');
@@ -1298,14 +1301,17 @@ test('maintenance task titles open canonical detail inline and keep traditional 
   await expect(response.getByRole('link', { name: 'Service the heat pump' })).toHaveCount(0);
   await response.getByRole('button', { name: 'Service the heat pump', exact: true }).click();
 
-  await expect(response.getByRole('heading', { name: 'Service the heat pump' })).toBeVisible();
-  await expect(response.getByText('Annual preventive service for the recorded HVAC system.')).toBeVisible();
-  await expect(response.getByText('$250')).toBeVisible();
+  // The live task opens in a drawer over the conversation (the maintenance shelves' own design), not inline in the response.
+  const drawer = page.getByRole('dialog', { name: 'Task detail: Service the heat pump' });
+  await expect(drawer.getByRole('heading', { name: 'Service the heat pump', level: 4 })).toBeVisible();
+  await expect(drawer.getByText('Annual preventive service for the recorded HVAC system.')).toBeVisible();
+  await expect(drawer.getByText('$250')).toBeVisible();
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
-  await expect(response.getByRole('link', { name: /Open Maintenance/ })).toBeVisible();
+  // Owner rule 2026-10-10: Ask never links to desktop pages; the answer-trust validator removes such a link.
+  await expect(response.getByRole('link', { name: /Open Maintenance/ })).toHaveCount(0);
 });
 
-test('maintenance answers lead with chips and show timing shelves whose cards open the live task in a side drawer', async ({ page }) => {
+test('maintenance answers lead with chips and show timing shelves whose cards open the live task in the task workspace', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
@@ -1322,9 +1328,11 @@ test('maintenance answers lead with chips and show timing shelves whose cards op
 
   const drawer = page.getByRole('dialog', { name: 'Task detail: Service the heat pump' });
   await expect(drawer.getByText('Annual preventive service for the recorded HVAC system.')).toBeVisible();
+  // The task opens in the maintenance workspace: a centered dialog over the conversation (2026-10-02/03), not an edge drawer.
   const box = await drawer.boundingBox();
-  expect(box && box.x + box.width).toBeGreaterThan(1430);
-  expect(box && box.x).toBeGreaterThan(900);
+  expect(box && box.width).toBeGreaterThanOrEqual(700);
+  expect(box && box.x).toBeGreaterThan(200);
+  expect(box && box.x + box.width).toBeLessThan(1240);
   await page.keyboard.press('Escape');
   await expect(drawer).toBeHidden();
   await expect(card).toBeFocused();
@@ -1353,8 +1361,10 @@ test('on a phone, maintenance shelves scroll sideways and the task opens as a bo
   const sheet = page.getByRole('dialog', { name: 'Task detail: Service the heat pump' });
   await expect(sheet.getByText('Annual preventive service for the recorded HVAC system.')).toBeVisible();
   const box = await sheet.boundingBox();
-  expect(box && Math.round(box.y + box.height)).toBeGreaterThanOrEqual(843);
-  expect(box && box.width).toBeGreaterThan(380);
+  // On a phone the workspace is anchored to the bottom with a small inset, and fills the width (within that inset).
+  expect(box && Math.round(box.y + box.height)).toBeGreaterThanOrEqual(830);
+  expect(box && box.width).toBeGreaterThanOrEqual(360);
+  expect(box && box.x + box.width).toBeLessThanOrEqual(390);
   await sheet.getByRole('button', { name: 'Close task detail for Service the heat pump' }).click();
   await expect(sheet).toBeHidden();
 });
@@ -1430,17 +1440,17 @@ test('sell, hold and rent expose the modeled lead, full inputs, annual projectio
 
   await expect(response.getByRole('img', { name: /Annual modeled changes/ })).toBeVisible();
   await expect(response.getByRole('heading', { name: 'Inputs used' })).toBeVisible();
-  await expect(response.getByText('Rent growth')).toBeVisible();
-  await expect(response.getByText('Vacancy')).toBeVisible();
-  await expect(response.getByText('Management', { exact: true })).toBeVisible();
+  // The inputs are a table (and, responsively, cards): each input is read from its table cell.
+  for (const input of ['Rent growth', 'Vacancy', 'Management']) await expect(response.getByRole('cell', { name: input, exact: true })).toBeVisible();
   await expect(response.getByRole('button', { name: 'Edit assumptions' })).toBeVisible();
   await expect(response.getByRole('button', { name: 'Update mortgage details' })).toBeVisible();
   await expect(response.getByRole('button', { name: 'Track this decision' })).toBeVisible();
 
-  await response.getByRole('button', { name: 'Table', exact: true }).click();
+  // The answer now has two view choosers (the scenario snapshot and the inputs); this one is the snapshot's.
+  await response.getByRole('group', { name: 'View 5-year scenario snapshot' }).getByRole('button', { name: 'Table', exact: true }).click();
   const table = response.getByRole('table', { name: '5-year scenario snapshot' });
   await expect(table.getByRole('columnheader')).toHaveText(['Sell at the end of the horizon', 'Continue holding', 'Rent the home out']);
-  await expect(table.getByRole('rowheader')).toHaveText(['Modeled outcome', 'Key components']);
+  await expect(table.getByRole('rowheader')).toHaveText(['Labels', 'Modeled outcome', 'Key components']);
   await expect(table.locator('[data-leading="true"]')).toHaveCount(0);
   await expect(response.getByRole('link')).toHaveCount(0);
   await expect.poll(() => api.executionBodies.length).toBe(1);
@@ -1620,18 +1630,18 @@ test('capital windows sit on a timeline track by start month; a window opens its
   await heater.click();
   const selected = track.locator('[data-ask-timeline-selected="timeline-heater"]');
   await expect(selected).toContainText('Window May 3, 2028–Apr 30, 2029 · Estimated $900–$1,600');
-  await selected.getByRole('button', { name: /Details for Water heater/ }).click();
+  await selected.getByRole('button', { name: /View details Water heater/ }).click();
   await expect(track.getByText('Capital window no longer exists')).toBeVisible();
 
   await track.getByRole('button', { name: 'Previous event' }).click();
-  await track.locator('[data-ask-timeline-selected="timeline-roof-property-summary"]').getByRole('button', { name: /Details for Asphalt shingle roof/ }).click();
+  await track.locator('[data-ask-timeline-selected="timeline-roof-property-summary"]').getByRole('button', { name: /View details Asphalt shingle roof/ }).click();
   await expect(track.getByText('Capital window detail')).toBeVisible();
   await expect(track.getByText('Typical service life for asphalt shingle roofing is 20-25 years; this roof was installed 22 years ago.')).toBeVisible();
 
   await response.getByRole('button', { name: 'List', exact: true }).click();
   const list = response.locator('[data-display-pattern="timeline-list"]');
-  await expect(list.getByRole('button', { name: /Details for/ })).toHaveCount(2);
-  await list.getByRole('button', { name: /Details for Asphalt shingle roof/ }).click();
+  await expect(list.getByRole('button', { name: /View details/ })).toHaveCount(2);
+  await list.getByRole('button', { name: /View details Asphalt shingle roof/ }).click();
   await expect(list.getByText('Capital window detail')).toBeVisible();
   await expect.poll(() => api.executionBodies.length).toBe(1);
 });
@@ -1648,7 +1658,7 @@ test('on a phone, the capital track scrolls inside its own box and a window open
   await expect(track).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await track.getByRole('button', { name: /Jan 2027: Asphalt shingle roof/ }).click();
-  await track.getByRole('button', { name: /Details for Asphalt shingle roof/ }).click();
+  await track.getByRole('button', { name: /View details Asphalt shingle roof/ }).click();
   await expect(track.getByText('Capital window detail')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
@@ -1661,6 +1671,9 @@ test('home timeline answers on a track: latest event selected, category chips, s
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-home-timeline-track');
+  // The home timeline opens as the chronological Event list; the Timeline map is the explicit alternative (FRD 1.384).
+  await expect(response.locator('[data-display-pattern="timeline-list"]')).toBeVisible();
+  await response.getByRole('button', { name: 'Timeline map', exact: true }).click();
   const track = response.locator('[data-display-pattern="timeline"]');
   await expect(track).toBeVisible();
   const detail = track.locator('[data-ask-timeline-selected="kitchen"]');
@@ -1675,12 +1688,12 @@ test('home timeline answers on a track: latest event selected, category chips, s
   await expect(response.getByRole('heading', { name: 'Date unknown' }).first()).toBeVisible();
   await expect(response.getByText('Old roof work')).toBeVisible();
 
-  await response.getByRole('button', { name: 'List', exact: true }).click();
+  await response.getByRole('button', { name: 'Event list', exact: true }).click();
   const list = response.locator('[data-timeline-list]');
   await expect(list.getByRole('listitem')).toHaveCount(5);
   await expect(list.getByRole('listitem').nth(2).getByText('2023', { exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) ?? '{}').timelineLayouts?.['home-timeline-events'], `ctc:ask-result-view:v1:${sessionIdOf(page.url())}:${propertyId}:execution-home-timeline-track`)).toBe('LIST');
-  await response.getByRole('button', { name: 'Timeline', exact: true }).click();
+  await response.getByRole('button', { name: 'Timeline map', exact: true }).click();
   await expect(track).toBeVisible();
   expect(api.executionBodies.length).toBe(1);
 });
@@ -1692,6 +1705,7 @@ test('on a phone, the home timeline track scrolls sideways inside its box and th
   await page.getByPlaceholder(/^Ask anything about /).fill('Show my home timeline history');
   await page.getByRole('button', { name: 'Send question' }).click();
 
+  await page.locator('#ask-execution-execution-home-timeline-track').getByRole('button', { name: 'Timeline map', exact: true }).click();
   const track = page.locator('#ask-execution-execution-home-timeline-track [data-display-pattern="timeline"]');
   await expect(track).toBeVisible();
   const scroller = track.locator('[aria-label^="Home timeline,"]');
@@ -1699,7 +1713,7 @@ test('on a phone, the home timeline track scrolls sideways inside its box and th
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   const box = await track.locator('[data-ask-timeline-selected="kitchen"]').boundingBox();
   expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
-  await track.getByRole('button', { name: 'List', exact: true }).click();
+  await track.getByRole('button', { name: 'Event list', exact: true }).click();
   await expect(page.locator('#ask-execution-execution-home-timeline-track [data-timeline-list]')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
@@ -1755,7 +1769,10 @@ test('rooms answer as a room map by floor; a tile opens the live room detail inl
 
   const response = page.locator('#ask-execution-execution-room-map');
   await expect(response.locator('[data-display-pattern="room_map"]')).toBeVisible();
-  await expect(response.getByRole('group', { name: 'Floor' }).getByRole('button')).toHaveText(['Ground floor (2)', 'Floor 1 (2)', 'Other (1)']);
+  // The map opens on every room (since the 2026-10-15 presentation follow-up) and narrows by floor.
+  await expect(response.getByRole('group', { name: 'Floor' }).getByRole('button')).toHaveText(['All rooms (5)', 'Ground floor (2)', 'Floor 1 (2)', 'Other (1)']);
+  await expect(response.getByRole('button', { name: /^All rooms/ })).toHaveAttribute('aria-pressed', 'true');
+  await response.getByRole('button', { name: /^Ground floor/ }).click();
   const kitchen = response.getByRole('list', { name: 'Ground floor, 2 rooms' }).getByRole('button', { name: /Kitchen/ });
   await expect(kitchen).toContainText('8 items');
   await expect(kitchen).toContainText('2 open tasks');
@@ -1764,7 +1781,7 @@ test('rooms answer as a room map by floor; a tile opens the live room detail inl
   await response.getByRole('button', { name: /^Ground floor/ }).click();
   await kitchen.click();
   const detail = response.locator('[data-inline-room-detail]');
-  await expect(detail.getByText('Good · 82/100')).toBeVisible();
+  await expect(detail.getByText('Kitchen · 8 recorded items')).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await detail.getByRole('button', { name: /Rename room/ }).click();
   await expect.poll(() => api.executionBodies.some((body) => body.message === 'Rename this room.'
@@ -1780,6 +1797,8 @@ test('on a phone, the room map tiles and inline room detail fit the screen; List
 
   const response = page.locator('#ask-execution-execution-room-map');
   const tiles = response.locator('[data-ask-room-tile]');
+  await expect(tiles).toHaveCount(5);
+  await response.getByRole('button', { name: /^Ground floor/ }).click();
   await expect(tiles).toHaveCount(2);
   for (const tile of await tiles.all()) {
     const box = await tile.boundingBox();
@@ -1788,7 +1807,7 @@ test('on a phone, the room map tiles and inline room detail fit the screen; List
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await response.locator('[data-ask-room-tile="room-property-summary"]').click();
   const detail = response.locator('[data-inline-room-detail]');
-  await expect(detail.getByText('Good · 82/100')).toBeVisible();
+  await expect(detail.getByText('Kitchen · 8 recorded items')).toBeVisible();
   const box = await detail.boundingBox();
   expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
   await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -2434,7 +2453,7 @@ test('adaptive table view switches locally and persists the homeowner choice wit
 
   await expect(response.getByRole('table')).toHaveCount(0);
   await expect(response.locator('[data-table-presentation="cards"]')).toBeVisible();
-  await expect(response.getByText('Showing 2 of 3 records. View: cards.')).toBeVisible();
+  await expect(response.getByText('Showing 2 of 3 records.', { exact: true })).toBeVisible();
   await expect(response.getByRole('link', { name: 'Open ownership costs' })).toBeVisible();
   await expect.poll(() => api.executionBodies.length).toBe(1);
   await expect.poll(() => page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) ?? '{}').presentationModes?.['ownership-cost-categories'], `ctc:ask-result-view:v1:${sessionIdOf(page.url())}:ask-property-fixture:adaptive-table-result`)).toBe('CARDS');

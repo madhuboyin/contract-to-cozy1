@@ -40,7 +40,8 @@ function formatCurrency(value: number | null | undefined): string {
 function statusPresentation(status: string | null | undefined): { label: string; className: string } {
   switch (status) {
     case 'ACTIVE': return { label: 'Active', className: 'border-emerald-200 bg-emerald-50 text-emerald-800' };
-    case 'EXPIRING': return { label: 'Expiring soon', className: 'border-amber-200 bg-amber-50 text-amber-900' };
+    // Warranty policy (W-1): never the bare word "soon"; the number is always said, and it is the same window the "Expires within 60 days" filter names.
+    case 'EXPIRING': return { label: 'Expires within 60 days', className: 'border-amber-200 bg-amber-50 text-amber-900' };
     case 'EXPIRED': return { label: 'Expired', className: 'border-rose-200 bg-rose-50 text-rose-800' };
     case 'NEEDS_REVIEW': return { label: 'Needs review', className: 'border-amber-200 bg-amber-50 text-amber-900' };
     case 'STARTS_LATER': return { label: 'Starts later', className: 'border-sky-200 bg-sky-50 text-sky-800' };

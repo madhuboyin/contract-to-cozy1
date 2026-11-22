@@ -1289,6 +1289,8 @@ const AskConfirmationEditableFieldSchema = z.object({
   // string; each operation's own edit handler owns the field-specific validation.
   type: z.enum(['DATE', 'TEXT', 'TEXTAREA', 'SELECT', 'MONEY']),
   value: z.string().max(2000),
+  // An optional field may stay empty and the confirmation can still be sent; every other editable field needs a value.
+  optional: z.boolean().optional(),
   options: z.array(z.object({ label: z.string().trim().min(1).max(80), value: z.string().trim().min(1).max(80) })).max(12).optional(),
 });
 

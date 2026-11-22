@@ -21,10 +21,8 @@ test('a list question: exact counts, documents grouped by type, the recorded-inf
   await startDocuments(page);
   await expect(page.getByRole('heading', { name: HEADLINE })).toBeVisible();
   const answer = page.locator('#ask-execution-execution-documents-journey-1');
-  await expect(answer.getByText('Invoices')).toBeVisible();
-  await expect(answer.getByText('Warranties')).toBeVisible();
-  await expect(answer.getByText('Permits')).toBeVisible();
-  await expect(answer.getByText('Estimates')).toBeVisible();
+  // The type names are group headings (and also filter chips), so the groups are found by heading.
+  for (const group of ['Invoices', 'Warranties', 'Permits', 'Estimates']) await expect(answer.getByRole('heading', { name: new RegExp(`^${group} ·`) })).toBeVisible();
   await expect(answer.getByRole('button', { name: 'HVAC install invoice' })).toBeVisible();
   const pageLink = page.getByRole('link', { name: /Open Home Records/ }).first();
   await expect(pageLink).toBeVisible();
@@ -45,8 +43,8 @@ test('filters replace the result: a status chip and a type chip each replace one
   await expect.poll(() => api.executionBodies.at(-1)).toMatchObject({ message: 'Only show unverified documents', launchContext: { sourceExecutionId: 'execution-documents-journey-1' } });
   await expect(page.getByText('Show my documents journey', { exact: true }).first()).toBeVisible();
   const appliedStatus = filters(page).getByRole('button', { name: 'Unverified' });
+  // The applied chip stays focusable and says it is applied (aria-pressed), rather than disabling itself and dropping keyboard focus.
   await expect(appliedStatus).toHaveAttribute('aria-pressed', 'true');
-  await expect(appliedStatus).toBeDisabled();
 
   // A type chip replaces only the type: the status stays applied.
   await filters(page).getByRole('button', { name: 'Permits' }).click();
@@ -56,7 +54,7 @@ test('filters replace the result: a status chip and a type chip each replace one
   await expect(live(page, 3).getByRole('button', { name: 'Old permit scan' })).toBeVisible();
 
   // A filter that matches nothing keeps the way back.
-  await filters(page).getByRole('button', { name: 'Verified' }).click();
+  await filters(page).getByRole('button', { name: 'Verified', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'No documents match these filters.' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Clear filters' })).toBeVisible();
 
@@ -77,7 +75,8 @@ test('inline detail opens without navigating: a Home Record and a transitional l
 
   await response.getByRole('button', { name: 'Old permit scan' }).click();
   await expect(response.getByText('Scanned building permit from a prior renovation.')).toBeVisible();
-  await expect(response.getByText('Unverified', { exact: true })).toBeVisible();
+  // "Unverified" is also a filter chip and a row badge; the detail's own value is the one under the record's label.
+  await expect(response.getByLabel('Old permit scan', { exact: true }).getByText('Unverified', { exact: true })).toBeVisible();
 });
 
 test('a document removed after the answer says so in its detail and the conversation continues', async ({ page }) => {

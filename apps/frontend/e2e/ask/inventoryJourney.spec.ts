@@ -57,7 +57,7 @@ test('filters replace the result: each chip continues the source, replaces one d
   await expect(page.getByRole('group', { name: 'Inventory status filters' }).getByRole('button', { name: 'Missing details' })).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => api.executionBodies.at(-1)).toMatchObject({ message: 'Only show HVAC items', launchContext: { sourceExecutionId: 'execution-inventory-journey-2' } });
   // One row is still a list with its chips: the way back never disappears.
-  await expect(live(page, 3).getByRole('button', { name: 'Water heater' })).toBeVisible();
+  await expect(live(page, 3).getByRole('button', { name: 'Water heater', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Clear filters' })).toBeVisible();
 
   // Explicit clear resets both dimensions.
@@ -71,7 +71,7 @@ test('item detail opens inline without navigating, and a correction goes through
   const api = await installAskApi(page);
   await startInventory(page);
   const response = live(page, 1);
-  await response.getByRole('button', { name: 'Water heater' }).click();
+  await response.getByRole('button', { name: 'Water heater', exact: true }).click();
   await expect(response.getByText('Tank-style, in basement utility closet.')).toBeVisible();
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
   await response.getByText('Correct a detail').click();

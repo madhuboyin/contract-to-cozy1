@@ -41,7 +41,7 @@ test('the expanded rail carries the Explore group apart from history', async ({ 
   const group = page.getByRole('region', { name: 'Explore with Cozy' });
   await expect(group).toBeVisible();
   // Indicators come from the server: present for two topics, omitted (not zero) for the third.
-  await expect(group.getByRole('button')).toHaveText(['Home care3 need attention', 'DIY & Projects', 'My Home Record72% complete', 'More ideas']);
+  await expect(group.getByRole('button')).toHaveText(['Home care3 need attention', 'DIY & Projects', 'My Home Record72% complete', 'More ideas', 'What needs meWork', 'Browse my home recordRecord', 'Find something savedSaved', 'Export my home recordExport']);
 });
 
 test('More ideas: search finds a reviewed idea by an approved alias, a pick launches it once with its operation, and nothing else is sent', async ({ context, page }) => {

@@ -176,7 +176,7 @@ export async function installRadarJourney(page: Page, options: RadarJourneyOptio
       confirmation: { confirmationId: `${spec.id}-1`, version: (extra.version as number | undefined) ?? 1, title: spec.title, description: spec.description, fields: spec.fields, confirmLabel: spec.label, consentText: spec.consent, expiresAt: new Date(FIXTURE_NOW.getTime() + 30 * 60_000).toISOString(),
         editableFields: kind === 'feedback' ? [
           { key: 'feedbackType', label: 'Reason', type: 'SELECT', value: (extra.reason as string | undefined) ?? '', options: [{ label: 'Wrong location', value: 'wrong_location' }, { label: 'Not relevant to my home', value: 'not_relevant' }, { label: 'Duplicate event', value: 'duplicate' }, { label: 'Information is stale', value: 'stale' }, { label: 'Something else', value: 'other' }] },
-          { key: 'comment', label: 'Comment (optional, up to 500 characters)', type: 'TEXTAREA', value: (extra.comment as string | undefined) ?? '' },
+          { key: 'comment', label: 'Comment (optional, up to 500 characters)', type: 'TEXTAREA', value: (extra.comment as string | undefined) ?? '', optional: true },
         ] : [] } };
   };
 

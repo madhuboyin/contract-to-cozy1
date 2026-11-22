@@ -550,6 +550,7 @@ export interface AskConfirmationEditableField {
   label: string;
   type: 'DATE' | 'TEXT' | 'TEXTAREA' | 'SELECT' | 'MONEY';
   value: string;
+  optional?: boolean;
   options?: Array<{ label: string; value: string }>;
 }
 

@@ -204,8 +204,10 @@ test('feedback: the reason is edited in the review, then confirmed', async ({ pa
   await review(page).click();
   await detail(page).locator('[data-radar-action="radar-feedback"]').click();
   await expect(page.getByText('Send feedback on "Heat advisory"?').first()).toBeVisible();
-  await flow(page, 'feedback').getByRole('button', { name: 'Edit', exact: true }).first().click();
-  await page.getByLabel('Reason').selectOption('not_relevant');
+  // Each review field has its own Edit; open the Reason row's (the first is not necessarily the reason).
+  // The first unset field (Reason) opens for editing as soon as the review appears; the only Edit button is Comment's.
+  await expect(page.getByRole('combobox', { name: 'Reason' })).toBeVisible();
+  await page.getByRole('combobox', { name: 'Reason' }).selectOption('not_relevant');
   await flow(page, 'feedback').getByRole('button', { name: 'Save', exact: true }).first().click();
   await expect.poll(() => api.editBodies).toEqual([expect.objectContaining({ confirmationVersion: 1, edits: expect.objectContaining({ feedbackType: 'not_relevant' }) })]);
   await page.getByLabel(/I want to send this feedback to Home Event Radar/).check();

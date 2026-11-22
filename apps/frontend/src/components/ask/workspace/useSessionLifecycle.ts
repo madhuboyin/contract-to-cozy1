@@ -41,6 +41,9 @@ export function useSessionLifecycle({ mode, sessionId, executions, selectedPrope
   setHistoryDrawerOpen: (value: boolean) => void;
 }) {
   const appliedInitialQuestionRef = useRef('');
+  // The popstate listener below must see the current conversation without re-subscribing on every answer.
+  const executionsRef = useRef(executions);
+  executionsRef.current = executions;
 
   useEffect(() => {
     activeSessionRef.current = sessionId;
@@ -135,6 +138,9 @@ export function useSessionLifecycle({ mode, sessionId, executions, selectedPrope
         return;
       }
       if (!targetSessionId) {
+        // Back to the bare Ask home (for example closing Explore with Cozy) while this conversation has no answers yet: it is already that
+        // state, so keep it and the draft in its composer instead of starting a new session that drops the draft.
+        if (executionsRef.current.length === 0) return;
         const nextSession = newId();
         activeSessionRef.current = nextSession;
         activeSessionPropertyRef.current = selectedPropertyId;

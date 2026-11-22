@@ -14,6 +14,9 @@ test('the ranked list: one Start here row, compact rows, whole-feed filter count
   await ask(page, 'home actions fixture all');
   const list = page.locator('[data-calm-home-actions]');
   await expect(list.getByText('Start here')).toHaveCount(1);
+  // The calm list opens with three rows and offers the rest behind a toggle (bb7cbd81).
+  await expect(list.locator('[data-home-action-row]')).toHaveCount(3);
+  await list.getByRole('button', { name: 'Show 3 more actions' }).click();
   await expect(list.locator('[data-home-action-row]')).toHaveCount(6);
   for (const name of ['All · 9', 'Now · 1', 'Soon · 2', 'Plan · 3', 'Consider · 3']) await expect(list.getByRole('button', { name })).toBeVisible();
   await expect(list.getByRole('button', { name: 'All · 9' })).toHaveAttribute('aria-pressed', 'true');
@@ -93,7 +96,8 @@ test('regulated work: no Mark complete, plain wording that a photo does not clos
   const answer = page.locator('[id^="ask-execution-execution-home-actions-regulated"]');
   await expect(answer.getByRole('button', { name: 'Mark complete' })).toHaveCount(0);
   await expect(answer.getByRole('button', { name: 'Change due date' })).toBeVisible();
-  await expect(answer.getByText(/does not close it/)).toBeVisible();
+  // With no evidence yet the row says so plainly; the "does not close it" explanation is shown once evidence exists (open question W-2: should it also show here?).
+  await expect(answer.getByText('No evidence is attached yet.')).toBeVisible();
   await expect(page.getByRole('button', { name: /Add a photo or document/ })).toBeVisible();
   // The attach is worded as submitting completion evidence, and there is nothing yet to remove.
   const region = answer.locator('[data-work-evidence]');
