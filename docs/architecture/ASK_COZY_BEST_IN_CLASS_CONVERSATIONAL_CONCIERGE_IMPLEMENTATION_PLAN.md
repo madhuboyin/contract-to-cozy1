@@ -1,6 +1,6 @@
 # Ask Cozy Best-in-Class Conversational Concierge — Implementation Plan
 
-**Status:** Draft v0.8; FRD defaults active, owner review optional; implementation slices and acceptance plan, not a delivery claim
+**Status:** Draft v0.9; FRD defaults active, owner review optional; implementation slices and acceptance plan, not a delivery claim
 
 **Date:** 2026-11-22
 
@@ -75,8 +75,8 @@ BICC-0.2 shall trace the repository for additional model/provider call sites and
 | `BICC-2.2` | Bounded composed reads | `BICC-2.1` | Compound/facet coverage passes with no silent loss or retargeting |
 | `BICC-2.3` | Safe regeneration and per-attempt feedback | `BICC-2.1`; execution identity and retry paths | CTX-006 and UX-003 attempt-linking, preservation, feedback, and no-write-replay corpus passes |
 | `BICC-3.1` | Attachment lifecycle and isolation | D04, D10, `BICC-0.2` | MM-001–005 and MM-010 pass |
-| `BICC-3.2` | Document-grounded answers | `BICC-3.1`, scorer from `BICC-0.1` | GATE-004B2 and `USER_DOCUMENT` GATE-005 subset pass |
-| `BICC-3.3` | Injection isolation and promotion | `BICC-3.2` | EVAL-015 and MM-008/MM-011/MM-012 pass |
+| `BICC-3.2` | Document-grounded answers with injection isolation | `BICC-3.1`, scorer from `BICC-0.1` | EVAL-015 and MM-012/MM-013 injection-isolation evidence, GATE-004B2, and `USER_DOCUMENT` GATE-005 subset pass; no document-grounded answer activates before all pass |
+| `BICC-3.3` | Reviewed promotion into canonical records | `BICC-3.2` | MM-008 and MM-011 promotion, confirmation, and retention-boundary corpus passes |
 | `BICC-4.1` | Candidate workspace and buyer reads | D03, D09; Phase 1A | BUY-001–006 and buyer read matrix pass |
 | `BICC-4.2` | Fair-housing boundary | `BICC-4.1` | EVAL-017 and BUY-011 pass |
 | `BICC-4.3` | Candidate promotion and buyer actions | `BICC-4.1` | BUY-007–010 authorization and confirmation corpus passes |
@@ -460,7 +460,7 @@ Deliver upload/preview lifecycle, authorized retrieval, citations, version/delet
 
 **Focused evidence and gate**
 
-Wrong user/property/version, access loss, deletion, replacement, retention expiry, citation mismatch, incomplete/conflicting evidence, typed-schema rejection, provenance loss, injection attempts, and promotion confirmation. Tests prove model candidates cannot diagnose, recommend, write records, select actions, or become free-form answer prose. GATE-004B2, the `USER_DOCUMENT` GATE-005 subset, EVAL-009, EVAL-015, and MM-001–013 pass.
+Wrong user/property/version, access loss, deletion, replacement, retention expiry, citation mismatch, incomplete/conflicting evidence, typed-schema rejection, provenance loss, injection attempts, and promotion confirmation. Tests prove model candidates cannot diagnose, recommend, write records, select actions, or become free-form answer prose. BICC-3.2 shall not activate document-grounded answers until EVAL-015 and MM-012/MM-013 injection-isolation evidence passes alongside GATE-004B2, the `USER_DOCUMENT` GATE-005 subset, and EVAL-009; BICC-3.3 promotion additionally passes MM-008 and MM-011. MM-001–013 pass across the group.
 
 ### BICC-4.1 to BICC-4.3 — Prospective Buyer Discovery
 
@@ -539,7 +539,7 @@ This table is the authoritative initial assignment for every in-scope BICC requi
 | BICC-INV-002, BICC-INV-011 | BICC-0.2, BICC-1B.1, BICC-1B.2 |
 | BICC-INV-003, BICC-INV-008, BICC-INV-009 | Cross-cutting gate for every activating slice |
 | BICC-INV-004 | BICC-1A.3 |
-| BICC-INV-010 | BICC-0.5, BICC-5.1 |
+| BICC-INV-010 | BICC-3.3 (record/document promotion), BICC-4.3 (candidate promotion), BICC-5.2 (persistent memory) |
 | BICC-EVAL-001, BICC-EVAL-002, BICC-EVAL-003, BICC-EVAL-004, BICC-EVAL-005, BICC-EVAL-006, BICC-EVAL-007, BICC-EVAL-008, BICC-EVAL-009, BICC-EVAL-010, BICC-EVAL-011, BICC-EVAL-012, BICC-EVAL-013, BICC-EVAL-014, BICC-EVAL-015, BICC-EVAL-016, BICC-EVAL-017, BICC-EVAL-018, BICC-EVAL-019 | BICC-0.1; applicable feature slice supplies its corpus and result |
 | BICC-GATE-001, BICC-GATE-003, BICC-GATE-004A1, BICC-GATE-010 | BICC-1A.2; BICC-1B.2 where selected; final combined-system certification |
 | BICC-GATE-002, BICC-GATE-009 | BICC-1S |
@@ -556,13 +556,13 @@ This table is the authoritative initial assignment for every in-scope BICC requi
 | BICC-ANS-001, BICC-ANS-002, BICC-ANS-003, BICC-ANS-005, BICC-ANS-006, BICC-ANS-007, BICC-ANS-008, BICC-ANS-009, BICC-ANS-011 | BICC-1C.1 |
 | BICC-ANS-004 | BICC-3.2 |
 | BICC-ANS-010 | BICC-0.3, BICC-2.2 |
-| BICC-ANS-012 | BICC-1D.n, BICC-5.1 |
+| BICC-ANS-012 | Cross-cutting gate for every activating slice that renders or proposes a next action, handoff, recovery, or navigation target |
 | BICC-ANS-013, BICC-ANS-014 | BICC-1C.2 |
 | BICC-CTX-001, BICC-CTX-002, BICC-CTX-003, BICC-CTX-004, BICC-CTX-005 | BICC-2.1 |
 | BICC-CTX-006 | BICC-2.3 |
 | BICC-MM-001, BICC-MM-002, BICC-MM-003, BICC-MM-004, BICC-MM-005, BICC-MM-010 | BICC-3.1 |
-| BICC-MM-006, BICC-MM-007, BICC-MM-009, BICC-MM-013 | BICC-3.2 |
-| BICC-MM-008, BICC-MM-011, BICC-MM-012 | BICC-3.3 |
+| BICC-MM-006, BICC-MM-007, BICC-MM-009, BICC-MM-012, BICC-MM-013 | BICC-3.2 |
+| BICC-MM-008, BICC-MM-011 | BICC-3.3 |
 | BICC-BUY-001, BICC-BUY-002, BICC-BUY-003, BICC-BUY-004, BICC-BUY-005, BICC-BUY-006 | BICC-4.1 |
 | BICC-BUY-007, BICC-BUY-008, BICC-BUY-009, BICC-BUY-010 | BICC-4.3 |
 | BICC-BUY-011 | BICC-4.2 |
@@ -574,7 +574,8 @@ This table is the authoritative initial assignment for every in-scope BICC requi
 | BICC-UX-003 | BICC-0.5, BICC-2.3 |
 | BICC-UX-009 | BICC-1A.3 |
 | BICC-UX-010 | BICC-1C.2 |
-| BICC-OPS-001, BICC-OPS-002, BICC-OPS-003, BICC-OPS-004, BICC-OPS-005 | BICC-0.1 and every applicable activating slice |
+| BICC-OPS-001, BICC-OPS-002, BICC-OPS-003, BICC-OPS-005 | BICC-0.1 and every applicable activating slice |
+| BICC-OPS-004 | BICC-1A.1 generates the inventory; BICC-0.1 consumes it in the evaluation baseline |
 | BICC-OPS-006, BICC-OPS-007, BICC-OPS-008, BICC-OPS-009 | BICC-0.2 |
 | BICC-D01, BICC-D06, BICC-D11, BICC-D12, BICC-D13 | BICC-0.1 active defaults |
 | BICC-D02 | BICC-1C.2 |
@@ -597,6 +598,7 @@ Every completed slice shall append or update a record containing:
 | Tests/checks | Commands executed and exact pass/fail/skip counts |
 | Evaluation | Dataset/scorer versions, sample sizes, intervals, exclusions, and contamination status |
 | Gate result | Applicable gate only; unrelated future gates marked not applicable |
+| Inline-action evidence | For a slice that renders or proposes a next action, handoff, recovery, or navigation target: evidence that supported actions remain inline and no desktop link is introduced except an explicitly governed exception (BICC-ANS-012); otherwise not applicable |
 | Not run | Environment-dependent checks explicitly omitted |
 | Remaining discrepancy | Known incomplete behavior or decision |
 
