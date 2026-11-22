@@ -200,6 +200,8 @@ export function verifyRichPresentationPopulationEquivalence(
     }
   }
 
+  // An analysis is one result, not a collection: its summary is the displayed result, so there are no rows to count.
+  const isAnalysis = summary?.type === 'SUMMARY' && summary.presentationFamily === 'ANALYSIS';
   const listBlock = blocks.find((block) => block.type === 'GROUPED_LIST' && !block.id.endsWith(UNCONFIRMED_LIST_SUFFIX));
   const unconfirmedBlock = blocks.find((block) => block.type === 'GROUPED_LIST' && block.id.endsWith(UNCONFIRMED_LIST_SUFFIX));
   if (unconfirmedBlock && unconfirmedBlock.type === 'GROUPED_LIST') {
@@ -212,7 +214,7 @@ export function verifyRichPresentationPopulationEquivalence(
     ? listBlock.sections.flatMap((section) => section.items)
     : [];
 
-  if (receipt.projection !== 'COUNT' && renderedItems.length !== receipt.population.displayedCount) {
+  if (!isAnalysis && receipt.projection !== 'COUNT' && renderedItems.length !== receipt.population.displayedCount) {
     reasons.push(`displayed_count_mismatch:${renderedItems.length}!=${receipt.population.displayedCount}`);
   }
 
@@ -228,7 +230,7 @@ export function verifyRichPresentationPopulationEquivalence(
       }
       seenRenderedIds.add(item.id);
     }
-    if (!receipt.population.truncated && receipt.projection !== 'COUNT') {
+    if (!isAnalysis && !receipt.population.truncated && receipt.projection !== 'COUNT') {
       for (const expectedId of receipt.resolvedRecordIds) {
         if (!seenRenderedIds.has(expectedId)) {
           reasons.push(`missing_rendered_item:${expectedId}`);

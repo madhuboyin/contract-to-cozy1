@@ -13,6 +13,7 @@ import {
 import { ASK_SEMANTIC_PLAN_VERSION, type SemanticFacet, type SemanticRequestPlan, type SemanticWhereExpression } from '../semanticRequestPlan';
 import { ASK_SEMANTIC_DOMAINS, type SemanticDomainId } from '../governance/semanticOntologyBaseline';
 import type { AskListRecordKind, AskPresentationFamily } from '../../../../productFramework/ask/ask.contract';
+import { buildSliceAnalysisPresentation, wholeDollars, type SliceAnalysisInput } from '../slice/analysisPresentation';
 import {
   ENTITY_TYPE_OF_RECORD_KIND,
   UNCONFIRMED_LIST_SUFFIX,
@@ -431,6 +432,8 @@ function finalizeReceiptAndPresentation(input: {
   readonly conflictedCount?: number;
   /** Declared for analyses and comparisons; a list or a direct answer is derived from the rows. */
   readonly family?: AskPresentationFamily;
+  /** An analysis is presented as a conclusion with key facts, assumptions and a note, never as a list of rows. */
+  readonly analysis?: Omit<SliceAnalysisInput, 'receipt'>;
 }): {
   readonly receipt: SemanticReadReceipt;
   readonly entailment: SemanticReceiptEntailmentVerdict;
@@ -469,7 +472,7 @@ function finalizeReceiptAndPresentation(input: {
     answerVariantId: input.variantId,
   });
 
-  const blocks = buildSliceRichPresentation({
+  const blocks = input.analysis ? buildSliceAnalysisPresentation({ receipt, ...input.analysis }) : buildSliceRichPresentation({
     receipt,
     title: cleanTitle,
     summaryBody: renderedBody,
@@ -1722,6 +1725,41 @@ function executeNewStackFacet(
               : {}),
           }]
         : [];
+      // The presentation: a conclusion with key facts and assumptions, or what cannot be determined yet. The receipt keeps its one analysis result; nothing is rendered as a row.
+      const ownRentAnalysis: Omit<SliceAnalysisInput, 'receipt'> = ownRentResult === null
+        ? {
+            headline: 'I can’t determine the owning-versus-renting break-even yet.',
+            supportLine: `It needs ${missingSlots.map((slot) => missingWords[slot] ?? slot).join(', ')}.`,
+            cannotDetermine: true,
+            ...(savedAnalysisContext ? { note: { title: 'About your saved analysis', body: savedAnalysisContext.trim() } } : {}),
+          }
+        : (() => {
+            const horizon = ownRentResult.horizonYears;
+            const rentNow = wholeDollars(slots!.monthlyRentCents!);
+            const homeValue = wholeDollars(slots!.homeValueCents!);
+            const advantage = ownRentResult.ownAdvantageAtHorizonCents;
+            const headline = ownRentResult.crossoverYear === null
+              ? 'Owning does not beat renting within 30 years.'
+              : ownRentResult.breaksEvenWithinHorizon
+                ? `Owning beats renting starting in year ${ownRentResult.crossoverYear}.`
+                : `Owning beats renting in year ${ownRentResult.crossoverYear}, beyond your ${horizon}-year horizon.`;
+            return {
+              headline,
+              supportLine: `At ${rentNow} a month in rent and a ${homeValue} home, over ${horizon} years.`,
+              facts: [
+                ...(ownRentResult.crossoverYear !== null ? [{ label: 'Break-even year', value: `Year ${ownRentResult.crossoverYear}` }] : []),
+                ...(advantage !== null ? [{ label: advantage >= 0 ? `Estimated owning advantage at ${horizon} years` : `Estimated renting advantage at ${horizon} years`, value: wholeDollars(Math.abs(advantage)) }] : []),
+                ...(ownRentResult.cumulativeRentAtHorizonCents !== null ? [{ label: `Rent paid over ${horizon} years`, value: wholeDollars(ownRentResult.cumulativeRentAtHorizonCents) }] : []),
+              ],
+              assumptions: [
+                `Monthly rent for a comparable home: ${rentNow}, rising 3% a year`,
+                `Home value: ${homeValue}, growing 3.5% a year`,
+                `80% financed at ${((slots!.currentRateBps ?? 650) / 100).toFixed(2)}%${slots!.currentRateBps ? '' : ' (assumed)'}`,
+                'Carrying costs of 2.2% of the home’s value a year',
+                'Selling and closing costs of 6% of the home’s value',
+              ],
+            };
+          })();
       const finalized = finalizeReceiptAndPresentation({
         facet,
         snapshot,
@@ -1735,7 +1773,7 @@ function executeNewStackFacet(
         summaryBody: summary,
         variantId: 'variant.finance_break_even',
         family: 'ANALYSIS',
-        unknownCount: missingSlots.length > 0 ? missingSlots.length : 0,
+        analysis: ownRentAnalysis,
       });
       return {
         facetId: facet.id,
@@ -1798,6 +1836,39 @@ function executeNewStackFacet(
             : {}),
         }]
       : [];
+    const refiMissingWords: Record<string, string> = {
+      currentRateBps: 'your current rate', candidateRateBps: 'the new rate you are considering', closingCostsCents: 'the closing costs', loanBalanceCents: 'your loan balance',
+    };
+    const refiAnalysis: Omit<SliceAnalysisInput, 'receipt'> = missingSlots.length > 0 || !refiResult
+      ? {
+          headline: 'I can’t work out the refinance break-even yet.',
+          supportLine: `It needs ${missingSlots.map((slot) => refiMissingWords[slot] ?? slot).join(', ')}.`,
+          cannotDetermine: true,
+        }
+      : (() => {
+          const current = `${(slots!.currentRateBps! / 100).toFixed(2)}%`;
+          const candidate = `${(slots!.candidateRateBps! / 100).toFixed(2)}%`;
+          const noSavings = refiResult.monthlySavingsCents !== null && refiResult.monthlySavingsCents <= 0;
+          const headline = noSavings
+            ? 'Refinancing would not lower your monthly payment at these rates.'
+            : refiResult.breaksEvenWithinHorizon
+              ? `Refinancing breaks even in ${refiResult.breakEvenMonths} ${refiResult.breakEvenMonths === 1 ? 'month' : 'months'}.`
+              : `Refinancing breaks even in ${refiResult.breakEvenMonths} ${refiResult.breakEvenMonths === 1 ? 'month' : 'months'}, longer than your ${horizonYears}-year horizon.`;
+          return {
+            headline,
+            supportLine: `From ${current} to ${candidate} with ${wholeDollars(slots!.closingCostsCents!)} in closing costs.`,
+            facts: [
+              ...(refiResult.monthlySavingsCents !== null ? [{ label: 'Monthly savings', value: wholeDollars(refiResult.monthlySavingsCents) }] : []),
+              ...(refiResult.breakEvenMonths !== null ? [{ label: 'Break-even', value: `${refiResult.breakEvenMonths} ${refiResult.breakEvenMonths === 1 ? 'month' : 'months'}` }] : []),
+              { label: 'Your horizon', value: `${horizonYears} ${horizonYears === 1 ? 'year' : 'years'}` },
+            ],
+            assumptions: [
+              `Current rate ${current}, new rate ${candidate}`,
+              `Closing costs of ${wholeDollars(slots!.closingCostsCents!)}`,
+              ...(typeof slots!.loanBalanceCents === 'number' && slots!.loanBalanceCents > 0 ? [`Loan balance of ${wholeDollars(slots!.loanBalanceCents)}`] : []),
+            ],
+          };
+        })();
     const finalized = finalizeReceiptAndPresentation({
       facet,
       snapshot,
@@ -1811,7 +1882,7 @@ function executeNewStackFacet(
       summaryBody: summary,
       variantId: 'variant.finance_break_even',
       family: 'ANALYSIS',
-      unknownCount: missingSlots.length > 0 ? missingSlots.length : 0,
+      analysis: refiAnalysis,
     });
     return {
       facetId: facet.id,
@@ -3422,6 +3493,11 @@ function notAnsweredNote(overflowFacets: readonly PlanOverflowFacet[]): string {
   return `I couldn’t answer ${parts.join(' or ')} here, so ${parts.length === 1 ? 'that part isn’t' : 'those parts aren’t'} included in this answer.`;
 }
 
+/** An analysis facet is one result with its own conclusion, assumptions and note; it is never a row in a collection. */
+function isAnalysisFacet(facet: CrossDomainFacetExecutionResult): boolean {
+  return facet.blocks?.some((block) => block.type === 'SUMMARY' && block.presentationFamily === 'ANALYSIS') === true;
+}
+
 export function buildOperationResultFromCrossDomainExecution(execution: CrossDomainExecutionResult): AskOperationResult {
   if (execution.status === 'FORBIDDEN') {
     return {
@@ -3578,7 +3654,7 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
     });
     const listSections = execution.facetResults
       // Claims and permits retain symmetric sections in a compound answer, including an explicit zero-record section.
-      .filter((f) => (f.recordIds.length > 0 || f.jobMatch?.startsWith('query.claim.') || f.jobMatch?.startsWith('query.permit.')) && f.receipt && f.receipt.projection !== 'COUNT')
+      .filter((f) => !isAnalysisFacet(f) && (f.recordIds.length > 0 || f.jobMatch?.startsWith('query.claim.') || f.jobMatch?.startsWith('query.permit.')) && f.receipt && f.receipt.projection !== 'COUNT')
       .map((facetResult) => {
         const rowById = new Map((facetResult.rows ?? []).map((row) => [row.id, row]));
         const sourceType = facetResult.receipt?.provenance.sourceType;
@@ -3632,6 +3708,10 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
         filters: [],
         listDensity: 'DENSE',
       });
+    }
+    // An analysis facet's assumptions and notes ride along in a compound answer; its conclusion is already in the combined summary.
+    for (const facetResult of execution.facetResults.filter(isAnalysisFacet)) {
+      blocks.push(...(facetResult.blocks ?? []).filter((block) => block.type === 'ASSUMPTIONS' || block.type === 'LIMITATION'));
     }
     // Records a facet could not confirm are their own collection under their own heading, never mixed into the matches above.
     for (const facetResult of execution.facetResults) {
