@@ -73,7 +73,7 @@ Ask supports typed blocks, evidence and freshness, declared interactions, propos
 
 ### 4.4 Existing foundations for advanced conversation
 
-The repository already contains deterministic routing, local semantic matching, optional bounded model understanding, conversational capture, follow-up context, result synthesis, bounded read composition, evaluation harnesses, and operational controls. Several remain disabled, uncertified, partial, or unevenly adopted. The best path is certification and integration, not a second conversation platform. **[Code-traced]**
+The repository already contains deterministic routing, local semantic matching, optional bounded model understanding, conversational capture, follow-up context, bounded read composition, evaluation harnesses, operational controls, and a disabled model-backed result-synthesis path. Several remain disabled, uncertified, partial, or unevenly adopted. The best path is certification and integration, not a second conversation platform; model-backed result synthesis is retired rather than activated because it writes answer text and conflicts with the governing boundary. **[Code-traced]**
 
 ## 5. Principal gaps
 
@@ -103,7 +103,7 @@ Ask must distinguish at least:
 5. **General guidance** — useful guidance explicitly not derived from the home record; and
 6. **Cannot answer yet** — missing data, ambiguity, authorization, unsupported scope, or unavailable source.
 
-The current fallback architecture is intentionally constrained, but that constraint can produce robotic refusal for safe general questions. General guidance must become a declared, separately evaluated mode—not a relaxation of record-grounding.
+The current fallback architecture is intentionally constrained, but gaps in deterministic reach and the authored guidance catalogue can produce robotic refusal for safe general questions. The fix is to improve deterministic reach and govern a versioned, reviewed guidance catalogue with measured held-out topic coverage. `GENERAL_GUIDANCE` remains the declared presentation/evidence mode for those authored answers; the mode itself does not create content and does not relax record-grounding.
 
 ### P0 — Evaluation does not yet express the whole user outcome
 
@@ -147,10 +147,10 @@ Registry and renderer size increase the cost of adding capabilities. Consolidati
 
 ## 6. Recommended program order
 
-1. **Quality contract and baseline:** scenario taxonomy, hidden evaluation sets, end-to-end scoring, latency and cost baselines.
-2. **Deterministic reach and recovery:** data-point reads, deterministic entity/filter extraction, focused clarification, and bounded recovery without new model authority.
-3. **Last-resort semantic planning:** only after certified deterministic paths do not safely resolve the request, enable approved and calibrated read strata under the governing privacy and fail-closed contract; the model never writes the answer.
-4. **Answer modes and safe proposals:** deliver deterministic/authored general guidance and social turns, certified answer modes and emergency handling, then add write-proposal families one at a time.
+1. **Quality contract and baseline:** scenario taxonomy, hidden evaluation sets, cross-revision all-prompt success scoring, latency and cost baselines.
+2. **Deterministic reach and recovery, with immediate safety in parallel:** data-point reads, deterministic entity/filter extraction, focused clarification, and bounded recovery without new model authority; certify emergency interception as soon as its Phase 0 corpus and thresholds exist.
+3. **Last-resort semantic planning:** only after deterministic value delivery and reach pass their gates, enable approved and calibrated read strata under the governing privacy and fail-closed contract; the model never writes the answer.
+4. **Answer modes and safe proposals:** deliver deterministic/authored general guidance and social turns, certified answer modes, then add write-proposal families one at a time.
 5. **Continuity and composition:** certify and extend current bounded read composition; add structured turn summaries and reference resolution.
 6. **Multimodal and document answers:** inline attachments, authorized cited retrieval, injection isolation, and explicit promotion into the record.
 7. **Prospective Buyer Discovery:** candidate-home workspace, fair-housing boundaries, and lifecycle promotion.
@@ -182,8 +182,9 @@ This table prevents the program from creating a second conversational platform. 
 | `GeminiUnderstandingProvider` | **Refactor and evaluate** | It may propose only eligible typed plans and remains subject to deterministic validation and existing semantic gates. |
 | `semanticProviderOrchestrator` | **Consolidate with the governing planner** | Do not introduce another orchestration layer. Retire duplicated branches after consumer tracing. |
 | Deterministic regex rules and local lexical/feature-hash classifier | **Retain as candidate evidence; certify or demote claiming paths** | Safe provisional reads remain governed by the Understanding Reliability FRD. |
-| Result synthesis behind `ASK_RESULT_SYNTHESIS_ENABLED` | **Refactor, evaluate, then activate or retire** | It must preserve per-facet answer mode, validated values, citations, limitations, and entailment. |
-| Conversational capture | **Retain and certify by write family** | Clear-intent recall is measured; canonical confirmation, authorization, idempotency, and reconciliation remain mandatory. |
+| Model-backed result synthesis behind `ASK_RESULT_SYNTHESIS_ENABLED` | **Retire after consumer tracing** | It writes homeowner-facing answer text and has no named exception to the model-does-not-write-answers rule. Retain deterministic composition of validated facets only. |
+| Conversational capture extraction in `extractionContract.ts` | **Retain under MF-014, MF-017, MF-034, MF-038, and MF-046** | A deterministic pre-filter gates a bounded structured extraction call. It does not route or change the answer and produces only typed, confirmation-governed candidates. |
+| Conversational capture write families | **Retain and certify by write family** | Clear-intent recall is measured; canonical confirmation, authorization, idempotency, and reconciliation remain mandatory. |
 | Bounded read composition | **Extend** | It is the existing multi-facet read mechanism; writes are never composed. |
 | `PROSPECTIVE_BUYER` audience value | **Activate only through an approved account/lifecycle design, otherwise keep unreachable or remove** | The enum does not override the current authenticated account-role boundary. |
 | Legacy `POST /api/gemini/chat` | **Trace consumers, migrate, then retire if unneeded** | Do not remove until all current clients and exceptional behaviors are identified. |

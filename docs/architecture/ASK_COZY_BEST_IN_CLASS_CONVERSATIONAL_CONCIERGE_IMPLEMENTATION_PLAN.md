@@ -1,6 +1,6 @@
 # Ask Cozy Best-in-Class Conversational Concierge — Implementation Plan
 
-**Status:** Draft v0.1 for owner review; implementation slices and acceptance plan, not a delivery claim
+**Status:** Draft v0.2 for owner review; implementation slices and acceptance plan, not a delivery claim
 
 **Date:** 2026-11-22
 
@@ -33,23 +33,37 @@ General guidance and social turns use approved authored content or deterministic
 - No model-assisted stratum activates merely because its code compiles or its provider returns schema-valid output. Its privacy, calibration, availability, and held-out gates must pass.
 - No write family inherits certification from another family.
 - `BICC-GATE-006` and `BICC-EVAL-010` are continuous invariants for every applicable slice.
-- Validation is repository-local and environment-independent unless an authoritative requirement explicitly requires more. No development database, service stack, browser environment, or staged user rollout is implied by this plan.
+- Validation is repository-local and environment-independent unless an authoritative requirement explicitly requires more. No development database, service stack, browser environment, or staged user rollout is implied by this plan. One-stratum-at-a-time activation is technical capability gating based on evaluation evidence, not a cohort, canary, compatibility phase, or staged user release.
+
+### 2.1 Model-call register
+
+Every Ask-related model call shall be present in the provider-boundary register before it can run. The initial known calls have these dispositions:
+
+| Call and path | Purpose | Governing authority | Output authority | Control and disposition |
+|---|---|---|---|---|
+| Conversational extraction — `apps/backend/src/services/ask/conversationalUnderstanding/extractionContract.ts`, route `ai:ask-conversational-capture-extraction` | Extract typed fact, event, warranty, evidence, or goal candidates after a deterministic pre-filter | `MF-014`, `MF-017`, `MF-034`, `MF-038`, `MF-046` | Candidate proposals only; it does not route, change the answer, or commit a material write | `ASK_CONVERSATIONAL_CAPTURE_ENABLED`, default off; retain and certify by candidate/write family |
+| Semantic understanding — `apps/backend/src/services/ask/modelRouting/understandingProvider.ts` | Last-resort typed target/plan proposal after certified deterministic paths do not resolve the request | `FR-UND-*`, `FR-PRV-*`, BICC-INV-011, BICC-UND-012 | Validated plan only; handlers remain answer authority; write targets are preview-only | `ASK_UNDERSTANDING_PLANNER_ENABLED`, provider-terms and homeowner-text approvals, all default off; retain disabled until each stratum passes |
+| Result synthesis — `apps/backend/src/services/ask/askResultSynthesis.service.ts` | Generate homeowner-facing summary text from result blocks | No compatible named exception | Writes answer wording | `ASK_RESULT_SYNTHESIS_ENABLED`, default off; retire service, control, call site, provider method, metrics, and dedicated tests after consumer tracing |
+| Offline evaluation judge — implementation selected by BICC-0.1 | Score semantic properties that deterministic checks and human review cannot decide economically | BICC-EVAL-014, BICC-OPS-006–009 | Evaluation evidence only; never runtime behavior | Synthetic approved evaluation material only; never real or replayed homeowner payloads |
+
+BICC-0.2 shall trace the repository for additional model/provider call sites and fail the inventory if any call lacks a purpose, authorizing requirement, allowed input, output authority, control default, failure behavior, evaluation gate, and retain/retire decision.
 
 ## 3. Dependency and delivery map
 
 | Slice | Outcome | Depends on | Activation or completion gate |
 |---|---|---|---|
-| `BICC-0.1` | Evaluation contract and sealed pools | Owner decisions D01, D06, D11, D12 | BICC-EVAL-001–017 executable; scorer and pool provenance approved |
-| `BICC-0.2` | Provider-boundary inventory | `BICC-0.1`; applicable provider facts | BICC-OPS-006–008 evidence complete before any new external call |
+| `BICC-0.1` | Evaluation contract, sealed pools, and cross-revision baseline | Owner decisions D01, D06, D11, D12, D13 | BICC-EVAL-001–018 executable; scorer, pool provenance, and historical comparison approved |
+| `BICC-0.2` | Provider-boundary and model-call inventory | `BICC-0.1`; applicable provider facts | BICC-OPS-006–009 evidence complete before any new external call |
+| `BICC-0.3` | Retire model-backed result synthesis | Model-call inventory in `BICC-0.2` | No consumer or configuration path can invoke model-written result synthesis |
 | `BICC-0.5` | Independent UX corrections | Current defect reproduction | Focused regression and accessibility evidence per accepted defect |
 | `BICC-1A.1` | Deterministic reach inventory | `BICC-0.1` | Reachability denominator and missing-target list approved |
-| `BICC-1A.2` | Deterministic data-point/entity/filter reach | `BICC-1A.1` | Phase 1A portions of GATE-001 and GATE-003 pass |
+| `BICC-1A.2` | Deterministic data-point/entity/filter reach | `BICC-1A.1` | GATE-004A1, GATE-010, and Phase 1A portions of GATE-001/GATE-003 pass |
 | `BICC-1A.3` | Clarification and bounded recovery | `BICC-1A.2` | UND-006–009, PORT-003, and UX-009 corpus passes |
+| `BICC-1S` | Immediate-safety interception | `BICC-0.1` and D11; runs alongside Phase 1A | GATE-002, GATE-009, and SAFE-001–003 pass |
 | `BICC-1B.1` | Last-resort semantic-plan contract | `BICC-0.2`, `BICC-1A.2` | Ordering, schema, eligibility, privacy, and no-answer-authority tests pass |
 | `BICC-1B.2` | First approved model-assisted read stratum | `BICC-1B.1`; approved calibration stratum | Held-out GATE-001/GATE-003 subset and availability model pass |
-| `BICC-1C.1` | Atomic answer-mode contract | `BICC-0.1`, `BICC-1A.2` | GATE-004A, GATE-004B1, supported-mode GATE-005 subset pass |
-| `BICC-1C.2` | Authored general guidance and social turns | `BICC-1C.1` | GATE-007/007B and EVAL-016 pass without a model answer call |
-| `BICC-1C.3` | Emergency interception | `BICC-0.1` and D11 | GATE-002, GATE-009, and SAFE-001–003 pass |
+| `BICC-1C.1` | Atomic answer-mode contract | `BICC-0.1`, `BICC-1A.2` | GATE-004A2, GATE-004B1, supported-mode GATE-005 subset pass |
+| `BICC-1C.2` | Authored general guidance and social turns | `BICC-1C.1`, D13 | GATE-007/007B/010/011 and EVAL-016 pass without a model answer call |
 | `BICC-1D.n` | One approved write-proposal family | `BICC-1A.2`; family selected by D06 | Family-specific GATE-008 and EVAL-010 pass |
 | `BICC-2.1` | Structured continuity and follow-ups | Phase 1A; applicable Phase 1C modes | CTX-001–005 follow-up corpus passes |
 | `BICC-2.2` | Bounded composed reads | `BICC-2.1` | Compound/facet coverage passes with no silent loss or retargeting |
@@ -73,6 +87,8 @@ General guidance and social turns use approved authored content or deterministic
 - Build the rotating sealed-shard manifest, burn/replenishment ledger, overlap checks, sample floors, and held-out-first report.
 - Implement the versioned claim segmentation and entailment/unsupported-claim scorer contract.
 - Record human-label protocol, reviewer independence, adjudication, scorer calibration, and exact confidence methods.
+- Re-evaluate the current and recent comparable revisions using the same all-prompt success definition and still-eligible held-out prompts. Record routing-path movement and treat the eight routing-ratchet failures/demoted-fast-path explanation as a hypothesis until reproduced.
+- Keep offline evaluator models synthetic-only and use deterministic lint, exact assertions, and human review for fixed authored content wherever sufficient.
 
 **Expected existing files**
 
@@ -91,17 +107,19 @@ General guidance and social turns use approved authored content or deterministic
 - Report cannot emit a certification headline from main-corpus results alone.
 - Confidence-bound fixtures include zero-event and non-zero-event cases.
 - LLM-judge fixtures pin provider/model/prompt/schema versions and fail when calibration is absent or stale.
+- Evaluator egress rejects real or replayed homeowner prompts and production payloads.
 - Human-label fixtures cover agreement, adjudication, and safety-critical escalation.
+- Cross-revision reports show absolute success, change, confidence intervals, and prompt/routing movements without comparing incompatible historical metrics as though they used the same denominator.
 
 **Gate**
 
-All BICC-EVAL requirements are executable. D01, D06, D11, and D12 remain owner decisions and are not inferred from code.
+All BICC-EVAL requirements are executable and the cross-revision baseline exists. D01, D06, D11, D12, and D13 remain owner decisions and are not inferred from code.
 
 ### BICC-0.2 — Provider-boundary register and egress proof
 
 **Scope**
 
-- Inventory routing, document, vision, synthesis, recommendation, and evaluator call paths separately.
+- Inventory routing, conversational extraction, document, vision, synthesis, recommendation, and evaluator call paths separately; reconcile every path with the §2.1 register.
 - Add purpose-specific allowlisted serializers and captured-payload evidence at the governed egress boundary.
 - Record real-data versus synthetic-only approvals.
 
@@ -125,7 +143,27 @@ All BICC-EVAL requirements are executable. D01, D06, D11, and D12 remain owner d
 
 **Gate**
 
-BICC-OPS-006–008 pass before a new provider path or real homeowner payload is enabled.
+BICC-OPS-006–009 pass before a new provider path or real homeowner payload is enabled.
+
+### BICC-0.3 — Retire model-backed result synthesis
+
+**Scope**
+
+- Trace every consumer of `synthesizeAskResult` and `ASK_RESULT_SYNTHESIS_ENABLED`.
+- Preserve only deterministic composition of validated facets under BICC-ANS-010.
+- Remove the model synthesis service, operational control and kill switch, provider method, call site, model-stage metrics, and dedicated tests after confirming no required consumer remains.
+
+**Expected existing files**
+
+- `apps/backend/src/services/ask/askResultSynthesis.service.ts`
+- `apps/backend/src/services/ask/support/answerGuards.ts`
+- `apps/backend/src/config/askOperationalControls.ts`
+- `apps/backend/src/services/gemini.service.ts`
+- synthesis-focused tests and configuration references found by repository-wide consumer tracing
+
+**Focused evidence and gate**
+
+Repository search and import/call-graph checks find no callable model-backed synthesis path or synthesis flag. Existing deterministic results and summaries remain unchanged except where deterministic composition is explicitly corrected. No model call writes answer text.
 
 ### BICC-0.5 — Independent experience corrections
 
@@ -187,10 +225,12 @@ Implement missing deterministic reads and query shapes one domain slice at a tim
 - Positive, adjacent-negative, wrong-entity, wrong-property, missing-value, and authorization cases.
 - Parser/legacy agreement and containment remain intact.
 - Values come only from the canonical reader.
+- At least 300 independently eligible deterministic home-record read trials satisfy the GATE-004A1 zero-error and confidence-bound contract before BICC-1B activation.
+- All-prompt held-out success and change from the last accepted revision are reported under GATE-010; improved precision cannot conceal lost reach.
 
 **Gate**
 
-The approved Phase 1A domain slice passes its BICC-GATE-001 and BICC-GATE-003 subset; BICC-GATE-006 remains zero.
+The approved Phase 1A matrix passes its BICC-GATE-001 and BICC-GATE-003 subset, BICC-GATE-004A1, and BICC-GATE-010; BICC-GATE-006 remains zero.
 
 ### BICC-1A.3 — Clarification and bounded recovery
 
@@ -209,6 +249,24 @@ Implement one-focused-clarification behavior, the consecutive-clarification limi
 **Focused evidence and gate**
 
 No repeated clarification loop; no best-interpretation escape for material ambiguity; no silent current-property answer to a portfolio question; no mutation from recovery. UND-006–009, PORT-003, and UX-009 pass.
+
+### BICC-1S — Immediate-safety interception, parallel with Phase 1A
+
+**Scope**
+
+Extend and certify deterministic active-emergency detection without waiting for model planning or answer-mode work and without turning educational, historical, conditional, or resolved mentions into active emergencies.
+
+**Expected existing files**
+
+- `apps/backend/src/services/ask/support/emergencyBoundary.ts`
+- `apps/backend/src/services/ask/askRoutingCascade.ts`
+- `apps/backend/tests/ask/emergencyParaphrases.test.js`
+- `apps/backend/tests/ask/emergencyBoundaryRoutineDetector.test.js`
+- `apps/backend/tests/ask/emergencyBoundaryWording.test.js`
+
+**Focused evidence and gate**
+
+Critical canonical cases have zero misses; broader recall and false-positive results include sample sizes and intervals; emergency presentation precedes deterministic routing, model planning, normal work, guidance, and exact-four behavior. GATE-002 and GATE-009 pass after D11 approval.
 
 ### BICC-1B.1 — Last-resort semantic-plan boundary
 
@@ -260,7 +318,7 @@ The BICC-1B.1 paths plus the selected domain's catalogue, handler, canonical rea
 
 **Gate**
 
-The stratum-specific portions of GATE-001 and GATE-003 pass with approved availability assumptions or measurements. Passing one stratum activates only that stratum.
+The stratum-specific portions of GATE-001, GATE-003, and GATE-010 pass with approved availability assumptions or measurements. Passing one stratum activates only that technical capability stratum for all eligible users; it is not a cohort or staged user rollout.
 
 ### BICC-1C.1 — Atomic answer modes
 
@@ -279,17 +337,18 @@ Implement atomic facet labels and presentation for `HOME_RECORD`, `CALCULATION`,
 
 **Focused evidence and gate**
 
-Mixed-facet answers retain separate modes and evidence; calculations use authoritative/explicit inputs; assumed inputs become estimates; recommendations retain supporting facets. GATE-004A, GATE-004B1, and the supported-mode portion of GATE-005 pass.
+Mixed-facet answers retain separate modes and evidence; calculations use authoritative/explicit inputs; assumed inputs become estimates; recommendations retain supporting facets. GATE-004A2, GATE-004B1, and the supported-mode portion of GATE-005 pass.
 
 ### BICC-1C.2 — Authored general guidance and social turns
 
 **Scope**
 
-Keep general guidance and small talk deterministic or approved-content based. Do not add a model call.
+Keep general guidance and small talk deterministic or approved-content based. Govern the existing guidance catalogue with stable identifiers, named ownership, evidence basis, topic inventory, review dates, deterministic lint, and a reviewed growth process. Do not add a model call.
 
 **Expected existing files**
 
 - `apps/backend/src/services/ask/support/generalGuidanceCard.ts`
+- `apps/backend/src/services/ask/askGeneralGuidanceCatalog.ts`
 - `apps/backend/src/services/ask/askRemoteFallbackTypedClaims.ts`
 - `apps/backend/src/services/ask/askConciergePromptPolicy.ts`
 - `apps/backend/tests/ask/generalGuidanceCard.test.js`
@@ -298,31 +357,13 @@ Keep general guidance and small talk deterministic or approved-content based. Do
 
 **Focused evidence and gate**
 
-Social turns do not route, execute, clarify, or create an action row; guidance is clearly not home-record-derived and never claims inspection, eligibility, coverage, diagnosis, or a guaranteed outcome. GATE-007, GATE-007B, and EVAL-016 pass.
-
-### BICC-1C.3 — Emergency interception
-
-**Scope**
-
-Extend and certify active-emergency detection without turning educational, historical, conditional, or resolved mentions into active emergencies.
-
-**Expected existing files**
-
-- `apps/backend/src/services/ask/support/emergencyBoundary.ts`
-- `apps/backend/src/services/ask/askRoutingCascade.ts`
-- `apps/backend/tests/ask/emergencyParaphrases.test.js`
-- `apps/backend/tests/ask/emergencyBoundaryRoutineDetector.test.js`
-- `apps/backend/tests/ask/emergencyBoundaryWording.test.js`
-
-**Focused evidence and gate**
-
-Critical canonical cases have zero misses; broader recall and false-positive results include sample sizes and intervals; emergency presentation precedes normal work and exact-four behavior. GATE-002 and GATE-009 pass after D11 approval.
+Social turns do not route, execute, clarify, or create an action row; guidance is clearly not home-record-derived and never claims inspection, eligibility, coverage, diagnosis, or a guaranteed outcome. Catalogue schema, prohibited-claim lint, required boundaries, evidence/source checks, duplicate/conflict checks, stale-review checks, and human content/safety review pass before any optional semantic evaluator is considered. GATE-007, GATE-007B, GATE-010, GATE-011, and EVAL-016 pass.
 
 ### BICC-1D.n — Write-proposal family
 
 **Scope**
 
-Choose one family, trace its current deterministic command, and close proposal recall without broadening execution authority. Model classification, if already permitted by the governing FRD, can open only a validated preview; the canonical writer still requires review and confirmation.
+Choose one family, trace its current deterministic command, and close proposal recall without broadening execution authority. The retained conversational-extraction model exception is governed by MF-014/MF-017/MF-034/MF-038/MF-046 and may produce only typed candidates. The retained understanding-provider exception is governed by FR-UND/FR-PRV and may identify a write target only as a validated preview. Neither model executes the canonical writer, which still requires review and confirmation.
 
 **Expected existing files**
 
