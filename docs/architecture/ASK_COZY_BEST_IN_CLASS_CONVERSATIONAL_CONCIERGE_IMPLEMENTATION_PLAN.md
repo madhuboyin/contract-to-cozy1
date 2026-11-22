@@ -1,6 +1,6 @@
 # Ask Cozy Best-in-Class Conversational Concierge — Implementation Plan
 
-**Status:** Draft v0.6; FRD defaults active, owner review optional; implementation slices and acceptance plan, not a delivery claim
+**Status:** Draft v0.7; FRD defaults active, owner review optional; implementation slices and acceptance plan, not a delivery claim
 
 **Date:** 2026-11-22
 
@@ -24,7 +24,7 @@ The existing owner rule remains controlling:
 
 General guidance and social turns use approved authored content or deterministic composition. Model-generated guidance is outside this plan unless the owner approves a separate FRD amendment and certification contract.
 
-The following named structured-analysis exceptions are intentional and sit outside the last-resort semantic-routing order: conversational-capture candidate extraction, document evidence/citation candidate extraction, and image observation/urgency candidate extraction. They are separate governed provider flows, never answer authors, and receive no authority beyond closed-schema candidates that deterministic validation accepts or rejects.
+The following three named structured-analysis exceptions are currently authorized and sit outside the last-resort semantic-routing order: conversational-capture candidate extraction, document evidence/citation candidate extraction, and image observation/urgency candidate extraction. A fourth exception for sensitive-document classification is conditional under BICC-D04 and is not authorized unless deterministic checks prove insufficient and its separate provider flow satisfies BICC-OPS-006 through BICC-OPS-009. Every exception is a governed provider flow, never an answer author, and receives no authority beyond closed-schema candidates that deterministic validation accepts or rejects.
 
 ## 2. Working rules
 
@@ -73,6 +73,7 @@ BICC-0.2 shall trace the repository for additional model/provider call sites and
 | `BICC-1D.n` | One write-proposal family | `BICC-1A.2`; family selected under active D06 default | Family-specific GATE-008 and EVAL-010 pass |
 | `BICC-2.1` | Structured continuity and follow-ups | Phase 1A; applicable Phase 1C modes | CTX-001–005 follow-up corpus passes |
 | `BICC-2.2` | Bounded composed reads | `BICC-2.1` | Compound/facet coverage passes with no silent loss or retargeting |
+| `BICC-2.3` | Safe regeneration and per-attempt feedback | `BICC-2.1`; execution identity and retry paths | CTX-006 and UX-003 attempt-linking, preservation, feedback, and no-write-replay corpus passes |
 | `BICC-3.1` | Attachment lifecycle and isolation | D04, D10, `BICC-0.2` | MM-001–005 and MM-010 pass |
 | `BICC-3.2` | Document-grounded answers | `BICC-3.1`, scorer from `BICC-0.1` | GATE-004B2 and `USER_DOCUMENT` GATE-005 subset pass |
 | `BICC-3.3` | Injection isolation and promotion | `BICC-3.2` | EVAL-015 and MM-008/MM-011/MM-012 pass |
@@ -183,6 +184,11 @@ Cancellation, copy, persisted feedback, mobile overlap, duplicate-close behavior
 
 - `apps/frontend/src/components/ask/workspace/ConciergeHome.tsx`
 - `apps/frontend/src/components/ask/workspace/ExecutionCard.tsx`
+- `apps/frontend/src/components/AIChat.tsx`
+- `apps/frontend/src/components/ask/AskWorkspace.tsx`
+- `apps/frontend/src/app/(dashboard)/layout.tsx`
+- `apps/frontend/src/components/ask/workspace/useAskRequest.ts`
+- `apps/frontend/src/components/ask/VoiceInputButton.tsx`
 - `apps/frontend/src/features/ask/conversationView.ts`
 - relevant existing component and `e2e/ask` tests selected from the reproduced defect
 
@@ -274,7 +280,7 @@ Extend and certify deterministic active-emergency detection without waiting for 
 
 **Focused evidence and gate**
 
-Critical canonical cases have zero misses; broader recall and false-positive results include sample sizes and intervals; emergency presentation precedes deterministic routing, model planning, normal work, guidance, and exact-four behavior. GATE-002 and GATE-009 pass after D11 approval.
+Critical canonical cases have zero misses; broader recall and false-positive results include sample sizes and intervals; emergency presentation precedes deterministic routing, model planning, normal work, guidance, and exact-four behavior. GATE-002 and GATE-009 pass under the active BICC-D11 default unless a later versioned override applies.
 
 ### BICC-1B.1 — Last-resort semantic-plan boundary
 
@@ -408,6 +414,27 @@ Add bounded structured follow-up state, canonical entity references, context inv
 
 Follow-up identity, property switching, access loss, expired/deleted entity, dependencies, partial failure, facet coverage, and no write composition. CTX requirements and compound/follow-up certification pass.
 
+### BICC-2.3 — Safe regeneration and per-attempt feedback
+
+**Scope**
+
+Deliver user-requested regeneration as a new attempt linked to the original execution. Preserve both results and their attempt identities, persist feedback against the selected attempt, and never overwrite a prior answer or replay a consequential write.
+
+**Expected existing files**
+
+- `apps/backend/src/services/ask/askFollowUpContext.ts`
+- `apps/backend/src/services/ask/execution/askRetry.ts`
+- `apps/backend/src/services/ask/execution/askFeedback.ts`
+- `apps/backend/src/controllers/ask.controller.ts`
+- `apps/backend/src/routes/ask.routes.ts`
+- `apps/frontend/src/components/ask/workspace/ExecutionCard.tsx`
+- `apps/frontend/src/components/ask/workspace/useAskRequest.ts`
+- focused retry, regeneration, attempt-linking, feedback persistence, reload, and consequential-write replay tests
+
+**Focused evidence and gate**
+
+Duplicate delivery, reload, concurrent retry, original/result preservation, attempt-specific feedback, failed retry, and prior consequential-write scenarios prove CTX-006 and UX-003. Every regenerated result links to its source execution/attempt, both remain auditable, feedback reloads against the intended attempt, and no material effect is repeated.
+
 ### BICC-3.1 to BICC-3.3 — Attachments and document-grounded answers
 
 **Scope**
@@ -417,8 +444,12 @@ Deliver upload/preview lifecycle, authorized retrieval, citations, version/delet
 **Expected existing files**
 
 - `apps/backend/src/services/ask/handlers/documents.handler.ts`
+- `apps/backend/src/services/ask/askIntake.service.ts`
+- `apps/backend/src/controllers/askIntake.controller.ts`
 - document retrieval/index and promotion paths identified through that handler and governing document FRDs
 - `apps/frontend/src/components/ask/DocumentResultList.tsx`
+- `apps/frontend/src/components/ask/intake/AskIntakeDialog.tsx`
+- `apps/frontend/src/components/ask/AttachEvidenceControl.tsx`
 - `apps/frontend/src/components/ask/__tests__/documentResultContinuity.test.tsx`
 - `apps/frontend/src/components/ask/__tests__/calmDocumentAnswer.test.tsx`
 - `apps/backend/tests/ask/documentLookup.test.js`
@@ -465,7 +496,11 @@ Deliver cancellation/reconnect truthfulness, workload limits, measured latency, 
 **Expected existing files**
 
 - Ask request/execution transport paths reached through `apps/backend/src/services/ask/execution/askConcierge.ts`
+- `apps/backend/src/routes/ask.routes.ts`
+- `apps/backend/src/controllers/ask.controller.ts`
+- `apps/backend/src/services/ask/execution/createAskExecution.ts`
 - `apps/frontend/src/components/ask/workspace/ConciergeHome.tsx`
+- `apps/frontend/src/components/ask/workspace/useAskRequest.ts`
 - `apps/frontend/src/features/ask/conversationView.ts`
 - canonical preference and proactive services identified through their governing FRDs
 - focused execution-state, cancellation, memory-control, and proactive-policy tests selected during slice tracing
