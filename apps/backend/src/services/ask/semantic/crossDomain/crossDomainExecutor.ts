@@ -414,12 +414,14 @@ const humanizeEnumTokens = humanizeEnumTokensInCopy;
  * is kept ("3 maintenance tasks due in December 2026: A, B, C." becomes "3 maintenance tasks due in December 2026.").
  */
 export function withoutRowEnumeration(summary: string, labels: readonly string[]): string {
-  if (labels.length < 2) return summary;
+  if (labels.length === 0) return summary;
   // Only the sentence that lists the rows is shortened; a disclosure that follows it ("2 have no confirmed status, so ...") is kept as it is.
   const sentences = summary.split(/(?<=\.)\s+(?=[A-Z0-9])/);
   const trimmed = sentences.map((sentence) => {
     const present = labels.filter((label) => label.length > 0 && sentence.includes(label));
-    if (present.length < 2) return sentence;
+    // Two or more rows named, or a single row named as the whole tail of the sentence ("1 open claim: Water-damage claim."), is the list said again.
+    const listsRows = present.length >= 2 || (present.length === 1 && labels.length === 1 && sentence.endsWith(`: ${present[0]}.`));
+    if (!listsRows) return sentence;
     const first = Math.min(...present.map((label) => sentence.indexOf(label)));
     const colon = sentence.lastIndexOf(': ', first);
     const head = (colon >= 0 ? sentence.slice(0, colon) : sentence.slice(0, first)).trim().replace(/[:,(\s]+$/, '');

@@ -30,6 +30,19 @@ const run = async (rawText) => {
   return { execution, operation: X.buildOperationResultFromCrossDomainExecution(execution) };
 };
 
+// The contract strips a key it does not declare, so a producer that sets one (a row "subtitle") silently loses it before the homeowner sees the answer. Every key a real block carries must survive parsing.
+function droppedKeys(original, parsed, trail = '') {
+  if (Array.isArray(original)) return original.flatMap((item, index) => droppedKeys(item, parsed?.[index], `${trail}[${index}]`));
+  if (original && typeof original === 'object') {
+    return Object.entries(original).flatMap(([key, value]) => {
+      if (value === undefined) return [];
+      if (parsed == null || !(key in parsed)) return [`${trail}.${key}`];
+      return droppedKeys(value, parsed[key], `${trail}.${key}`);
+    });
+  }
+  return [];
+}
+
 for (const prompt of PROMPTS) {
   test(`"${prompt}": every block passes the contract, the answer declares a family, and typed lists declare their kind`, async () => {
     const { execution, operation } = await run(prompt);
@@ -37,6 +50,7 @@ for (const prompt of PROMPTS) {
     for (const block of operation.blocks) {
       const parsed = AskPresentationBlockSchema.safeParse(block);
       assert.ok(parsed.success, `${block.id}: ${parsed.success ? '' : JSON.stringify(parsed.error.issues.slice(0, 2))}`);
+      assert.deepEqual(droppedKeys(block, parsed.data, block.id), [], `${prompt}: the contract drops keys this block carries`);
     }
     const summaries = operation.blocks.filter((b) => b.type === 'SUMMARY');
     assert.ok(summaries.length > 0);

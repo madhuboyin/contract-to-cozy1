@@ -49,7 +49,7 @@ test('the answered section says it is only part of what was asked, in plain word
   const summary = result.blocks.find((b) => b.type === 'SUMMARY');
   assert.match(summary.title, /\(partly answered\)$/);
   assert.equal(summary.tone, 'CAUTION');
-  assert.match(summary.body, /1 open claim: Water-damage claim\./);
+  assert.match(summary.body, /^1 open claim\. I couldn’t answer “open projects for this home” here/);
   assert.match(summary.body, /I couldn’t answer “open projects for this home” here, so that part isn’t included in this answer\./);
   assert.ok(!/DOMAIN_NOT_SEARCHED|Overflow/.test(JSON.stringify(result.blocks)), 'no developer text reaches the homeowner');
   assert.equal(verifySemanticReadReceiptEntailment(result).outcome, 'PASS', 'the receipt-bound block keeps its id');

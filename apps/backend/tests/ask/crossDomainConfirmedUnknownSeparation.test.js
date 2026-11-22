@@ -29,7 +29,7 @@ test('zero confirmed and one unknown: the unknown record is its own collection, 
   assert.equal(primary, undefined, 'no confirmed-matches list exists when nothing is confirmed');
   assert.deepEqual(titles(unconfirmed), ['Office Desk']);
   assert.equal(unconfirmed.title, 'Needs confirmation');
-  assert.equal(unconfirmed.sections[0].items[0].subtitle, 'Permit requirement not recorded');
+  assert.equal(unconfirmed.sections[0].items[0].description, 'Permit requirement not recorded');
   assert.equal(facet.receipt.population.confirmedCount, 0);
   assert.equal(facet.receipt.population.unknownCount, 1);
   assert.deepEqual(facet.recordIds, []);

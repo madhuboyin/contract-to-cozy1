@@ -661,7 +661,10 @@ test('Phase 6 review fixes: repeated span mapping, strict calibration bound, bud
     );
     assert.equal(detProdRead.status, 'ANSWERED');
     assert.equal(providerCalls, 0);
-    assert.match(detProdRead.blocks[0].body, /Roof Hail Claim/);
+    // The summary says what the records mean ("1 open claim."); the claim itself is named in the list below it, not repeated in the sentence.
+    assert.match(detProdRead.blocks[0].body, /^1 open claim\./);
+    const claimTitles = detProdRead.blocks.filter((b) => b.type === 'GROUPED_LIST').flatMap((b) => b.sections.flatMap((section) => section.items.map((item) => item.title)));
+    assert.ok(claimTitles.includes('Roof Hail Claim'), `the claim is listed by its title: ${JSON.stringify(claimTitles)}`);
 
     // (c) DUAL_PRODUCER material disagreement fails closed rather than guessing
     const disagreeProdRead = await dataPointReadResult(

@@ -1,0 +1,427 @@
+{
+ "permitsUnknownOnly": {
+  "question": "which active projects still need a permit?",
+  "status": "ANSWERED",
+  "blocks": [
+   {
+    "type": "SUMMARY",
+    "id": "variant.project_permit_status",
+    "title": "Project permit requirements",
+    "body": "No projects are confirmed as needing a permit. 1 has no permit requirement recorded.",
+    "tone": "DEFAULT",
+    "presentationFamily": "ENTITY_LIST",
+    "headline": "No projects are confirmed as needing a permit.",
+    "supportLine": "1 has no permit requirement recorded.",
+    "actions": []
+   },
+   {
+    "type": "GROUPED_LIST",
+    "id": "variant.project_permit_status-needs-confirmation",
+    "title": "Needs confirmation",
+    "description": "",
+    "listDensity": "DENSE",
+    "sections": [
+     {
+      "id": "variant.project_permit_status-unconfirmed-section",
+      "title": "Needs confirmation",
+      "count": 1,
+      "items": [
+       {
+        "id": "p-desk",
+        "title": "Office Desk",
+        "meta": [],
+        "description": "Permit requirement not recorded"
+       }
+      ]
+     }
+    ],
+    "actions": [],
+    "filters": []
+   },
+   {
+    "type": "BOUNDARY",
+    "id": "variant.project_permit_status-boundary",
+    "title": "Not counted",
+    "body": "1 record could not be confirmed, so it isn’t counted either way.",
+    "severity": "INFO",
+    "suggestions": []
+   },
+   {
+    "type": "EVIDENCE",
+    "id": "variant.project_permit_status-evidence",
+    "title": "Where this comes from",
+    "items": [
+     {
+      "label": "Your home record",
+      "source": "HomeRenovationCase",
+      "observedAt": "2026-11-15T00:00:00.000Z"
+     }
+    ]
+   }
+  ]
+ },
+ "permitsMixed": {
+  "question": "which active projects still need a permit?",
+  "status": "ANSWERED",
+  "blocks": [
+   {
+    "type": "SUMMARY",
+    "id": "variant.project_permit_status",
+    "title": "Project permit requirements",
+    "body": "1 project needs a permit. 2 more have no permit requirement recorded.",
+    "tone": "DEFAULT",
+    "presentationFamily": "ENTITY_LIST",
+    "headline": "1 project needs a permit.",
+    "supportLine": "2 more have no permit requirement recorded.",
+    "actions": []
+   },
+   {
+    "type": "GROUPED_LIST",
+    "id": "variant.project_permit_status-list",
+    "listDensity": "DENSE",
+    "title": "",
+    "description": "",
+    "sections": [
+     {
+      "id": "variant.project_permit_status-section-1",
+      "title": "",
+      "count": 1,
+      "items": [
+       {
+        "id": "p-panel",
+        "title": "200A Electrical Panel Upgrade",
+        "meta": [],
+        "description": "Permit needed"
+       }
+      ]
+     }
+    ],
+    "actions": [],
+    "filters": []
+   },
+   {
+    "type": "GROUPED_LIST",
+    "id": "variant.project_permit_status-needs-confirmation",
+    "title": "Needs confirmation",
+    "description": "",
+    "listDensity": "DENSE",
+    "sections": [
+     {
+      "id": "variant.project_permit_status-unconfirmed-section",
+      "title": "Needs confirmation",
+      "count": 2,
+      "items": [
+       {
+        "id": "p-deck",
+        "title": "Deck rebuild",
+        "meta": [],
+        "description": "Permit requirement not recorded"
+       },
+       {
+        "id": "p-fence",
+        "title": "Fence repair",
+        "meta": [],
+        "description": "Permit requirement not recorded"
+       }
+      ]
+     }
+    ],
+    "actions": [],
+    "filters": []
+   },
+   {
+    "type": "BOUNDARY",
+    "id": "variant.project_permit_status-boundary",
+    "title": "Not counted",
+    "body": "2 records could not be confirmed, so they aren’t counted either way.",
+    "severity": "INFO",
+    "suggestions": []
+   },
+   {
+    "type": "EVIDENCE",
+    "id": "variant.project_permit_status-evidence",
+    "title": "Where this comes from",
+    "items": [
+     {
+      "label": "Your home record",
+      "source": "HomeRenovationCase",
+      "observedAt": "2026-11-15T00:00:00.000Z"
+     }
+    ]
+   }
+  ]
+ },
+ "ownVsRentComputed": {
+  "question": "how long until owning beats renting?",
+  "status": "ANSWERED",
+  "blocks": [
+   {
+    "type": "SUMMARY",
+    "id": "variant.finance_break_even",
+    "title": "Owning beats renting starting in year 3.",
+    "body": "At $3,200 a month in rent and a $650,000 home, over 5 years.",
+    "headline": "Owning beats renting starting in year 3.",
+    "supportLine": "At $3,200 a month in rent and a $650,000 home, over 5 years.",
+    "bullets": [
+     {
+      "label": "Break-even year",
+      "body": "Year 3"
+     },
+     {
+      "label": "Estimated owning advantage at 5 years",
+      "body": "$34,684"
+     },
+     {
+      "label": "Rent paid over 5 years",
+      "body": "$203,871"
+     }
+    ],
+    "tone": "DEFAULT",
+    "presentationFamily": "ANALYSIS",
+    "actions": []
+   },
+   {
+    "type": "ASSUMPTIONS",
+    "id": "variant.finance_break_even-assumptions",
+    "title": "What this assumes",
+    "items": [
+     "Monthly rent for a comparable home: $3,200, rising 3% a year",
+     "Home value: $650,000, growing 3.5% a year",
+     "80% financed at 6.75%",
+     "Carrying costs of 2.2% of the home’s value a year",
+     "Selling and closing costs of 6% of the home’s value"
+    ]
+   },
+   {
+    "type": "EVIDENCE",
+    "id": "variant.finance_break_even-evidence",
+    "title": "Where this comes from",
+    "items": [
+     {
+      "label": "Your home record",
+      "source": "Property",
+      "observedAt": "2026-11-15T00:00:00.000Z"
+     }
+    ]
+   }
+  ]
+ },
+ "ownVsRentMissingRent": {
+  "question": "how long until owning beats renting?",
+  "status": "READY_WITH_LIMITATIONS",
+  "blocks": [
+   {
+    "type": "SUMMARY",
+    "id": "variant.finance_break_even",
+    "title": "I can’t determine the owning-versus-renting break-even yet.",
+    "body": "It needs the monthly rent for a comparable home you would rent as a tenant.",
+    "headline": "I can’t determine the owning-versus-renting break-even yet.",
+    "supportLine": "It needs the monthly rent for a comparable home you would rent as a tenant.",
+    "tone": "CAUTION",
+    "presentationFamily": "ANALYSIS",
+    "actions": []
+   },
+   {
+    "type": "LIMITATION",
+    "id": "variant.finance_break_even-note",
+    "title": "About your saved analysis",
+    "body": "Your saved Sell/Hold/Rent analysis is a different comparison (selling now, living in the home, or renting it out): it favors selling now; renting it out beats keeping the home by $233,000 over 5 years.",
+    "severity": "INFO"
+   },
+   {
+    "type": "EVIDENCE",
+    "id": "variant.finance_break_even-evidence",
+    "title": "Where this comes from",
+    "items": [
+     {
+      "label": "Your home record",
+      "source": "Property",
+      "observedAt": "2026-11-15T00:00:00.000Z"
+     }
+    ]
+   }
+  ]
+ },
+ "openClaims": {
+  "question": "what claims are open?",
+  "status": "ANSWERED",
+  "blocks": [
+   {
+    "type": "SUMMARY",
+    "id": "variant.open_claims",
+    "title": "Open claims",
+    "body": "1 open claim.",
+    "tone": "DEFAULT",
+    "presentationFamily": "ENTITY_LIST",
+    "headline": "1 open claim.",
+    "actions": []
+   },
+   {
+    "type": "GROUPED_LIST",
+    "id": "incident-claim-list",
+    "recordKind": "CLAIM",
+    "listDensity": "DENSE",
+    "title": "",
+    "description": "",
+    "sections": [
+     {
+      "id": "variant.open_claims-section-1",
+      "title": "Claims",
+      "count": 1,
+      "items": [
+       {
+        "id": "claim-water-damage",
+        "title": "Water-damage claim",
+        "meta": [
+         "open"
+        ],
+        "status": "OPEN",
+        "entityType": "CLAIM",
+        "actions": [
+         {
+          "id": "claim-start",
+          "label": "Mark in progress",
+          "message": "Mark this claim as in progress.",
+          "style": "SECONDARY",
+          "interactionType": "MUTATE_RECORD",
+          "operationId": "CLAIM_TRANSITION"
+         },
+         {
+          "id": "claim-submit",
+          "label": "Mark submitted",
+          "message": "Submit this claim.",
+          "style": "SECONDARY",
+          "interactionType": "MUTATE_RECORD",
+          "operationId": "CLAIM_TRANSITION"
+         },
+         {
+          "id": "claim-under-review",
+          "label": "Mark under review",
+          "message": "Move this claim to under review.",
+          "style": "SECONDARY",
+          "interactionType": "MUTATE_RECORD",
+          "operationId": "CLAIM_TRANSITION"
+         },
+         {
+          "id": "claim-approve",
+          "label": "Mark approved",
+          "message": "Mark this claim approved.",
+          "style": "SECONDARY",
+          "interactionType": "MUTATE_RECORD",
+          "operationId": "CLAIM_TRANSITION"
+         },
+         {
+          "id": "claim-deny",
+          "label": "Mark denied",
+          "message": "Mark this claim denied.",
+          "style": "SECONDARY",
+          "interactionType": "MUTATE_RECORD",
+          "operationId": "CLAIM_TRANSITION"
+         },
+         {
+          "id": "claim-close",
+          "label": "Close claim",
+          "message": "Close this claim.",
+          "style": "SECONDARY",
+          "interactionType": "MUTATE_RECORD",
+          "operationId": "CLAIM_TRANSITION"
+         },
+         {
+          "id": "claim-checklist",
+          "label": "Checklist",
+          "message": "Show the checklist for this claim.",
+          "style": "SECONDARY",
+          "interactionType": "CONVERSATION_CONTINUE",
+          "operationId": "CLAIM_CHECKLIST_VIEW"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "actions": [],
+    "filters": []
+   },
+   {
+    "type": "EVIDENCE",
+    "id": "variant.open_claims-evidence",
+    "title": "Where this comes from",
+    "items": [
+     {
+      "label": "Your home record",
+      "source": "Claim",
+      "observedAt": "2026-11-15T00:00:00.000Z"
+     }
+    ]
+   }
+  ]
+ },
+ "noWarranty": {
+  "question": "which appliances have no warranty?",
+  "status": "ANSWERED",
+  "blocks": [
+   {
+    "type": "SUMMARY",
+    "id": "phase2a-inventory-summary",
+    "title": "Items without a linked warranty record",
+    "body": "Water Heater has no warranty linked in your home record. This describes links recorded for each item; it does not decide whether warranty terms cover the item.",
+    "tone": "DEFAULT",
+    "presentationFamily": "ENTITY_LIST",
+    "headline": "Water Heater has no warranty linked in your home record.",
+    "supportLine": "This describes links recorded for each item; it does not decide whether warranty terms cover the item.",
+    "actions": []
+   },
+   {
+    "type": "GROUPED_LIST",
+    "id": "inventory-results",
+    "listDensity": "DENSE",
+    "title": "1 matching appliance",
+    "description": "",
+    "sections": [
+     {
+      "id": "phase2a-inventory-summary-section-1",
+      "title": "Basement",
+      "count": 1,
+      "items": [
+       {
+        "id": "item-water-heater",
+        "title": "Water Heater",
+        "meta": [
+         "Basement",
+         "Bradford White"
+        ],
+        "description": "Room: Basement",
+        "entityType": "INVENTORY_ITEM",
+        "actions": [
+         {
+          "id": "update-coverage-status-item",
+          "label": "Update coverage status",
+          "message": "Update the coverage status for this inventory item.",
+          "style": "SECONDARY",
+          "interactionType": "MUTATE_RECORD",
+          "operationId": "COVERAGE_COMMAND"
+         }
+        ],
+        "badgeLabel": "explicitly recorded as no coverage"
+       }
+      ]
+     }
+    ],
+    "actions": [],
+    "filters": []
+   },
+   {
+    "type": "EVIDENCE",
+    "id": "phase2a-inventory-summary-evidence",
+    "title": "Where this comes from",
+    "items": [
+     {
+      "label": "Your home record",
+      "source": "property inventory and relations",
+      "observedAt": "2026-11-15T00:00:00.000Z"
+     }
+    ]
+   }
+  ]
+ }
+}

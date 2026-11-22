@@ -3,10 +3,40 @@ import type { SemanticReadReceipt } from '../semanticExecutionReceipt';
 import type { EnrichmentRowAction } from '../../actionEnrichment/actionEnrichmentRows';
 import { humanizeEnumTokensInCopy, humanizePresentationText, humanizePresentationToken } from '../containment/presentationHumanizer';
 
+/**
+ * Answer first (UI review 2026-11-21, #43): the headline is the answer's own first sentence, not a topic label such as "Project permit requirements", and what follows it is the one
+ * supporting line. The title and body stay as they were for every consumer that reads them; a client that knows `headline` uses it.
+ */
+export function answerFirst(body: string, title: string): { headline?: string; supportLine?: string } {
+  const sentences = body.split(/(?<=[.!?])\s+(?=[A-Z0-9])/).map((sentence) => sentence.trim()).filter(Boolean);
+  const first = sentences[0];
+  if (!first || first.length > 200 || first.toLowerCase() === title.toLowerCase()) return {};
+  const rest = sentences.slice(1).join(' ');
+  return { headline: first, ...(rest.length > 0 && rest.length <= 240 ? { supportLine: rest } : {}) };
+}
+
+/** The group heading of a list whose records are all of one kind. */
+export const SECTION_NOUN_OF_RECORD_KIND: Readonly<Record<AskListRecordKind, string>> = {
+  INVENTORY_ITEM: 'Items', MAINTENANCE_TASK: 'Tasks', CLAIM: 'Claims', PERMIT: 'Permits', WARRANTY: 'Warranties', DOCUMENT: 'Documents', HOME_EVENT: 'Events',
+};
+
 /** The row `entityType` each list kind's canonical renderer expects (the same value the registry handlers emit). */
 export const ENTITY_TYPE_OF_RECORD_KIND: Readonly<Record<AskListRecordKind, string>> = {
   INVENTORY_ITEM: 'INVENTORY_ITEM', MAINTENANCE_TASK: 'MAINTENANCE_TASK', CLAIM: 'CLAIM', PERMIT: 'PERMIT_RECORD', WARRANTY: 'WARRANTY', DOCUMENT: 'DOCUMENT', HOME_EVENT: 'HOME_EVENT',
 };
+
+/** The block contract's field is `badgeLabel` (a key it does not declare is stripped on parse), and it is omitted when the row has no state to show. */
+function rowBadge(row: SlicePresentationRow): { badgeLabel?: string } {
+  const label = row.stateCode ? humanizePresentationToken(row.stateCode) : row.badgeLabel ? humanizePresentationToken(row.badgeLabel) : '';
+  return label.trim().length > 0 ? { badgeLabel: label.slice(0, 60) } : {};
+}
+
+/** The one secondary line of a row: its description and subtitle (said once if they are the same), else why it matched. */
+export function rowSecondaryLine(row: SlicePresentationRow): string | undefined {
+  const parts = [row.description, row.subtitle].map((part) => (part ? humanizeEnumTokensInCopy(part) : '')).filter((part, index, all) => part.length > 0 && all.indexOf(part) === index);
+  const line = parts.length > 0 ? parts.join(' · ') : row.matchReason ? humanizeEnumTokensInCopy(row.matchReason) : '';
+  return line.length > 0 ? line : undefined;
+}
 
 /** Block-id suffix of the separate collection of unconfirmed records. */
 export const UNCONFIRMED_LIST_SUFFIX = '-needs-confirmation';
@@ -76,6 +106,7 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
       body: humanizeEnumTokensInCopy(input.summaryBody),
       tone: receipt.population.conflictedCount > 0 ? 'CAUTION' : 'DEFAULT',
       presentationFamily: input.family ?? (rows.length > 0 || (input.unconfirmedRows?.length ?? 0) > 0 ? 'ENTITY_LIST' : 'DIRECT_ANSWER'),
+      ...answerFirst(humanizeEnumTokensInCopy(input.summaryBody), humanizeEnumTokensInCopy(input.title)),
       actions: [],
     },
   ];
@@ -83,8 +114,9 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
   if (rows.length > 0) {
     const grouped = new Map<string, SlicePresentationRow[]>();
     for (const row of rows) {
-      // A row with no group of its own is simply a match: there is no "Matched records" heading to repeat the list's own title.
-      const key = row.groupKey ? humanizePresentationToken(row.groupKey) : '';
+      // A row with no group of its own is simply a match. A list of a known record kind names its group by that kind (the domain renderers always print a section heading); any other list has no
+      // group heading at all, and never a generic "Matched records".
+      const key = row.groupKey ? humanizePresentationToken(row.groupKey) : input.recordKind ? SECTION_NOUN_OF_RECORD_KIND[input.recordKind] : '';
       const bucket = grouped.get(key) ?? [];
       bucket.push(row);
       grouped.set(key, bucket);
@@ -107,17 +139,13 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
           id: row.id,
           title: humanizeEnumTokensInCopy(row.label),
           meta: [...(row.meta ?? [])].map(humanizeEnumTokensInCopy),
-          subtitle: row.subtitle ? humanizeEnumTokensInCopy(row.subtitle) : undefined,
-          description: row.description ? humanizeEnumTokensInCopy(row.description) : undefined,
+          // The block contract has no `subtitle`: a field it does not know is stripped on parse and never reaches the homeowner. A row's secondary line is its `description`.
+          description: rowSecondaryLine(row),
           ...(row.status ? { status: row.status } : {}),
           ...(row.entityType ? { entityType: row.entityType } : input.recordKind ? { entityType: ENTITY_TYPE_OF_RECORD_KIND[input.recordKind] } : {}),
           ...(row.matchReason ? { matchReason: humanizeEnumTokensInCopy(row.matchReason) } : {}),
           ...(row.actions && row.actions.length > 0 ? { actions: row.actions.map((action) => ({ ...action })) } : {}),
-          badge: row.stateCode
-            ? humanizePresentationToken(row.stateCode)
-            : row.badgeLabel
-              ? humanizePresentationToken(row.badgeLabel)
-              : undefined,
+          ...rowBadge(row),
         })),
       })),
       actions: [],
@@ -140,11 +168,11 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
           id: row.id,
           title: humanizeEnumTokensInCopy(row.label),
           meta: [...(row.meta ?? [])].map(humanizeEnumTokensInCopy),
-          subtitle: row.subtitle ? humanizeEnumTokensInCopy(row.subtitle) : undefined,
-          description: row.description ? humanizeEnumTokensInCopy(row.description) : undefined,
+          // The block contract has no `subtitle`: a field it does not know is stripped on parse and never reaches the homeowner. A row's secondary line is its `description`.
+          description: rowSecondaryLine(row),
           ...(row.status ? { status: row.status } : {}),
           ...(row.entityType ? { entityType: row.entityType } : {}),
-          badge: row.stateCode ? humanizePresentationToken(row.stateCode) : row.badgeLabel ? humanizePresentationToken(row.badgeLabel) : undefined,
+          ...rowBadge(row),
         })),
       }],
       actions: [],

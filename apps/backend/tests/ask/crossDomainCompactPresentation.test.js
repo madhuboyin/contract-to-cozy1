@@ -26,7 +26,9 @@ test('a summary that names the rows listed below it is shortened, and a disclosu
   const rows = ['Gutter cleaning', 'Furnace service', 'Roof check'];
   assert.equal(X.withoutRowEnumeration('3 maintenance task(s): Gutter cleaning, Furnace service, Roof check.', rows), '3 maintenance task(s).');
   assert.equal(X.withoutRowEnumeration('3 open permit(s): A-1 (Open), B-2 (Open). 1 has no confirmed status, so it is counted on what you reported.', ['A-1', 'B-2']), '3 open permit(s). 1 has no confirmed status, so it is counted on what you reported.');
-  assert.equal(X.withoutRowEnumeration('1 task: Only one.', ['Only one']), '1 task: Only one.', 'a single row is not an enumeration');
+  assert.equal(X.withoutRowEnumeration('1 task: Only one.', ['Only one']), '1 task.', 'a single row named as the whole tail is the list said again');
+  assert.equal(X.withoutRowEnumeration('Only one is due soon.', ['Only one']), 'Only one is due soon.', 'a row named inside a sentence is kept');
+  assert.equal(X.withoutRowEnumeration('2 tasks: A, B.', ['A', 'B', 'C']), '2 tasks.');
 });
 
 test('a list answer is dense, has no "Matched records" heading, no repeated title and no "Showing N of N confirmed matches"', async () => {
@@ -51,4 +53,20 @@ test('the uncertainty note is one calm line with no instruction the homeowner ca
   assert.ok(!/Add or correct the missing details/.test(JSON.stringify(facet.blocks)));
   const unconfirmed = facet.blocks.find((b) => b.id.endsWith('-needs-confirmation'));
   assert.equal(unconfirmed.listDensity, 'DENSE');
+});
+
+test('answer first: the headline is the answer’s own first sentence and the rest is one supporting line', () => {
+  const { answerFirst } = require('../../src/services/ask/semantic/slice/richPresentationAdapter.ts');
+  assert.deepEqual(answerFirst('1 project needs a permit. 2 more have no permit requirement recorded.', 'Project permit requirements'), { headline: '1 project needs a permit.', supportLine: '2 more have no permit requirement recorded.' });
+  assert.deepEqual(answerFirst('No active projects need a permit.', 'Project permit requirements'), { headline: 'No active projects need a permit.' });
+  assert.deepEqual(answerFirst('Open claims', 'Open claims'), {}, 'a sentence that is only the title adds nothing');
+  assert.deepEqual(answerFirst('', 'Title'), {});
+  assert.equal(answerFirst('A'.repeat(260) + '.', 'T').headline, undefined, 'an over-long first sentence is not a headline');
+});
+
+test('a list of a known record kind names its group by that kind, never an empty heading the domain renderers would print as "· 1"', async () => {
+  const { facet } = await run('what claims are open?');
+  const list = facet.blocks.find((b) => b.type === 'GROUPED_LIST');
+  assert.equal(list.recordKind, 'CLAIM');
+  assert.equal(list.sections[0].title, 'Claims');
 });
