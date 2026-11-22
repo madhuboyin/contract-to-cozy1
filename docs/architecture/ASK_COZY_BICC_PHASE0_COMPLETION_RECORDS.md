@@ -51,7 +51,7 @@ Every record states what ran, what did not, and what is still open. Nothing here
 | Field | Record |
 |---|---|
 | Requirements | `BICC-EVAL-002`, `-003`, `-004` (partly), `-006`, `-013`, `-014`, `-018`, `-019`, `BICC-OPS-009` |
-| Code revision | Committed with this record. |
+| Code revision | `bf9852b6` |
 | Files changed | New `semantic/evaluation/biccStatistics.ts`, `biccShardManifest.ts`, `biccEvaluationReport.ts`; `scripts/ask-bicc-routing-run.js`, `scripts/ask-bicc-cross-revision.js`; `tests/ask/biccStatistics.test.js`, `tests/ask/biccEvaluationContract.test.js`; the two Phase 0 documents. |
 | Built and tested | Exact Clopper–Pearson bounds and the zero-failure sample size; a shard manifest that rejects near-duplicate and same-family certification prompts, requires an independent reviewer, burns a revealed shard into tuning evidence and discloses pool size, burn rate and remaining eligible coverage; an all-prompt success report that **refuses a certification headline from main-corpus or contaminated results**; same-pool revision comparison with the two-point non-inferiority margin; deterministic claim segmentation; scorer-contract validation (pinned judge versions, fresh calibration against a sealed human set, no judge for static authored content, human adjudication of borderline and safety-critical items); an evaluator egress guard that rejects real, replayed or identifier-bearing material; fidelity-suite manifests with partition coverage, no population-bound claim for a fixed matrix, and permanent regression cases. |
 | Tests/checks | `node --test tests/ask/biccStatistics.test.js tests/ask/biccEvaluationContract.test.js`: 22 pass, 0 fail. `npm run typecheck` clean. Cross-revision run: see the baseline document. |
