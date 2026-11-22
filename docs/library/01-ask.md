@@ -8,7 +8,7 @@
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-|  | [Ask Cozy — Best-in-Class Conversational Concierge FRD](../product/ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_CONCIERGE_FRD.md) | v0.2.9 · Draft v0.2.9 for owner review; target requirements, not an implementation claim | 2026-11-22 | 405 |
+|  | [Ask Cozy — Best-in-Class Conversational Concierge FRD](../product/ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_CONCIERGE_FRD.md) | v0.3.0 · Draft v0.3.0; implementation defaults active, owner review optional; target requ | 2026-11-22 | 405 |
 |  | [Ask Cozy — Cross-Domain Semantic Request Architecture FRD](../product/ASK_COZY_CROSS_DOMAIN_SEMANTIC_ARCHITECTURE_FRD.md) | v1.34 · Draft v1.34 for owner review | 2026-11-22 | 1390 |
 |  | [Ask Cozy — Understanding Reliability: Reaching 90% Resolved Prompts Without Controlling th](../product/ASK_COZY_UNDERSTANDING_RELIABILITY_FRD.md) | v0.19 · Draft v0.19 for owner review (v0.18 committed as `e9827f8a`; v0.19 answers a sev | 2026-11-21 | 1077 |
 |  | [Ask Cozy — Inline Workspace Product Requirements Document](../product/ASK_COZY_INLINE_WORKSPACE_FRD.md) |  | 2026-11-20 | 2478 |
@@ -30,7 +30,7 @@
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-|  | [Ask Cozy Best-in-Class Conversational Concierge — Implementation Plan](../architecture/ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_CONCIERGE_IMPLEMENTATION_PLAN.md) | v0.5 · Draft v0.5 for owner review; implementation slices and acceptance plan, not a de | 2026-11-22 | 497 |
+|  | [Ask Cozy Best-in-Class Conversational Concierge — Implementation Plan](../architecture/ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_CONCIERGE_IMPLEMENTATION_PLAN.md) | v0.6 · Draft v0.6; FRD defaults active, owner review optional; implementation slices an | 2026-11-22 | 498 |
 |  | [Ask Cozy UX Consolidation — Implementation Plan](../architecture/ASK_COZY_UX_CONSOLIDATED_IMPLEMENTATION_PLAN.md) | Phases 0, 1, 2, 3, 4, 5 (foundation), 7A and the first step of 8 implemented Nov | 2026-11-03 | 424 |
 |  | [Ask Cozy High-Precision Suggested Next Actions — Implementation Plan](../product/ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md) | v1.25 · Phases 1-5, exact-four engagement, governed opportunity backfill, the Phase 5 ze | 2026-11-03 | 1400 |
 |  | [Ask Cozy Sole Homeowner Interface — Implementation Plan](../architecture/ASK_COZY_SOLE_HOMEOWNER_INTERFACE_IMPLEMENTATION_PLAN.md) | In progress | 2026-11-02 | 687 |

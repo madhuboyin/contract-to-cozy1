@@ -1,6 +1,6 @@
 # Ask Cozy Best-in-Class Conversational Concierge — Implementation Plan
 
-**Status:** Draft v0.5 for owner review; implementation slices and acceptance plan, not a delivery claim
+**Status:** Draft v0.6; FRD defaults active, owner review optional; implementation slices and acceptance plan, not a delivery claim
 
 **Date:** 2026-11-22
 
@@ -48,6 +48,7 @@ Every Ask-related model call shall be present in the provider-boundary register 
 | Semantic understanding — `apps/backend/src/services/ask/modelRouting/understandingProvider.ts` | Last-resort typed target/plan proposal after certified deterministic paths do not resolve the request | `FR-UND-*`, `FR-PRV-*`, BICC-INV-011, BICC-UND-012 | Validated plan only; handlers remain answer authority; write targets are preview-only | `ASK_UNDERSTANDING_PLANNER_ENABLED`, provider-terms and homeowner-text approvals, all default off; retain disabled until each stratum passes |
 | Document evidence extraction — implementation selected by BICC-3.2 | Extract typed spans, claims, fields, and citation candidates from authorized document chunks | BICC-MM-004–008, BICC-MM-012–013 | Evidence candidates only, with page/chunk provenance; deterministic handler assigns mode and renders prose | No call may activate before BICC-0.2 registration and BICC-3.2 gates pass |
 | Vision observation/urgency extraction — implementation selected by BICC-3.2 | Extract typed observations, condition candidates, and urgency class from an authorized image | BICC-MM-009, BICC-MM-012–013, BICC-SAFE-* | Observation/urgency candidates only, with image/region provenance; no diagnosis or recommendation authority | No call may activate before BICC-0.2 registration and BICC-3.2 gates pass |
+| Sensitive-document classification — no model implementation authorized by default | If deterministic D04 checks prove insufficient, classify a minimized upload into allowed, prohibited, or uncertain sensitivity classes | BICC-D04, BICC-OPS-006–009 | Classification candidate only; uncertain and prohibited outcomes fail closed and reveal no sensitive content | Fourth named structured-analysis exception only if registered and evaluated under BICC-0.2; default implementation remains deterministic |
 | Result synthesis — `apps/backend/src/services/ask/askResultSynthesis.service.ts` | Generate homeowner-facing summary text from result blocks | No compatible named exception | Writes answer wording | `ASK_RESULT_SYNTHESIS_ENABLED`, default off; retire service, control, call site, provider method, metrics, and dedicated tests after consumer tracing |
 | Offline evaluation judge — implementation selected by BICC-0.1 | Score semantic properties that deterministic checks and human review cannot decide economically | BICC-EVAL-014, BICC-OPS-006–009 | Evaluation evidence only; never runtime behavior | Synthetic approved evaluation material only; never real or replayed homeowner payloads |
 
@@ -120,13 +121,13 @@ BICC-0.2 shall trace the repository for additional model/provider call sites and
 
 **Gate**
 
-All BICC-EVAL requirements are executable and the cross-revision baseline exists. D01, D06, D11, D12, and D13 remain owner decisions and are not inferred from code.
+All BICC-EVAL requirements are executable and the cross-revision baseline exists. D01, D06, D11, D12, and D13 use the active default decisions recorded in FRD §18; later overrides are prospective and versioned.
 
 ### BICC-0.2 — Provider-boundary register and egress proof
 
 **Scope**
 
-- Inventory semantic planning, conversational extraction, document evidence, vision observation/urgency, and evaluator call paths separately; reconcile every path with the §2.1 register. Trace model-backed synthesis only for BICC-0.3 retirement and verify that no model-backed recommendation-authoring path is enabled or treated as permitted.
+- Inventory semantic planning, conversational extraction, document evidence, vision observation/urgency, any sensitive-document classifier, and evaluator call paths separately; reconcile every path with the §2.1 register. Trace model-backed synthesis only for BICC-0.3 retirement and verify that no model-backed recommendation-authoring path is enabled or treated as permitted.
 - Add purpose-specific allowlisted serializers and captured-payload evidence at the governed egress boundary.
 - Record real-data versus synthetic-only approvals.
 
@@ -310,7 +311,7 @@ Contract tests pass, but no stratum activates until BICC-1B.2.
 
 **Scope**
 
-Defer this slice when no model-assisted stratum is selected. When Phase 0 identifies a material held-out gap that deterministic work cannot safely close, select the eligible read domain with the largest reproducible gap and positive expected value after privacy, cost, and reliability review. Enable only that stratum after calibration and provider-boundary approval. Additional strata repeat this selection rule; owner sign-off is not a prerequisite, and deferral does not block Phase 1C or later deterministic slices.
+Defer this slice when no model-assisted stratum qualifies. A material gap requires at least 100 eligible held-out prompts in a domain that remains at least 10 percentage points below its applicable correctness target after Phase 1A. Select the eligible domain with the largest qualifying gap. Positive expected value requires calibrated improvement of at least 5 percentage points on that domain, no deterministic-path correctness reduction greater than 2 percentage points, zero new authorization or critical-safety failures, and compliance with active privacy, latency, availability, and cost ceilings. Enable only that stratum after calibration and provider-boundary approval. Additional strata repeat this rule; owner sign-off is not a prerequisite, and deferral with recorded measurements does not block Phase 1C or later deterministic slices.
 
 **Expected existing files**
 
