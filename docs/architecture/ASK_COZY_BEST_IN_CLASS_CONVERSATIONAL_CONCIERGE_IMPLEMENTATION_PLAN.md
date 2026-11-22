@@ -1,6 +1,6 @@
 # Ask Cozy Best-in-Class Conversational Concierge — Implementation Plan
 
-**Status:** Draft v0.7; FRD defaults active, owner review optional; implementation slices and acceptance plan, not a delivery claim
+**Status:** Draft v0.8; FRD defaults active, owner review optional; implementation slices and acceptance plan, not a delivery claim
 
 **Date:** 2026-11-22
 
@@ -82,6 +82,7 @@ BICC-0.2 shall trace the repository for additional model/provider call sites and
 | `BICC-4.3` | Candidate promotion and buyer actions | `BICC-4.1` | BUY-007–010 authorization and confirmation corpus passes |
 | `BICC-5.1` | Transport and recovery | Phase 1 answer contract | TRN-001–007 pass |
 | `BICC-5.2` | Memory and proactive continuation | D05; `BICC-5.1` | MEM-001–005 and PRO-001–002 pass |
+| `BICC-5.3` | Reviewed route-context starters and measured interaction budgets | `BICC-0.5`, `BICC-5.1`; reviewed route allowlist | UX-002, UX-006, and UX-007 route authorization, fallback, offline, bundle, and interaction evidence pass |
 
 `n` means repeat the slice independently for each approved write family.
 
@@ -317,7 +318,7 @@ Contract tests pass, but no stratum activates until BICC-1B.2.
 
 **Scope**
 
-Defer this slice when no model-assisted stratum qualifies. A material gap requires at least 100 eligible held-out prompts in a domain that remains at least 10 percentage points below its applicable correctness target after Phase 1A. Select the eligible domain with the largest qualifying gap. Positive expected value requires calibrated improvement of at least 5 percentage points on that domain, no deterministic-path correctness reduction greater than 2 percentage points, zero new authorization or critical-safety failures, and compliance with active privacy, latency, availability, and cost ceilings. Enable only that stratum after calibration and provider-boundary approval. Additional strata repeat this rule; owner sign-off is not a prerequisite, and deferral with recorded measurements does not block Phase 1C or later deterministic slices.
+Defer this slice when no model-assisted stratum qualifies. A material gap requires at least 100 eligible versioned tuning or calibration prompts in a domain that remains at least 10 percentage points below its applicable correctness target after Phase 1A. Select the eligible domain with the largest qualifying gap. Positive expected value requires calibrated improvement of at least 5 percentage points on that domain, no deterministic-path correctness reduction greater than 2 percentage points, zero new authorization or critical-safety failures, and compliance with active privacy, latency, availability, and cost ceilings. Gap selection and improvement measurement never use the sealed shard reserved for final certification. After the stratum and thresholds are frozen, a fresh previously unexposed sealed shard provides certification evidence and is burned if revealed under BICC-EVAL-002. Enable only that stratum after calibration and provider-boundary approval. Additional strata repeat this rule; owner sign-off is not a prerequisite, and deferral with recorded measurements does not block Phase 1C or later deterministic slices.
 
 **Expected existing files**
 
@@ -509,7 +510,80 @@ Deliver cancellation/reconnect truthfulness, workload limits, measured latency, 
 
 Stop, reload, reconnect, duplicate prevention, offline disclosure, retention/deletion, preference inspection/correction/deletion, saved-preference disclosure, and no unsolicited consequential action. TRN-001–007, MEM-001–005, and PRO-001–002 pass.
 
-## 5. Per-slice completion record
+### BICC-5.3 — Reviewed route-context starters and interaction budgets
+
+**Scope**
+
+Deliver current-page starters only for reviewed routes with parseable property/entity identifiers and server-side reauthorization. Unsupported or stale routes fall back to generic starters without inferred context. Complete offline-read disclosure and measure the lazy-loaded Ask bundle and interaction budgets rather than inferring them from source size.
+
+**Expected existing files**
+
+- `apps/frontend/src/features/ask/routeContext.ts`
+- `apps/frontend/src/components/ask/RouteContextStarter.tsx`
+- `apps/frontend/src/components/AIChat.tsx`
+- `apps/frontend/src/components/ask/AskWorkspace.tsx`
+- `apps/frontend/src/components/ask/workspace/useAskRequest.ts`
+- route parsing, authorization, generic-fallback, offline, lazy-load, bundle, and interaction-budget tests
+
+**Focused evidence and gate**
+
+Reviewed supported routes retain the correct property/entity only after server reauthorization; malformed, unsupported, stale, unauthorized, or cross-property routes remain generic. Offline behavior is truthful, writes remain prohibited offline, launch context survives lazy loading, and measured bundle/interaction budgets are recorded. BICC-UX-002, BICC-UX-006, and BICC-UX-007 pass.
+
+## 5. Requirement-to-slice traceability
+
+This table is the authoritative initial assignment for every in-scope BICC requirement. Cross-cutting requirements may appear in more than one slice; every completion record still supplies requirement-specific evidence.
+
+| Requirement IDs | Accountable slice or slices |
+|---|---|
+| BICC-INV-001, BICC-INV-005, BICC-INV-006, BICC-INV-007 | BICC-1A.2, BICC-1C.1, BICC-2.2 |
+| BICC-INV-002, BICC-INV-011 | BICC-0.2, BICC-1B.1, BICC-1B.2 |
+| BICC-INV-003, BICC-INV-008, BICC-INV-009 | Cross-cutting gate for every activating slice |
+| BICC-INV-004 | BICC-1A.3 |
+| BICC-INV-010 | BICC-0.5, BICC-5.1 |
+| BICC-EVAL-001, BICC-EVAL-002, BICC-EVAL-003, BICC-EVAL-004, BICC-EVAL-005, BICC-EVAL-006, BICC-EVAL-007, BICC-EVAL-008, BICC-EVAL-009, BICC-EVAL-010, BICC-EVAL-011, BICC-EVAL-012, BICC-EVAL-013, BICC-EVAL-014, BICC-EVAL-015, BICC-EVAL-016, BICC-EVAL-017, BICC-EVAL-018, BICC-EVAL-019 | BICC-0.1; applicable feature slice supplies its corpus and result |
+| BICC-GATE-001, BICC-GATE-003, BICC-GATE-004A1, BICC-GATE-010 | BICC-1A.2; BICC-1B.2 where selected; final combined-system certification |
+| BICC-GATE-002, BICC-GATE-009 | BICC-1S |
+| BICC-GATE-004A2, BICC-GATE-004B1, BICC-GATE-005 | BICC-1C.1; USER_DOCUMENT subset of BICC-GATE-005 in BICC-3.2 |
+| BICC-GATE-004B2 | BICC-3.2 |
+| BICC-GATE-006 | Cross-cutting gate for every certification slice |
+| BICC-GATE-007, BICC-GATE-007B, BICC-GATE-011 | BICC-1C.2 |
+| BICC-GATE-008 | BICC-1D.n |
+| BICC-UND-001, BICC-UND-002, BICC-UND-003, BICC-UND-005, BICC-UND-010 | BICC-1A.1, BICC-1A.2 |
+| BICC-UND-004, BICC-UND-012 | BICC-1B.1, BICC-1B.2 |
+| BICC-UND-006, BICC-UND-007, BICC-UND-008, BICC-UND-009 | BICC-1A.3 |
+| BICC-UND-011 | BICC-2.2 and BICC-1D.n |
+| BICC-SAFE-001, BICC-SAFE-002, BICC-SAFE-003 | BICC-1S |
+| BICC-ANS-001, BICC-ANS-002, BICC-ANS-003, BICC-ANS-005, BICC-ANS-006, BICC-ANS-007, BICC-ANS-008, BICC-ANS-009, BICC-ANS-011 | BICC-1C.1 |
+| BICC-ANS-004 | BICC-3.2 |
+| BICC-ANS-010 | BICC-0.3, BICC-2.2 |
+| BICC-ANS-012 | BICC-1D.n, BICC-5.1 |
+| BICC-ANS-013, BICC-ANS-014 | BICC-1C.2 |
+| BICC-CTX-001, BICC-CTX-002, BICC-CTX-003, BICC-CTX-004, BICC-CTX-005 | BICC-2.1 |
+| BICC-CTX-006 | BICC-2.3 |
+| BICC-MM-001, BICC-MM-002, BICC-MM-003, BICC-MM-004, BICC-MM-005, BICC-MM-010 | BICC-3.1 |
+| BICC-MM-006, BICC-MM-007, BICC-MM-009, BICC-MM-013 | BICC-3.2 |
+| BICC-MM-008, BICC-MM-011, BICC-MM-012 | BICC-3.3 |
+| BICC-BUY-001, BICC-BUY-002, BICC-BUY-003, BICC-BUY-004, BICC-BUY-005, BICC-BUY-006 | BICC-4.1 |
+| BICC-BUY-007, BICC-BUY-008, BICC-BUY-009, BICC-BUY-010 | BICC-4.3 |
+| BICC-BUY-011 | BICC-4.2 |
+| BICC-PORT-001, BICC-PORT-002, BICC-PORT-003 | BICC-1A.3, BICC-4.1 |
+| BICC-TRN-001, BICC-TRN-002, BICC-TRN-003, BICC-TRN-004, BICC-TRN-005, BICC-TRN-006, BICC-TRN-007 | BICC-5.1 |
+| BICC-MEM-001, BICC-MEM-002, BICC-MEM-003, BICC-MEM-004, BICC-MEM-005, BICC-PRO-001, BICC-PRO-002 | BICC-5.2 |
+| BICC-UX-001, BICC-UX-004, BICC-UX-005, BICC-UX-008 | BICC-0.5 |
+| BICC-UX-002, BICC-UX-006, BICC-UX-007 | BICC-5.3 |
+| BICC-UX-003 | BICC-0.5, BICC-2.3 |
+| BICC-UX-009 | BICC-1A.3 |
+| BICC-UX-010 | BICC-1C.2 |
+| BICC-OPS-001, BICC-OPS-002, BICC-OPS-003, BICC-OPS-004, BICC-OPS-005 | BICC-0.1 and every applicable activating slice |
+| BICC-OPS-006, BICC-OPS-007, BICC-OPS-008, BICC-OPS-009 | BICC-0.2 |
+| BICC-D01, BICC-D06, BICC-D11, BICC-D12, BICC-D13 | BICC-0.1 active defaults |
+| BICC-D02 | BICC-1C.2 |
+| BICC-D03, BICC-D09 | BICC-4.1, BICC-4.3 |
+| BICC-D04, BICC-D10 | BICC-3.1, BICC-3.2, BICC-3.3 |
+| BICC-D05 | BICC-5.2 |
+| BICC-D07, BICC-D08 | BICC-5.1, BICC-5.3 |
+
+## 6. Per-slice completion record
 
 Every completed slice shall append or update a record containing:
 
@@ -528,6 +602,6 @@ Every completed slice shall append or update a record containing:
 
 Update `docs/library/requirement_status.csv` only with requirement-specific evidence. A compile, route, component, or unit test alone does not establish end-to-end delivery.
 
-## 6. Plan completion definition
+## 7. Plan completion definition
 
 The program is complete only when every in-scope FRD requirement has requirement-specific evidence, all applicable phase gates pass on eligible held-out data, provider and model strata have explicit approval, and no later phase is being used to conceal a failed earlier invariant. A roadmap bullet, implemented file, or passing main corpus is not completion evidence.
