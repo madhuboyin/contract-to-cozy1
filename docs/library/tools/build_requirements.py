@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 LIBRARY = ROOT / 'docs/library'
 SOURCE = ROOT / 'docs'
-ID = re.compile(r'(?:[A-Z]{2,12}-){1,3}\d{1,3}|(?:FR|TR|UR)-\d{1,3}')
+ID = re.compile(r'(?:[A-Z]{2,12}-){1,3}\d{1,3}(?:[A-Z]\d*)?|(?:FR|TR|UR)-\d{1,3}(?:[A-Z]\d*)?')
 LEAD = re.compile(r'^\s*(?:\|\s*|#{1,6}\s*|[-*]\s*)?(?:\*\*|`)?(' + ID.pattern + r')(?:\*\*|`)?\s*(?:[:—–|.]|\s+-\s+|\s+shall\b)', re.I)
 FIELDS = ['source', 'requirement_id', 'line', 'requirement_text', 'status', 'acceptance_criteria', 'evidence_paths', 'checked_commit', 'checked_date', 'notes']
 STATUSES = {'UNVERIFIED', 'TARGET', 'IMPLEMENTED_STATIC', 'VERIFIED_RUNTIME', 'PARTIAL', 'DEFERRED', 'SUPERSEDED', 'NEEDS_ATOMIZATION'}

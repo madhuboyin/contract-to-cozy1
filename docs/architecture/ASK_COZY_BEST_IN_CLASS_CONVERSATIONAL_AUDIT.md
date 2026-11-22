@@ -26,6 +26,8 @@ The target is therefore not an unrestricted general-purpose agent. The target is
 6. serves prospective buyers before a canonical property exists; and
 7. preserves every existing authorization, safety, confirmation, idempotency, provenance, and canonical-service boundary.
 
+**Named model-role decision.** “LLM = last resort” continues to govern semantic routing and answer authorship. Three intentional, separately governed structured-analysis exceptions may run when their feature requires them: conversational-capture candidate extraction, document evidence/citation candidate extraction, and image observation/urgency candidate extraction. Each produces closed-schema, provenance-bound candidates only; deterministic server validation and rendering remain authoritative. These exceptions do not authorize model-written answers, diagnoses, recommendations, writes, or unrestricted actions.
+
 ## 2. Evidence and interpretation rules
 
 This audit follows [`AUTHORITY.md`](../library/AUTHORITY.md): requirements describe the target; code, schema, and executed tests establish delivery. Counts and measurements are point-in-time evidence, not architectural constants.

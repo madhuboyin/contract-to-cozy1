@@ -1,6 +1,6 @@
 # Ask Cozy Best-in-Class Conversational Concierge — Implementation Plan
 
-**Status:** Draft v0.4 for owner review; implementation slices and acceptance plan, not a delivery claim
+**Status:** Draft v0.5 for owner review; implementation slices and acceptance plan, not a delivery claim
 
 **Date:** 2026-11-22
 
@@ -23,6 +23,8 @@ The existing owner rule remains controlling:
 5. a model never writes answer wording, executes a write, assigns authority, or replaces an eligible deterministic result.
 
 General guidance and social turns use approved authored content or deterministic composition. Model-generated guidance is outside this plan unless the owner approves a separate FRD amendment and certification contract.
+
+The following named structured-analysis exceptions are intentional and sit outside the last-resort semantic-routing order: conversational-capture candidate extraction, document evidence/citation candidate extraction, and image observation/urgency candidate extraction. They are separate governed provider flows, never answer authors, and receive no authority beyond closed-schema candidates that deterministic validation accepts or rejects.
 
 ## 2. Working rules
 
@@ -55,19 +57,19 @@ BICC-0.2 shall trace the repository for additional model/provider call sites and
 
 | Slice | Outcome | Depends on | Activation or completion gate |
 |---|---|---|---|
-| `BICC-0.1` | Evaluation contract, sealed pools, deterministic fidelity suites, and cross-revision baseline | Owner decisions D01, D06, D11, D12, D13 | BICC-EVAL-001–019 executable; scorer, pool provenance, fixture partitions, and historical comparison approved |
+| `BICC-0.1` | Evaluation contract, sealed pools, deterministic fidelity suites, and cross-revision baseline | Active FRD §18 defaults D01, D06, D11, D12, D13 | BICC-EVAL-001–019 executable; scorer, pool provenance, fixture partitions, and historical comparison recorded |
 | `BICC-0.2` | Provider-boundary and model-call inventory | `BICC-0.1`; applicable provider facts | BICC-OPS-006–009 evidence complete before any new external call |
 | `BICC-0.3` | Retire model-backed result synthesis | Model-call inventory in `BICC-0.2` | No consumer or configuration path can invoke model-written result synthesis |
 | `BICC-0.5` | Independent UX corrections | Current defect reproduction | Focused regression and accessibility evidence per accepted defect |
-| `BICC-1A.1` | Deterministic reach inventory | `BICC-0.1` | Reachability denominator and missing-target list approved |
-| `BICC-1A.2` | Deterministic data-point/entity/filter reach | `BICC-1A.1` | GATE-004A1, GATE-010, and Phase 1A portions of GATE-001/GATE-003 pass |
+| `BICC-1A.1` | Deterministic reach inventory | `BICC-0.1` | Reachability denominator, baseline, and missing-target list recorded |
+| `BICC-1A.2` | Deterministic data-point/entity/filter reach | `BICC-1A.1` | GATE-004A1, Phase 1A portions of GATE-001/GATE-003, deterministic-reachable target, and overall non-regression pass; full GATE-010 remains combined-system |
 | `BICC-1A.3` | Clarification and bounded recovery | `BICC-1A.2` | UND-006–009, PORT-003, and UX-009 corpus passes |
 | `BICC-1S` | Immediate-safety interception | `BICC-0.1` and D11; runs alongside Phase 1A | GATE-002, GATE-009, and SAFE-001–003 pass |
 | `BICC-1B.1` | Last-resort semantic-plan contract | `BICC-0.2`, `BICC-1A.2` | Ordering, schema, eligibility, privacy, and no-answer-authority tests pass |
-| `BICC-1B.2` | First approved model-assisted read stratum | `BICC-1B.1`; approved calibration stratum | Held-out GATE-001/GATE-003 subset and availability model pass |
+| `BICC-1B.2` | Conditional first model-assisted read stratum | `BICC-1B.1`; material residual gap and D06 selection rule | Deferred when no stratum qualifies; otherwise held-out GATE-001/GATE-003 subset and availability model pass |
 | `BICC-1C.1` | Atomic answer-mode contract | `BICC-0.1`, `BICC-1A.2` | GATE-004A2, GATE-004B1, supported-mode GATE-005 subset pass |
 | `BICC-1C.2` | Authored general guidance and social turns | `BICC-1C.1`, D13 | GATE-007/007B/010/011 and EVAL-016 pass without a model answer call |
-| `BICC-1D.n` | One approved write-proposal family | `BICC-1A.2`; family selected by D06 | Family-specific GATE-008 and EVAL-010 pass |
+| `BICC-1D.n` | One write-proposal family | `BICC-1A.2`; family selected under active D06 default | Family-specific GATE-008 and EVAL-010 pass |
 | `BICC-2.1` | Structured continuity and follow-ups | Phase 1A; applicable Phase 1C modes | CTX-001–005 follow-up corpus passes |
 | `BICC-2.2` | Bounded composed reads | `BICC-2.1` | Compound/facet coverage passes with no silent loss or retargeting |
 | `BICC-3.1` | Attachment lifecycle and isolation | D04, D10, `BICC-0.2` | MM-001–005 and MM-010 pass |
@@ -235,7 +237,7 @@ Implement missing deterministic reads and query shapes one domain slice at a tim
 
 **Gate**
 
-The approved Phase 1A matrix passes its BICC-GATE-001 and BICC-GATE-003 subset, BICC-GATE-004A1, and BICC-GATE-010; BICC-GATE-006 remains zero.
+The Phase 1A matrix passes its per-domain BICC-GATE-001 and BICC-GATE-003 subset, BICC-GATE-004A1, the Phase 0 deterministic-reachable target, and the BICC-GATE-010 two-percentage-point overall non-regression margin; BICC-GATE-006 remains zero. The full 90% GATE-010 target remains a combined-system gate and does not block this slice.
 
 ### BICC-1A.3 — Clarification and bounded recovery
 
@@ -304,11 +306,11 @@ Critical canonical cases have zero misses; broader recall and false-positive res
 
 Contract tests pass, but no stratum activates until BICC-1B.2.
 
-### BICC-1B.2 — First approved model-assisted read stratum
+### BICC-1B.2 — Conditional first model-assisted read stratum
 
 **Scope**
 
-Enable exactly one read stratum selected under the FRD §18 default after calibration and provider-boundary approval. Additional strata repeat this slice; owner sign-off is not a prerequisite.
+Defer this slice when no model-assisted stratum is selected. When Phase 0 identifies a material held-out gap that deterministic work cannot safely close, select the eligible read domain with the largest reproducible gap and positive expected value after privacy, cost, and reliability review. Enable only that stratum after calibration and provider-boundary approval. Additional strata repeat this selection rule; owner sign-off is not a prerequisite, and deferral does not block Phase 1C or later deterministic slices.
 
 **Expected existing files**
 
