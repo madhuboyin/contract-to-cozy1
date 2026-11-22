@@ -1,6 +1,6 @@
 # Ask Cozy — Best-in-Class Conversational Concierge FRD
 
-**Status:** Draft v0.2 for owner review; target requirements, not an implementation claim
+**Status:** Draft v0.2.1 for owner review; target requirements, not an implementation claim
 
 **Date:** 2026-11-22
 
@@ -94,7 +94,7 @@ Unknown lifecycle context may receive safe general guidance and capability disco
 - **BICC-EVAL-010.** Consequential actions retain a zero-tolerance gate for unauthorized execution, confirmation bypass, duplicate effect, wrong-property effect, and wrong-entity effect.
 - **BICC-EVAL-011.** Supported write families shall report clear-intent proposal recall, correct operation and entity selection, required-field extraction accuracy, clarification appropriateness, and absence of pre-confirmation material effects. Refusal or fallback on a clear supported action request counts as a recall failure.
 
-### 6.3 Initial release gates
+### 6.3 Initial automated evaluation gates
 
 The following are proposed gates and require owner approval before becoming certification thresholds:
 
@@ -239,6 +239,7 @@ This track runs in parallel with Phases 0 and 1 and does not wait for semantic p
 - Add real client cancellation and propagate cancellation to cancellable work; represent user stop as a normal state.
 - Add copy and persisted feedback under the existing execution identity.
 - Lazy-load the Ask workspace from non-Ask dashboard pages without losing launch context.
+- Complete the existing voice-dictation states, transcript review, permission/error recovery, and accessibility behavior required by BICC-UX-008.
 - Add focused accessibility and narrow-viewport tests for each corrected defect.
 
 **Exit:** each accepted defect has a current reproduction, focused regression evidence, and no change to authorization, execution, confirmation, or result identity.
@@ -249,6 +250,8 @@ This track runs in parallel with Phases 0 and 1 and does not wait for semantic p
 - Add bounded candidate retrieval and planner validation.
 - Deliver declared answer modes, warm small talk, general guidance, and focused clarification.
 - Correct emergency-intent false positives through evaluated classification.
+- Deliver the explicit property-selection recovery required by BICC-PORT-003 for unsupported portfolio questions.
+- Deliver the respectful, non-destructive unsupported-language recovery required by BICC-UX-009.
 
 **Exit:** BICC-GATE-001 through BICC-GATE-008 pass for the approved Phase 1 domain and write-family matrix; BICC-EVAL-010 remains zero.
 
@@ -256,7 +259,7 @@ This track runs in parallel with Phases 0 and 1 and does not wait for semantic p
 
 - Certify structured conversation summaries and entity references.
 - Complete approved bounded multi-facet reads using the existing composition contract.
-- Deliver safe regeneration and persisted feedback.
+- Deliver safe regeneration with per-attempt persisted feedback.
 
 **Exit:** compound and follow-up certification passes with no silent facet loss or property retargeting.
 
@@ -266,7 +269,7 @@ This track runs in parallel with Phases 0 and 1 and does not wait for semantic p
 - Authorized, version-aware, deletion-aware retrieval with citations.
 - Reviewed promotion of extracted candidates.
 
-**Exit:** BICC-MM-001 through BICC-MM-009 pass, including access-loss and deletion tests.
+**Exit:** BICC-MM-001 through BICC-MM-011 pass, including access-loss, retention, promotion-boundary, and deletion tests.
 
 ### Phase 4 — Prospective Buyer Discovery
 
@@ -274,14 +277,14 @@ This track runs in parallel with Phases 0 and 1 and does not wait for semantic p
 - Cost/cash scenarios and document review.
 - Explicit candidate-to-contract promotion.
 
-**Exit:** BICC-BUY-001 through BICC-BUY-008 pass without candidate data leaking into canonical homeowner behavior.
+**Exit:** BICC-BUY-001 through BICC-BUY-010 pass without candidate data leaking into canonical homeowner behavior or unauthenticated access crossing the approved account boundary.
 
 ### Phase 5 — Responsiveness, memory, and proactive concierge
 
-- Cancellation and staged delivery.
+- Staged delivery, building on Phase 0.5 cancellation.
 - Workload-aware limits and measured performance.
 - Opt-in preference memory and explainable proactive continuations.
-- Reproduced mobile, accessibility, route-context, and bundle improvements.
+- Remaining route-context starters, offline read behavior, and measured bundle and interaction budgets.
 
 **Exit:** transport recovery, memory control, accessibility, and performance acceptance suites pass.
 
