@@ -88,3 +88,26 @@ test('every answered cross-domain turn declares a result-level family, has its a
   }
   assert.ok(checked >= 12, `only ${checked} answered turns were checked`);
 });
+
+test('delivery boundary: an answer whose producer declared no family is declared from its status and blocks, and legacy lists are stamped OTHER', () => {
+  const { declareAnswerFamily } = require('../../src/productFramework/ask/answerFamilyAnatomy.ts');
+  const legacyList = list('legacy');
+  const a = declareAnswerFamily('ANSWERED', [summary, legacyList]);
+  assert.equal(a.family, 'ENTITY_LIST');
+  assert.equal(a.blocks[1].recordKind, 'OTHER');
+  assert.equal(legacyList.recordKind, undefined, 'the stored block is not mutated');
+  assert.equal(declareAnswerFamily('ANSWERED', [summary]).family, 'DIRECT_ANSWER');
+  assert.equal(declareAnswerFamily('NEEDS_CLARIFICATION', [summary]).family, 'CLARIFICATION');
+  assert.equal(declareAnswerFamily('NOT_APPLICABLE', [summary]).family, 'BOUNDARY');
+  assert.equal(declareAnswerFamily('ANSWERED', [summary, { type: 'WORKFLOW_PROGRESS', id: 'w' }]).family, 'WORKFLOW');
+  assert.equal(declareAnswerFamily('ANSWERED', [summary, { type: 'TABLE', id: 't', title: 't', columns: [], rows: [] }]).family, 'COMPARISON');
+  // a clarification that still carries a list fits another family rather than being declared a clarification it is not
+  assert.equal(declareAnswerFamily('NEEDS_CLARIFICATION', [summary, legacyList]).family, 'ENTITY_LIST');
+  // a kinded list whose rows lack what its renderer needs fits nothing: stays undeclared, visibly
+  const broken = list('m', { recordKind: 'MAINTENANCE_TASK' });
+  assert.equal(declareAnswerFamily('ANSWERED', [summary, broken]).family, null);
+  for (const status of ['ANSWERED', 'NOT_APPLICABLE', 'NEEDS_CLARIFICATION']) {
+    const { family, blocks } = declareAnswerFamily(status, [summary, legacyList]);
+    assert.deepEqual(answerAnatomyIssues(family, blocks), []);
+  }
+});

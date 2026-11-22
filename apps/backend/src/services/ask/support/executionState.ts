@@ -1,6 +1,7 @@
 // Ask handler support: executionState. Moved out of askHandlerSupport.ts unchanged (FRD v1.110); that file re-exports these modules.
 import { staleMarkerFor } from './askReconciliation';
 import { ASK_RESPONSE_SCHEMA_VERSION, AskExecutionResponseSchema, AskPresentationBlockSchema, SuggestedNextActionsStatusSchema, type AskExecutionResponse, type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
+import { declareAnswerFamily } from '../../../productFramework/ask/answerFamilyAnatomy';
 import { AskExecution, AskExecutionStatus, Prisma } from '@prisma/client';
 import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, resolveAskOperation, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
 import { prisma } from '../../../lib/prisma';
@@ -184,6 +185,11 @@ export function mapPersistedExecution(execution: {
     retryResponse: execution.status === 'FAILED_RETRYABLE'
       || (execution.status === 'UNAVAILABLE' && execution.reasonCode !== 'ASK_ANSWER_RELEVANCE_UNRESOLVED_AFTER_CLARIFICATION'),
   };
+  const storedFamily = typeof (stored as { presentationFamily?: unknown }).presentationFamily === 'string' ? (stored as { presentationFamily: string }).presentationFamily : null;
+  const storedBlocks = Array.isArray(stored.blocks) ? stored.blocks as Array<Record<string, unknown> & { type: string }> : null;
+  const delivered: { family: string | null; blocks: unknown } = storedFamily || !storedBlocks || storedBlocks.some((block) => !block || typeof block !== 'object' || typeof block.type !== 'string')
+    ? { family: storedFamily, blocks: stored.blocks ?? [] }
+    : declareAnswerFamily(execution.status, storedBlocks);
   const candidate = {
     schemaVersion: storedSchemaVersion,
     executionId: execution.id,
@@ -202,9 +208,9 @@ export function mapPersistedExecution(execution: {
       : null,
     viewState,
     contextVersion: execution.contextVersion,
-    blocks: stored.blocks ?? [],
-    // Declared by the producer and stored with the answer; absent on answers from producers that do not declare one yet.
-    presentationFamily: typeof (stored as { presentationFamily?: unknown }).presentationFamily === 'string' ? (stored as { presentationFamily: string }).presentationFamily : null,
+    blocks: delivered.blocks,
+    // Declared by the producer and stored with the answer; an answer whose producer did not declare one gets the family its status and blocks fit (declareAnswerFamily), so none leaves undeclared.
+    presentationFamily: delivered.family,
     captureRequests: Array.isArray(stored.captureRequests)
       ? stored.captureRequests.map((request) => request && typeof request === 'object' && !Array.isArray(request)
         ? {

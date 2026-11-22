@@ -1632,7 +1632,7 @@ const AskExecutionResponseBaseSchema = z.object({
   }).nullable().default(null),
   operation: z.object({ id: z.string(), version: z.string(), family: z.string() }).nullable(),
   // The answer's presentation family at the level of the whole response (the owner review of the first five UI slices): the client validates the blocks against it and shows only what the
-  // family permits. Null for an answer from a producer that has not declared one yet; every semantic-stack answer declares it.
+  // family permits. A producer that declares none gets the family its status and blocks fit when the answer is delivered (declareAnswerFamily); null only when the blocks fit no family.
   presentationFamily: z.enum(ASK_PRESENTATION_FAMILIES).nullable().default(null),
   // Present only when this execution's stored launch context declared the same operation that actually ran. This lets an unchanged
   // "Change and resend" preserve reviewed starter/action routing without treating an inferred operation as a client-owned declaration.

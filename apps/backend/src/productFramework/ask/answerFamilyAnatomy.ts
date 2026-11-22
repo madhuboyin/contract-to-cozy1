@@ -76,3 +76,32 @@ export function answerAnatomyIssues(family: AskPresentationFamily | null | undef
   }
   return issues;
 }
+
+// ---- The delivery boundary: every answer leaves with a family ----
+
+const BOUNDARY_STATUSES: ReadonlySet<string> = new Set(['NOT_APPLICABLE', 'UNAVAILABLE', 'OUT_OF_SCOPE', 'BLOCKED', 'FAILED_RETRYABLE', 'FAILED_TERMINAL', 'CANCELLED', 'EXPIRED', 'OUTCOME_UNKNOWN']);
+const CLARIFICATION_STATUSES: ReadonlySet<string> = new Set(['NEEDS_CLARIFICATION', 'NEEDS_PROPERTY', 'NEEDS_ENTITY', 'NEEDS_CONTEXT']);
+
+type MutableBlock = AnatomyBlock & { recordKind?: string };
+
+/**
+ * The family of an answer whose producer did not declare one, decided from its status and blocks, plus the blocks stamped so the family's anatomy holds: a list that never said what its records
+ * are is stamped `OTHER` (the shared list's own default, which the kind rules exempt from "one list per kind"). The first candidate whose anatomy the blocks satisfy wins; when none does, the
+ * answer genuinely breaks every family and `family` is null, so the violation stays visible instead of being declared away.
+ */
+export function declareAnswerFamily<T extends AnatomyBlock>(status: string, blocks: readonly T[]): { family: AskPresentationFamily | null; blocks: T[] } {
+  const stamped = blocks.map((block) => (block.type === 'GROUPED_LIST' && !block.recordKind && !isUnconfirmedList(block) ? ({ ...block, recordKind: 'OTHER' } as T) : block));
+  const has = (...types: string[]): boolean => blocks.some((block) => types.includes(block.type));
+  const candidates: AskPresentationFamily[] = [];
+  if (CLARIFICATION_STATUSES.has(status)) candidates.push('CLARIFICATION');
+  if (BOUNDARY_STATUSES.has(status)) candidates.push('BOUNDARY');
+  if (has('COMPARISON', 'SCENARIO_COMPARISON')) candidates.push('COMPARISON');
+  if (has('WORKFLOW_PROGRESS', 'TASK_GUIDE', 'DECISION_PROGRESS')) candidates.push('WORKFLOW');
+  if (has('GROUPED_LIST', 'EMPTY_STATE', 'LIMITATION', 'ERROR_STATE')) candidates.push('ENTITY_LIST');
+  if (has('TABLE')) candidates.push('COMPARISON');
+  candidates.push('DIRECT_ANSWER', 'ENTITY_LIST');
+  for (const family of candidates) {
+    if (answerAnatomyIssues(family, stamped).length === 0) return { family, blocks: stamped };
+  }
+  return { family: null, blocks: [...blocks] };
+}
