@@ -18,7 +18,12 @@ export function answerFirst(body: string, title: string): { headline?: string; s
 /** The family a set of presentation blocks declared on its answer summary; an answer with no declared summary family is an entity list. */
 export function familyOfBlocks(blocks: readonly AskPresentationBlock[]): AskPresentationFamily {
   const summary = blocks.find((block) => block.type === 'SUMMARY');
-  return (summary && summary.type === 'SUMMARY' ? summary.presentationFamily : undefined) ?? 'ENTITY_LIST';
+  return (summary && summary.type === 'SUMMARY' ? summary.presentationFamily : undefined) ?? defaultFamilyOfBlocks(blocks);
+}
+
+/** With no declared family, an answer that lists records is an entity list; one with no list at all (a count, a yes/no, one fact) is a direct answer. */
+export function defaultFamilyOfBlocks(blocks: readonly AskPresentationBlock[]): AskPresentationFamily {
+  return blocks.some((block) => block.type === 'GROUPED_LIST') || blocks.some((block) => ['EMPTY_STATE', 'LIMITATION', 'ERROR_STATE'].includes(block.type)) ? 'ENTITY_LIST' : 'DIRECT_ANSWER';
 }
 
 /** The group heading of a list whose records are all of one kind. */

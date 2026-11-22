@@ -4,6 +4,7 @@ import type { AskPresentationFamily } from './ask.contract';
  * UI review 2026-11-21 (owner review of the first five slices): a presentation family is the answer's contract with the client, not a hint. Declaring one means accepting its anatomy:
  *  - ANALYSIS is a conclusion with facts and assumptions: it carries no collection (no GROUPED_LIST, no TABLE).
  *  - DIRECT_ANSWER is a count, a yes/no or one fact: a collection is allowed only when the list declares why (`justifiedCollection`).
+ *  - CLARIFICATION and BOUNDARY carry no collection; COMPARISON carries a comparison block; WORKFLOW carries a workflow block; ENTITY_LIST must carry a list (or say why not).
  *  - ENTITY_LIST names what its records are: every list (except the separate "needs confirmation" list) declares a `recordKind`, and no two lists of one kind share an answer.
  * Pure and free of I/O so the contract, the producers' tests and the client apply the same rules (the client keeps a copy: apps/frontend/src/features/ask/answerFamilyAnatomy.ts).
  */
@@ -33,6 +34,9 @@ function rendererRequirementIssues(block: AnatomyBlock): string[] {
   return missing.length > 0 ? [`${block.recordKind} list "${block.id ?? ''}" has ${missing.length} row(s) without ${requirement.status ? 'entityType and status' : 'entityType'}`] : [];
 }
 
+const COMPARISON_BLOCK_TYPES: ReadonlySet<string> = new Set(['COMPARISON', 'SCENARIO_COMPARISON', 'TABLE', 'GROUPED_LIST']);
+const WORKFLOW_BLOCK_TYPES: ReadonlySet<string> = new Set(['WORKFLOW_PROGRESS', 'TASK_GUIDE', 'DECISION_PROGRESS', 'PROGRESS']);
+const EMPTY_RESULT_BLOCK_TYPES: ReadonlySet<string> = new Set(['EMPTY_STATE', 'LIMITATION', 'ERROR_STATE']);
 const isCollection = (block: AnatomyBlock): boolean => block.type === 'GROUPED_LIST' || block.type === 'TABLE';
 const itemCount = (block: AnatomyBlock): number => (Array.isArray(block.sections)
   ? block.sections.reduce((sum: number, section: { items?: unknown[] }) => sum + (Array.isArray(section?.items) ? section.items.length : 0), 0)
@@ -51,7 +55,14 @@ export function answerAnatomyIssues(family: AskPresentationFamily | null | undef
       if (isCollection(block) && itemCount(block) > 0 && !block.justifiedCollection) issues.push(`DIRECT_ANSWER carries ${block.type} "${block.id ?? ''}" with no justifiedCollection`);
     }
   }
+  if (family === 'CLARIFICATION' || family === 'BOUNDARY') {
+    for (const block of blocks) if (isCollection(block)) issues.push(`${family} answers carry no collection, but ${block.type} "${block.id ?? ''}" is present`);
+  }
+  if (family === 'COMPARISON' && !blocks.some((block) => COMPARISON_BLOCK_TYPES.has(block.type))) issues.push('COMPARISON answers carry a comparison block (COMPARISON, SCENARIO_COMPARISON, TABLE, or a list with one row per option)');
+  if (family === 'WORKFLOW' && !blocks.some((block) => WORKFLOW_BLOCK_TYPES.has(block.type))) issues.push('WORKFLOW answers carry a workflow block (WORKFLOW_PROGRESS, TASK_GUIDE, DECISION_PROGRESS or PROGRESS)');
   if (family === 'ENTITY_LIST') {
+    // An entity list is defined by its list; an answer with nothing to list says so with an empty/limitation/error state instead.
+    if (!blocks.some((block) => block.type === 'GROUPED_LIST') && !blocks.some((block) => EMPTY_RESULT_BLOCK_TYPES.has(block.type))) issues.push('ENTITY_LIST answers carry a GROUPED_LIST (or an EMPTY_STATE / LIMITATION / ERROR_STATE saying why there is none)');
     const kinds = new Map<string, string>();
     for (const block of blocks) {
       if (block.type !== 'GROUPED_LIST' || isUnconfirmedList(block)) continue;

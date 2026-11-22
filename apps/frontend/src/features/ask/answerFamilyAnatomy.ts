@@ -27,7 +27,11 @@ export function answerAnatomyIssues(family: AskPresentationFamily | null | undef
   const issues: string[] = [];
   if (family === 'ANALYSIS') for (const block of blocks) if (isCollection(block)) issues.push(`ANALYSIS carries ${block.type} "${block.id}"`);
   if (family === 'DIRECT_ANSWER') for (const block of blocks) if (block.type === 'GROUPED_LIST' && itemCount(block) > 0 && !block.justifiedCollection) issues.push(`DIRECT_ANSWER carries an unjustified list "${block.id}"`);
+  if (family === 'CLARIFICATION' || family === 'BOUNDARY') for (const block of blocks) if (isCollection(block)) issues.push(`${family} carries ${block.type} "${block.id}"`);
+  if (family === 'COMPARISON' && !blocks.some((block) => ['COMPARISON', 'SCENARIO_COMPARISON', 'TABLE', 'GROUPED_LIST'].includes(block.type))) issues.push('COMPARISON carries no comparison block');
+  if (family === 'WORKFLOW' && !blocks.some((block) => ['WORKFLOW_PROGRESS', 'TASK_GUIDE', 'DECISION_PROGRESS', 'PROGRESS'].includes(block.type))) issues.push('WORKFLOW carries no workflow block');
   if (family === 'ENTITY_LIST') {
+    if (!blocks.some((block) => block.type === 'GROUPED_LIST') && !blocks.some((block) => ['EMPTY_STATE', 'LIMITATION', 'ERROR_STATE'].includes(block.type))) issues.push('ENTITY_LIST carries no list');
     const kinds = new Set<string>();
     for (const block of blocks) {
       if (block.type !== 'GROUPED_LIST' || block.id.endsWith(UNCONFIRMED_LIST_ID_SUFFIX)) continue;
@@ -49,6 +53,7 @@ export function enforceAnswerAnatomy(family: AskPresentationFamily | null | unde
   if (issues.length === 0) return blocks;
   report(issues);
   if (family === 'ANALYSIS') return blocks.filter((block) => !isCollection(block));
+  if (family === 'CLARIFICATION' || family === 'BOUNDARY') return blocks.filter((block) => !isCollection(block));
   if (family === 'DIRECT_ANSWER') return blocks.filter((block) => !(block.type === 'GROUPED_LIST' && itemCount(block) > 0 && !block.justifiedCollection));
   return blocks;
 }

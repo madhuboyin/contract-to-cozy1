@@ -19,6 +19,7 @@ import {
   ENTITY_TYPE_OF_RECORD_KIND,
   UNCONFIRMED_LIST_SUFFIX,
   buildSliceRichPresentation,
+  defaultFamilyOfBlocks,
   verifyRichPresentationPopulationEquivalence,
   type SlicePresentationRow,
   type SliceRichPresentationEquivalenceReport,
@@ -3556,7 +3557,10 @@ function isAnalysisFacet(facet: CrossDomainFacetExecutionResult): boolean {
 
 export function buildOperationResultFromCrossDomainExecution(execution: CrossDomainExecutionResult): AskOperationResult {
   const result = buildCrossDomainOperationResult(execution);
-  return { ...result, presentationFamily: crossDomainResultFamily(execution, result) };
+  const family = crossDomainResultFamily(execution, result);
+  // The summary's own declaration follows the result: an answer with no list to show (a count, a yes/no) is a direct answer, not an entity list.
+  const blocks = result.blocks.map((block) => (block.type === 'SUMMARY' && block.presentationFamily !== family ? { ...block, presentationFamily: family } : block));
+  return { ...result, blocks, presentationFamily: family };
 }
 
 /**
@@ -3568,7 +3572,8 @@ function crossDomainResultFamily(execution: CrossDomainExecutionResult, result: 
   if (execution.status === 'BOUNDARY' || execution.status === 'FORBIDDEN' || execution.status === 'NONE_FITS') return 'BOUNDARY';
   const summary = result.blocks.find((block) => block.type === 'SUMMARY');
   const declared = summary && summary.type === 'SUMMARY' ? summary.presentationFamily : undefined;
-  return declared ?? 'ENTITY_LIST';
+  if (declared === 'ENTITY_LIST' || declared === undefined) return defaultFamilyOfBlocks(result.blocks);
+  return declared;
 }
 
 function buildCrossDomainOperationResult(execution: CrossDomainExecutionResult): AskOperationResult {

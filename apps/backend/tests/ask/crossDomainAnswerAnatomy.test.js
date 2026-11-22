@@ -31,6 +31,18 @@ test('rules: ANALYSIS rejects any collection; DIRECT_ANSWER rejects an unjustifi
   assert.ok(ASK_LIST_RECORD_KINDS.includes('OTHER'));
 });
 
+test('rules: the other four families and a list-less entity list', () => {
+  assert.equal(answerAnatomyIssues('ENTITY_LIST', [summary]).length, 1, 'an entity list needs its list');
+  assert.deepEqual(answerAnatomyIssues('ENTITY_LIST', [summary, { type: 'EMPTY_STATE', id: 'e', title: 't', body: 'b', actions: [] }]), [], 'or says why there is none');
+  assert.equal(answerAnatomyIssues('COMPARISON', [summary]).length, 1);
+  assert.deepEqual(answerAnatomyIssues('COMPARISON', [summary, list('l', { recordKind: 'OTHER' })]), []);
+  assert.equal(answerAnatomyIssues('WORKFLOW', [summary]).length, 1);
+  assert.deepEqual(answerAnatomyIssues('WORKFLOW', [summary, { type: 'WORKFLOW_PROGRESS', id: 'w' }]), []);
+  assert.equal(answerAnatomyIssues('CLARIFICATION', [summary, list('l')]).length, 1);
+  assert.equal(answerAnatomyIssues('BOUNDARY', [summary, list('l')]).length, 1);
+  assert.deepEqual(answerAnatomyIssues('BOUNDARY', [summary]), []);
+});
+
 const response = (presentationFamily, blocks) => ({
   schemaVersion: '1.0', executionId: 'e', sessionId: 's', question: 'q', status: 'ANSWERED', property: null, operation: null, contextVersion: null, presentationFamily,
   blocks, suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
