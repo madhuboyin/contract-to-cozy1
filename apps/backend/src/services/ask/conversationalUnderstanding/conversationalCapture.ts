@@ -76,6 +76,8 @@ export interface ConversationalCaptureInput {
   // implementation plan's Phase 3 status section for what this narrower
   // rule deliberately does not cover.
   skipDueToRoutedCapture: boolean;
+  /** The person stopped the request (BICC-TRN-001): the optional extraction call is not started. */
+  stopped?: boolean;
   // Consolidated plan 3B: called when extraction filled this turn's own routed event form instead of creating a second proposal, with the
   // updated parent row so the turn's response shows the prefilled form.
   onRoutedCaptureReconciled?: (parent: PersistedCaptureExecution) => void;
@@ -2109,6 +2111,8 @@ export async function runConversationalCaptureForTurn(input: ConversationalCaptu
   const controls = readAskOperationalControls();
   if (!controls.askConversationalCaptureEnabled) return [];
   if (input.skipDueToRoutedCapture) return [];
+  // The person stopped the request: the optional extraction model call is cancellable work and is not started.
+  if (input.stopped) return [];
 
   const activeDecisionThread = await fetchActiveDecisionThreadContext(input.propertyId);
   const preFilter = evaluateExtractionPreFilter(input.message, activeDecisionThread !== null);

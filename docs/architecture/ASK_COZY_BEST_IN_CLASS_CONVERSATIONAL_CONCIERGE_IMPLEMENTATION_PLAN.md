@@ -36,6 +36,7 @@ The following three named structured-analysis exceptions are currently authorize
 - No write family inherits certification from another family.
 - `BICC-GATE-006` and `BICC-EVAL-010` are continuous invariants for every applicable slice.
 - Owner review does not block implementation. FRD §18 defaults govern immediately; a later versioned override applies prospectively and updates affected slices and evidence.
+- The provisional-read allowlist is not widened to improve a metric; additions need recorded authorization, value-integrity, routing and held-out certification evidence (FRD §18 D14; `provisionalAllowlistGuard.test.js`). The certification work queue is `ASK_COZY_BICC_CERTIFICATION_WORK_QUEUE.md`.
 - Validation is repository-local and environment-independent unless an authoritative requirement explicitly requires more. No development database, service stack, browser environment, or staged user rollout is implied by this plan. One-stratum-at-a-time activation is technical capability gating based on evaluation evidence, not a cohort, canary, compatibility phase, or staged user release.
 
 ### 2.1 Model-call register

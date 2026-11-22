@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { isWriteCapableOperation } from '../support/writeCapability';
 import { enforceClarificationContract } from '../support/clarificationContract';
 import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
@@ -167,7 +168,11 @@ function suggestedActionRecoveryResultJson(reason: SuggestedActionRejectionReaso
 
 // `input` is rebound once a selected Suggested Next Action is verified; everything before that point is selection-independent.
 /** Set only by the composition runner for a component child; never part of the public request schema. */
-export interface CreateAskExecutionInternal { composition?: { parentExecutionId: string; expiresAt: Date | null } }
+export interface CreateAskExecutionInternal {
+  composition?: { parentExecutionId: string; expiresAt: Date | null };
+  /** Aborted when the person stops the request (the browser closed the connection). Only cancellable work observes it (BICC-TRN-001). */
+  signal?: AbortSignal;
+}
 
 export async function createAskExecution(userId: string, requestInput: CreateAskExecutionRequest, accountRole?: AskAccountRole, internal: CreateAskExecutionInternal = {}): Promise<AskExecutionResponse> {
   // Phase 3: the request clock. REQUEST_SETUP and REQUEST_TOTAL are measured from here; every older stage is measured from `startedAt` below.
@@ -363,6 +368,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
         },
         provider: new GeminiUnderstandingProvider(),
         knownNames,
+        signal: internal.signal,
       });
     if (modelPlan?.kind === 'UNAVAILABLE' || modelPlan?.kind === 'DISABLED' && modelPlan.reason !== 'FEATURE_OFF') {
       await prisma.askExecutionEvent.create({ data: {
@@ -792,6 +798,9 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
         ))
         : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: executionPropertyId, operation, launchContext: effectiveLaunchContext, continuationCursor: followUp.continuationCursor, suppliedInput: followUp.suppliedInput, deferSemanticValidation: true }, skillTelemetryTrace),
       controls.executionTimeoutMs,
+      // Only cancellable work observes a stop: a write-capable operation is never raced against it, so committed canonical work finishes and
+      // a reload shows its true final state (BICC-TRN-001). A stop before the work starts, or during a read, ends the turn as CANCELLED.
+      isWriteCapableOperation(operation.operationId) ? undefined : internal.signal,
     );
     const rawResult = routingDecision.requiresClarification
       ? rawExecutedResult
@@ -957,6 +966,8 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
           message: input.message,
           contextVersion: result.contextVersion ?? saved.contextVersion,
           skipDueToRoutedCapture: operationDefinition.safetyClass === 'MATERIAL_DECISION' && result.status === 'COMPLETED',
+          // A stopped request skips the optional extraction model call (BICC-TRN-001); routing never suppresses it (FRD §10).
+          stopped: Boolean(internal.signal?.aborted),
           onRoutedCaptureReconciled: (parent) => { reconciledParent = parent; },
         });
         const childProperty = await resolvedPropertyPromise;
@@ -988,7 +999,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       data: {
         status: failureStatus,
         errorCode,
-        completedAt: failureStatus === 'FAILED_TERMINAL' ? new Date() : null,
+        completedAt: failureStatus === 'FAILED_TERMINAL' || failureStatus === 'CANCELLED' ? new Date() : null,
         resultJson: asInputJson({
           schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
           blocks: askFailureBlocks(caught, retryable),

@@ -58,6 +58,7 @@ export async function retryAskExecution(
   executionId: string,
   input: RetryAskExecution,
   accountRole?: AskAccountRole,
+  options: { signal?: AbortSignal } = {},
 ): Promise<AskExecutionResponse> {
   const source = await prisma.askExecution.findFirst({
     where: { id: executionId, userId },
@@ -97,7 +98,7 @@ export async function retryAskExecution(
     throw error;
   }
 
-  const retried = await createAskExecution(userId, buildAskRetryRequest(source, input), accountRole);
+  const retried = await createAskExecution(userId, buildAskRetryRequest(source, input), accountRole, { signal: options.signal });
   const retriedRow = await prisma.askExecution.findUnique({ where: { id: retried.executionId }, select: { resultJson: true } });
   const resultJson = retriedRow?.resultJson && typeof retriedRow.resultJson === 'object' && !Array.isArray(retriedRow.resultJson)
     ? retriedRow.resultJson

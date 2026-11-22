@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { withSavedFeedback } from './askFeedbackState';
 import { recordAskCapabilityLifecycle } from '../askCapabilityLifecycle';
 import { finalizeRecoveryActions, restartAfterExpiryCandidates } from '../suggestedActions/recoveryCandidates';
 import { AskExecution, AskExecutionStatus, HouseholdRole, Prisma } from '@prisma/client';
@@ -82,7 +83,8 @@ export async function getAskSession(userId: string, sessionId: string): Promise<
   const reconciled = await Promise.all(gated.map((execution) => execution
     ? reconcileActivationCaptureForSessionRead(userId, execution, execution.propertyId ? accessByPropertyId.get(execution.propertyId)?.role ?? null : null)
     : null));
-  return reconciled.flatMap((execution) => (execution ? [mapPersistedExecution(execution, execution.propertyId ? labels.get(execution.propertyId) ?? null : null)] : []));
+  const mapped = reconciled.flatMap((execution) => (execution ? [mapPersistedExecution(execution, execution.propertyId ? labels.get(execution.propertyId) ?? null : null)] : []));
+  return withSavedFeedback(userId, mapped);
 }
 
 /** Null when the whole composite must be withheld (property access lost or nothing still authorized); otherwise the row with its projection recomputed. */
@@ -229,7 +231,8 @@ export async function getAskExecution(userId: string, executionId: string): Prom
     (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
     throw error;
   }
-  return mapPersistedExecution(delivered, await propertySummary(execution.propertyId));
+  const [withFeedback] = await withSavedFeedback(userId, [mapPersistedExecution(delivered, await propertySummary(execution.propertyId))]);
+  return withFeedback;
 }
 
 export const INTERACTIVE_ASK_STATUSES: AskExecutionStatus[] = [...INTERACTIVE_ASK_EXECUTION_STATUSES];

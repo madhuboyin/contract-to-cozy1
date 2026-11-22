@@ -29,7 +29,9 @@ import { ClarificationCard, ConfirmationCard, InlineCaptureCard, PendingOutcomeC
 // list's own section dividers stay, so no answer is a card holding cards.
 const FRAMELESS_LISTS = '[&>section.overflow-hidden]:rounded-none [&>section.overflow-hidden]:border-0 [&>section.overflow-hidden]:bg-transparent [&>section.overflow-hidden>div]:px-0 [&>section.overflow-hidden>div:first-child>h3:first-child]:sr-only [&_section.overflow-hidden_h4]:text-xs [&_section.overflow-hidden_h4]:font-semibold [&_section.overflow-hidden_h4]:uppercase [&_section.overflow-hidden_h4]:tracking-wide [&_section.overflow-hidden_h4]:text-slate-500';
 
-export function ExecutionFeedback({ executionId, propertyId, capabilities, calm = false, leading, onCorrectionExecution, copyText }: {
+export function ExecutionFeedback({ executionId, propertyId, capabilities, calm = false, leading, onCorrectionExecution, copyText, savedFeedback }: {
+  // BICC-UX-003: the rating already saved for this attempt, hydrated from the execution so a reload shows it. It belongs to this execution id only.
+  savedFeedback?: AskExecutionResponse['feedback'];
   // BICC-UX-003: the plain text of the completed answer; the Copy control is offered only when there is some.
   copyText?: string;
   // UX-05: same-session intent/entity corrections arrive as an execution and merge in place; without this (or without an execution in the reply) the fallback `href` navigates as before.
@@ -42,10 +44,11 @@ export function ExecutionFeedback({ executionId, propertyId, capabilities, calm 
   calm?: boolean;
   capabilities: AskExecutionResponse['correctionCapabilities'];
 }) {
-  const [rating, setRating] = useState<'UP' | 'DOWN' | null>(null);
+  const hydrated = savedFeedback && savedFeedback.attemptExecutionId === executionId ? savedFeedback : null;
+  const [rating, setRating] = useState<'UP' | 'DOWN' | null>(hydrated?.rating ?? null);
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(Boolean(hydrated));
   const [error, setError] = useState<string | null>(null);
   const [correcting, setCorrecting] = useState(false);
   const [copied, setCopied] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -403,7 +406,7 @@ export function ExecutionCard({
           return <p className="w-full max-w-[960px] text-sm" data-skill-handoff="" aria-describedby={`handoff-note-${execution.executionId}`}><span className="text-slate-500">Next: </span><button type="button" disabled={loading} onClick={() => void ask(prompt, undefined, { handoffFromExecutionId: execution.executionId, propertyId: continuity.propertyId ?? undefined, entityType: continuity.sourceEntityType ?? undefined, entityId: continuity.sourceEntityId ?? undefined, actionId: continuity.sourceHomeActionId ?? undefined, decisionThreadId: continuity.decisionThreadId ?? undefined, workItemId: continuity.workItemId ?? undefined, journeyId: continuity.journeyId ?? undefined, contextVersion: continuity.contextVersion ?? undefined, returnTo: continuity.returnDestination ?? undefined })} className="min-h-8 rounded-md px-1 text-left font-semibold text-teal-800 underline-offset-2 hover:underline disabled:opacity-50">{label} →</button><span id={`handoff-note-${execution.executionId}`} className="sr-only">Ask will check access, availability, and current home context again before continuing.</span></p>;
         })()}
         {shownSuggestions.length > 0 && <div className="flex flex-wrap gap-2 pt-1">{shownSuggestions.map((suggestion) => <button key={suggestion} onClick={() => { setInput(suggestion); window.localStorage.setItem(draftStorageKey(selectedPropertyId, execution.sessionId), suggestion); }} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-800">{suggestion}</button>)}</div>}
-        <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} capabilities={execution.correctionCapabilities} calm={calmChrome} onCorrectionExecution={updateExecution} copyText={execution.status === 'ANSWERED' || execution.status === 'READY_WITH_LIMITATIONS' ? answerPlainText(execution.blocks) : undefined} />
+        <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} capabilities={execution.correctionCapabilities} calm={calmChrome} onCorrectionExecution={updateExecution} savedFeedback={execution.feedback} copyText={execution.status === 'ANSWERED' || execution.status === 'READY_WITH_LIMITATIONS' ? answerPlainText(execution.blocks) : undefined} />
         </div>
       </div>
     </article></CalmAnswerContext.Provider></CalmChromeContext.Provider></ResultViewContext.Provider></ResultRevalidationBoundary>

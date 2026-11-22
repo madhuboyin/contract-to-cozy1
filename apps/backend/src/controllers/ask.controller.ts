@@ -30,13 +30,28 @@ function sendAskDependencyError(res: Response, error: unknown): Response | null 
   return null;
 }
 
+/**
+ * An AbortSignal that fires when the client closes the connection before the response has finished. `release` detaches the listener once the
+ * handler has its result, so a normal close after the response never aborts anything.
+ */
+export function requestStopSignal(res: Response): { signal: AbortSignal; release: () => void } {
+  const controller = new AbortController();
+  const onClose = () => { if (!res.writableFinished) controller.abort(); };
+  res.once('close', onClose);
+  return { signal: controller.signal, release: () => res.off('close', onClose) };
+}
+
 export async function postAskExecution(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const user = req.user;
     if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
     const parsed = CreateAskExecutionRequestSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'The Ask request is invalid.', details: parsed.error.flatten() } });
-    const execution = await createAskExecution(user.userId, parsed.data, user.role);
+    // BICC-TRN-001: a browser that closes the connection before the answer is written has stopped the request. Cancellable work observes
+    // the signal; committed work finishes and a reload shows its true state.
+    const stop = requestStopSignal(res);
+    const execution = await createAskExecution(user.userId, parsed.data, user.role, { signal: stop.signal });
+    stop.release();
     return res.status(201).json({ success: true, data: execution });
   } catch (error) {
     const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
@@ -55,7 +70,10 @@ export async function postAskExecutionRetry(req: AuthRequest, res: Response, nex
     if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
     const input = RetryAskExecutionSchema.safeParse(req.body);
     if (!input.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'The retry request is invalid.', details: input.error.flatten() } });
-    return res.status(201).json({ success: true, data: await retryAskExecution(user.userId, req.params.executionId, input.data, user.role) });
+    const stop = requestStopSignal(res);
+    const retried = await retryAskExecution(user.userId, req.params.executionId, input.data, user.role, { signal: stop.signal });
+    stop.release();
+    return res.status(201).json({ success: true, data: retried });
   } catch (error) {
     const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
     if (code === 'ASK_EXECUTION_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Ask execution not found.' } });

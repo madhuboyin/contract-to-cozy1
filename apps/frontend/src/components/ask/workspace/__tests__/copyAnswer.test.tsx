@@ -26,3 +26,21 @@ describe('ExecutionFeedback copy', () => {
     expect(screen.queryByRole('button', { name: 'Copy answer' })).toBeNull();
   });
 });
+
+// BICC-UX-003: a saved rating returns after reload and belongs to its own attempt.
+describe('ExecutionFeedback hydration', () => {
+  const saved = (attemptExecutionId: string) => ({ rating: 'DOWN' as const, attemptExecutionId, comment: 'too vague', submittedAt: '2026-11-22T00:00:00.000Z' });
+
+  it('shows the rating saved for this attempt after a reload', () => {
+    render(<ExecutionFeedback executionId="e1" capabilities={capabilities} savedFeedback={saved('e1')} />);
+    expect(screen.getByRole('button', { name: 'Not helpful response' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Helpful response' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByText(/your feedback was saved/i)).toBeInTheDocument();
+  });
+
+  it('never shows another attempt\'s rating on a regenerated answer', () => {
+    render(<ExecutionFeedback executionId="e2" capabilities={capabilities} savedFeedback={saved('e1')} />);
+    expect(screen.getByRole('button', { name: 'Not helpful response' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByText(/your feedback was saved/i)).toBeNull();
+  });
+});

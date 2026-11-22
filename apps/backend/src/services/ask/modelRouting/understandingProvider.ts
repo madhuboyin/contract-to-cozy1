@@ -73,6 +73,8 @@ export interface GuardedPlanInput {
   /** D3a: true only when the provider's retention, no-training and regional-processing terms have been recorded and approved by the owner. */
   readonly providerTermsRecorded: boolean;
   readonly planContext: Omit<PlanContext, 'message'>;
+  /** The person's stop: aborts the provider call when it fires. */
+  readonly signal?: AbortSignal;
 }
 
 export async function guardedPlan(input: GuardedPlanInput): Promise<GuardOutcome> {
@@ -81,6 +83,8 @@ export async function guardedPlan(input: GuardedPlanInput): Promise<GuardOutcome
   if (minimised.noCall) return { kind: 'REFUSED', reason: minimised.noCall === 'UNCLASSIFIABLE_IDENTIFIER' ? 'NO_CALL_UNCLASSIFIABLE_IDENTIFIER' : 'NO_CALL_UNINTERPRETABLE_AFTER_MINIMISATION' };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), input.provider.timeoutBudgetMs ?? MODEL_CALL_BUDGET.perCallTimeoutMs);
+  const onStop = () => controller.abort();
+  if (input.signal?.aborted) controller.abort(); else input.signal?.addEventListener('abort', onStop, { once: true });
   try {
     const raw = await Promise.race([
       input.provider.plan({
@@ -102,7 +106,7 @@ export async function guardedPlan(input: GuardedPlanInput): Promise<GuardOutcome
   } catch (error) {
     const stage = (error as { stage?: unknown })?.stage;
     return { kind: 'UNAVAILABLE', reason: (error as Error)?.name === 'TimeoutError' ? 'TIMEOUT' : 'PROVIDER_ERROR', calls: input.provider.lastCallCount ?? 1, ...(stage === 'STAGE1' || stage === 'STAGE2' ? { stage } : {}) };
-  } finally { clearTimeout(timer); }
+  } finally { clearTimeout(timer); input.signal?.removeEventListener('abort', onStop); }
 }
 
 /** A scripted provider for the offline harness and tests: returns what it is told, records what it was sent. It never leaves the process. */

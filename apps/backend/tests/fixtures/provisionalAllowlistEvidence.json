@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "note": "Owner decision 2026-11-22: the provisional-read allowlist is not widened to improve a metric. An operation may be added only with recorded evidence for all four requirements below (authorization, valueIntegrity, routing, heldOutCertification). The operations here predate the rule and are grandfathered.",
+  "required": [
+    "authorization",
+    "valueIntegrity",
+    "routing",
+    "heldOutCertification"
+  ],
+  "grandfathered": [
+    "APPLIANCE_FAILURE_RISK",
+    "BREAK_EVEN_ANALYSIS",
+    "DATA_POINT_READ",
+    "HOME_BASICS_GUIDE",
+    "HOME_STATUS_BOARD",
+    "INCIDENT_CLAIM_STATUS",
+    "ITEM_REPLACEMENT_COST",
+    "MAINTENANCE_STATUS",
+    "PROPERTY_SUMMARY",
+    "QUOTE_COMPARISON_REVIEW",
+    "SAVED_RESULTS",
+    "SELLER_PREP_CHECKLIST",
+    "WARRANTY_LOOKUP",
+    "WORK_OVERVIEW"
+  ],
+  "added": {}
+}

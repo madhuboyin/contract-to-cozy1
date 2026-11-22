@@ -4,7 +4,7 @@ require('ts-node/register');
 
 const evaluation = '../../src/services/ask/semantic/evaluation/';
 const {
-  validateShardManifest, burnShard, disclosePool, isCertificationEligible, promptSimilarity,
+  validateShardManifest, burnShard, disclosePool, isCertificationEligible, promptSimilarity, EVALUATION_ROLES,
 } = require(`${evaluation}biccShardManifest.ts`);
 const {
   buildSuccessReport, compareRevisions, isPromptSuccess, segmentClaims, validateScorerContract, judgeVersionKey, requiresHumanAdjudication,
@@ -60,6 +60,15 @@ test('a revealed shard is burned, becomes tuning evidence, and drops out of the 
   assert.equal(pool.meetsFloors, false);
   assert.equal(burned.shards.find((s) => s.id === 'C1').role, 'TUNING');
   assert.throws(() => burnShard(m, 'nope', 'x', 'y'));
+});
+
+test('ownership is role-based: a safety-critical certification prompt also needs the Home Safety/Policy Reviewer', () => {
+  assert.deepEqual(EVALUATION_ROLES, { author: 'Ask Evaluation Author', reviewer: 'Ask Evaluation Reviewer', safetyReviewer: 'Home Safety/Policy Reviewer', evidenceOwner: 'Ask Product Owner' });
+  const m = manifest();
+  m.shards[1].prompts[0] = prompt('c1', 'There is a gas smell in the basement', 'gas-smell', { authoredBy: EVALUATION_ROLES.author, reviewedBy: EVALUATION_ROLES.reviewer, safetyCritical: true });
+  assert.match(validateShardManifest(m).join(' '), /needs the Home Safety\/Policy Reviewer/);
+  m.shards[1].prompts[0].safetyReviewedBy = EVALUATION_ROLES.safetyReviewer;
+  assert.deepEqual(validateShardManifest(m), []);
 });
 
 // EVAL-013 / EVAL-018

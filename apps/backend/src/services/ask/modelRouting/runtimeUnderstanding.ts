@@ -26,13 +26,15 @@ export async function planRuntimeUnderstanding(input: {
   provider: UnderstandingProvider;
   /** The authorised property's own names, protected by the minimiser before anything is sent (FR-PRV-1). */
   knownNames?: ReadonlyArray<KnownName>;
+  /** Aborted when the person stops the request; the provider call is then abandoned (BICC-TRN-001). */
+  signal?: AbortSignal;
 }): Promise<RuntimeUnderstandingOutcome> {
   if (!input.controls.enabled) return { kind: 'DISABLED', reason: 'FEATURE_OFF' };
   if (!input.controls.providerTermsRecorded) return { kind: 'DISABLED', reason: 'PROVIDER_TERMS_NOT_RECORDED' };
   if (!input.controls.homeownerTextApproved) return { kind: 'DISABLED', reason: 'HOMEOWNER_TEXT_NOT_APPROVED' };
   if (!isUnderstandingStratumCertified('SINGLE_STAGE_READ_PLAN')) return { kind: 'DISABLED', reason: 'STRATUM_NOT_CERTIFIED' };
   const outcome = await guardedPlan({
-    message: input.message, provider: input.provider, providerTermsRecorded: true, knownNames: input.knownNames,
+    message: input.message, provider: input.provider, providerTermsRecorded: true, knownNames: input.knownNames, signal: input.signal,
     planContext: { eligibleOperationIds: input.eligibleOperationIds, eligibleDataPointIds: input.eligibleDataPointIds },
   });
   if (outcome.kind === 'NO_MATCH') return { kind: 'UNAVAILABLE', reason: outcome.disposition, recovery: outcome.disposition === 'NONE_FITS' ? 'MODEL_NONE_FITS' : 'MODEL_INSUFFICIENT_TEXT' };

@@ -7,6 +7,17 @@
 //
 // Pure functions over plain data; the manifest itself is a versioned file maintained by the evaluation owner.
 
+/**
+ * Role-based ownership until people are named (owner decision 2026-11-22). A prompt's author and its independent reviewer are different
+ * roles; safety-critical prompts also need the safety reviewer; the Ask Product Owner owns the final evidence record.
+ */
+export const EVALUATION_ROLES = Object.freeze({
+  author: 'Ask Evaluation Author',
+  reviewer: 'Ask Evaluation Reviewer',
+  safetyReviewer: 'Home Safety/Policy Reviewer',
+  evidenceOwner: 'Ask Product Owner',
+} as const);
+
 export type ShardRole = 'TUNING' | 'CERTIFICATION';
 export type ShardStatus = 'SEALED' | 'BURNED';
 
@@ -18,6 +29,9 @@ export interface ShardPrompt {
   authoredBy: string;
   /** A different person (or process) from the author. */
   reviewedBy: string | null;
+  /** True for emergency, safety and policy prompts; they need the safety reviewer in addition to the independent reviewer. */
+  safetyCritical?: boolean;
+  safetyReviewedBy?: string | null;
   strata?: Record<string, string>;
 }
 
@@ -76,6 +90,7 @@ export function validateShardManifest(manifest: ShardManifest): string[] {
       promptIds.add(prompt.id);
       if (shard.role !== 'CERTIFICATION') continue;
       if (!prompt.reviewedBy || prompt.reviewedBy === prompt.authoredBy) issues.push(`Prompt ${prompt.id}: certification prompts need an independent reviewer.`);
+      if (prompt.safetyCritical && prompt.safetyReviewedBy !== EVALUATION_ROLES.safetyReviewer) issues.push(`Prompt ${prompt.id}: a safety-critical prompt needs the ${EVALUATION_ROLES.safetyReviewer}.`);
       if (tuningFamilies.has(prompt.templateFamily)) issues.push(`Prompt ${prompt.id}: template family "${prompt.templateFamily}" also appears in tuning (EVAL-003).`);
       const twin = tuning.find((candidate) => promptSimilarity(candidate.text, prompt.text) >= NEAR_DUPLICATE_THRESHOLD);
       if (twin) issues.push(`Prompt ${prompt.id}: near-duplicate of tuning prompt ${twin.id} (EVAL-003).`);

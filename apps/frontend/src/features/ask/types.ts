@@ -453,6 +453,8 @@ export interface AskExecutionResponse {
   // of the SAME interactive result (resultId), separate from executionId.
   viewState?: { resultId: string; domainScopePhrase: string | null; dateScopePhrase: string | null; statusFilter: string; selectedTaskId: string | null; queryMessage?: string | null; collectionOffsets?: Record<string, number>; revision: number } | null;
   contextVersion: string | null;
+  /** BICC-UX-003: the rating saved against this attempt (execution) only; a regenerated answer has its own. */
+  feedback?: { rating: 'UP' | 'DOWN'; attemptExecutionId: string; comment: string | null; submittedAt: string } | null;
   blocks: AskPresentationBlock[];
   captureRequests: AskCaptureRequest[];
   confirmation: AskConfirmation | null;

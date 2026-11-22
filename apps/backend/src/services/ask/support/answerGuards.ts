@@ -202,7 +202,9 @@ export function assertSkillResultBlocksAllowed(operationId: AskOperationId, resu
   }
 }
 
-export function askFailureStatus(error: unknown): Extract<AskExecutionStatus, 'FAILED_RETRYABLE' | 'FAILED_TERMINAL'> {
+export function askFailureStatus(error: unknown): Extract<AskExecutionStatus, 'FAILED_RETRYABLE' | 'FAILED_TERMINAL' | 'CANCELLED'> {
+  // BICC-TRN-001/002: a user stop is a normal state, not a failure.
+  if (error instanceof Error && error.name === 'AskExecutionCancelledError') return 'CANCELLED';
   const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
   if (error instanceof z.ZodError || code === 'ASK_PERMISSION_REQUIRED' || code === 'ASK_PROPERTY_NOT_FOUND'
     || (error instanceof Error && /undeclared block type|invalid configuration|invariant/i.test(error.message))) return 'FAILED_TERMINAL';
@@ -219,7 +221,10 @@ export function askFailureStatus(error: unknown): Extract<AskExecutionStatus, 'F
 export function askFailureBlocks(error: unknown, retryable: boolean): AskPresentationBlock[] {
   const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
   const timedOut = code === 'AI_TIMEOUT' || (error instanceof Error && error.name === 'AskExecutionTimeoutError');
-  const { title, body } = timedOut
+  const cancelled = error instanceof Error && error.name === 'AskExecutionCancelledError';
+  const { title, body } = cancelled
+    ? { title: 'Stopped', body: 'You stopped this request before it finished. Nothing was changed. You can ask again.' }
+    : timedOut
     ? { title: 'Ask timed out', body: 'Ask exceeded its operational time limit. No changes were made; try again with current records.' }
     : code === 'AI_CIRCUIT_OPEN' || code === 'AI_UPSTREAM_ERROR' || code === 'AI_EMPTY_RESPONSE'
       ? { title: 'Guidance temporarily unavailable', body: 'Generated guidance is temporarily unavailable. Record-based Ask operations remain available.' }
@@ -227,11 +232,29 @@ export function askFailureBlocks(error: unknown, retryable: boolean): AskPresent
   return [{ type: 'ERROR_STATE', id: 'execution-failed', title, body, retryable, actions: [] }];
 }
 
-export async function withAskTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+/** Raised when the person stopped the request and the work was cancellable (a read, never a write). */
+export function askCancelledError(): Error {
+  const error = new Error('The person stopped this Ask request.');
+  error.name = 'AskExecutionCancelledError';
+  return error;
+}
+
+/**
+ * Races an execution against its operational timeout and, when a signal is supplied, against the person stopping the request. The signal is
+ * supplied only for cancellable work (a read or a non-committing proposal): committed canonical work is never raced against a stop, so it
+ * finishes and a reload shows its true final state (BICC-TRN-001).
+ */
+export async function withAskTimeout<T>(promise: Promise<T>, timeoutMs: number, cancel?: AbortSignal): Promise<T> {
   let timeout: NodeJS.Timeout | undefined;
+  let onAbort: (() => void) | undefined;
   try {
     return await Promise.race([
       promise,
+      ...(cancel ? [new Promise<T>((_, reject) => {
+        if (cancel.aborted) { reject(askCancelledError()); return; }
+        onAbort = () => reject(askCancelledError());
+        cancel.addEventListener('abort', onAbort, { once: true });
+      })] : []),
       new Promise<T>((_, reject) => {
         timeout = setTimeout(() => {
           const error = new Error('Ask execution exceeded its operational timeout.');
@@ -242,5 +265,6 @@ export async function withAskTimeout<T>(promise: Promise<T>, timeoutMs: number):
     ]);
   } finally {
     if (timeout) clearTimeout(timeout);
+    if (cancel && onAbort) cancel.removeEventListener('abort', onAbort);
   }
 }
