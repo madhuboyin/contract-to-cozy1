@@ -27,6 +27,7 @@ import {
   verifyRichPresentationPopulationEquivalence,
   type SlicePresentationRow,
   type SliceRichPresentationEquivalenceReport,
+  familyOfBlocks,
 } from './richPresentationAdapter';
 
 export interface SliceAuthorizationContext {
@@ -628,11 +629,13 @@ function executeValidatedSlicePlan(input: {
       summaryBody: `${recommendation} Estimated replacement cost: ${costText}.`,
       rows,
       listId: 'inventory-results',
+      recordKind: 'INVENTORY_ITEM',
       listTitle: `${targetItem.name} details`,
       listDescription: 'Open the item for its full home-record details',
     });
     const operationResult: AskOperationResult = {
       status: 'ANSWERED',
+      presentationFamily: familyOfBlocks(blocks),
       blocks,
       suggestions: [],
       parameters: { semanticExecutionReceipt: receipt, redactedFields, operationId: 'REPLACEMENT_GUIDANCE' },
@@ -829,11 +832,13 @@ function executeValidatedSlicePlan(input: {
       summaryBody: `Found ${matchingTasks.length} matching maintenance task${matchingTasks.length === 1 ? '' : 's'}.`,
       rows,
       listId: 'maintenance-groups',
+      recordKind: 'MAINTENANCE_TASK',
       listTitle: `${matchingTasks.length} matching maintenance ${matchingTasks.length === 1 ? 'task' : 'tasks'}`,
       listDescription: 'Open a task to review its schedule, cost, status, and actions',
     });
     const operationResult: AskOperationResult = {
       status: 'ANSWERED',
+      presentationFamily: familyOfBlocks(blocks),
       blocks,
       suggestions: [],
       parameters: { semanticExecutionReceipt: receipt, redactedFields, operationId: 'MAINTENANCE_STATUS' },
@@ -1097,6 +1102,7 @@ function executeValidatedSlicePlan(input: {
     // them the canonical list identity enables the existing compact table and
     // live item-detail disclosure instead of the generic label-only cards.
     listId: 'inventory-results',
+    recordKind: 'INVENTORY_ITEM',
     listTitle: projection === 'COUNT'
       ? title
       : `${matched.length} matching ${plural(matched.length, 'appliance', 'appliances')}`,
@@ -1106,6 +1112,7 @@ function executeValidatedSlicePlan(input: {
 
   const operationResult: AskOperationResult = {
     status: 'ANSWERED',
+    presentationFamily: familyOfBlocks(blocks),
     blocks,
     suggestions: [],
     parameters: { semanticExecutionReceipt: receipt, redactedFields, operationId: 'INVENTORY_ITEMS_READ' },

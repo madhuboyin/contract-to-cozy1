@@ -15,6 +15,7 @@ import { useCalmAnswer, useCalmChrome } from './blocks/calmContext';
 import type { MaintenanceTaskFrequency, MaintenanceTaskPriority, MaintenanceTaskServiceCategory, PropertyMaintenanceTask } from '@/types';
 import { CompactAskCard } from './CompactAskCard';
 import { ConfirmationCard, PendingOutcomeCard } from './workspace/CaptureCards';
+import { formatStatusLabel } from '@/features/ask/statusLabel';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Item = Block['sections'][number]['items'][number];
@@ -468,7 +469,7 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
             return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('rounded-xl border p-3 outline-offset-2', selected ? 'border-teal-600 bg-teal-50' : 'border-transparent bg-slate-50')}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <button type="button" data-maintenance-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} disabled={disabled} aria-expanded={detailTaskId === item.id} aria-controls={`maintenance-detail-${item.id}`} onClick={() => openDetail(item)} className="min-h-10 text-left font-medium text-slate-950 underline-offset-4 hover:text-teal-800 hover:underline disabled:opacity-60">{item.title}</button>
-                {item.status && <span className="text-xs text-slate-600">{item.status.replace(/_/g, ' ')}</span>}
+                {item.status && <span className="text-xs text-slate-600">{formatStatusLabel(item.status)}</span>}
               </div>
               <p className="mt-1 text-xs text-slate-600">{item.meta.join(' · ')}</p>
               {controls && <div className="mt-2 flex gap-2">

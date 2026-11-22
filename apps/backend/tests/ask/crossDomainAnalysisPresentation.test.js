@@ -73,3 +73,38 @@ test('the equivalence check has nothing to count for an analysis, but still reje
   assert.equal(verifyRichPresentationPopulationEquivalence(facet.receipt, facet.blocks).ok, true);
   assert.equal(verifyRichPresentationPopulationEquivalence(facet.receipt, withList).ok, false, 'an ungrounded row is still rejected');
 });
+
+// Owner review 2026-11-21: an analysis offers the next step inline: supply the missing rent, or adjust the assumptions. Both open the governed Sell / Hold / Rent assumptions command; neither
+// calculates or writes by itself. A viewer cannot run that command, so a viewer is offered nothing.
+const runAs = async (rawText, role, financePatch = {}) => {
+  const base = buildSeededCrossDomainSnapshot();
+  const execution = await X.executeCrossDomainSnapshot({ rawText, snapshot: { ...base, financeSlots: { ...base.financeSlots, ...financePatch } }, role, propertyAuthorized: true });
+  return X.buildOperationResultFromCrossDomainExecution(execution);
+};
+
+test('without a tenant rent the summary offers "Add comparable rent"; with inputs it offers "Adjust assumptions"; a viewer is offered neither', async () => {
+  const missing = await runAs('how long until owning beats renting?', 'OWNER', { monthlyRentCents: null });
+  const add = missing.blocks[0].actions;
+  assert.equal(add.length, 1);
+  assert.equal(add[0].label, 'Add comparable rent');
+  assert.equal(add[0].interactionType, 'START_WORKFLOW');
+  assert.equal(add[0].operationId, 'SELL_HOLD_RENT_COMMAND');
+  assert.equal(add[0].message, 'Edit the assumptions for this sell, hold, or rent comparison.');
+  const computed = await runAs('how long until owning beats renting?', 'OWNER');
+  assert.equal(computed.blocks[0].actions[0].label, 'Adjust assumptions');
+  const viewer = await runAs('how long until owning beats renting?', 'VIEWER', { monthlyRentCents: null });
+  assert.deepEqual(viewer.blocks[0].actions, []);
+});
+
+test('the action survives the real answer-trust pipeline (a block action not allowlisted for the answering operation is stripped there)', async () => {
+  const { attachAskAuthoritativeSourceEvidence, completedAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
+  const { validateAskAnswerTrustPipeline } = require('../../src/services/ask/askAnswerTrustValidator.ts');
+  const operation = await runAs('how long until owning beats renting?', 'OWNER', { monthlyRentCents: null });
+  // The audience policy sets the household role on the result before the trust pipeline runs; a property-scoped action is not shown without it.
+  const withRole = { ...operation, parameters: { ...(operation.parameters ?? {}), audiencePresentation: { householdRole: 'OWNER' } } };
+  const result = attachAskAuthoritativeSourceEvidence(withRole, [completedAskAuthoritativeSourceEvidence('DATA_POINT_READ')]);
+  const out = validateAskAnswerTrustPipeline({ question: 'how long until owning beats renting?', operationId: 'DATA_POINT_READ', result, propertyId: 'prop-1', semanticEnabled: true, routedDeterministically: false, provisionalRead: false });
+  const summary = out.result.blocks.find((block) => block.type === 'SUMMARY');
+  assert.ok(summary, `the answer was replaced: ${out.result.status}`);
+  assert.deepEqual(summary.actions.map((action) => action.label), ['Add comparable rent'], 'the action was stripped');
+});

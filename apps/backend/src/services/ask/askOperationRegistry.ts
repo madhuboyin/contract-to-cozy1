@@ -7,7 +7,7 @@ import { validateCoverageDeclarations } from './composition/quantities';
 import { COMPOSABLE_SOURCE_AUTHORIZATION } from './composition/sourceAuthorization';
 import { isNotificationSettingsCommandRequest, isNotificationSettingsOverviewRequest, isNotificationsOverviewRequest } from './support/notificationConversation';
 import { isHomeRecordExportRequest, isHomeRecordExportShareRequest, isHomeRecordExportStatusRequest } from './support/homeRecordExport';
-import type { AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionStatus, AskPresentationBlock, SuggestedNextAction, SuggestedNextActionsStatus } from '../../productFramework/ask/ask.contract';
+import type { AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionStatus, AskPresentationBlock, AskPresentationFamily, SuggestedNextAction, SuggestedNextActionsStatus } from '../../productFramework/ask/ask.contract';
 import type { AskFollowUpNomination, SkillHandoffSuggestion } from '../skills/skillHandoff';
 import type { SuggestedNextActionCandidate } from './suggestedActions/suggestedNextActionCandidate';
 import { createAskOperationSemanticContract, validateAskSemanticContract, type AskOperationSemanticContract } from './askTrust.contract';
@@ -652,6 +652,8 @@ export function isAskMessageRoutableOperation(operationId: AskOperationId): bool
 
 export interface AskOperationResult {
   status: AskExecutionStatus;
+  /** The answer's presentation family (answerFamilyAnatomy.ts). Declared by every semantic-stack answer; the response contract rejects blocks the family forbids. */
+  presentationFamily?: AskPresentationFamily | null;
   reasonCode?: string;
   contextVersion?: string | null;
   blocks: AskPresentationBlock[];

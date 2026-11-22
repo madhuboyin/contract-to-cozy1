@@ -16,6 +16,12 @@ const HEADLINE = '1 active incident and 2 open claims.';
 const startClaims = async (page: Page) => { await open(page); await ask(page, 'Show my claims journey'); await expect(page.locator('[data-calm-summary]').first()).toBeVisible(); };
 const scope = (page: Page) => page.getByRole('group', { name: 'Claim scope filters' });
 const state = (page: Page) => page.getByRole('group', { name: 'Claim status filters' });
+// The filters restate the question, so they are folded behind one quiet "Refine" control (owner review 2026-11-21). Open it before using a chip (idempotent).
+const openRefine = async (page: Page) => {
+  const refine = page.locator('[data-claim-refine]').last();
+  await expect(refine).toBeVisible();
+  if (!(await refine.evaluate((node) => (node as HTMLDetailsElement).open))) await refine.locator('summary').click();
+};
 
 test('the answer says what is open, offers no claim action, keeps the record pages quiet, and states what it does not decide', async ({ page }) => {
   await installAskApi(page);
@@ -42,29 +48,36 @@ test('the answer says what is open, offers no claim action, keeps the record pag
 test('filters replace the result: each chip continues the source, replaces one dimension, keeps the question, and can be cleared', async ({ page }) => {
   const api = await installAskApi(page);
   await startClaims(page);
+  await openRefine(page);
   await expect(scope(page).getByRole('button', { name: 'Incidents and claims' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('button', { name: 'Clear filters' })).toHaveCount(0);
 
+  await openRefine(page);
   await scope(page).getByRole('button', { name: 'Claims', exact: true }).click();
   await expect(page.getByRole('heading', { name: '2 open claims.' })).toBeVisible();
   await expect.poll(() => api.executionBodies.at(-1)).toMatchObject({ message: 'Only show claims', launchContext: { sourceExecutionId: 'execution-claims-journey-1' } });
   await expect(page.getByText('Earlier version of this answer · show')).toBeVisible();
   await expect(page.getByText('Show my claims journey', { exact: true }).first()).toBeVisible();
+  await openRefine(page);
   const applied = scope(page).getByRole('button', { name: 'Claims', exact: true });
   await expect(applied).toHaveAttribute('aria-pressed', 'true');
   await expect(applied).toBeDisabled();
   await expect(live(page, 2).getByText('Basement leak')).toHaveCount(0);
 
   // The state replaces only itself: the scope stays.
+  await openRefine(page);
   await state(page).getByRole('button', { name: 'Closed', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'No open claims.' })).toBeVisible();
+  await openRefine(page);
   await expect(scope(page).getByRole('button', { name: 'Claims', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => api.executionBodies.at(-1)).toMatchObject({ message: 'Only show closed records', launchContext: { sourceExecutionId: 'execution-claims-journey-2' } });
   await expect(live(page, 3).getByRole('button', { name: 'Old fence claim' })).toBeVisible();
 
+  await openRefine(page);
   await page.getByRole('button', { name: 'Clear filters' }).click();
   await expect(page.getByRole('heading', { name: HEADLINE }).last()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Clear filters' })).toHaveCount(0);
+  await openRefine(page);
   await expect(scope(page).getByRole('button', { name: 'Incidents and claims' })).toHaveAttribute('aria-pressed', 'true');
 });
 
@@ -199,6 +212,7 @@ test('on a phone: nothing scrolls sideways, chips are reachable, and a refinemen
   await installAskApi(page);
   await startClaims(page);
   await noSidewaysScroll(page);
+  await openRefine(page);
   const chip = scope(page).getByRole('button', { name: 'Claims', exact: true });
   await chip.scrollIntoViewIfNeeded();
   const chipBox = await chip.boundingBox();
@@ -214,11 +228,13 @@ test('accessibility: filters are named groups of toggle buttons operable from th
   await installAskApi(page);
   await startClaims(page);
   await expect(page.getByRole('status').filter({ hasText: 'Ask response updated. Latest status: answered.' })).toBeAttached();
+  await openRefine(page);
   const chip = state(page).getByRole('button', { name: 'Open', exact: true });
   await expect(chip).toHaveAttribute('aria-pressed', 'false');
   await chip.focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: HEADLINE }).last()).toBeVisible();
+  await openRefine(page);
   await expect(state(page).getByRole('button', { name: 'Open', exact: true }).last()).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('button', { name: 'Response options' }).last()).toBeVisible();
   await expect(page.getByRole('button', { name: /View sources/ }).last()).toBeVisible();
@@ -228,6 +244,7 @@ test('accessibility: with reduced motion requested, the settled Claims answer ru
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await installAskApi(page);
   await startClaims(page);
+  await openRefine(page);
   await scope(page).getByRole('button', { name: 'Claims', exact: true }).click();
   await expect(page.getByRole('heading', { name: '2 open claims.' })).toBeVisible();
   // Poll rather than sample once: a finite CSS transition that began a frame ago must be allowed to finish.
@@ -249,6 +266,7 @@ test('recovery: a failed first request keeps the typed question in the composer,
 test('recovery: a refinement that fails keeps the answer on screen, says so, and the same chip works on retry', async ({ page }) => {
   await installAskApi(page, { refinementFailsOnce: true });
   await startClaims(page);
+  await openRefine(page);
   const chip = () => scope(page).getByRole('button', { name: 'Claims', exact: true });
   await chip().click();
   await expect(page.getByRole('alert').filter({ hasText: /could not refine|Ask/ }).first()).toBeVisible();
@@ -257,4 +275,19 @@ test('recovery: a refinement that fails keeps the answer on screen, says so, and
   await expect(chip()).toBeEnabled();
   await chip().click();
   await expect(page.getByRole('heading', { name: '2 open claims.' })).toBeVisible();
+});
+
+
+test('the filters are folded behind one quiet Refine control that names what the answer is showing', async ({ page }) => {
+  await installAskApi(page);
+  await startClaims(page);
+  const answer = live(page, 1);
+  const refine = answer.locator('[data-claim-refine]');
+  await expect(refine.locator('summary')).toHaveText('Refine');
+  await expect(refine).not.toHaveAttribute('open', '');
+  await expect(scope(page).getByRole('button', { name: 'Claims', exact: true })).toBeHidden();
+  await openRefine(page);
+  await expect(scope(page).getByRole('button', { name: 'Claims', exact: true })).toBeVisible();
+  await scope(page).getByRole('button', { name: 'Claims', exact: true }).click();
+  await expect(page.locator('[data-claim-refine] summary').last()).toContainText('Showing Claims');
 });

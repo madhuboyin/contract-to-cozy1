@@ -7,7 +7,7 @@ import { evaluateCoverageRecord } from '../coverage/contextPolicy';
 import { formatAskMaintenanceScope, formatAskMaintenanceTitle } from './askMaintenancePresentation';
 import { maintenanceMoney } from './handlers/maintenance.handler';
 import { PROJECT_STATUS_LABELS, PROJECT_TYPE_LABELS } from './handlers/projectTracker.handler';
-import { OPEN_CLAIM_STATUSES, OPEN_INCIDENT_STATUSES } from './handlers/claims.handler';
+import { OPEN_INCIDENT_STATUSES, UNFINISHED_CLAIM_STATUSES } from './handlers/claims.handler';
 import { PERMIT_CATEGORY_LABELS, PERMIT_OFFICIAL_STATUS_LABELS, PERMIT_REPORTED_STATUS_LABELS } from './support/permitTrackerRead';
 import { RENOVATION_CASE_TYPE_LABELS } from './support/renovationCaseStart';
 import { HOME_EVENT_EDIT_MESSAGE } from './support/homeEventCorrection';
@@ -353,7 +353,7 @@ async function readIncidentClaimDetail(context: DetailContext, compositeId: stri
     ...(claim.insurancePolicy ? [{ label: claim.insurancePolicy.carrierName, kindLabel: 'Insurance policy', broken: null }] : []),
     ...(claim.warranty ? [{ label: claim.warranty.providerName, kindLabel: 'Warranty', broken: null }] : []),
   ];
-  const open = OPEN_CLAIM_STATUSES.includes(claim.status);
+  const open = UNFINISHED_CLAIM_STATUSES.includes(claim.status);
   const claimId = compositeId.slice(CLAIM_PREFIX.length);
   return {
     title: claim.title,

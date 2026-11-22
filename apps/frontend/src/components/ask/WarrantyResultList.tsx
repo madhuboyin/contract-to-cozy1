@@ -11,6 +11,7 @@ import { AttachEvidenceControl, EVIDENCE_ATTACH_MESSAGES } from './AttachEvidenc
 import { ActionLink } from './blocks/context';
 import { useCalmAnswer } from './blocks/calmContext';
 import type { Warranty } from '@/types';
+import { formatStatusLabel } from '@/features/ask/statusLabel';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Item = Block['sections'][number]['items'][number];
@@ -43,7 +44,7 @@ function statusPresentation(status: string | null | undefined): { label: string;
     case 'EXPIRED': return { label: 'Expired', className: 'border-rose-200 bg-rose-50 text-rose-800' };
     case 'NEEDS_REVIEW': return { label: 'Needs review', className: 'border-amber-200 bg-amber-50 text-amber-900' };
     case 'STARTS_LATER': return { label: 'Starts later', className: 'border-sky-200 bg-sky-50 text-sky-800' };
-    default: return { label: status?.replace(/_/g, ' ') ?? 'Status unavailable', className: 'border-slate-200 bg-slate-50 text-slate-700' };
+    default: return { label: formatStatusLabel(status, 'Status unavailable'), className: 'border-slate-200 bg-slate-50 text-slate-700' };
   }
 }
 

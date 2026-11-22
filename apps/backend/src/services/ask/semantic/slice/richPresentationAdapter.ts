@@ -15,13 +15,19 @@ export function answerFirst(body: string, title: string): { headline?: string; s
   return { headline: first, ...(rest.length > 0 && rest.length <= 240 ? { supportLine: rest } : {}) };
 }
 
+/** The family a set of presentation blocks declared on its answer summary; an answer with no declared summary family is an entity list. */
+export function familyOfBlocks(blocks: readonly AskPresentationBlock[]): AskPresentationFamily {
+  const summary = blocks.find((block) => block.type === 'SUMMARY');
+  return (summary && summary.type === 'SUMMARY' ? summary.presentationFamily : undefined) ?? 'ENTITY_LIST';
+}
+
 /** The group heading of a list whose records are all of one kind. */
-export const SECTION_NOUN_OF_RECORD_KIND: Readonly<Record<AskListRecordKind, string>> = {
+export const SECTION_NOUN_OF_RECORD_KIND: Readonly<Partial<Record<AskListRecordKind, string>>> = {
   INVENTORY_ITEM: 'Items', MAINTENANCE_TASK: 'Tasks', CLAIM: 'Claims', PERMIT: 'Permits', WARRANTY: 'Warranties', DOCUMENT: 'Documents', HOME_EVENT: 'Events',
 };
 
 /** The row `entityType` each list kind's canonical renderer expects (the same value the registry handlers emit). */
-export const ENTITY_TYPE_OF_RECORD_KIND: Readonly<Record<AskListRecordKind, string>> = {
+export const ENTITY_TYPE_OF_RECORD_KIND: Readonly<Partial<Record<AskListRecordKind, string>>> = {
   INVENTORY_ITEM: 'INVENTORY_ITEM', MAINTENANCE_TASK: 'MAINTENANCE_TASK', CLAIM: 'CLAIM', PERMIT: 'PERMIT_RECORD', WARRANTY: 'WARRANTY', DOCUMENT: 'DOCUMENT', HOME_EVENT: 'HOME_EVENT',
 };
 
@@ -98,6 +104,9 @@ export interface SliceRichPresentationEquivalenceReport {
  */
 export function buildSliceRichPresentation(input: SliceRichPresentationInput): AskPresentationBlock[] {
   const { receipt, rows } = input;
+  const family: AskPresentationFamily = input.family ?? (rows.length > 0 || (input.unconfirmedRows?.length ?? 0) > 0 ? 'ENTITY_LIST' : 'DIRECT_ANSWER');
+  // A direct answer carries a list only to show the records it rests on, and says so (the family's anatomy rule).
+  const collectionJustification = family === 'DIRECT_ANSWER' ? { justifiedCollection: 'The records this answer is based on.' } : {};
   const blocks: AskPresentationBlock[] = [
     {
       type: 'SUMMARY',
@@ -105,7 +114,7 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
       title: humanizeEnumTokensInCopy(input.title),
       body: humanizeEnumTokensInCopy(input.summaryBody),
       tone: receipt.population.conflictedCount > 0 ? 'CAUTION' : 'DEFAULT',
-      presentationFamily: input.family ?? (rows.length > 0 || (input.unconfirmedRows?.length ?? 0) > 0 ? 'ENTITY_LIST' : 'DIRECT_ANSWER'),
+      presentationFamily: family,
       ...answerFirst(humanizeEnumTokensInCopy(input.summaryBody), humanizeEnumTokensInCopy(input.title)),
       actions: [],
     },
@@ -116,7 +125,7 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
     for (const row of rows) {
       // A row with no group of its own is simply a match. A list of a known record kind names its group by that kind (the domain renderers always print a section heading); any other list has no
       // group heading at all, and never a generic "Matched records".
-      const key = row.groupKey ? humanizePresentationToken(row.groupKey) : input.recordKind ? SECTION_NOUN_OF_RECORD_KIND[input.recordKind] : '';
+      const key = row.groupKey ? humanizePresentationToken(row.groupKey) : input.recordKind ? SECTION_NOUN_OF_RECORD_KIND[input.recordKind] ?? '' : '';
       const bucket = grouped.get(key) ?? [];
       bucket.push(row);
       grouped.set(key, bucket);
@@ -126,6 +135,7 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
       type: 'GROUPED_LIST',
       id: input.listId ?? `${receipt.answerVariantId}-list`,
       ...(input.recordKind ? { recordKind: input.recordKind } : {}),
+      ...collectionJustification,
       // Records are listed densely: a one-line row unless the record has more to say. The list's heading is not the answer's heading said again.
       listDensity: 'DENSE',
       title: input.listTitle ? humanizeEnumTokensInCopy(input.listTitle) : '',
@@ -142,7 +152,7 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
           // The block contract has no `subtitle`: a field it does not know is stripped on parse and never reaches the homeowner. A row's secondary line is its `description`.
           description: rowSecondaryLine(row),
           ...(row.status ? { status: row.status } : {}),
-          ...(row.entityType ? { entityType: row.entityType } : input.recordKind ? { entityType: ENTITY_TYPE_OF_RECORD_KIND[input.recordKind] } : {}),
+          ...(row.entityType ? { entityType: row.entityType } : input.recordKind && ENTITY_TYPE_OF_RECORD_KIND[input.recordKind] ? { entityType: ENTITY_TYPE_OF_RECORD_KIND[input.recordKind] } : {}),
           ...(row.matchReason ? { matchReason: humanizeEnumTokensInCopy(row.matchReason) } : {}),
           ...(row.actions && row.actions.length > 0 ? { actions: row.actions.map((action) => ({ ...action })) } : {}),
           ...rowBadge(row),
@@ -159,6 +169,7 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
       id: `${receipt.answerVariantId}${UNCONFIRMED_LIST_SUFFIX}`,
       title: humanizeEnumTokensInCopy(input.unconfirmedTitle ?? 'Needs confirmation'),
       description: '',
+      ...collectionJustification,
       listDensity: 'DENSE',
       sections: [{
         id: `${receipt.answerVariantId}-unconfirmed-section`,
@@ -195,7 +206,7 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
     blocks.push({
       type: 'BOUNDARY',
       id: `${receipt.answerVariantId}-boundary`,
-      title: isWarranty ? 'Warranty linkage requires confirmation' : 'Not counted',
+      title: isWarranty ? 'Warranty record needs confirmation' : 'Not counted',
       body: `${sentences.join(', and ')}, so ${unknown + conflicted === 1 ? 'it isn’t' : 'they aren’t'} counted either way.`,
       severity: conflicted > 0 ? 'CAUTION' : 'INFO',
       suggestions: [],

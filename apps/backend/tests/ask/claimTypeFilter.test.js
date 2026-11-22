@@ -68,19 +68,19 @@ test.afterEach(() => { prismaModule.prisma = realPrisma; propertyAccess.resolveP
 test('the live prompt through the real handler is filtered by the type the claim was filed under', async () => {
   const empty = { findMany: async () => [], findFirst: async () => null, findUnique: async () => null, count: async () => 0 };
   const row = (id, title, status, type) => ({ id, propertyId: 'p1', title, status, type, documents: [], checklistItems: [] });
-  prismaModule.prisma = new Proxy({}, { get: (_t, m) => (m === 'then' ? undefined : m === '$disconnect' ? (async () => {}) : m === 'claim' ? { ...empty, findMany: async () => [row('a', 'Water damage claim', 'DRAFT', 'WATER_DAMAGE'), row('b', 'Fire or smoke claim', 'DRAFT', 'FIRE_SMOKE')] } : m === 'property' ? { ...empty, findUnique: async () => ({ id: 'p1', timezone: 'UTC' }) } : empty) });
+  prismaModule.prisma = new Proxy({}, { get: (_t, m) => (m === 'then' ? undefined : m === '$disconnect' ? (async () => {}) : m === 'claim' ? { ...empty, findMany: async () => [row('a', 'Water damage claim', 'SUBMITTED', 'WATER_DAMAGE'), row('b', 'Fire or smoke claim', 'DRAFT', 'FIRE_SMOKE')] } : m === 'property' ? { ...empty, findUnique: async () => ({ id: 'p1', timezone: 'UTC' }) } : empty) });
   propertyAccess.resolvePropertyAccess = async () => ({ role: 'OWNER', userId: 'u1', propertyId: 'p1' });
   const result = await capabilityInvoke('DATA_POINT_READ', { userId: 'u1', propertyId: 'p1', message: 'show open claims that are related to water damage' });
   const text = JSON.stringify(result.blocks);
   assert.match(text, /Water damage claim/);
   assert.ok(!/Fire or smoke claim/.test(text), 'the fire claim is not a water damage claim');
-  // The row is the claims list's own: it opens the canonical claim, shows the stored status (a draft is shown as a draft) and carries its actions.
+  // The row is the claims list's own: it opens the canonical claim, shows the stored status in sentence case and carries its actions.
   const list = result.blocks.find((block) => block.type === 'GROUPED_LIST');
   assert.equal(list.id, 'incident-claim-list');
   const item = list.sections[0].items[0];
   assert.equal(item.entityType, 'CLAIM');
-  assert.equal(item.status, 'DRAFT');
-  assert.deepEqual(item.meta, ['draft']);
+  assert.equal(item.status, 'SUBMITTED');
+  assert.deepEqual(item.meta, ['Submitted']);
   assert.equal(item.description, 'Filed as water damage');
   assert.ok(item.actions.length > 0);
 });
@@ -100,4 +100,18 @@ test('the words alone, in an ordinary question, are not an emergency', () => {
 
 test('a fire claim question is answered from the claim list, not with the emergency card', async () => {
   assert.deepEqual((await run('show open fire claims')).ids, ['c3']);
+});
+
+// Owner review 2026-11-21: a draft is a claim record that has not been filed, so it is never an "open claim".
+test('a draft claim is not counted as open: the answer says so and does not list it', async () => {
+  const empty = { findMany: async () => [], findFirst: async () => null, findUnique: async () => null, count: async () => 0 };
+  const row = (id, title, status, type) => ({ id, propertyId: 'p1', title, status, type, documents: [], checklistItems: [] });
+  prismaModule.prisma = new Proxy({}, { get: (_t, m) => (m === 'then' ? undefined : m === '$disconnect' ? (async () => {}) : m === 'claim' ? { ...empty, findMany: async () => [row('a', 'Water damage claim', 'DRAFT', 'WATER_DAMAGE')] } : m === 'property' ? { ...empty, findUnique: async () => ({ id: 'p1', state: 'TX', timezone: 'America/Chicago', lastAppraisedValue: null }) } : empty) });
+  propertyAccess.resolvePropertyAccess = async () => ({ role: 'OWNER', userId: 'u1', propertyId: 'p1' });
+  const result = await capabilityInvoke('DATA_POINT_READ', { userId: 'u1', propertyId: 'p1', message: 'show open claims that are related to water damage' });
+  const text = JSON.stringify(result.blocks);
+  assert.match(text, /No open water damage claims are recorded/);
+  assert.match(text, /1 draft claim record is not counted as open\./);
+  const list = result.blocks.find((block) => block.type === 'GROUPED_LIST');
+  assert.ok(!list || list.sections.every((section) => section.items.length === 0), 'the draft is not listed as an open claim');
 });

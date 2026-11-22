@@ -53,8 +53,10 @@ test('a fresh question carries a new view state and the declared chips, and read
   assert.match(result.parameters.viewState.resultId, /^[0-9a-f-]{36}$/);
   assert.deepEqual(list(result).filters.map((filter) => filter.id), ['scope-both', 'scope-claims', 'scope-incidents', 'state-all', 'state-open', 'state-closed']);
   assert.deepEqual(active(result), ['scope-both', 'state-all']);
-  assert.equal(summary(result).headline, '1 active incident and 2 open claims.');
-  assert.equal(calls.filter(([, kind]) => kind === 'count').length, 4, 'one exact count per bucket');
+  // A draft is a claim record that has not been filed: it is never an open claim, and the answer says so once.
+  assert.equal(summary(result).headline, '1 active incident and 1 open claim.');
+  assert.match(summary(result).supportLine, /1 draft claim record is not counted as open\./);
+  assert.equal(calls.filter(([, kind]) => kind === 'count').length, 5, 'one exact count per bucket: two incident buckets and open, closed and draft claims');
 });
 
 test('words still pick the scope of a fresh question', async () => {
@@ -85,8 +87,9 @@ test('a state chip replaces only the state, keeps the scope, and never reads the
   assert.equal(result.parameters.viewState.domainScopePhrase, 'CLAIMS');
   assert.equal(result.parameters.viewState.statusFilter, 'OPEN');
   assert.equal(result.parameters.viewState.revision, 3);
-  assert.deepEqual(ids(result), ['c-draft', 'c-open']);
-  assert.equal(summary(result).headline, '2 open claims.');
+  assert.deepEqual(ids(result), ['c-open'], 'a draft is not an open claim');
+  assert.equal(summary(result).headline, '1 open claim.');
+  assert.match(summary(result).supportLine, /1 draft claim record is not counted as open\./);
   assert.equal(calls.filter(([, kind]) => kind === 'findMany').length, 1, 'only the open-claims bucket is read');
   const closed = await run('Only show closed records', 'exec-3');
   assert.deepEqual(ids(closed), ['c-closed']);
@@ -181,7 +184,7 @@ test('the emergency follow-up list applies its own filter chips (scope and state
   assert.deepEqual(ids(incidentsOnly), ['i-active', 'i-resolved']);
   priorViewState = view('CLAIMS', 'ALL', 2);
   const open = await cont('Only show open records', 'exec-1');
-  assert.deepEqual(ids(open), ['c-draft', 'c-open'], 'a state chip keeps the scope');
+  assert.deepEqual(ids(open), ['c-open'], 'a state chip keeps the scope; a draft is not open');
   priorOperation = 'MAINTENANCE_STATUS';
   const foreign = await cont('Only show claims', 'exec-1');
   assert.equal(ids(foreign).length, 5, 'another domain\'s view state is never continued');

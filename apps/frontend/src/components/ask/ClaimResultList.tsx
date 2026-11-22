@@ -9,6 +9,7 @@ import type { ClaimDTO, ClaimStatus } from '@/types/claims.types';
 import { cn } from '@/lib/utils';
 import { useCalmAnswer } from './blocks/calmContext';
 import { ActionLink } from './blocks/context';
+import { formatStatusLabel } from '@/features/ask/statusLabel';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Item = Block['sections'][number]['items'][number];
@@ -55,7 +56,7 @@ function isClaimNotFound(error: unknown): boolean {
   return typeof message === 'string' && /claim not found/i.test(message);
 }
 
-const label = (value: string | null | undefined) => value ? value.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase()) : 'Not recorded';
+const label = (value: string | null | undefined) => formatStatusLabel(value, 'Not recorded');
 const formatDate = (value: string | null | undefined) => {
   if (!value) return 'Not recorded';
   const date = new Date(value);
@@ -239,7 +240,13 @@ export function ClaimResultList({ block, propertyId, disabled, onAction, onFilte
       <h3 className="font-semibold text-slate-950">{block.title}</h3>
       {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
       {calm && block.actions.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
-      {block.filters.length > 0 && (calm
+      {/* Question-derived filters restate the question, so they are folded behind one quiet control that names what is applied (owner review 2026-11-21). */}
+      {block.filters.length > 0 && <details className="mt-2" data-claim-refine="">
+        <summary className="cursor-pointer text-xs font-medium text-slate-500 hover:text-slate-800">{(() => {
+          const applied = block.filters.filter((filter) => filter.active && filter.id !== 'scope-both' && filter.id !== 'state-all').map((filter) => filter.label);
+          return applied.length > 0 ? `Showing ${applied.join(' · ')} · Refine` : 'Refine';
+        })()}</summary>
+        {(calm
         // C-2: the two filter dimensions (scope, state) and the way back are separate quiet groups, so it is clear which chip replaces which.
         ? <div className="mt-2 space-y-1" data-claim-filters="">
           {([['scope-', 'Claim scope filters'], ['state-', 'Claim status filters'], ['clear-', 'Clear claim filters']] as const).map(([prefix, groupLabel]) => {
@@ -252,6 +259,7 @@ export function ClaimResultList({ block, propertyId, disabled, onAction, onFilte
           {block.filters.map((filter) => <button key={filter.id} type="button" aria-pressed={filter.active} disabled={disabled}
             onClick={() => onFilter?.(filter.message)} className={cn('min-h-10 rounded-full border px-3 py-1 text-xs font-semibold', filter.active ? 'bg-teal-700 text-white' : 'bg-white text-slate-700')}>{filter.label}</button>)}
         </div>)}
+      </details>}
     </div>
     {block.sections.length === 0 && <p className="border-b border-slate-100 p-4 text-sm text-slate-500">Nothing matches these filters.</p>}
     {block.sections.map((section) => <div key={section.id} className="border-b border-slate-100 p-4">
@@ -263,7 +271,7 @@ export function ClaimResultList({ block, propertyId, disabled, onAction, onFilte
             {item.entityType === 'CLAIM' || item.entityType === 'INCIDENT'
               ? <button type="button" aria-label={item.title} data-claim-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={detailId === item.id} aria-controls={`${item.entityType === 'CLAIM' ? 'claim' : 'incident'}-detail-${item.id}`} onClick={() => openDetail(item)} className="group flex min-h-10 min-w-0 flex-1 items-center justify-between gap-3 text-left font-semibold text-slate-950 underline-offset-4 hover:text-teal-800"><span className="truncate group-hover:underline">{item.title}</span><ChevronRight className={cn('h-4 w-4 shrink-0 transition-transform', detailId === item.id && 'rotate-90')} aria-hidden="true" /></button>
               : item.href ? <span className="inline-flex min-h-10 items-center font-medium text-slate-950">{link(item.href, item.title)}</span> : <span className="font-medium text-slate-950">{item.title}</span>}
-            {item.status && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">{item.status.replace(/_/g, ' ').toLowerCase()}</span>}
+            {item.status && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">{formatStatusLabel(item.status)}</span>}
           </div>
           {item.description && <p className="mt-0.5 line-clamp-2 text-sm text-slate-600">{item.description}</p>}
           {item.meta.filter((value) => label(value) !== label(item.status)).length > 0 && <p className="mt-1 text-xs text-slate-600">{item.meta.filter((value) => label(value) !== label(item.status)).map(label).join(' · ')}</p>}

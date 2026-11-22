@@ -17,7 +17,7 @@ import { listRenovationCases } from '../renovationCase.service';
 import { RENOVATION_CASE_TYPE_LABELS } from './support/renovationCaseStart';
 import { PERMIT_CATEGORY_LABELS, PERMIT_OFFICIAL_STATUS_LABELS, PERMIT_REPORTED_STATUS_LABELS, PERMIT_WORK_TYPE_LABELS } from './support/permitTrackerRead';
 import { PROJECT_STATUS_LABELS, PROJECT_TYPE_LABELS } from './handlers/projectTracker.handler';
-import { OPEN_CLAIM_STATUSES, OPEN_INCIDENT_STATUSES } from './handlers/claims.handler';
+import { OPEN_INCIDENT_STATUSES, UNFINISHED_CLAIM_STATUSES } from './handlers/claims.handler';
 import { HomeEventsService } from '../homeEvents.service';
 import { loadCanonicalMaintenanceTaskSet } from '../skills/context/maintenanceTaskContext.provider';
 import { formatAskMaintenanceScope, formatAskMaintenanceTitle } from './askMaintenancePresentation';
@@ -1163,7 +1163,7 @@ export async function readIncidentsClaimsPage(propertyId: string, query: AskReco
       };
     }),
     ...claims.map((claim) => {
-      const open = OPEN_CLAIM_STATUSES.includes(claim.status);
+      const open = UNFINISHED_CLAIM_STATUSES.includes(claim.status);
       const when = claim.openedAt ?? claim.incidentAt ?? claim.updatedAt;
       return {
         key: when.getTime(), kind: 'CLAIM' as const, open,

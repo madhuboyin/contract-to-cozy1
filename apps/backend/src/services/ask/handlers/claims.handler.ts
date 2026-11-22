@@ -211,8 +211,11 @@ const claimCount = (count: number, one: string, many: string) => `${count} ${cou
  */
 export function claimsCalmCopy(counts: {
   focus: 'BOTH' | 'CLAIMS' | 'INCIDENTS'; activeIncidents: number; resolvedIncidents: number; openClaims: number; closedClaims: number; truncated: boolean;
+  /** Claim records that have not been filed. Never counted as open; said once, in the supporting line. */
+  draftClaims?: number;
 }): { headline: string; supportLine?: string; chips: Array<{ label: string; tone: 'DEFAULT' | 'CAUTION' | 'CRITICAL' }> } {
   const { focus, activeIncidents, resolvedIncidents, openClaims, closedClaims, truncated } = counts;
+  const draftClaims = focus === 'INCIDENTS' ? 0 : counts.draftClaims ?? 0;
   const parts = [
     focus !== 'CLAIMS' && activeIncidents > 0 ? claimCount(activeIncidents, 'active incident', 'active incidents') : null,
     focus !== 'INCIDENTS' && openClaims > 0 ? claimCount(openClaims, 'open claim', 'open claims') : null,
@@ -223,12 +226,17 @@ export function claimsCalmCopy(counts: {
     focus !== 'CLAIMS' && resolvedIncidents > 0 ? claimCount(resolvedIncidents, 'resolved incident', 'resolved incidents') : null,
     focus !== 'INCIDENTS' && closedClaims > 0 ? claimCount(closedClaims, 'closed claim', 'closed claims') : null,
   ].filter((part): part is string => Boolean(part));
-  const notes = [onFile.length ? `${onFile.join(' and ')} also on file.` : null, truncated ? 'Showing the most recent records.' : null].filter((note): note is string => Boolean(note));
+  const notes = [
+    draftClaims > 0 ? `${claimCount(draftClaims, 'draft claim record', 'draft claim records')} ${draftClaims === 1 ? 'is' : 'are'} not counted as open.` : null,
+    onFile.length ? `${onFile.join(' and ')} also on file.` : null,
+    truncated ? 'Showing the most recent records.' : null,
+  ].filter((note): note is string => Boolean(note));
   const chips: Array<{ label: string; tone: 'DEFAULT' | 'CAUTION' | 'CRITICAL' }> = [
     ...(focus !== 'CLAIMS' && activeIncidents > 0 ? [{ label: claimCount(activeIncidents, 'active incident', 'active incidents'), tone: 'CAUTION' as const }] : []),
     ...(focus !== 'INCIDENTS' && openClaims > 0 ? [{ label: claimCount(openClaims, 'open claim', 'open claims'), tone: 'CAUTION' as const }] : []),
     ...(focus !== 'CLAIMS' && resolvedIncidents > 0 ? [{ label: `${resolvedIncidents} resolved`, tone: 'DEFAULT' as const }] : []),
     ...(focus !== 'INCIDENTS' && closedClaims > 0 ? [{ label: `${closedClaims} closed`, tone: 'DEFAULT' as const }] : []),
+    ...(draftClaims > 0 ? [{ label: `${draftClaims} draft`, tone: 'DEFAULT' as const }] : []),
   ];
   return notes.length ? { headline, supportLine: notes.join(' '), chips } : { headline, chips };
 }
@@ -254,7 +262,13 @@ export type ClaimsState = 'ALL' | 'OPEN' | 'CLOSED';
 const CLAIMS_SCOPES: ReadonlySet<string> = new Set(['BOTH', 'CLAIMS', 'INCIDENTS']);
 const CLAIMS_STATES: ReadonlySet<string> = new Set(['ALL', 'OPEN', 'CLOSED']);
 export const OPEN_INCIDENT_STATUSES: string[] = ['DETECTED', 'EVALUATED', 'ACTIVE', 'ACTIONED'];
-export const OPEN_CLAIM_STATUSES: string[] = ['DRAFT', 'IN_PROGRESS', 'SUBMITTED', 'UNDER_REVIEW'];
+// Owner review 2026-11-21: a draft is a claim RECORD that has not been filed, so it is never an "open claim". Open (active) means filed and not closed: in progress, submitted, under review,
+// approved or denied but not yet closed. Draft and closed are their own states.
+export const OPEN_CLAIM_STATUSES: string[] = ['IN_PROGRESS', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'DENIED'];
+export const DRAFT_CLAIM_STATUSES: string[] = ['DRAFT'];
+export const CLOSED_CLAIM_STATUSES: string[] = ['CLOSED'];
+/** A claim record that is still being worked on, filed or not: open plus draft. For record browsing, where the row's own status label says which. */
+export const UNFINISHED_CLAIM_STATUSES: string[] = [...DRAFT_CLAIM_STATUSES, ...OPEN_CLAIM_STATUSES];
 // Each declared chip begins with a phrase askFollowUpContext's FILTER_CONTINUATION_PATTERN accepts (asserted in tests).
 const CLAIMS_CLEAR_MESSAGE = 'Now show all records with no filters';
 // A typed follow-up arrives joined to the prior question ("Show my claims. Only show open records"), so each phrase may follow a sentence break.
@@ -318,7 +332,7 @@ async function loadClaimsViewState(sourceExecutionId: string | null | undefined,
   return source?.operationId === 'INCIDENT_CLAIM_STATUS' || source?.operationId === 'INCIDENT_CONTINUATION' ? loadAskViewState(sourceExecutionId, userId) : null;
 }
 
-const CLAIMS_BUCKET_LIMITS = { activeIncidents: 12, resolvedIncidents: 8, openClaims: 12, closedClaims: 8 } as const;
+const CLAIMS_BUCKET_LIMITS = { activeIncidents: 12, resolvedIncidents: 8, openClaims: 12, closedClaims: 8, draftClaims: 8 } as const;
 
 async function incidentClaimStatusResult(
   userId: string,
@@ -352,7 +366,7 @@ async function incidentClaimStatusResult(
   const wantClosed = state !== 'OPEN';
   // One query and one exact count per bucket the question asks about; a bucket it does not ask about is never read.
   const incidentWhere = (open: boolean) => ({ propertyId, isSuppressed: false, status: open ? { in: OPEN_INCIDENT_STATUSES as never } : { notIn: OPEN_INCIDENT_STATUSES as never } });
-  const claimWhere = (open: boolean) => ({ propertyId, status: open ? { in: OPEN_CLAIM_STATUSES as never } : { notIn: OPEN_CLAIM_STATUSES as never } });
+  const claimWhere = (kind: 'OPEN' | 'DRAFT' | 'CLOSED') => ({ propertyId, status: { in: (kind === 'OPEN' ? OPEN_CLAIM_STATUSES : kind === 'DRAFT' ? DRAFT_CLAIM_STATUSES : CLOSED_CLAIM_STATUSES) as never } });
   const incidentSelect = { id: true, title: true, summary: true, status: true, severity: true, openedAt: true, resolvedAt: true, typeKey: true } as const;
   // Owner audience policy 2026-11-13: the provider name is not a contributor-readable claim field (not catalogued); it is not even selected for non-owners.
   const isOwnerRole = access.role === HouseholdRole.OWNER;
@@ -361,18 +375,23 @@ async function incidentClaimStatusResult(
     prisma.incident.findMany({ where: incidentWhere(open), orderBy: [{ openedAt: 'desc' }], take, select: incidentSelect }),
     prisma.incident.count({ where: incidentWhere(open) }),
   ]);
-  const readClaims = (open: boolean, take: number) => Promise.all([
-    prisma.claim.findMany({ where: claimWhere(open), orderBy: [{ updatedAt: 'desc' }], take, select: claimSelect }),
-    prisma.claim.count({ where: claimWhere(open) }),
+  const readClaims = (kind: 'OPEN' | 'DRAFT' | 'CLOSED', take: number) => Promise.all([
+    prisma.claim.findMany({ where: claimWhere(kind), orderBy: [{ updatedAt: 'desc' }], take, select: claimSelect }),
+    prisma.claim.count({ where: claimWhere(kind) }),
   ]);
   const none = <T,>(): Promise<[T[], number]> => Promise.resolve([[], 0]);
-  const [[activeIncidents, activeIncidentTotal], [resolvedIncidents, resolvedIncidentTotal], [activeClaims, openClaimTotal], [closedClaims, closedClaimTotal]] = await Promise.all([
+  // Drafts are listed only when the question asks for everything; any claims question still says how many there are, so a homeowner is never told "no open claims" about a drafted one in silence.
+  const wantDraft = wantClaims && state === 'ALL';
+  const [[activeIncidents, activeIncidentTotal], [resolvedIncidents, resolvedIncidentTotal], [activeClaims, openClaimTotal], [closedClaims, closedClaimTotal], [draftClaims, draftClaimTotal]] = await Promise.all([
     wantIncidents && wantOpen ? readIncidents(true, CLAIMS_BUCKET_LIMITS.activeIncidents) : none<never>(),
     wantIncidents && wantClosed ? readIncidents(false, CLAIMS_BUCKET_LIMITS.resolvedIncidents) : none<never>(),
-    wantClaims && wantOpen ? readClaims(true, CLAIMS_BUCKET_LIMITS.openClaims) : none<never>(),
-    wantClaims && wantClosed ? readClaims(false, CLAIMS_BUCKET_LIMITS.closedClaims) : none<never>(),
+    wantClaims && wantOpen ? readClaims('OPEN', CLAIMS_BUCKET_LIMITS.openClaims) : none<never>(),
+    wantClaims && wantClosed ? readClaims('CLOSED', CLAIMS_BUCKET_LIMITS.closedClaims) : none<never>(),
+    wantDraft ? readClaims('DRAFT', CLAIMS_BUCKET_LIMITS.draftClaims) : none<never>(),
   ]);
 
+  // How many unfiled drafts exist, for the one line that says they are not counted as open. Read as a count when a question about open claims does not list them.
+  const draftNoteCount = wantDraft ? draftClaimTotal : (wantClaims && state === 'OPEN' ? await prisma.claim.count({ where: claimWhere('DRAFT') }) : 0);
   const canStartClaim = access.role !== HouseholdRole.VIEWER;
   const humanizeEnum = (value: string) => value.toLowerCase().replace(/_/g, ' ');
   // A status badge is sentence case ("Draft"), and a secondary line says something the title does not ("Water damage claim" needs no "water damage" under it).
@@ -400,10 +419,11 @@ async function incidentClaimStatusResult(
   if (wantIncidents && wantOpen) sections.push({ id: 'active-incidents', title: 'Active incidents', count: activeIncidentTotal, items: activeIncidents.map((incident) => incidentRow(incident, 'Opened', incident.openedAt)) });
   if (wantIncidents && wantClosed && resolvedIncidentTotal > 0) sections.push({ id: 'resolved-incidents', title: 'Resolved incidents', count: resolvedIncidentTotal, items: resolvedIncidents.map((incident) => incidentRow(incident, 'Resolved', incident.resolvedAt)) });
   if (wantClaims && wantOpen) sections.push({ id: 'active-claims', title: 'Open claims', count: openClaimTotal, items: activeClaims.map((claim) => claimRow(claim, 'Opened', claim.openedAt)) });
+  if (wantDraft && draftClaimTotal > 0) sections.push({ id: 'draft-claims', title: 'Draft claims', count: draftClaimTotal, items: draftClaims.map((claim) => claimRow(claim, 'Started', claim.openedAt)) });
   if (wantClaims && wantClosed && closedClaimTotal > 0) sections.push({ id: 'closed-claims', title: 'Closed claims', count: closedClaimTotal, items: closedClaims.map((claim) => claimRow(claim, 'Closed', claim.closedAt)) });
 
   const totalActive = activeIncidentTotal + openClaimTotal;
-  const totalRecords = activeIncidentTotal + resolvedIncidentTotal + openClaimTotal + closedClaimTotal;
+  const totalRecords = activeIncidentTotal + resolvedIncidentTotal + openClaimTotal + closedClaimTotal + (wantDraft ? draftClaimTotal : 0);
   const viewState = buildClaimsViewState(priorViewState, scope, state);
   // A viewer's chips are the state chips only: no scope chip and no clear-all (which restores the claims scope) is offered.
   const chips = claimsAllowed ? claimsFilterChips(scope, state) : claimsFilterChips(scope, state).filter((chip) => chip.id.startsWith('state-'));
@@ -438,8 +458,8 @@ async function incidentClaimStatusResult(
     };
   }
 
-  const truncated = activeIncidentTotal > activeIncidents.length || resolvedIncidentTotal > resolvedIncidents.length || openClaimTotal > activeClaims.length || closedClaimTotal > closedClaims.length;
-  const totals = { incidents: activeIncidentTotal + resolvedIncidentTotal, claims: openClaimTotal + closedClaimTotal };
+  const truncated = activeIncidentTotal > activeIncidents.length || resolvedIncidentTotal > resolvedIncidents.length || openClaimTotal > activeClaims.length || closedClaimTotal > closedClaims.length || draftClaimTotal > draftClaims.length;
+  const totals = { incidents: activeIncidentTotal + resolvedIncidentTotal, claims: openClaimTotal + closedClaimTotal + (wantDraft ? draftClaimTotal : 0) };
   return {
     status: 'ANSWERED', reasonCode: totalActive > 0 ? 'INCIDENT_CLAIM_ACTIVE' : 'INCIDENT_CLAIM_HISTORICAL',
     parameters: { viewState },
@@ -450,7 +470,7 @@ async function incidentClaimStatusResult(
         title: emergencyFollowUp ? (claimsAllowed ? 'Continue from a recorded incident or claim' : 'Continue from a recorded incident') : totalActive > 0 ? `${totalActive} active ${totalActive === 1 ? 'item needs' : 'items need'} attention` : (claimsAllowed ? 'No active incidents or claims right now' : 'No active incidents right now'),
         body: claimsAllowed ? `${totals.incidents} recorded incident${totals.incidents === 1 ? '' : 's'} and ${totals.claims} recorded claim${totals.claims === 1 ? '' : 's'} match this request.` : `${totals.incidents} recorded incident${totals.incidents === 1 ? '' : 's'} match this request.`,
         tone: totalActive > 0 ? 'CAUTION' : 'DEFAULT',
-        ...claimsCalmCopy({ focus: scope, activeIncidents: activeIncidentTotal, resolvedIncidents: resolvedIncidentTotal, openClaims: openClaimTotal, closedClaims: closedClaimTotal, truncated }),
+        ...claimsCalmCopy({ focus: scope, activeIncidents: activeIncidentTotal, resolvedIncidents: resolvedIncidentTotal, openClaims: openClaimTotal, closedClaims: closedClaimTotal, draftClaims: draftNoteCount, truncated }),
         actions: emergencyFollowUp && canStartClaim ? [{ ...CLAIM_FILE_START_ACTION, style: 'PRIMARY' as const }] : [],
       },
       // Status changes remain row actions behind confirmation. Emergency follow-up alone promotes Start a claim in the list header.

@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react';
 import { render, screen } from '@testing-library/react';
 import { BlockView } from '../blocks/registry';
-import { withCanonicalListId } from '../blocks/GroupedListBlock';
+import { canonicalRendererId } from '../blocks/GroupedListBlock';
 import type { AskPresentationBlock } from '@/features/ask/types';
 
 type ListBlock = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
@@ -16,19 +16,34 @@ const asProps = (block: ListBlock) => propsFor(block) as unknown as ComponentPro
 const propsFor = (block: ListBlock) => ({ block, executionId: 'e1', propertyId: 'home', itemActionsDisabled: false, onItemAction: jest.fn(), onFilterClick: jest.fn(), onAccessLost: jest.fn() });
 
 describe('list renderer follows the declared record kind', () => {
-  it('maps a generated id to the canonical id for each kind that has a domain renderer', () => {
-    const idFor = (recordKind: ListBlock['recordKind']) => withCanonicalListId(propsFor(claimList({ recordKind }))).block.id;
+  it('chooses the renderer by the declared kind, for each kind that has a domain renderer, without changing the block', () => {
+    const idFor = (recordKind: ListBlock['recordKind']) => canonicalRendererId(claimList({ recordKind }));
     expect(idFor('CLAIM')).toBe('incident-claim-list');
     expect(idFor('PERMIT')).toBe('permit-tracker-permits');
     expect(idFor('WARRANTY')).toBe('warranty-results');
     expect(idFor('INVENTORY_ITEM')).toBe('inventory-results');
     expect(idFor('HOME_EVENT')).toBe('inventory-history');
+    const block = claimList({ recordKind: 'CLAIM' });
+    canonicalRendererId(block);
+    expect(block.id).toBe('cross-domain-grouped-list');
   });
 
-  it('leaves a list unchanged when it declares no kind, an unmapped kind, or already has the canonical id', () => {
-    expect(withCanonicalListId(propsFor(claimList())).block.id).toBe('cross-domain-grouped-list');
-    expect(withCanonicalListId(propsFor(claimList({ recordKind: 'MAINTENANCE_TASK' }))).block.id).toBe('cross-domain-grouped-list');
-    expect(withCanonicalListId(propsFor(claimList({ id: 'incident-claim-list', recordKind: 'CLAIM' }))).block.id).toBe('incident-claim-list');
+  it('keeps the producer’s id for a list with no kind, an unmapped kind, a kind the shared list renders, or the canonical id already', () => {
+    expect(canonicalRendererId(claimList())).toBe('cross-domain-grouped-list');
+    expect(canonicalRendererId(claimList({ recordKind: 'MAINTENANCE_TASK' }))).toBe('cross-domain-grouped-list');
+    expect(canonicalRendererId(claimList({ recordKind: 'PROJECT' }))).toBe('cross-domain-grouped-list');
+    expect(canonicalRendererId(claimList({ id: 'incident-claim-list', recordKind: 'CLAIM' }))).toBe('incident-claim-list');
+  });
+
+  it('routes maintenance and document lists only when their rows carry the metadata those renderers require', () => {
+    const rows = (over: Record<string, unknown>) => [{ id: 's', title: 'Group', count: 1, items: [{ id: 't1', title: 'Service furnace', meta: [], ...over }] }];
+    const task = (over: Record<string, unknown> = {}) => claimList({ recordKind: 'MAINTENANCE_TASK', sections: rows({ entityType: 'MAINTENANCE_TASK', status: 'PENDING', ...over }) as ListBlock['sections'] });
+    expect(canonicalRendererId(task())).toBe('maintenance-groups');
+    expect(canonicalRendererId(task({ status: undefined }))).toBe('cross-domain-grouped-list');
+    expect(canonicalRendererId(task({ entityType: undefined }))).toBe('cross-domain-grouped-list');
+    const doc = (over: Record<string, unknown> = {}) => claimList({ recordKind: 'DOCUMENT', sections: rows({ entityType: 'DOCUMENT', ...over }) as ListBlock['sections'] });
+    expect(canonicalRendererId(doc())).toBe('document-lookup-groups');
+    expect(canonicalRendererId(doc({ entityType: undefined }))).toBe('cross-domain-grouped-list');
   });
 
   it('renders the claim list for a claim kind under a generated id, and the generic list without it', async () => {

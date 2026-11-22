@@ -3,6 +3,13 @@ import { HOME_ACTIONS_FOCUSED, HOME_ACTIONS_LIST } from './homeActionsFixtures';
 import { WORK_EVIDENCE } from './workEvidenceFixtures';
 import { expect, type BrowserContext, type Page, type Request, type Route } from '@playwright/test';
 
+/**
+ * The moment the fixtures were authored around (their own dates run 2026-09-01 to 2026-09-24). UI that reads relative dates (an expiry window, "to plan soon", an overdue count) must read them as of
+ * then, not as of whenever the suite happens to run, or every fixture drifts into the past and the suite fails for a reason that has nothing to do with the code. `setFixedTime` fixes `Date` only:
+ * timers and animation keep running.
+ */
+export const FIXTURE_NOW = new Date('2026-09-24T12:00:00.000Z');
+
 export const propertyId = 'ask-property-fixture';
 export const otherPropertyId = 'ask-other-property-fixture';
 // The certification build serves the API from the page's own origin (WebKit cannot intercept a cross-origin preflight); the default is unchanged.
@@ -32,7 +39,7 @@ function capabilityExecution(unavailable = false) {
       ],
     skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null,
     correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false },
-    suggestions: ['What information does this tool need?'], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    suggestions: ['What information does this tool need?'], createdAt: new Date(FIXTURE_NOW).toISOString(), updatedAt: new Date(FIXTURE_NOW).toISOString(),
   };
 }
 
@@ -62,7 +69,7 @@ function heatPreparationExecution() {
     ],
     skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
     correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false },
-    suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    suggestions: [], createdAt: new Date(FIXTURE_NOW).toISOString(), updatedAt: new Date(FIXTURE_NOW).toISOString(),
   };
 }
 
@@ -229,7 +236,7 @@ function radarTaskExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId?:
     operation: { id: 'HOME_EVENT_RADAR_TASK', version: '1.0', family: 'COMMAND' }, contextVersion: 'radar-task-context-v1',
     skill: null, skillHandoff: null, clarification: null, childExecutions: [], originalResponse: null,
     correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false },
-    suggestions: [], createdAt: '2026-09-22T12:00:00.000Z', updatedAt: new Date().toISOString(),
+    suggestions: [], createdAt: '2026-09-22T12:00:00.000Z', updatedAt: new Date(FIXTURE_NOW).toISOString(),
   };
   const radarHref = `/dashboard/properties/${propertyId}/tools/home-event-radar?matchId=match-property-summary`;
   if (stage === 'FORM') {
@@ -244,7 +251,7 @@ function radarTaskExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId?:
         confirmationId: 'radar-task-match-property-summary-SECURE_OUTDOOR_ITEMS-1', version: 1, title: 'Set a reminder for "Secure outdoor furniture and loose items"?',
         description: 'This adds a task to your maintenance list through the same service Home Event Radar uses, linked to this recommended action.',
         fields: [{ label: 'Event', value: 'severe thunderstorm warning' }, { label: 'What happens', value: 'Set a reminder' }, { label: 'Task title', value: 'Reminder: Secure outdoor furniture and loose items' }, { label: 'Due', value: 'Sep 30, 2026, 7:30 AM' }, { label: 'Assigned to', value: 'Alex Kim' }],
-        editableFields: [], confirmLabel: 'Set reminder', consentText: 'I authorize adding this to the shared maintenance list for this home.', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+        editableFields: [], confirmLabel: 'Set reminder', consentText: 'I authorize adding this to the shared maintenance list for this home.', expiresAt: new Date(FIXTURE_NOW.getTime() + 30 * 60_000).toISOString(),
       } };
   }
   return { ...common, status: 'COMPLETED', captureRequests: [], confirmation: null, blocks: [{
@@ -288,7 +295,7 @@ function claimsExecution(stage: 'LIST' | 'REVIEW' | 'RUNNING' | 'DONE', sessionI
         details: [{ label: 'Claim', value: 'Kitchen leak' }, { label: 'From', value: 'draft' }, { label: 'To', value: 'submitted' }],
         actions: [{ id: 'open-claim', label: 'Open claim', href: claimHref, style: 'PRIMARY' }] }] };
   }
-  const expiresAt = new Date(Date.now() + 30 * 60_000).toISOString();
+  const expiresAt = new Date(FIXTURE_NOW.getTime() + 30 * 60_000).toISOString();
   return { ...common, executionId: 'execution-claim-transition', question: 'Submit this claim.', status: stage === 'RUNNING' ? 'RUNNING' : 'NEEDS_CONFIRMATION', suggestions: [],
     operation: { id: 'CLAIM_TRANSITION', version: '1.0', family: 'COMMAND' }, contextVersion: 'claim-context-v1',
     blocks: [{ type: 'SUMMARY', id: 'claim-transition-review', title: 'Review the claim status change', body: 'The canonical Claims service will enforce the legal lifecycle.', tone: 'DEFAULT', actions: [] }],
@@ -317,7 +324,7 @@ function maintenanceCompletionExecution(stage: 'CAPTURE' | 'REVIEW' | 'DONE', se
         currentAnswer: {}, allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used to prepare this completion; nothing is saved until you confirm', confirmationText: null, expectedContextVersion: 'maintenance-workflow-v1',
       }] };
   }
-  const expiresAt = new Date(Date.now() + 30 * 60_000).toISOString();
+  const expiresAt = new Date(FIXTURE_NOW.getTime() + 30 * 60_000).toISOString();
   if (stage === 'REVIEW') {
     return { ...common, status: 'NEEDS_CONFIRMATION', contextVersion: 'task-v1', captureRequests: [], suggestions: [],
       blocks: [{ type: 'SUMMARY', id: 'maintenance-complete-review', title: 'Review completion for Chimney cleaning and inspection', body: 'No status has changed yet.', tone: 'DEFAULT', actions: [] }],
@@ -361,7 +368,7 @@ function inspectionExecution(stage: 'LIST' | 'REVIEW', sessionId?: string) {
         { key: 'notes', label: 'Notes (optional)', type: 'TEXTAREA', value: '' },
         { key: 'costCents', label: 'Cost in dollars (optional)', type: 'MONEY', value: '' },
       ],
-      confirmLabel: 'Resolve finding', consentText: 'I reviewed this inspection finding and authorize updating its canonical disposition.', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() } };
+      confirmLabel: 'Resolve finding', consentText: 'I reviewed this inspection finding and authorize updating its canonical disposition.', expiresAt: new Date(FIXTURE_NOW.getTime() + 30 * 60_000).toISOString() } };
 }
 // ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (FRD v1.75): the findings answer as the real producer now sends it to a
 // contributor -- a card deck whose Accept/Dismiss decisions are collected and proposed together -- and that batch's
@@ -387,7 +394,7 @@ function inspectionDeckExecution(stage: 'LIST' | 'BATCH_REVIEW', sessionId?: str
     blocks: [{ type: 'SUMMARY', id: 'inspection-finding-batch-review', title: 'Review 2 findings', body: 'Accepting as work creates or reuses tracked work for 1 finding. Dismissing closes 1 finding without work. Nothing changes until you confirm.', tone: 'DEFAULT', actions: [] }],
     confirmation: { confirmationId: 'inspection-finding-batch-1', version: 1, title: 'Confirm 2 findings?', description: 'These changes are saved to the canonical inspection record, one finding at a time.',
       fields: [{ label: 'Accept as work', value: '1 finding' }, { label: 'Dismiss', value: '1 finding' }], editableFields: [], confirmLabel: 'Confirm 2 changes',
-      consentText: 'I have reviewed these inspection finding decisions and want them saved.', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() } };
+      consentText: 'I have reviewed these inspection finding decisions and want them saved.', expiresAt: new Date(FIXTURE_NOW.getTime() + 30 * 60_000).toISOString() } };
 }
 // FRD v1.44 seller-prep capability-card slice: SELLER_PREP_CHECKLIST and a SELLER_PREP_ITEM_DECISION review.
 const SALE_ITEM_ACTIONS = [
@@ -420,7 +427,7 @@ function sellerPrepExecution(stage: 'LIST' | 'REVIEW', sessionId?: string, shelv
     blocks: [{ type: 'SUMMARY', id: 'seller-prep-item-review', title: 'Review unpursue decision', body: 'Removing your pursue commitment returns this item to open, undecided.', tone: 'CAUTION', actions: [] }],
     confirmation: { confirmationId: 'seller-prep-item-item-door-1', version: 1, title: 'Unpursue "Paint the front door"?', description: 'Paint the front door',
       fields: [{ label: 'Item', value: 'Paint the front door' }, { label: 'Decision', value: 'unpursue' }], editableFields: [],
-      confirmLabel: 'Unpursue item', consentText: 'I authorize this update to the shared seller-prep checklist.', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() } };
+      confirmLabel: 'Unpursue item', consentText: 'I authorize this update to the shared seller-prep checklist.', expiresAt: new Date(FIXTURE_NOW.getTime() + 30 * 60_000).toISOString() } };
 }
 // FRD v1.45 mortgage-refinance-radar slice: REFINANCE_ANALYSIS now also shows the homeowner's own rate monitor.
 function refinanceMonitorAnalysisExecution(sessionId?: string) {
@@ -464,7 +471,7 @@ function buyerDeadlinesExecution(stage: 'LIST' | 'REVIEW', sessionId?: string) {
     blocks: [{ type: 'SUMMARY', id: 'buyer-task-complete-review', title: 'Review completion for Order the appraisal', body: 'No status has changed yet.', tone: 'DEFAULT', actions: [] }],
     confirmation: { confirmationId: 'buyer-task-complete-task-appraisal-1', version: 1, title: 'Mark this Buyer Plan task complete?', description: 'This records completion in the canonical Buyer Plan and updates closing readiness.',
       fields: [{ label: 'Task', value: 'Order the appraisal' }, { label: 'Current status', value: 'in progress' }, { label: 'Completion method', value: 'User attestation' }], editableFields: [],
-      confirmLabel: 'Mark complete', consentText: 'I confirm this task was completed and authorize updating the shared Buyer Plan.', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() } };
+      confirmLabel: 'Mark complete', consentText: 'I confirm this task was completed and authorize updating the shared Buyer Plan.', expiresAt: new Date(FIXTURE_NOW.getTime() + 30 * 60_000).toISOString() } };
 }
 function homeEventRadarFeedExecution({ happeningNow = false } = {}) {
   return {
@@ -627,7 +634,7 @@ function eventCorrectionConfirmation(version: number, value: string) {
     description: 'This records a new revision on the canonical home timeline; the original is preserved as history.',
     fields: [{ label: 'Event', value: 'Roof replacement' }, { label: 'Field', value: 'title' }, { label: 'Current value', value: 'Roof replacement' }],
     editableFields: [{ key: 'value', label: 'Corrected title', type: 'TEXT', value }],
-    confirmLabel: 'Save title', consentText: 'I authorize this correction to the shared home timeline.', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+    confirmLabel: 'Save title', consentText: 'I authorize this correction to the shared home timeline.', expiresAt: new Date(FIXTURE_NOW.getTime() + 30 * 60_000).toISOString(),
   };
 }
 
@@ -640,7 +647,7 @@ function eventCorrectionExecution(status: 'NEEDS_CONFIRMATION' | 'COMPLETED', ve
       ? [{ type: 'WORKFLOW_PROGRESS', id: 'event-corrected-event-replacement', title: 'Home timeline event corrected', status: 'COMPLETED', description: 'A new revision replaces the prior entry on your home\'s canonical timeline; the original is preserved as history.', details: [{ label: 'Event', value }], actions: [] }]
       : [{ type: 'SUMMARY', id: 'home-event-correct-review', title: 'Review this title correction', body: 'No shared-home record has changed yet. Edit the corrected value, then confirm.', tone: 'DEFAULT', actions: [] }],
     confirmation: status === 'COMPLETED' ? null : eventCorrectionConfirmation(version, value),
-    updatedAt: new Date().toISOString(),
+    updatedAt: new Date(FIXTURE_NOW).toISOString(),
   };
 }
 
@@ -662,7 +669,7 @@ function evidenceAttachConfirmation(version: number, documentName: string, targe
     description: `You are attaching a document you just uploaded to this ${target.where}. No change is saved until you confirm.`,
     fields: [{ label: 'Document', value: documentName }, { label: 'Attach to', value: target.title }],
     editableFields: [], confirmLabel: 'Attach document', consentText: target.kind === 'event' ? 'I confirm this document is evidence for this home record entry.' : `I confirm this document belongs with this ${target.noun}.`,
-    expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+    expiresAt: new Date(FIXTURE_NOW.getTime() + 30 * 60_000).toISOString(),
   };
 }
 
@@ -675,7 +682,7 @@ function evidenceAttachExecution(status: 'NEEDS_CONFIRMATION' | 'COMPLETED', ver
       ? [{ type: 'SUMMARY', id: 'evidence-attached-link-1', title: 'Attached to your home timeline', tone: 'POSITIVE', body: `${documentName} is now attached as evidence on your home timeline.`, actions: [] }]
       : [{ type: 'SUMMARY', id: 'evidence-attach-review', title: `Attach this document to "${target.title}"?`, body: 'Nothing has been saved yet. Review, then confirm.', tone: 'DEFAULT', actions: [] }],
     confirmation: status === 'COMPLETED' ? null : evidenceAttachConfirmation(version, documentName, target),
-    updatedAt: new Date().toISOString(),
+    updatedAt: new Date(FIXTURE_NOW).toISOString(),
   };
 }
 
@@ -709,9 +716,9 @@ function correctionExecution(kind: CorrectionKind, status: 'NEEDS_CONFIRMATION' 
       confirmationId: `correct-${kind}-${version}`, version, title: spec.title, description: 'Review before it is written to the canonical record.',
       fields: [{ label: 'Current value', value: spec.current }],
       editableFields: [{ key: 'value', label: spec.label, type: spec.type, value, ...(spec.options ? { options: spec.options } : {}) }],
-      confirmLabel: spec.confirmLabel, consentText: spec.consentText, expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+      confirmLabel: spec.confirmLabel, consentText: spec.consentText, expiresAt: new Date(FIXTURE_NOW.getTime() + 30 * 60_000).toISOString(),
     },
-    updatedAt: new Date().toISOString(),
+    updatedAt: new Date(FIXTURE_NOW).toISOString(),
   };
 }
 
@@ -721,7 +728,7 @@ function warrantyAddExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId
   const base = propertySummaryTimelineExecution();
   const common = {
     ...base, sessionId: sessionId ?? base.sessionId, executionId: 'execution-warranty-add', question: 'Record a warranty in my home record.',
-    operation: { id: 'CAPTURE_WARRANTY_CONFIRM', version: '1.0', family: 'COMMAND' }, contextVersion: 'warranty-add-context-v1', updatedAt: new Date().toISOString(),
+    operation: { id: 'CAPTURE_WARRANTY_CONFIRM', version: '1.0', family: 'COMMAND' }, contextVersion: 'warranty-add-context-v1', updatedAt: new Date(FIXTURE_NOW).toISOString(),
   };
   const field = (key: string, label: string, required: boolean, inputSchema: Record<string, unknown>) => ({ key, label, required, inputSchema });
   if (stage === 'FORM') {
@@ -755,7 +762,7 @@ function warrantyAddExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId
         description: 'You entered these details. No change is saved until you confirm.',
         fields: [{ label: 'Provider', value: String(answer?.providerName ?? '') }, { label: 'Coverage', value: answer?.category === 'HOME_WARRANTY_PLAN' ? 'Home warranty plan' : String(answer?.category ?? '') }, { label: 'Expires', value: String((answer?.expiryDate as { value?: string } | undefined)?.value ?? '') }],
         editableFields: [], confirmLabel: 'Save warranty',
-        consentText: 'I confirm this is accurate and authorize ContractToCozy to save it to my property record.', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+        consentText: 'I confirm this is accurate and authorize ContractToCozy to save it to my property record.', expiresAt: new Date(FIXTURE_NOW.getTime() + 30 * 60_000).toISOString(),
       },
     };
   }
@@ -771,7 +778,7 @@ function warrantyEditExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionI
   const base = propertySummaryTimelineExecution();
   const common = {
     ...base, sessionId: sessionId ?? base.sessionId, executionId: 'execution-warranty-edit', question: 'Edit this warranty.',
-    operation: { id: 'WARRANTY_UPDATE', version: '1.0', family: 'COMMAND' }, contextVersion: 'warranty-edit-context-v1', updatedAt: new Date().toISOString(),
+    operation: { id: 'WARRANTY_UPDATE', version: '1.0', family: 'COMMAND' }, contextVersion: 'warranty-edit-context-v1', updatedAt: new Date(FIXTURE_NOW).toISOString(),
   };
   if (stage === 'FORM') {
     return {
@@ -808,7 +815,7 @@ function warrantyEditExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionI
         confirmationId: 'warranty-update-warranty-property-summary-1', version: 1, title: `Save ${changed.length === 1 ? '1 change' : `${changed.length} changes`} to the Acme Home Warranty warranty?`,
         description: 'This writes through the canonical warranty service.',
         fields: [{ label: 'Warranty', value: 'Acme Home Warranty' }, ...changed.map(([key, value]) => ({ label: key === 'expiryDate' ? 'Expiration date' : key, value: `${(WARRANTY_EDITOR_ORIGINAL as Record<string, string>)[key]} \u2192 ${value}` }))],
-        editableFields: [], confirmLabel: 'Save changes', consentText: 'I authorize these changes to the warranty record.', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+        editableFields: [], confirmLabel: 'Save changes', consentText: 'I authorize these changes to the warranty record.', expiresAt: new Date(FIXTURE_NOW.getTime() + 30 * 60_000).toISOString(),
       },
     };
   }
@@ -824,7 +831,7 @@ function eventEditExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId?:
   const base = propertySummaryTimelineExecution();
   const common = {
     ...base, sessionId: sessionId ?? base.sessionId, executionId: 'execution-event-edit', question: 'Edit this timeline event.',
-    operation: { id: 'HOME_EVENT_UPDATE', version: '1.0', family: 'COMMAND' }, contextVersion: 'event-edit-context-v1', updatedAt: new Date().toISOString(),
+    operation: { id: 'HOME_EVENT_UPDATE', version: '1.0', family: 'COMMAND' }, contextVersion: 'event-edit-context-v1', updatedAt: new Date(FIXTURE_NOW).toISOString(),
   };
   if (stage === 'FORM') {
     const select = (key: string, label: string, section: string, required: boolean, options: Array<{ label: string; value: string }>, extra: Record<string, unknown> = {}) => ({ key, label, kind: 'SELECT', section, required, options, ...extra });
@@ -863,7 +870,7 @@ function eventEditExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId?:
         confirmationId: 'home-event-update-event-property-summary-1', version: 1, title: `Save ${changed.length === 1 ? '1 change' : `${changed.length} changes`} to "Roof replacement"?`,
         description: 'This records ONE new revision on the canonical home timeline.',
         fields: [{ label: 'Event', value: 'Roof replacement' }, ...changed.map(([key, value]) => ({ label: key === 'title' ? 'Title' : key, value: `${(EVENT_EDITOR_ORIGINAL as Record<string, string>)[key]} \u2192 ${value}` }))],
-        editableFields: [], confirmLabel: 'Save changes', consentText: 'I authorize these changes to the shared home timeline.', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+        editableFields: [], confirmLabel: 'Save changes', consentText: 'I authorize these changes to the shared home timeline.', expiresAt: new Date(FIXTURE_NOW.getTime() + 30 * 60_000).toISOString(),
       },
     };
   }
@@ -908,7 +915,7 @@ function addExecution(kind: AddKind, stage: 'FORM' | 'CONFIRMATION' | 'DONE', se
     : kind === 'item'
     ? { executionId: 'execution-item-add', question: 'Add an item to my home inventory.', operationId: 'INVENTORY_ITEM_CREATE', context: 'item-add-context-v1', requirementId: 'inventory-create-inputs', captureKey: 'INVENTORY_ITEM_CREATE_INPUTS', title: 'Add an item', questionText: 'Which item would you like to add to your home inventory?' }
     : { executionId: 'execution-room-add', question: 'Add a room to my home record.', operationId: 'ROOM_CREATE', context: 'room-add-context-v1', requirementId: 'room-create-inputs', captureKey: 'ROOM_CREATE_INPUTS', title: 'Add a room', questionText: 'Which room would you like to add to your home record?' };
-  const common = { ...base, sessionId: sessionId ?? base.sessionId, executionId: spec.executionId, question: spec.question, operation: { id: spec.operationId, version: '1.0', family: 'COMMAND' }, contextVersion: spec.context, updatedAt: new Date().toISOString() };
+  const common = { ...base, sessionId: sessionId ?? base.sessionId, executionId: spec.executionId, question: spec.question, operation: { id: spec.operationId, version: '1.0', family: 'COMMAND' }, contextVersion: spec.context, updatedAt: new Date(FIXTURE_NOW).toISOString() };
   const field = (key: string, label: string, required: boolean, inputSchema: Record<string, unknown>) => ({ key, label, required, inputSchema });
   const fields = kind === 'event'
     ? [
@@ -974,7 +981,7 @@ function addExecution(kind: AddKind, stage: 'FORM' | 'CONFIRMATION' | 'DONE', se
         editableFields: [], confirmLabel: 'Add room', consentText: 'I authorize adding this room to the shared home record.' };
     return { ...common, status: 'NEEDS_CONFIRMATION', captureRequests: [captureRequest(entered)],
       blocks: [{ type: 'SUMMARY', id: `${kind}-add-review`, title: 'Review before adding', body: 'You entered these details. Nothing is saved until you confirm.', tone: 'DEFAULT', actions: [] }],
-      confirmation: { ...confirmation, expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() } };
+      confirmation: { ...confirmation, expiresAt: new Date(FIXTURE_NOW.getTime() + 30 * 60_000).toISOString() } };
   }
   if (kind === 'area') {
     return { ...common, status: 'COMPLETED', captureRequests: [], confirmation: null, blocks: [
@@ -1011,7 +1018,7 @@ function maintenanceExecution() {
     ],
     skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
     correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [],
-    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    createdAt: new Date(FIXTURE_NOW).toISOString(), updatedAt: new Date(FIXTURE_NOW).toISOString(),
   };
 }
 
@@ -1098,7 +1105,7 @@ function inventoryJourneyExecution(state: InventoryJourneyState) {
     ],
     skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
     correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [],
-    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    createdAt: new Date(FIXTURE_NOW).toISOString(), updatedAt: new Date(FIXTURE_NOW).toISOString(),
   };
 }
 
@@ -1109,7 +1116,7 @@ function continuityExecution(variant: 'starter' | 'established', sessionId?: str
     property: { id: propertyId, label: 'Acceptance Home' }, operation: { id: 'HOME_DIGITAL_WILL', version: '1.0', family: 'RECORDS' }, contextVersion: 'continuity-v1',
     skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null, viewState: null,
     correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [], blocks: CONTINUITY_BLOCKS[variant],
-    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    createdAt: new Date(FIXTURE_NOW).toISOString(), updatedAt: new Date(FIXTURE_NOW).toISOString(),
   };
 }
 
@@ -1121,7 +1128,7 @@ function homeActionsExecution(kind: 'list-all' | 'list-consider' | 'contributor'
     property: { id: propertyId, label: 'Acceptance Home' }, operation: { id: 'HOME_ACTIONS', version: '1.0', family: 'HOME_OPERATIONS' }, contextVersion: 'home-actions-v1',
     skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null, viewState: null,
     correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [], blocks,
-    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    createdAt: new Date(FIXTURE_NOW).toISOString(), updatedAt: new Date(FIXTURE_NOW).toISOString(),
   };
 }
 
@@ -1142,7 +1149,7 @@ function workEvidenceExecution(flow: WorkEvidenceFlow, stage: 'form' | 'review' 
     property: { id: propertyId, label: 'Acceptance Home' }, operation: { id: 'HOME_WORK_ITEM_COMMAND', version: '1.0', family: 'COMMAND' }, contextVersion: data.contextVersion ?? 'work-evidence-v1',
     skill: null, skillHandoff: null, captureRequests: data.captureRequests, confirmation: data.confirmation, clarification: null, childExecutions: [], originalResponse: null, viewState: null,
     correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: data.suggestions, blocks: data.blocks,
-    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    createdAt: new Date(FIXTURE_NOW).toISOString(), updatedAt: new Date(FIXTURE_NOW).toISOString(),
   };
 }
 
@@ -1164,7 +1171,7 @@ function warrantyJourneyExecution(state: WarrantyJourneyState, options: { viewer
     schemaVersion: '1.0', sessionId: state.sessionId ?? 'ask-acceptance-session', status: 'ANSWERED', property: { id: propertyId, label: 'Acceptance Home' },
     operation: { id: 'WARRANTY_LOOKUP', version: '1.0', family: 'WARRANTY' }, contextVersion: 'warranty-journey-v1',
     skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
-    correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [], createdAt: new Date(FIXTURE_NOW).toISOString(), updatedAt: new Date(FIXTURE_NOW).toISOString(),
   };
   const boundary = { type: 'BOUNDARY', id: 'warranty-boundary', title: 'Recorded information only', body: 'This reports the warranty information recorded in your Home Record. It does not determine whether a repair is covered or file a claim.', severity: 'INFO', suggestions: [] };
   const addAction = { id: 'add-warranty', label: 'Record home warranty plan', interactionType: 'START_WORKFLOW', message: 'Record a warranty in my home record.', operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' };
@@ -1238,7 +1245,7 @@ function documentsJourneyExecution(state: DocumentsJourneyState, options: { empt
     schemaVersion: '1.0', sessionId: state.sessionId ?? 'ask-acceptance-session', status: 'ANSWERED', property: { id: propertyId, label: 'Acceptance Home' },
     operation: { id: 'DOCUMENT_LOOKUP', version: '1.0', family: 'RECORD_QUERY' }, contextVersion: 'documents-journey-v1',
     skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
-    correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [], createdAt: new Date(FIXTURE_NOW).toISOString(), updatedAt: new Date(FIXTURE_NOW).toISOString(),
   };
   const boundary = { type: 'BOUNDARY', id: 'document-lookup-boundary', title: 'Recorded information only', body: 'This shows what is recorded about each document in your Home Record: its type, when it was added and its review or verification status. Ask has not read or interpreted the documents themselves.', severity: 'INFO', suggestions: [] };
   if (options.empty) {
@@ -1303,7 +1310,7 @@ function claimsJourneyExecution(view: ClaimsJourneyView, options: { viewer?: boo
     schemaVersion: '1.0', sessionId: view.sessionId ?? 'ask-acceptance-session', status: 'ANSWERED', property: { id: propertyId, label: 'Acceptance Home' },
     operation: { id: 'INCIDENT_CLAIM_STATUS', version: '1.0', family: 'RECORD_QUERY' }, contextVersion: 'claims-journey-v1',
     skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
-    correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [], createdAt: new Date(FIXTURE_NOW).toISOString(), updatedAt: new Date(FIXTURE_NOW).toISOString(),
   };
   const boundary = { type: 'BOUNDARY', id: 'claim-status-boundary', title: 'Recorded information only', body: 'This shows the incident and claim records in your Home Record. It does not decide whether a claim will be approved or covered. Filing a claim or changing its status happens only when you ask and confirm.', severity: 'INFO', suggestions: [] };
   if (options.empty) {
@@ -2782,7 +2789,7 @@ function adaptiveTableExecution() {
     }],
     skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
     correctionCapabilities: { intent: true, entity: false, homeRecord: false, retryResponse: false }, suggestions: [],
-    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    createdAt: new Date(FIXTURE_NOW).toISOString(), updatedAt: new Date(FIXTURE_NOW).toISOString(),
   };
 }
 
@@ -2827,7 +2834,7 @@ function comparisonStripExecution() {
     }],
     skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
     correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [],
-    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    createdAt: new Date(FIXTURE_NOW).toISOString(), updatedAt: new Date(FIXTURE_NOW).toISOString(),
   };
 }
 
@@ -2856,7 +2863,7 @@ function execution(kind: 'refrigerator' | 'refinance', captured = false) {
     contextVersion: captured ? 'context-v2' : 'context-v1', blocks: [{ type: 'SUMMARY', id: 'summary', title: captured ? 'Updated answer' : 'A little more context will improve this answer', body: captured ? 'The saved home details were applied automatically.' : 'Complete the inline card to continue.', tone: 'DEFAULT', actions: [] }],
     skill: null, skillHandoff: null, captureRequests: captured ? [] : [capture], confirmation: null, clarification: null,
     correctionCapabilities: { intent: true, entity: true, homeRecord: true, retryResponse: false },
-    suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    suggestions: [], createdAt: new Date(FIXTURE_NOW).toISOString(), updatedAt: new Date(FIXTURE_NOW).toISOString(),
   };
 }
 
@@ -2869,7 +2876,9 @@ export async function installAskContext(context: BrowserContext, options: { calm
   await context.addCookies([{ name: 'ctc.at', value: 'ask-acceptance-token', domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Strict' }]);
 }
 
+
 export async function installAskApi(page: Page, options: { selectorState?: 'OPTIONS' | 'NONE_ELIGIBLE' | 'UNAVAILABLE'; slowAnswerMs?: number; conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; askFailsOnce?: boolean; refinementFailsOnce?: boolean; warrantyViewer?: boolean; warrantyEmpty?: boolean; warrantyDetailAccessLost?: boolean; documentsEmpty?: boolean; claimsViewer?: boolean; claimsEmpty?: boolean; claimDetailAccessLost?: boolean; claimUnknownOutcomeOnce?: boolean; claimConfirmDenied?: boolean; unknownOutcomeOnce?: boolean; repeatedSuggestion?: boolean; inventoryDetailNotFound?: boolean; inventoryDetailAccessLost?: boolean; claimStaleAfterConfirm?: 'REFRESH_OK' | 'REFRESH_FAILS' ; workEvidenceScenario?: 'default' | 'attachMany' | 'emptyAttach' | 'emptyRemove' | 'viewer'; confirmDelayMs?: number} = {}) {
+  await page.clock.setFixedTime(FIXTURE_NOW);
   activeSessionId = null;
   const captureBodies: Array<Record<string, unknown>> = [];
   const warrantyEditCaptureBodies: Array<Record<string, unknown>> = [];
@@ -3106,14 +3115,14 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
   await page.route(`${apiOrigin}/api/ask/pending*`, (route) => {
     const pendingExecution = {
       ...execution('refrigerator'), executionId: 'execution-pending-maintenance', sessionId: 'session-pending-maintenance',
-      question: 'I want to create a maintenance task', updatedAt: new Date().toISOString(),
+      question: 'I want to create a maintenance task', updatedAt: new Date(FIXTURE_NOW).toISOString(),
     };
     return fulfill(route, { success: true, data: { items: options.pendingWork && !pendingDismissed ? [{ pendingKind: 'CONTEXT_CAPTURE', actionLabel: 'Add the missing detail', execution: pendingExecution }] : [] } });
   });
   // Target selectors (IW-SHELL-022): a read that writes nothing. `options.selectorState` lets a spec exercise the honest empty and unavailable states.
   await page.route(`${apiOrigin}/api/ask/target-selectors/*`, (route) => {
     selectorReads.push(new URL(route.request().url()).pathname.split('/').pop() ?? '');
-    const base = { selectorId: 'PROPERTY_AREA', propertyId, title: 'Which part of your home record?', generatedAt: new Date().toISOString(), truncated: false };
+    const base = { selectorId: 'PROPERTY_AREA', propertyId, title: 'Which part of your home record?', generatedAt: new Date(FIXTURE_NOW).toISOString(), truncated: false };
     if (options.selectorState === 'NONE_ELIGIBLE') return fulfill(route, { success: true, data: { ...base, state: 'NONE_ELIGIBLE', options: [], explanation: 'Nothing is missing in any area right now, so there is nothing to add.' } });
     if (options.selectorState === 'UNAVAILABLE') return fulfill(route, { success: true, data: { ...base, state: 'UNAVAILABLE', options: [], explanation: 'Your home record could not be checked right now. Nothing has changed. Try again in a moment.' } });
     return fulfill(route, { success: true, data: { ...base, state: 'OPTIONS', explanation: null, options: [
@@ -3121,16 +3130,16 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
     ] } });
   });
   await page.route(`${apiOrigin}/api/ask/concierge-home*`, (route) => fulfill(route, { success: true, data: {
-    propertyId, generatedAt: new Date().toISOString(),
+    propertyId, generatedAt: new Date(FIXTURE_NOW).toISOString(),
     priorityList: {
-      state: 'AVAILABLE', rankingPolicyVersion: 'acceptance-v1', generatedAt: new Date().toISOString(), truncated: false, href: `/dashboard?propertyId=${propertyId}`,
+      state: 'AVAILABLE', rankingPolicyVersion: 'acceptance-v1', generatedAt: new Date(FIXTURE_NOW).toISOString(), truncated: false, href: `/dashboard?propertyId=${propertyId}`,
       items: [options.heatAttention
         ? { homeActionId: 'heat-action-1', title: 'Multi-day heat risk ahead preparation', askQuestion: 'How should I prepare for the multi-day heat risk at this home?', askCategoryId: 'PROTECT', askCategoryLabel: 'Protect', subject: { kind: 'CHECKLIST', id: 'heat-checklist-1', label: 'Multi-day heat preparation' }, consumerPriority: 'PLAN_SOON', comparativeReasonCodes: ['SAFETY_IMPACT'], confidenceLabel: 'HIGH', deadlineAt: '2026-08-20T12:00:00.000Z', cta: { label: 'Open preparation checklist', href: `/dashboard/properties/${propertyId}/environment-report/preparation?insightId=heat-1` }, watchState: null, suppressed: false, completed: false, unavailable: false, stale: false }
         : options.duplicateRefrigerator
           ? { homeActionId: 'refrigerator-action-1', title: 'Plan ahead for Refrigerator', askQuestion: 'What should I do next for “Plan ahead for Refrigerator”?', askCategoryId: 'MAINTAIN', askCategoryLabel: 'Maintain', subject: { kind: 'INVENTORY_ITEM', id: 'refrigerator-1', label: 'Refrigerator' }, consumerPriority: 'PLAN_SOON', comparativeReasonCodes: ['COST_AVOIDANCE'], confidenceLabel: 'HIGH', deadlineAt: '2026-09-01T12:00:00.000Z', cta: { label: 'Review action', href: '/dashboard/actions/refrigerator-action-1' }, watchState: null, suppressed: false, completed: false, unavailable: false, stale: false }
           : { homeActionId: 'action-1', title: 'Schedule HVAC service', askQuestion: 'What should I do next for “Schedule HVAC service”?', askCategoryId: 'MAINTAIN', askCategoryLabel: 'Maintain', subject: { kind: 'WORK_ITEM', id: 'hvac-service-1', label: 'HVAC service' }, consumerPriority: 'PLAN_SOON', comparativeReasonCodes: ['COST_AVOIDANCE'], confidenceLabel: 'HIGH', deadlineAt: '2026-09-01T12:00:00.000Z', cta: { label: 'Review action', href: '/dashboard/actions/action-1' }, watchState: null, suppressed: false, completed: false, unavailable: false, stale: false }],
     },
-    changes: { state: 'AVAILABLE', windowDays: 30, items: [{ id: 'change-1', source: 'Home action', summary: 'Home action updated.', materiality: 'MEANINGFUL', detectedAt: new Date().toISOString(), effectiveAt: null }], href: `/dashboard/ask?propertyId=${propertyId}` },
+    changes: { state: 'AVAILABLE', windowDays: 30, items: [{ id: 'change-1', source: 'Home action', summary: 'Home action updated.', materiality: 'MEANINGFUL', detectedAt: new Date(FIXTURE_NOW).toISOString(), effectiveAt: null }], href: `/dashboard/ask?propertyId=${propertyId}` },
     decisions: options.noDecision
       ? { state: 'NO_DECISIONS', items: [], href: `/dashboard/ask?propertyId=${propertyId}` }
       : { state: 'AVAILABLE', items: [{ decisionThreadId: 'decision-1', title: 'Repair or replace the refrigerator', lifecycleStatus: 'IN_PROGRESS', contextStatus: 'CURRENT', verdict: null, confidenceLabel: 'MEDIUM', subject: { kind: 'INVENTORY_ITEM', id: 'refrigerator-1', label: 'Refrigerator' }, updatedAt: '2026-08-12T12:00:00.000Z' }], href: `/dashboard/ask?propertyId=${propertyId}` },
@@ -3176,7 +3185,7 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
       if (options.allHomeSessions && body.scope === 'ALL_HOMES') return fulfill(route, { success: true, data: { items: body.query?.toLowerCase().includes('boiler') ? [{
         sessionId: 'other-home-session', title: 'Boiler replacement options',
         property: { id: otherPropertyId, label: 'Second Home' }, latestStatus: 'ANSWERED',
-        latestExecutionId: 'other-home-execution', executionCount: 1, lastActiveAt: new Date().toISOString(),
+        latestExecutionId: 'other-home-execution', executionCount: 1, lastActiveAt: new Date(FIXTURE_NOW).toISOString(),
       }] : [], nextCursor: null } });
       // "flashing" appears only in the homeowner's stored question; the
       // search response intentionally returns a title, not a question snippet.
@@ -3184,7 +3193,7 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
         sessionId: 'recent-session-2', title: 'Older roof project',
         property: { id: propertyId, label: 'Acceptance Home' }, latestStatus: 'ANSWERED',
         latestExecutionId: 'execution-roof', executionCount: 1,
-        lastActiveAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+        lastActiveAt: new Date(FIXTURE_NOW.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString(),
       }] : [], nextCursor: null } });
     }
     if (url.pathname.endsWith('/recent')) {
@@ -3192,7 +3201,7 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
         return fulfill(route, { success: true, data: { items: [{
           sessionId: 'other-home-session', title: 'Boiler replacement options',
           property: { id: otherPropertyId, label: 'Second Home' }, latestStatus: 'ANSWERED',
-          latestExecutionId: 'other-home-execution', executionCount: 1, lastActiveAt: new Date().toISOString(),
+          latestExecutionId: 'other-home-execution', executionCount: 1, lastActiveAt: new Date(FIXTURE_NOW).toISOString(),
         }], nextCursor: null } });
       }
       if (options.recentSessionsPages && url.searchParams.has('cursor')) {
@@ -3200,14 +3209,14 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
           sessionId: 'recent-session-2', title: 'Older roof project',
           property: { id: propertyId, label: 'Acceptance Home' }, latestStatus: 'ANSWERED',
           latestExecutionId: 'execution-roof', executionCount: 1,
-          lastActiveAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+          lastActiveAt: new Date(FIXTURE_NOW.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString(),
         }], nextCursor: null } });
       }
       return fulfill(route, { success: true, data: { items: options.recentSessions ? [{
         sessionId: 'recent-session-1', title: 'When should I replace my refrigerator?',
         property: { id: propertyId, label: 'Acceptance Home' }, latestStatus: 'NEEDS_CONTEXT',
         latestExecutionId: 'execution-refrigerator', executionCount: 1,
-        lastActiveAt: new Date().toISOString(),
+        lastActiveAt: new Date(FIXTURE_NOW).toISOString(),
       }] : [], nextCursor: options.recentSessionsPages ? 'fixture-page-2' : null } });
     }
     if (url.pathname.endsWith('/recent-session-1')) {
@@ -3910,7 +3919,7 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
       ...execution('refrigerator'), executionId: 'execution-pending-maintenance', sessionId: 'session-pending-maintenance',
       question: 'I want to create a maintenance task', status: 'CANCELLED', captureRequests: [],
       blocks: [{ type: 'SUMMARY', id: 'pending-request-dismissed', title: 'Pending request dismissed', body: 'No action was performed.', tone: 'DEFAULT', actions: [] }],
-      updatedAt: new Date().toISOString(),
+      updatedAt: new Date(FIXTURE_NOW).toISOString(),
     };
     return fulfill(route, { success: true, data: cancelled });
   });

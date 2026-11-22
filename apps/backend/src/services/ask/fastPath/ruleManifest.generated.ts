@@ -1082,7 +1082,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "DATA_POINT_READ",
   "confidence": 0.93,
   "order": 80,
-  "hash": "67fc8a41b7d59d56",
+  "hash": "947423562a603b6d",
   "condition": "isDataPointComputedQuery(message) && !compoundCapabilityFilterPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
    "../homeRecordsAccess.ts:visibleRecordWhere",
@@ -1989,7 +1989,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "DATA_POINT_READ",
   "confidence": 0.9,
   "order": 149,
-  "hash": "9a2d2a8884605e16",
+  "hash": "538526dfd626fbd6",
   "condition": "!compoundCapabilityFilterPattern.test(message) && ((dataPointQuestionPattern.test(message) && (resolveDataPoint(message) || resolveDataPo...",
   "references": [
    "../homeRecordsAccess.ts:visibleRecordWhere",

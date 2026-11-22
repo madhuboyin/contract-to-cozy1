@@ -203,6 +203,8 @@ export function mapPersistedExecution(execution: {
     viewState,
     contextVersion: execution.contextVersion,
     blocks: stored.blocks ?? [],
+    // Declared by the producer and stored with the answer; absent on answers from producers that do not declare one yet.
+    presentationFamily: typeof (stored as { presentationFamily?: unknown }).presentationFamily === 'string' ? (stored as { presentationFamily: string }).presentationFamily : null,
     captureRequests: Array.isArray(stored.captureRequests)
       ? stored.captureRequests.map((request) => request && typeof request === 'object' && !Array.isArray(request)
         ? {

@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { CorrectionActions } from './CorrectionActions';
 import { ActionLink } from './blocks/context';
 import { AttachEvidenceControl, EVIDENCE_ATTACH_MESSAGE } from './AttachEvidenceControl';
+import { formatStatusLabel } from '@/features/ask/statusLabel';
 export { EVIDENCE_ATTACH_MESSAGE } from './AttachEvidenceControl';
 
 // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3, evidence upload design (approved 2026-09-22). Must match
@@ -202,7 +203,7 @@ export function HomeEventResultList({ block, propertyId, disabled, onAction, onF
             return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('rounded-xl border p-3 outline-offset-2', selected ? 'border-teal-600 bg-teal-50' : 'border-transparent bg-slate-50')}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <button type="button" data-home-event-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={detailEventId === item.id} aria-controls={`home-event-detail-${item.id}`} onClick={() => openDetail(item)} className="min-h-10 text-left font-medium text-slate-950 underline-offset-4 hover:text-teal-800 hover:underline">{item.title}</button>
-                {item.status && <span className="text-xs text-slate-600">{item.status.replace(/_/g, ' ')}</span>}
+                {item.status && <span className="text-xs text-slate-600">{formatStatusLabel(item.status)}</span>}
               </div>
               <p className="mt-1 text-xs text-slate-600">{item.meta.join(' · ')}</p>
               {item.description && <p className="mt-2 text-sm text-slate-600">{item.description}</p>}

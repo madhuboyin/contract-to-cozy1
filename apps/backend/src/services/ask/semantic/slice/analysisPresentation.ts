@@ -9,6 +9,8 @@ import { humanizeEnumTokensInCopy, humanizePresentationToken } from '../containm
  */
 export interface AnalysisFact { readonly label: string; readonly value: string }
 
+type AnalysisAction = Extract<AskPresentationBlock, { type: 'SUMMARY' }>['actions'][number];
+
 export interface SliceAnalysisInput {
   readonly receipt: SemanticReadReceipt;
   /** One line: the conclusion, or what cannot be determined yet. */
@@ -23,6 +25,8 @@ export interface SliceAnalysisInput {
   readonly note?: { readonly title: string; readonly body: string };
   /** True when the analysis could not be worked out: the summary is cautionary. */
   readonly cannotDetermine?: boolean;
+  /** At most one next action: supply the missing input, or adjust the assumptions. Opens a governed Ask command; it never calculates or writes by itself. */
+  readonly actions?: readonly AnalysisAction[];
 }
 
 /** Whole dollars with separators ("$233,001"): a strategic comparison rarely needs cents. */
@@ -45,7 +49,7 @@ export function buildSliceAnalysisPresentation(input: SliceAnalysisInput): AskPr
     ...(facts.length > 0 ? { bullets: facts.map((fact) => ({ label: humanizeEnumTokensInCopy(fact.label), body: humanizeEnumTokensInCopy(fact.value) })) } : {}),
     tone: input.cannotDetermine ? 'CAUTION' : 'DEFAULT',
     presentationFamily: 'ANALYSIS',
-    actions: [],
+    actions: (input.actions ?? []).slice(0, 1) as AnalysisAction[],
   }];
   if (input.assumptions && input.assumptions.length > 0) {
     blocks.push({ type: 'ASSUMPTIONS', id: `${receipt.answerVariantId}-assumptions`, title: 'What this assumes', items: input.assumptions.map(humanizeEnumTokensInCopy) });

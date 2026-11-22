@@ -115,6 +115,8 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
 };
 
 const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<string>>>> = {
+  // An own-vs-rent analysis offers "Add comparable rent" / "Adjust assumptions": the governed Sell / Hold / Rent assumptions command (reviewed and confirmed before it saves anything).
+  DATA_POINT_READ: new Set(['sell-hold-rent-edit-assumptions']),
   // A completed task linked to an open journey step offers to attach evidence; a step with no linked task offers to create one for it.
   MAINTENANCE_TASK_COMPLETE: new Set(['maintenance-attach-evidence']),
   MAINTENANCE_STATUS: new Set(['create-maintenance', 'maintenance-templates-browse', 'add-purchase-date', 'seasonal-retry', 'seasonal-show-pending', 'seasonal-show-completed', 'seasonal-show-dismissed', 'seasonal-show-maintenance', 'seasonal-item-add', 'seasonal-item-snooze', 'seasonal-item-dismiss', 'seasonal-item-restore', 'seasonal-item-remove', 'seasonal-checklist-add-critical', 'seasonal-checklist-dismiss']),

@@ -45,7 +45,9 @@ export interface AskCollectionDescriptor {
 
 /** Mirrors the backend contract: the one presentation family an answer selects, and the kind of record a list carries (so its canonical renderer is chosen without reading a block id). */
 export type AskPresentationFamily = 'DIRECT_ANSWER' | 'ENTITY_LIST' | 'ANALYSIS' | 'COMPARISON' | 'CLARIFICATION' | 'BOUNDARY' | 'WORKFLOW';
-export type AskListRecordKind = 'INVENTORY_ITEM' | 'MAINTENANCE_TASK' | 'CLAIM' | 'PERMIT' | 'WARRANTY' | 'DOCUMENT' | 'HOME_EVENT';
+export type AskListRecordKind =
+  | 'INVENTORY_ITEM' | 'MAINTENANCE_TASK' | 'CLAIM' | 'PERMIT' | 'WARRANTY' | 'DOCUMENT' | 'HOME_EVENT'
+  | 'PROJECT' | 'QUOTE' | 'TAX_BILL' | 'INSURANCE_POLICY' | 'RECALL' | 'INSPECTION_FINDING' | 'SELLER_READINESS_ITEM' | 'BUYER_TASK' | 'CLAIM_DOCUMENT' | 'SAVED_RESULT' | 'ENVIRONMENTAL_RISK' | 'OTHER';
 
 export interface AskGroupedListItemAction {
   id: string;
@@ -134,7 +136,7 @@ export type AskPresentationBlock =
   }
   | { type: 'SUMMARY'; id: string; title: string; body: string; presentationFamily?: AskPresentationFamily; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL'; actions: AskAction[]; chips?: AskAnswerChip[]; headline?: string; supportLine?: string; bullets?: Array<{ label?: string; body: string }>; propertyBrief?: AskPropertyBriefSummary }
   | { type: 'PROACTIVE_INSIGHT'; id: string; title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL'; triggerSource: string; actions: AskAction[] }
-  | { type: 'GROUPED_LIST'; id: string; title: string; description?: string | null; recordKind?: AskListRecordKind; listDensity?: 'DENSE'; sections: Array<{ id: string; title: string; caption?: string | null; count: number; offset?: number; initialVisibleCount?: number; items: AskGroupedListItem[] }>; actions: AskAction[]; filters: AskGroupedListFilter[]; presentation?: AskGroupedListPresentation; collection?: AskCollectionDescriptor }
+  | { type: 'GROUPED_LIST'; id: string; title: string; description?: string | null; recordKind?: AskListRecordKind; justifiedCollection?: string; listDensity?: 'DENSE'; sections: Array<{ id: string; title: string; caption?: string | null; count: number; offset?: number; initialVisibleCount?: number; items: AskGroupedListItem[] }>; actions: AskAction[]; filters: AskGroupedListFilter[]; presentation?: AskGroupedListPresentation; collection?: AskCollectionDescriptor }
   | { type: 'TABLE'; id: string; title: string; description?: string | null; preferredPresentation?: 'AUTO' | 'TABLE' | 'CARDS'; columns: Array<{ key: string; label: string }>; rows: Array<{ id: string; values: Record<string, string> }>; totalCount?: number; actions: AskAction[] }
   | { type: 'CAPABILITY_LIST'; id: string; title: string; description?: string | null; capabilities: Array<{ id: string; label: string; description: string; expectedOutput: string; href: string | null; inlineLaunch: { interactionType: 'CONVERSATION_CONTINUE'; operationId: string; message: string } | null; inlineBoundary: string; readiness: 'READY' | 'NEEDS_PROPERTY' | 'NEEDS_CONTEXT' | 'UNAVAILABLE' | 'AVAILABLE'; readinessLabel: string | null; readinessReasons: string[]; releaseStage: 'ACTIVE' | 'BETA' }> }
   | { type: 'EVIDENCE'; id: string; title: string; items: Array<{ label: string; source: string | null; observedAt: string | null; claim?: { targetBlockId: string; targetItemId: string | null; text: string } | null }> }
@@ -409,6 +411,8 @@ export interface SuggestedNextActionSelection {
 
 export interface AskExecutionResponse {
   schemaVersion: '1.0';
+  /** The answer's presentation family, declared by the producer; null for an answer from a producer that has not declared one. The client shows only what the family permits (answerFamilyAnatomy.ts). */
+  presentationFamily?: AskPresentationFamily | null;
   executionId: string;
   sessionId: string;
   question: string;

@@ -10,6 +10,7 @@ import { ResultRevalidationBoundary } from '../ResultRevalidationBoundary';
 import { hasResponseContext, ResponseContextSummary } from '../EvidenceContextPanel';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { calmArtifactBlocks, isCalmAdopter, useCalmAnswers } from '@/features/ask/calmAnswers';
+import { enforceAnswerAnatomy } from '@/features/ask/answerFamilyAnatomy';
 import { AskBlockActionContext } from '../blocks/context';
 import { CalmAnswerContext, CalmChromeContext, CalmReceiptContext, CalmSecondaryContext } from '../blocks/calmContext';
 import { BlockSequence, BlockView } from '../blocks/registry';
@@ -175,7 +176,11 @@ export function ExecutionCard({
   const messageBlocks = cardIsTheMessage ? execution.blocks.filter((block) => !(block.type === 'SUMMARY' && block.tone === 'DEFAULT' && !block.chips?.length)) : execution.blocks;
   // IW-CONV-047: HOME_ACTIONS previously drew both its ranked PRIORITY_LIST and the same records again as shelves.
   // In the adopted calm anatomy the ranked list is the one primary artifact; the classic view keeps both for compatibility.
-  const shownBlocks = calm ? calmArtifactBlocks(messageBlocks) : messageBlocks;
+  // The declared presentation family decides which blocks may be shown: a producer that declares ANALYSIS cannot put a collection on screen (answerFamilyAnatomy.ts).
+  const familyBlocks = enforceAnswerAnatomy(execution.presentationFamily, messageBlocks, (issues) => {
+    if (process.env.NODE_ENV !== 'production') console.warn(`Ask answer ${execution.executionId} breaks its ${execution.presentationFamily} anatomy: ${issues.join('; ')}`);
+  });
+  const shownBlocks = calm ? calmArtifactBlocks(familyBlocks) : familyBlocks;
   const answerWidth = askAnswerWidth(shownBlocks);
   // ACUI-005: the created record's link, for a calm receipt that has no action of its own.
   const receiptContinuation = calmChrome ? execution.blocks.flatMap((block) => block.type === 'OUTPUT_ARTIFACTS' ? block.items : []).find((item) => item.navigation)?.navigation ?? null : null;
@@ -379,7 +384,7 @@ export function ExecutionCard({
           const prompt = handoffPrompt(execution.skillHandoff);
           const label = handoffLabel(execution.skillHandoff);
           const continuity = execution.skillHandoff.continuity;
-          return <div className="w-full max-w-[960px] rounded-2xl border border-teal-200 bg-teal-50/70 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Suggested next step</p><button type="button" disabled={loading} onClick={() => void ask(prompt, undefined, { handoffFromExecutionId: execution.executionId, propertyId: continuity.propertyId ?? undefined, entityType: continuity.sourceEntityType ?? undefined, entityId: continuity.sourceEntityId ?? undefined, actionId: continuity.sourceHomeActionId ?? undefined, decisionThreadId: continuity.decisionThreadId ?? undefined, workItemId: continuity.workItemId ?? undefined, journeyId: continuity.journeyId ?? undefined, contextVersion: continuity.contextVersion ?? undefined, returnTo: continuity.returnDestination ?? undefined })} className="mt-2 min-h-10 rounded-xl border border-teal-300 bg-white px-3 py-2 text-left text-sm font-semibold text-teal-900 hover:border-teal-500 disabled:opacity-50">{label}</button><p className="mt-2 text-xs text-teal-800">Ask will check access, availability, and current home context again before continuing.</p></div>;
+          return <p className="w-full max-w-[960px] text-sm" data-skill-handoff="" aria-describedby={`handoff-note-${execution.executionId}`}><span className="text-slate-500">Next: </span><button type="button" disabled={loading} onClick={() => void ask(prompt, undefined, { handoffFromExecutionId: execution.executionId, propertyId: continuity.propertyId ?? undefined, entityType: continuity.sourceEntityType ?? undefined, entityId: continuity.sourceEntityId ?? undefined, actionId: continuity.sourceHomeActionId ?? undefined, decisionThreadId: continuity.decisionThreadId ?? undefined, workItemId: continuity.workItemId ?? undefined, journeyId: continuity.journeyId ?? undefined, contextVersion: continuity.contextVersion ?? undefined, returnTo: continuity.returnDestination ?? undefined })} className="min-h-8 rounded-md px-1 text-left font-semibold text-teal-800 underline-offset-2 hover:underline disabled:opacity-50">{label} →</button><span id={`handoff-note-${execution.executionId}`} className="sr-only">Ask will check access, availability, and current home context again before continuing.</span></p>;
         })()}
         {shownSuggestions.length > 0 && <div className="flex flex-wrap gap-2 pt-1">{shownSuggestions.map((suggestion) => <button key={suggestion} onClick={() => { setInput(suggestion); window.localStorage.setItem(draftStorageKey(selectedPropertyId, execution.sessionId), suggestion); }} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-800">{suggestion}</button>)}</div>}
         <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} capabilities={execution.correctionCapabilities} calm={calmChrome} onCorrectionExecution={updateExecution} />

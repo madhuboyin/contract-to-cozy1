@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { answerAnatomyIssues } from './answerFamilyAnatomy';
 import { FEEDBACK_REASON_CODES } from '../feedback.contract';
 
 export const ASK_RESPONSE_SCHEMA_VERSION = '1.0' as const;
@@ -90,7 +91,12 @@ const AskSummaryBulletSchema = z.object({
 export const ASK_PRESENTATION_FAMILIES = ['DIRECT_ANSWER', 'ENTITY_LIST', 'ANALYSIS', 'COMPARISON', 'CLARIFICATION', 'BOUNDARY', 'WORKFLOW'] as const;
 export type AskPresentationFamily = (typeof ASK_PRESENTATION_FAMILIES)[number];
 // The kind of record a list carries, for lists that have a canonical domain renderer. Declared by the producer so the client never has to infer it from a block id.
-export const ASK_LIST_RECORD_KINDS = ['INVENTORY_ITEM', 'MAINTENANCE_TASK', 'CLAIM', 'PERMIT', 'WARRANTY', 'DOCUMENT', 'HOME_EVENT'] as const;
+export const ASK_LIST_RECORD_KINDS = [
+  // Kinds with a canonical domain renderer.
+  'INVENTORY_ITEM', 'MAINTENANCE_TASK', 'CLAIM', 'PERMIT', 'WARRANTY', 'DOCUMENT', 'HOME_EVENT',
+  // Kinds the shared list renders. Declaring one is a statement that the list has no domain renderer by design, which is different from not saying what the records are.
+  'PROJECT', 'QUOTE', 'TAX_BILL', 'INSURANCE_POLICY', 'RECALL', 'INSPECTION_FINDING', 'SELLER_READINESS_ITEM', 'BUYER_TASK', 'CLAIM_DOCUMENT', 'SAVED_RESULT', 'ENVIRONMENTAL_RISK', 'OTHER',
+] as const;
 export type AskListRecordKind = (typeof ASK_LIST_RECORD_KINDS)[number];
 
 const SummaryBlockSchema = z.object({
@@ -336,6 +342,8 @@ const GroupedListBlockSchema = z.object({
   description: z.string().nullable().optional(),
   // The kind of record this list carries. When set, the client renders the canonical domain list for that kind whatever the block id is.
   recordKind: z.enum(ASK_LIST_RECORD_KINDS).optional(),
+  // A DIRECT_ANSWER carries no collection unless the producer says why this one belongs (for example, the three records that were counted).
+  justifiedCollection: z.string().trim().min(1).max(160).optional(),
   // Producer-owned density for factual/action rows that should scan like a conversational list rather than cards.
   listDensity: z.literal('DENSE').optional(),
   sections: z.array(z.object({
@@ -1621,6 +1629,9 @@ const AskExecutionResponseBaseSchema = z.object({
     }).default({ propertyId: null, sourceEntityType: null, sourceEntityId: null, sourceHomeActionId: null, decisionThreadId: null, workItemId: null, journeyId: null, contextVersion: null, returnDestination: null }),
   }).nullable().default(null),
   operation: z.object({ id: z.string(), version: z.string(), family: z.string() }).nullable(),
+  // The answer's presentation family at the level of the whole response (the owner review of the first five UI slices): the client validates the blocks against it and shows only what the
+  // family permits. Null for an answer from a producer that has not declared one yet; every semantic-stack answer declares it.
+  presentationFamily: z.enum(ASK_PRESENTATION_FAMILIES).nullable().default(null),
   // Present only when this execution's stored launch context declared the same operation that actually ran. This lets an unchanged
   // "Change and resend" preserve reviewed starter/action routing without treating an inferred operation as a client-owned declaration.
   declaredOperationId: z.string().trim().min(1).max(120).nullable().default(null),
@@ -1735,6 +1746,8 @@ function validateEvidenceClaimMappings(
 
   validateBlocks(response.blocks, ['blocks']);
   if (response.originalResponse) validateBlocks(response.originalResponse.blocks, ['originalResponse', 'blocks']);
+  // A declared family is a promise about the blocks; an answer that breaks it is rejected, never shown with a layout its family forbids.
+  for (const issue of answerAnatomyIssues(response.presentationFamily, response.blocks)) ctx.addIssue({ code: 'custom', path: ['presentationFamily'], message: issue });
 }
 
 const AskExecutionResponseChildSchema = AskExecutionResponseBaseSchema.extend({

@@ -14,6 +14,7 @@ import { ASK_SEMANTIC_PLAN_VERSION, type SemanticFacet, type SemanticRequestPlan
 import { ASK_SEMANTIC_DOMAINS, type SemanticDomainId } from '../governance/semanticOntologyBaseline';
 import type { AskListRecordKind, AskPresentationFamily } from '../../../../productFramework/ask/ask.contract';
 import { buildSliceAnalysisPresentation, wholeDollars, type SliceAnalysisInput } from '../slice/analysisPresentation';
+import { SELL_HOLD_RENT_COMMAND_ACTION_IDS, SELL_HOLD_RENT_COMMAND_ENTITY_TYPE, SELL_HOLD_RENT_COMMAND_MESSAGES } from '../../support/sellHoldRentCommand';
 import {
   ENTITY_TYPE_OF_RECORD_KIND,
   UNCONFIRMED_LIST_SUFFIX,
@@ -430,9 +431,22 @@ export function withoutRowEnumeration(summary: string, labels: readonly string[]
   return trimmed.join(' ');
 }
 
+const sentenceCase = (value: string): string => value.charAt(0).toUpperCase() + value.slice(1);
+
+/** A stored date as a homeowner reads it ("Dec 10, 2026"), never an ISO timestamp. Date-only values and midnight-UTC timestamps are calendar days, so they are read in UTC and cannot shift a day. */
+export function plainDate(value: string | null | undefined): string {
+  if (!value) return '';
+  const parsed = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00.000Z` : value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
 /** The list kind whose canonical domain renderer a source type's rows belong to. Source types without one render through the shared list. */
 const RECORD_KIND_OF_SOURCE_TYPE: Readonly<Record<string, AskListRecordKind>> = {
   InventoryItem: 'INVENTORY_ITEM', PropertyMaintenanceTask: 'MAINTENANCE_TASK', Claim: 'CLAIM', PropertyPermitRecord: 'PERMIT', Warranty: 'WARRANTY', HomeEvent: 'HOME_EVENT',
+  // Kinds the shared list renders: declared, so no list of records leaves the executor without saying what its records are.
+  HomeRenovationCase: 'PROJECT', ContractorQuote: 'QUOTE', PropertyTaxBillRecord: 'TAX_BILL', InsurancePolicy: 'INSURANCE_POLICY', RecallMatch: 'RECALL', InspectionFinding: 'INSPECTION_FINDING',
+  SellerReadinessEntity: 'SELLER_READINESS_ITEM', BuyerTaskEntity: 'BUYER_TASK', ClaimDocument: 'CLAIM_DOCUMENT', SavedResult: 'SAVED_RESULT', EnvironmentalRisk: 'ENVIRONMENTAL_RISK',
 };
 
 function finalizeReceiptAndPresentation(input: {
@@ -462,8 +476,16 @@ function finalizeReceiptAndPresentation(input: {
   readonly rows: ReadonlyArray<{ readonly id: string; readonly label: string; readonly subtitle?: string }>;
   readonly blocks: readonly AskPresentationBlock[];
 } {
-  const resolvedRecordIds = input.rows.map((r) => r.id);
-  const cleanRows = input.rows.map((r) => ({ ...r, label: humanizeEnumTokens(r.label), ...(r.subtitle ? { subtitle: humanizeEnumTokens(r.subtitle) } : {}) }));
+  // Rows of a kind whose domain renderer reads live records need the metadata that renderer requires (MAINTENANCE_DOCUMENT_RENDERER_REQUIREMENTS in the FRD): a maintenance row carries its
+  // task's status. The producers build rows with an id and a label; the status is the snapshot's own, never guessed.
+  const maintenanceStatusById = RECORD_KIND_OF_SOURCE_TYPE[input.sourceType] === 'MAINTENANCE_TASK'
+    ? new Map(input.snapshot.maintenanceTasks.map((task) => [task.id, task.status]))
+    : null;
+  const sourceRows = maintenanceStatusById
+    ? input.rows.map((row) => (row.status || !maintenanceStatusById.get(row.id) ? row : { ...row, status: maintenanceStatusById.get(row.id) }))
+    : input.rows;
+  const resolvedRecordIds = sourceRows.map((r) => r.id);
+  const cleanRows = sourceRows.map((r) => ({ ...r, label: humanizeEnumTokens(r.label), ...(r.subtitle ? { subtitle: humanizeEnumTokens(r.subtitle) } : {}) }));
   const cleanTitle = humanizeEnumTokens(input.title);
   const cleanSummary = input.projection === 'LIST' ? withoutRowEnumeration(humanizeEnumTokens(input.summaryBody), input.rows.map((r) => r.label)) : humanizeEnumTokens(input.summaryBody);
   const unknownCount = input.unknownCount ?? 0;
@@ -786,7 +808,7 @@ function executeNewStackFacet(
       const cost = costOf(task);
       const parts = [
         hasThreshold && cost ? `${centsLabel(cost.cents)}${cost.estimated ? ' (estimated)' : ''}` : null,
-        task.completedOn ? `Completed ${task.completedOn}` : null,
+        task.completedOn ? `Completed ${plainDate(task.completedOn)}` : null,
       ].filter(Boolean);
       return { id: task.id, label: task.title, ...(parts.length > 0 ? { subtitle: parts.join(' · ') } : {}) };
     };
@@ -903,7 +925,7 @@ function executeNewStackFacet(
       return {
         id: m.id,
         label: m.title,
-        subtitle: [m.nextDueDate ? `Due ${m.nextDueDate}` : null, cost ? `${cost.estimated ? 'Estimated cost' : 'Recorded cost'} ${centsLabel(cost.cents)}` : 'Cost not recorded'].filter(Boolean).join(' · '),
+        subtitle: [m.nextDueDate ? `Due ${plainDate(m.nextDueDate)}` : null, cost ? `${cost.estimated ? 'Estimated cost' : 'Recorded cost'} ${centsLabel(cost.cents)}` : 'Cost not recorded'].filter(Boolean).join(' · '),
       };
     });
     const unknownCostNote = unknownCost.length
@@ -1403,7 +1425,7 @@ function executeNewStackFacet(
     const wantsOpen = atoms.some((atom) => atom.predicateId === 'predicate.claim.has_status' && atom.enumStatus === 'OPEN');
     const wantedTypes = [...new Set(atoms.filter((atom) => atom.predicateId === 'predicate.claim.has_type').map((atom) => String(atom.enumStatus)))];
     const inProperty = snapshot.claims.filter((c) => c.propertyId === snapshot.propertyId);
-    // "Open" is the claims page's own definition (draft, in progress, submitted, under review), so this answer and that page agree.
+    // "Open" means filed and not closed (in progress, submitted, under review, approved, denied). A draft is a claim record that has not been filed: it is never counted as open, and the answer says so.
     const matchesStatus = (c: CrossDomainClaimRecord) => !wantsOpen || (c.rawStatus ? OPEN_CLAIM_STATUSES.includes(c.rawStatus) : c.status === 'OPEN');
     const untyped = wantedTypes.length > 0 ? inProperty.filter((c) => matchesStatus(c) && !c.claimType) : [];
     const openClaims = inProperty.filter((c) => matchesStatus(c) && (wantedTypes.length === 0 || (c.claimType !== undefined && wantedTypes.includes(c.claimType))));
@@ -1417,7 +1439,7 @@ function executeNewStackFacet(
     const rows = openClaims.map((c) => ({
       id: c.id, label: c.title,
       ...(c.claimType ? { description: `Filed as ${c.claimType.toLowerCase().replace(/_/g, ' ')}` } : {}),
-      meta: [(c.rawStatus ?? c.status).toLowerCase().replace(/_/g, ' ')],
+      meta: [sentenceCase((c.rawStatus ?? c.status).toLowerCase().replace(/_/g, ' '))],
       status: c.rawStatus ?? c.status, entityType: 'CLAIM', actions: claimActions,
     }));
     const summary = wantedTypes.length === 0
@@ -1425,7 +1447,9 @@ function executeNewStackFacet(
       : openClaims.length === 0
         ? `No ${kind}s are recorded (by the type each claim was filed under).`
         : `${openClaims.length} ${kind}${openClaims.length === 1 ? '' : 's'} (by the type each claim was filed under): ${openClaims.map((c) => c.title).join(', ')}.`;
-    const summaryWithNote = untyped.length > 0 ? `${summary} ${untyped.length} claim${untyped.length === 1 ? ' has' : 's have'} no recorded type and ${untyped.length === 1 ? 'is' : 'are'} not counted.` : summary;
+    const typedNote = untyped.length > 0 ? `${summary} ${untyped.length} claim${untyped.length === 1 ? ' has' : 's have'} no recorded type and ${untyped.length === 1 ? 'is' : 'are'} not counted.` : summary;
+    const draftRecords = wantsOpen ? inProperty.filter((c) => c.rawStatus === 'DRAFT' && (wantedTypes.length === 0 || (c.claimType !== undefined && wantedTypes.includes(c.claimType)))) : [];
+    const summaryWithNote = draftRecords.length > 0 ? `${typedNote} ${draftRecords.length} draft claim record${draftRecords.length === 1 ? ' is' : 's are'} not counted as open.` : typedNote;
     const finalized = finalizeReceiptAndPresentation({
       facet,
       snapshot,
@@ -1747,11 +1771,20 @@ function executeNewStackFacet(
           }]
         : [];
       // The presentation: a conclusion with key facts and assumptions, or what cannot be determined yet. The receipt keeps its one analysis result; nothing is rendered as a row.
+      // The assumptions are the scenario inputs of the Sell / Hold / Rent tool (the same override rows this answer reads), edited through its governed Ask command: the form, a review of
+      // the change and a confirmation. A viewer cannot run that command, so a viewer is offered nothing.
+      const assumptionsAction = role === 'VIEWER' ? [] : [{
+        id: SELL_HOLD_RENT_COMMAND_ACTION_IDS.EDIT_ASSUMPTIONS,
+        label: ownRentResult === null && missingSlots.includes('monthlyRentCents') ? 'Add comparable rent' : 'Adjust assumptions',
+        interactionType: 'START_WORKFLOW' as const, message: SELL_HOLD_RENT_COMMAND_MESSAGES.EDIT_ASSUMPTIONS, operationId: 'SELL_HOLD_RENT_COMMAND',
+        entityType: SELL_HOLD_RENT_COMMAND_ENTITY_TYPE, entityId: snapshot.propertyId, style: 'SECONDARY' as const,
+      }];
       const ownRentAnalysis: Omit<SliceAnalysisInput, 'receipt'> = ownRentResult === null
         ? {
             headline: 'I can’t determine the owning-versus-renting break-even yet.',
             supportLine: `It needs ${missingSlots.map((slot) => missingWords[slot] ?? slot).join(', ')}.`,
             cannotDetermine: true,
+            actions: assumptionsAction,
             ...(savedAnalysisContext ? { note: { title: 'About your saved analysis', body: savedAnalysisContext.trim() } } : {}),
           }
         : (() => {
@@ -1766,6 +1799,7 @@ function executeNewStackFacet(
                 : `Owning beats renting in year ${ownRentResult.crossoverYear}, beyond your ${horizon}-year horizon.`;
             return {
               headline,
+              actions: assumptionsAction,
               supportLine: `At ${rentNow} a month in rent and a ${homeValue} home, over ${horizon} years.`,
               facts: [
                 ...(ownRentResult.crossoverYear !== null ? [{ label: 'Break-even year', value: `Year ${ownRentResult.crossoverYear}` }] : []),
@@ -2056,7 +2090,7 @@ function executeNewStackFacet(
       && t.status === 'OPEN'
       && (job === 'job.buyer.contingency_deadlines' ? t.isContingency : new Date(t.dueAt).getTime() <= closingMs),
     );
-    const rows = tasks.map((t) => ({ id: t.id, label: t.title, subtitle: `Due ${t.dueAt}` }));
+    const rows = tasks.map((t) => ({ id: t.id, label: t.title, subtitle: `Due ${plainDate(t.dueAt)}` }));
     const summary = `${tasks.length} open buyer task(s): ${tasks.map((t) => t.title).join(', ')}.`;
     const finalized = finalizeReceiptAndPresentation({
       facet,
@@ -2233,6 +2267,7 @@ function executeNewStackFacet(
       summaryBody: summary,
       rows: rows.map((r) => ({ id: r.id, label: r.label, subtitle: r.subtitle })),
       unconfirmedRows,
+      recordKind: 'PROJECT',
     });
     const entailment = verifySemanticReadReceiptEntailment({
       status: 'ANSWERED',
@@ -3520,6 +3555,23 @@ function isAnalysisFacet(facet: CrossDomainFacetExecutionResult): boolean {
 }
 
 export function buildOperationResultFromCrossDomainExecution(execution: CrossDomainExecutionResult): AskOperationResult {
+  const result = buildCrossDomainOperationResult(execution);
+  return { ...result, presentationFamily: crossDomainResultFamily(execution, result) };
+}
+
+/**
+ * The family of a whole cross-domain answer. A clarification, a boundary and a refusal say so; one answered facet declares its own family (its summary); several facets together are an
+ * entity list (an analysis facet inside it adds only its assumptions and note, never a collection).
+ */
+function crossDomainResultFamily(execution: CrossDomainExecutionResult, result: AskOperationResult): AskPresentationFamily {
+  if (execution.status === 'CLARIFY') return 'CLARIFICATION';
+  if (execution.status === 'BOUNDARY' || execution.status === 'FORBIDDEN' || execution.status === 'NONE_FITS') return 'BOUNDARY';
+  const summary = result.blocks.find((block) => block.type === 'SUMMARY');
+  const declared = summary && summary.type === 'SUMMARY' ? summary.presentationFamily : undefined;
+  return declared ?? 'ENTITY_LIST';
+}
+
+function buildCrossDomainOperationResult(execution: CrossDomainExecutionResult): AskOperationResult {
   if (execution.status === 'FORBIDDEN') {
     return {
       status: 'NOT_APPLICABLE',
@@ -3716,7 +3768,8 @@ export function buildOperationResultFromCrossDomainExecution(execution: CrossDom
     const genericCandidates = listSections.filter((candidate) => candidate.sourceType !== 'Claim' && candidate.sourceType !== 'PropertyPermitRecord');
     // One record kind across the generic sections means the canonical renderer for that kind applies, whatever this block's id is.
     const genericKinds = new Set(genericCandidates.map((candidate) => RECORD_KIND_OF_SOURCE_TYPE[candidate.sourceType ?? ''] ?? null));
-    const genericKind = genericKinds.size === 1 ? [...genericKinds][0] : null;
+    // One kind across the generic sections is that kind; a mix is declared as OTHER (the shared list), never left unsaid.
+    const genericKind = genericKinds.size === 1 && [...genericKinds][0] ? [...genericKinds][0] : 'OTHER';
     const genericSections = genericCandidates.map(({ sourceType: _sourceType, ...section }) => section);
     if (genericSections.length > 0) {
       blocks.push({

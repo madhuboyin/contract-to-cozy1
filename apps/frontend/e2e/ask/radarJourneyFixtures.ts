@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { askApiOrigin as apiOrigin, assertAskAuthenticated as assertAuthenticated, fulfillAskRoute as fulfill, propertyId } from './fixtures';
+import { askApiOrigin as apiOrigin, assertAskAuthenticated as assertAuthenticated, fulfillAskRoute as fulfill, propertyId, FIXTURE_NOW } from './fixtures';
 
 // Radar R-3 (FRD v1.134): the Home Event Radar journey fixture. It mirrors the producer's shape after R-1 and R-2 (counted headline, chips,
 // priority-ordered sections, view state, declared chips with authoritative source availability, the recorded-information boundary) and a small
@@ -82,7 +82,7 @@ export async function installRadarJourney(page: Page, options: RadarJourneyOptio
   const common = () => ({
     schemaVersion: '1.0', sessionId: session, property: { id: propertyId, label: 'Acceptance Home' }, skill: null, skillHandoff: null, captureRequests: [], clarification: null,
     childExecutions: [], originalResponse: null, confirmation: null, contextVersion: 'radar-journey-v1', suggestions: [] as string[],
-    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false }, createdAt: new Date(FIXTURE_NOW).toISOString(), updatedAt: new Date(FIXTURE_NOW).toISOString(),
   });
 
   function feed(state: View) {
@@ -173,7 +173,7 @@ export async function installRadarJourney(page: Page, options: RadarJourneyOptio
     if (stage === 'DONE') return { ...base, status: 'COMPLETED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `${spec.id}-receipt`, title: spec.receipt, status: 'COMPLETED', description: 'Home Event Radar has recorded this.', details: spec.fields, actions: [{ id: 'open-radar', label: 'Open in Home Event Radar', href: href(target.id), style: 'PRIMARY' }] }] };
     return { ...base, status: stage === 'RUNNING' ? 'RUNNING' : 'NEEDS_CONFIRMATION',
       blocks: [{ type: 'SUMMARY', id: `${spec.id}-review`, title: `Review: ${spec.receipt.toLowerCase()}`, body: 'Nothing is changed until you confirm.', tone: 'DEFAULT', actions: [] }],
-      confirmation: { confirmationId: `${spec.id}-1`, version: (extra.version as number | undefined) ?? 1, title: spec.title, description: spec.description, fields: spec.fields, confirmLabel: spec.label, consentText: spec.consent, expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+      confirmation: { confirmationId: `${spec.id}-1`, version: (extra.version as number | undefined) ?? 1, title: spec.title, description: spec.description, fields: spec.fields, confirmLabel: spec.label, consentText: spec.consent, expiresAt: new Date(FIXTURE_NOW.getTime() + 30 * 60_000).toISOString(),
         editableFields: kind === 'feedback' ? [
           { key: 'feedbackType', label: 'Reason', type: 'SELECT', value: (extra.reason as string | undefined) ?? '', options: [{ label: 'Wrong location', value: 'wrong_location' }, { label: 'Not relevant to my home', value: 'not_relevant' }, { label: 'Duplicate event', value: 'duplicate' }, { label: 'Information is stale', value: 'stale' }, { label: 'Something else', value: 'other' }] },
           { key: 'comment', label: 'Comment (optional, up to 500 characters)', type: 'TEXTAREA', value: (extra.comment as string | undefined) ?? '' },

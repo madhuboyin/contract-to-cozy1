@@ -40,6 +40,8 @@ import { GUIDANCE_JOURNEY_LIST_ID, GuidanceJourneyListView } from '../GuidanceJo
 import { PROPERTY_BRIEF_PREVIEW_IDS, PropertyBriefFactSheet, PropertyBriefSharePanel, PropertyBriefsListBlock } from '../PropertyBriefPreview';
 import { ActionLink, AskBlockActionContext, AskContextLink } from './context';
 import type { AskBlockRenderer } from './types';
+import { rendererRequirementsMet } from '@/features/ask/answerFamilyAnatomy';
+import { formatStatusLabel } from '@/features/ask/statusLabel';
 import { AskCollection, AskCollectionState } from '../presentation/AskLayoutPrimitives';
 import { AttachEvidenceControl, EVIDENCE_ATTACH_MESSAGES } from '../AttachEvidenceControl';
 import { FinancingNumbers, FinancingOptions, FinancingPlanner, FinancingScenarios } from '../FinancingOverviewResult';
@@ -664,7 +666,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                   const dominantDenseAction = denseActions.find((action) => action.style === 'PRIMARY') ?? denseActions[0];
                   const inlineDenseActions = denseActions.length <= 2 ? denseActions : dominantDenseAction ? [dominantDenseAction] : [];
                   const overflowDenseActions = denseActions.length <= 2 ? [] : denseActions.filter((action) => action !== dominantDenseAction);
-                  const statusLabel = item.status?.replace(/_/g, ' ');
+                  const statusLabel = item.status ? formatStatusLabel(item.status) : undefined;
                   const visibleStatus = statusLabel?.trim().toLowerCase() === section.title.trim().toLowerCase() ? null : statusLabel;
                   const homeWorkItemList = block.id === 'home-work-items';
                   const overdueWorkItem = homeWorkItemList && item.tone === 'CRITICAL';
@@ -912,19 +914,21 @@ const HOME_EVENT_DETAIL_BLOCK_IDS = new Set(['inventory-history', 'property-rece
 // ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (IW-PRES-014/015/019/022, FRD v1.72): a grouped list whose server declared a
 // shared pattern, and whose data fits it, renders through that pattern. The homeowner can switch it to the plain
 // list and back; the choice is kept with the result like the other view choices.
-// The canonical list id of each record kind whose domain renderer is selected by block id. A producer that declares the kind (`recordKind`) gets that renderer whatever its own block id is, so a
-// cross-domain answer with a generated id no longer falls to the generic list (UI review 2026-11-21, slice 2). Maintenance and documents are deliberately not mapped: their renderers need
-// paging and grouping metadata a generated list does not carry.
-const CANONICAL_LIST_ID_OF_RECORD_KIND: Partial<Record<AskListRecordKind, string>> = {
+// The id the renderer is chosen by, for each record kind whose domain renderer is selected by block id. A producer that declares the kind (`recordKind`) gets that renderer whatever its own block
+// id is. The block itself is never changed: its identity keys view state, detail targets and evidence references, so a renderer receives the list exactly as the producer sent it
+// (owner review of the first five UI slices). Maintenance and document lists are routed when their rows carry the metadata those renderers require (RENDERER_ROW_REQUIREMENTS).
+const RENDERER_ID_OF_RECORD_KIND: Partial<Record<AskListRecordKind, string>> = {
   CLAIM: 'incident-claim-list', PERMIT: 'permit-tracker-permits', WARRANTY: 'warranty-results', INVENTORY_ITEM: 'inventory-results', HOME_EVENT: 'inventory-history',
+  MAINTENANCE_TASK: 'maintenance-groups', DOCUMENT: 'document-lookup-groups',
 };
-export function withCanonicalListId<P extends { block: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }> }>(props: P): P {
-  const canonical = props.block.recordKind ? CANONICAL_LIST_ID_OF_RECORD_KIND[props.block.recordKind] : undefined;
-  return canonical && props.block.id !== canonical ? { ...props, block: { ...props.block, id: canonical } } : props;
+export function canonicalRendererId(block: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>): string {
+  const rendererId = block.recordKind ? RENDERER_ID_OF_RECORD_KIND[block.recordKind] : undefined;
+  // Maintenance and document renderers open the live record by the row's id, so they are chosen only for a list whose rows carry the metadata they require (answerFamilyAnatomy.ts); any other list
+  // of that kind is shown by the shared list, never by a renderer that would fail on it.
+  return rendererId && rendererRequirementsMet(block) ? rendererId : block.id;
 }
 
-export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (rawProps) => {
-  const props = withCanonicalListId(rawProps);
+export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   const controls = useContext(ResultViewContext);
   const preference = controls?.view.groupedListModes[props.block.id] ?? 'AUTO';
   const resolved = resolveGroupedListPattern(props.block, preference);
@@ -954,7 +958,7 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (rawProps) => 
   }
   // Maintenance keeps its own component in both layouts, so its live-record detail, paging and selection are the
   // same whichever the homeowner chooses. The pattern still comes only from the server's declaration.
-  if (props.block.id === 'maintenance-groups') {
+  if (canonicalRendererId(props.block) === 'maintenance-groups') {
     const { block, propertyId, itemActionsDisabled, onFilterClick, onCollectionPage, onItemAction, onWorkspaceExecutionComplete, onAccessLost } = props;
     const declaresShelves = block.presentation?.pattern === 'SHELVES';
     return <NotedMaintenanceResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onFilter={onFilterClick} onPage={onCollectionPage} onAction={onItemAction} onExecutionComplete={onWorkspaceExecutionComplete} onAccessLost={onAccessLost}
@@ -1042,38 +1046,39 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (rawProps) => 
 
 const DeclaredListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   const { block, propertyId, itemActionsDisabled, onFilterClick, onCollectionPage, onItemAction, onAccessLost } = props;
-  if (block.id === 'work-overview-results') {
+  const rendererId = canonicalRendererId(block);
+  if (rendererId === 'work-overview-results') {
     return <WorkOverviewResultList {...props} />;
   }
-  if (block.id === 'saved-results-list') {
+  if (rendererId === 'saved-results-list') {
     return <SavedResultsListBlock {...props} />;
   }
-  if (INVENTORY_ITEM_DETAIL_BLOCK_IDS.has(block.id)) {
+  if (INVENTORY_ITEM_DETAIL_BLOCK_IDS.has(rendererId)) {
     return <NotedInventoryResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
-  if (HOME_EVENT_DETAIL_BLOCK_IDS.has(block.id)) {
+  if (HOME_EVENT_DETAIL_BLOCK_IDS.has(rendererId)) {
     return <NotedHomeEventResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
-  if (block.id === 'property-rooms') {
+  if (rendererId === 'property-rooms') {
     return <NotedRoomResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
-  if (block.id === 'document-lookup-groups' || block.id === 'property-documents') {
+  if (rendererId === 'document-lookup-groups' || rendererId === 'property-documents') {
     return <NotedDocumentResultList block={block} propertyId={propertyId} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
-  if (block.id === 'property-household') {
+  if (rendererId === 'property-household') {
     return <NotedHouseholdResultList block={block} propertyId={propertyId} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   // 'material-specs-items' is the MATERIAL_SPECS_LIST answer (FRD v1.390): compact rows, inline canonical detail, Edit material in its Manage region.
-  if (block.id === 'material-specs-items') {
+  if (rendererId === 'material-specs-items') {
     return <NotedMaterialSpecResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost} />;
   }
   // 'warranty-results' is the WARRANTY_LOOKUP answer (Warranties W-1); 'property-warranties' is the Property Summary section. Same rows, same detail.
-  if (block.id === 'property-warranties' || block.id === 'warranty-results') {
+  if (rendererId === 'property-warranties' || rendererId === 'warranty-results') {
     return <NotedWarrantyResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onFilter={onFilterClick} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
@@ -1081,23 +1086,23 @@ const DeclaredListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   // line items get canonical detail the same way every other read-only Property Records collection does.
   // capital-timeline-table (a TABLE block, not GROUPED_LIST) got its own row-click-to-detail platform
   // capability separately -- see ./TableBlock.tsx, not this file.
-  if (block.id === 'reserve-allocations') {
+  if (rendererId === 'reserve-allocations') {
     return <NotedReserveAllocationResultList block={block} propertyId={propertyId} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   // Buyer-closing capability-card slice (FRD v1.46): blocking tasks open inline, with Mark complete while open.
-  if (block.id === 'buyer-deadlines-list') {
+  if (rendererId === 'buyer-deadlines-list') {
     return <NotedBuyerTaskResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onFilter={onFilterClick} onAction={onItemAction} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   // Inspection-hub capability-card slice (FRD v1.43): findings open inline, re-read through their report.
   // Claims capability-card slice (FRD v1.42): claim rows open the canonical claim inline, with its legal status
   // changes as declared CLAIM_TRANSITION actions; incident rows keep their link.
-  if (block.id === 'incident-claim-list') {
+  if (rendererId === 'incident-claim-list') {
     return <NotedClaimResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onFilter={onFilterClick} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
-  if (block.id === 'permit-tracker-permits') {
+  if (rendererId === 'permit-tracker-permits') {
     return <PermitResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost} />;
   }
   return <GenericGroupedListBlock {...props} />;

@@ -171,23 +171,8 @@ export function BlockSequence({
   const reserveFundAnswer = presentationBlocks.some((block) => block.id === 'reserve-fund-overview');
   for (let index = 0; index < presentationBlocks.length;) {
     const block = presentationBlocks[index];
-    const nextBlock = presentationBlocks[index + 1];
-    // Semantic inventory answers retain their SUMMARY block for receipt/trust
-    // verification, but the canonical inventory table already communicates
-    // the result and opens full item details. Do not repeat the generated
-    // predicate narrative immediately above that table.
-    const semanticCanonicalList = block.type === 'SUMMARY' && (
-      (block.id === 'phase2a-inventory-summary' && nextBlock?.type === 'GROUPED_LIST' && nextBlock.id === 'inventory-results')
-      || (block.id === 'phase2a-replacement-guidance-summary' && nextBlock?.type === 'GROUPED_LIST' && nextBlock.id === 'inventory-results')
-      || (block.id === 'phase2a-maintenance-summary' && nextBlock?.type === 'GROUPED_LIST' && nextBlock.id === 'maintenance-groups')
-      // A compact limitation can sit between the receipt-bound summary and
-      // the canonical list when one requested filter was not applied.
-      || (block.id === 'phase2a-maintenance-summary' && nextBlock?.type === 'LIMITATION' && presentationBlocks[index + 2]?.type === 'GROUPED_LIST' && presentationBlocks[index + 2]?.id === 'maintenance-groups')
-    );
-    if (semanticCanonicalList) {
-      index += 1;
-      continue;
-    }
+    // Semantic inventory and maintenance answers used to hide their SUMMARY above the canonical table, on the argument that the table already communicates the result. It does not: a table with no
+    // visible conclusion is not an answer (owner review 2026-11-21). The summary is shown, and its answer-first headline is the one sentence that says what the table is.
     if (reserveFundAnswer && block.id === 'reserve-allocations') {
       const secondaryStart = index;
       const secondary = presentationBlocks.slice(secondaryStart);

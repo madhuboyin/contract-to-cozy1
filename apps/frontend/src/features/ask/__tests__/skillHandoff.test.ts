@@ -28,7 +28,8 @@ test('the handoff card sends the routable prompt and displays the label', () => 
   expect(source).toMatch(/const prompt = handoffPrompt\(execution\.skillHandoff\)/);
   expect(source).toMatch(/const label = handoffLabel\(execution\.skillHandoff\)/);
   expect(source).toMatch(/void ask\(prompt, undefined,/);
-  expect(source).toMatch(/\{label\}<\/button><p className="mt-2 text-xs text-teal-800">Ask will check access/);
+  // One inline "Next: <label> →" action; the access-and-context note is kept for assistive technology only.
+  expect(source).toMatch(/\{label\} →<\/button><span id=\{`handoff-note-\$\{execution\.executionId\}`\} className="sr-only">Ask will check access/);
   expect(source).not.toMatch(/void ask\(label/);
 });
 

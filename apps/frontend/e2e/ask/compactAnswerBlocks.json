@@ -78,6 +78,7 @@
    {
     "type": "GROUPED_LIST",
     "id": "variant.project_permit_status-list",
+    "recordKind": "PROJECT",
     "listDensity": "DENSE",
     "title": "",
     "description": "",
@@ -178,7 +179,18 @@
     ],
     "tone": "DEFAULT",
     "presentationFamily": "ANALYSIS",
-    "actions": []
+    "actions": [
+     {
+      "id": "sell-hold-rent-edit-assumptions",
+      "label": "Adjust assumptions",
+      "interactionType": "START_WORKFLOW",
+      "message": "Edit the assumptions for this sell, hold, or rent comparison.",
+      "operationId": "SELL_HOLD_RENT_COMMAND",
+      "entityType": "SELL_HOLD_RENT_PLAN",
+      "entityId": "prop-waves-1",
+      "style": "SECONDARY"
+     }
+    ]
    },
    {
     "type": "ASSUMPTIONS",
@@ -219,7 +231,18 @@
     "supportLine": "It needs the monthly rent for a comparable home you would rent as a tenant.",
     "tone": "CAUTION",
     "presentationFamily": "ANALYSIS",
-    "actions": []
+    "actions": [
+     {
+      "id": "sell-hold-rent-edit-assumptions",
+      "label": "Add comparable rent",
+      "interactionType": "START_WORKFLOW",
+      "message": "Edit the assumptions for this sell, hold, or rent comparison.",
+      "operationId": "SELL_HOLD_RENT_COMMAND",
+      "entityType": "SELL_HOLD_RENT_PLAN",
+      "entityId": "prop-waves-1",
+      "style": "SECONDARY"
+     }
+    ]
    },
    {
     "type": "LIMITATION",
@@ -236,6 +259,140 @@
      {
       "label": "Your home record",
       "source": "Property",
+      "observedAt": "2026-11-15T00:00:00.000Z"
+     }
+    ]
+   }
+  ]
+ },
+ "permitsLongAndMany": {
+  "question": "which active projects still need a permit?",
+  "status": "ANSWERED",
+  "blocks": [
+   {
+    "type": "SUMMARY",
+    "id": "variant.project_permit_status",
+    "title": "Project permit requirements",
+    "body": "8 projects need a permit. 2 more have no permit requirement recorded.",
+    "tone": "DEFAULT",
+    "presentationFamily": "ENTITY_LIST",
+    "headline": "8 projects need a permit.",
+    "supportLine": "2 more have no permit requirement recorded.",
+    "actions": []
+   },
+   {
+    "type": "GROUPED_LIST",
+    "id": "variant.project_permit_status-list",
+    "recordKind": "PROJECT",
+    "listDensity": "DENSE",
+    "title": "",
+    "description": "",
+    "sections": [
+     {
+      "id": "variant.project_permit_status-section-1",
+      "title": "",
+      "count": 8,
+      "items": [
+       {
+        "id": "p1",
+        "title": "Replace the entire north-facing roof deck and flashing including the skylight curb, the chimney saddle and the valley underlayment",
+        "meta": [],
+        "description": "Permit needed"
+       },
+       {
+        "id": "p2",
+        "title": "Reinforced-concrete-retaining-wall-with-drainage-and-engineered-footings-along-the-entire-rear-property-line",
+        "meta": [],
+        "description": "Permit needed"
+       },
+       {
+        "id": "p3",
+        "title": "Kitchen and primary bathroom remodel phase 1 including plumbing relocation",
+        "meta": [],
+        "description": "Permit needed"
+       },
+       {
+        "id": "p4",
+        "title": "Kitchen and primary bathroom remodel phase 2 including plumbing relocation",
+        "meta": [],
+        "description": "Permit needed"
+       },
+       {
+        "id": "p5",
+        "title": "Kitchen and primary bathroom remodel phase 3 including plumbing relocation",
+        "meta": [],
+        "description": "Permit needed"
+       },
+       {
+        "id": "p6",
+        "title": "Kitchen and primary bathroom remodel phase 4 including plumbing relocation",
+        "meta": [],
+        "description": "Permit needed"
+       },
+       {
+        "id": "p7",
+        "title": "Kitchen and primary bathroom remodel phase 5 including plumbing relocation",
+        "meta": [],
+        "description": "Permit needed"
+       },
+       {
+        "id": "p8",
+        "title": "Kitchen and primary bathroom remodel phase 6 including plumbing relocation",
+        "meta": [],
+        "description": "Permit needed"
+       }
+      ]
+     }
+    ],
+    "actions": [],
+    "filters": []
+   },
+   {
+    "type": "GROUPED_LIST",
+    "id": "variant.project_permit_status-needs-confirmation",
+    "title": "Needs confirmation",
+    "description": "",
+    "listDensity": "DENSE",
+    "sections": [
+     {
+      "id": "variant.project_permit_status-unconfirmed-section",
+      "title": "Needs confirmation",
+      "count": 2,
+      "items": [
+       {
+        "id": "u1",
+        "title": "Detached garage conversion to an accessory dwelling unit with a separate meter",
+        "meta": [],
+        "description": "Permit requirement not recorded"
+       },
+       {
+        "id": "u2",
+        "title": "Office Desk",
+        "meta": [],
+        "description": "Permit requirement not recorded"
+       }
+      ]
+     }
+    ],
+    "actions": [],
+    "filters": []
+   },
+   {
+    "type": "BOUNDARY",
+    "id": "variant.project_permit_status-boundary",
+    "title": "Not counted",
+    "body": "2 records could not be confirmed, so they aren’t counted either way.",
+    "severity": "INFO",
+    "suggestions": []
+   },
+   {
+    "type": "EVIDENCE",
+    "id": "variant.project_permit_status-evidence",
+    "title": "Where this comes from",
+    "items": [
+     {
+      "label": "Your home record",
+      "source": "HomeRenovationCase",
       "observedAt": "2026-11-15T00:00:00.000Z"
      }
     ]
@@ -273,7 +430,7 @@
         "id": "claim-water-damage",
         "title": "Water-damage claim",
         "meta": [
-         "open"
+         "Open"
         ],
         "status": "OPEN",
         "entityType": "CLAIM",
@@ -374,6 +531,7 @@
    {
     "type": "GROUPED_LIST",
     "id": "inventory-results",
+    "recordKind": "INVENTORY_ITEM",
     "listDensity": "DENSE",
     "title": "1 matching appliance",
     "description": "",
@@ -418,6 +576,69 @@
      {
       "label": "Your home record",
       "source": "property inventory and relations",
+      "observedAt": "2026-11-15T00:00:00.000Z"
+     }
+    ]
+   }
+  ]
+ },
+ "maintenanceNextMonth": {
+  "question": "show maintenance tasks due next month",
+  "status": "ANSWERED",
+  "blocks": [
+   {
+    "type": "SUMMARY",
+    "id": "variant.maintenance_list",
+    "title": "Maintenance tasks",
+    "body": "2 maintenance tasks due in December 2026 (the whole calendar month, in your home’s time zone).",
+    "tone": "DEFAULT",
+    "presentationFamily": "ENTITY_LIST",
+    "headline": "2 maintenance tasks due in December 2026 (the whole calendar month, in your home’s time zone).",
+    "actions": []
+   },
+   {
+    "type": "GROUPED_LIST",
+    "id": "variant.maintenance_list-list",
+    "recordKind": "MAINTENANCE_TASK",
+    "listDensity": "DENSE",
+    "title": "",
+    "description": "",
+    "sections": [
+     {
+      "id": "variant.maintenance_list-section-1",
+      "title": "Tasks",
+      "count": 2,
+      "items": [
+       {
+        "id": "task-plumbing-next-month",
+        "title": "Flush water heater sediment",
+        "meta": [],
+        "description": "Due Dec 10, 2026 · Cost not recorded",
+        "status": "PENDING",
+        "entityType": "MAINTENANCE_TASK"
+       },
+       {
+        "id": "task-electrical-panel",
+        "title": "Inspect kitchen GFCI outlets",
+        "meta": [],
+        "description": "Due Dec 15, 2026 · Cost not recorded",
+        "status": "PENDING",
+        "entityType": "MAINTENANCE_TASK"
+       }
+      ]
+     }
+    ],
+    "actions": [],
+    "filters": []
+   },
+   {
+    "type": "EVIDENCE",
+    "id": "variant.maintenance_list-evidence",
+    "title": "Where this comes from",
+    "items": [
+     {
+      "label": "Your home record",
+      "source": "PropertyMaintenanceTask",
       "observedAt": "2026-11-15T00:00:00.000Z"
      }
     ]

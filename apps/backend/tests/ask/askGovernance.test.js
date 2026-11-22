@@ -260,7 +260,7 @@ test('Property Summary no longer embeds a Household collection in the vague over
 
   // HouseholdResultList stays -- pinned, not deleted, for a future dedicated household read operation.
   const groupedListBlock = readFileSync(resolve(__dirname, '../../../frontend/src/components/ask/blocks/GroupedListBlock.tsx'), 'utf8');
-  assert.match(groupedListBlock, /block\.id === 'property-household'[\s\S]*HouseholdResultList/);
+  assert.match(groupedListBlock, /(?:block\.id|rendererId) === 'property-household'[\s\S]*HouseholdResultList/);
 });
 
 test('Property Summary no longer embeds a Warranties collection in the vague overview (P-2); WARRANTY_LOOKUP already owns the certified answer', () => {
@@ -275,7 +275,7 @@ test('Property Summary no longer embeds a Warranties collection in the vague ove
   assert.match(client, /getPropertyWarranties[\s\S]*\/api\/properties\/\$\{propertyId\}\/warranties/);
 
   const groupedListBlock = readFileSync(resolve(__dirname, '../../../frontend/src/components/ask/blocks/GroupedListBlock.tsx'), 'utf8');
-  assert.match(groupedListBlock, /block\.id === 'property-warranties'[\s\S]*WarrantyResultList/);
+  assert.match(groupedListBlock, /(?:block\.id|rendererId) === 'property-warranties'[\s\S]*WarrantyResultList/);
 });
 
 test('evidence claim mappings resolve exact response block and item identities', () => {

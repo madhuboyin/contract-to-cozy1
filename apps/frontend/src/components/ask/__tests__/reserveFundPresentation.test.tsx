@@ -47,26 +47,26 @@ test('collapses reserve-fund secondary material into Plan details', () => {
   expect(disclosure).toHaveTextContent('capital-plan-evidence');
 });
 
-test('does not repeat the semantic inventory narrative above its detailed inventory list', () => {
+test('shows the semantic inventory answer sentence above its detailed inventory list (a table with no visible conclusion is not an answer)', () => {
   const blocks = [
     { type: 'SUMMARY', id: 'phase2a-inventory-summary' },
     { type: 'GROUPED_LIST', id: 'inventory-results' },
     { type: 'EVIDENCE', id: 'phase2a-inventory-summary-evidence' },
   ] as AskPresentationBlock[];
   render(<BlockSequence blocks={blocks} renderBlock={(block) => <div key={block.id}>{block.id}</div>} />);
-  expect(screen.queryByText('phase2a-inventory-summary')).not.toBeInTheDocument();
+  expect(screen.getByText('phase2a-inventory-summary')).toBeInTheDocument();
   expect(screen.getByText('inventory-results')).toBeInTheDocument();
   expect(screen.getByText('phase2a-inventory-summary-evidence')).toBeInTheDocument();
 });
 
-test('keeps a compact semantic limitation but omits the duplicate maintenance summary', () => {
+test('keeps the maintenance answer sentence and a compact semantic limitation above the maintenance list', () => {
   const blocks = [
     { type: 'SUMMARY', id: 'phase2a-maintenance-summary' },
     { type: 'LIMITATION', id: 'semantic-amount-filter-not-applied' },
     { type: 'GROUPED_LIST', id: 'maintenance-groups' },
   ] as AskPresentationBlock[];
   render(<BlockSequence blocks={blocks} renderBlock={(block) => <div key={block.id}>{block.id}</div>} />);
-  expect(screen.queryByText('phase2a-maintenance-summary')).not.toBeInTheDocument();
+  expect(screen.getByText('phase2a-maintenance-summary')).toBeInTheDocument();
   expect(screen.getByText('semantic-amount-filter-not-applied')).toBeInTheDocument();
   expect(screen.getByText('maintenance-groups')).toBeInTheDocument();
 });

@@ -67,7 +67,7 @@ test.afterEach(() => { prismaModule.prisma = realPrisma; propertyAccess.resolveP
 
 test('the live prompt through the real handler names the part it could not answer', async () => {
   const empty = { findMany: async () => [], findFirst: async () => null, findUnique: async () => null, count: async () => 0 };
-  const row = { id: 'a', propertyId: 'p1', title: 'Water damage claim', status: 'DRAFT', type: 'WATER_DAMAGE', documents: [], checklistItems: [] };
+  const row = { id: 'a', propertyId: 'p1', title: 'Water damage claim', status: 'SUBMITTED', type: 'WATER_DAMAGE', documents: [], checklistItems: [] };
   prismaModule.prisma = new Proxy({}, { get: (_t, m) => (m === 'then' ? undefined : m === '$disconnect' ? (async () => {}) : m === 'claim' ? { ...empty, findMany: async () => [row] } : m === 'property' ? { ...empty, findUnique: async () => ({ id: 'p1', timezone: 'UTC' }) } : empty) });
   propertyAccess.resolvePropertyAccess = async () => ({ role: 'OWNER', userId: 'u1', propertyId: 'p1' });
   const result = await capabilityInvoke('DATA_POINT_READ', { userId: 'u1', propertyId: 'p1', message: 'are there any open claims or open projects for this home?' });

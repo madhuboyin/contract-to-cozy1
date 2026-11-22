@@ -104,7 +104,7 @@ test('conflicted and unknown records are disclosed in a note that survives the t
   const out = await ask('list items without warranty');
   const boundary = out.result.blocks.find((b) => b.type === 'BOUNDARY');
   assert.ok(boundary, 'the uncertainty note must be delivered');
-  assert.match(boundary.title, /Warranty linkage requires confirmation/);
+  assert.match(boundary.title, /Warranty record needs confirmation/);
   assert.ok(!out.trust.reasonCodes.includes('INAPPLICABLE_BOUNDARY_REMOVED'));
   // a boundary that is not this answer's own receipt boundary is still removed
   const forged = await ask('list items without warranty', (r) => ({ ...r, blocks: [...r.blocks, { type: 'BOUNDARY', id: 'some-other-boundary', title: 'Other', body: 'x', severity: 'INFO', suggestions: [] }] }));

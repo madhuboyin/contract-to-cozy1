@@ -17,8 +17,17 @@ const CASES = {
   permitsMixed: { prompt: 'which active projects still need a permit?', patch: { projects: [project('p-panel', '200A Electrical Panel Upgrade', 'NEEDS_PERMIT'), project('p-deck', 'Deck rebuild', 'UNKNOWN'), project('p-fence', 'Fence repair', 'UNKNOWN')] } },
   ownVsRentComputed: { prompt: 'how long until owning beats renting?', patch: {} },
   ownVsRentMissingRent: { prompt: 'how long until owning beats renting?', patch: { financeSlots: { ...base.financeSlots, monthlyRentCents: null, netHoldCents: 8000000, netRentCents: 31300000, sellHoldRentWinner: 'SELL' } } },
+  // Stress shapes: long titles (one with an unbroken token), many rows, and unconfirmed rows together.
+  permitsLongAndMany: { prompt: 'which active projects still need a permit?', patch: { projects: [
+    project('p1', 'Replace the entire north-facing roof deck and flashing including the skylight curb, the chimney saddle and the valley underlayment', 'NEEDS_PERMIT'),
+    project('p2', 'Reinforced-concrete-retaining-wall-with-drainage-and-engineered-footings-along-the-entire-rear-property-line', 'NEEDS_PERMIT'),
+    ...Array.from({ length: 6 }, (_, i) => project(`p${i + 3}`, `Kitchen and primary bathroom remodel phase ${i + 1} including plumbing relocation`, 'NEEDS_PERMIT')),
+    project('u1', 'Detached garage conversion to an accessory dwelling unit with a separate meter', 'UNKNOWN'),
+    project('u2', 'Office Desk', 'UNKNOWN'),
+  ] } },
   openClaims: { prompt: 'what claims are open?', patch: {} },
   noWarranty: { prompt: 'which appliances have no warranty?', patch: {} },
+  maintenanceNextMonth: { prompt: 'show maintenance tasks due next month', patch: {} },
 };
 
 (async () => {

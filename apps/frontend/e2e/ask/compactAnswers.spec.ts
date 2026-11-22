@@ -73,6 +73,8 @@ test('own-vs-rent without a tenant rent leads with the limitation and shows no l
   await expect(article).toContainText('It needs the monthly rent for a comparable home');
   await expect(article.locator('[data-list-density]')).toHaveCount(0);
   await expect(article.getByText('Own-vs-rent break-even analysis')).toHaveCount(0);
+  // The next step is inline: supply the missing rent.
+  await expect(article.getByRole('button', { name: 'Add comparable rent' })).toBeVisible();
   const box = await article.boundingBox();
   console.log(`ownVsRentMissingRent: answer bottom ${Math.round(box!.y + box!.height)}px of a 720px window`);
   expect(box!.y + box!.height).toBeLessThanOrEqual(720 - COMPOSER_RESERVE);
@@ -84,6 +86,7 @@ test('own-vs-rent with inputs is a conclusion, facts and assumptions, with whole
   const article = page.locator('main article').last();
   await expect(article).toContainText(/Owning beats renting starting in year \d/);
   await expect(article).toContainText('$34,684');
+  await expect(article.getByRole('button', { name: 'Adjust assumptions' })).toBeVisible();
   console.log(`ownVsRentComputed text: ${(await article.innerText()).replace(/\n+/g, ' | ')}`);
   await expect(article.locator('[data-list-density]')).toHaveCount(0);
 });

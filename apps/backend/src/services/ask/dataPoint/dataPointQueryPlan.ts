@@ -11,7 +11,7 @@ export type Operator = 'lt' | 'lte' | 'gt' | 'gte' | 'equals' | 'in';
 export type AggregateFn = 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX';
 
 /** The claim statuses that mean "open". Must equal OPEN_CLAIM_STATUSES in the claims handler (a test asserts it). */
-export const OPEN_CLAIM_STATES: readonly string[] = Object.freeze(['DRAFT', 'IN_PROGRESS', 'SUBMITTED', 'UNDER_REVIEW']);
+export const OPEN_CLAIM_STATES: readonly string[] = Object.freeze(['IN_PROGRESS', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'DENIED']);
 export const QUERY_MAX_PREDICATES = 5;
 export const QUERY_MAX_LIMIT = 100;
 export const QUERY_DEFAULT_SHOWN = 10;
