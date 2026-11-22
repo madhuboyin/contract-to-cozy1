@@ -181,6 +181,9 @@ test('Track P enforces deterministic-first short-circuit, dual-producer reconcil
     { ASK_UNDERSTANDING_HOMEOWNER_TEXT_APPROVED: 'true' },
     { ASK_SEMANTIC_PROVIDER_APPROVED: 'true', ASK_UNDERSTANDING_PROVIDER_TERMS_RECORDED: 'true' },
     { ASK_SEMANTIC_PROVIDER_APPROVED: 'true', ASK_UNDERSTANDING_HOMEOWNER_TEXT_APPROVED: 'true' },
+    // The three approvals without the planner controls are not enough (owner decision 2026-11-22), and the kill switch always wins.
+    { ASK_SEMANTIC_PROVIDER_APPROVED: 'true', ASK_UNDERSTANDING_PROVIDER_TERMS_RECORDED: 'true', ASK_UNDERSTANDING_HOMEOWNER_TEXT_APPROVED: 'true' },
+    { ASK_SEMANTIC_PROVIDER_APPROVED: 'true', ASK_UNDERSTANDING_PROVIDER_TERMS_RECORDED: 'true', ASK_UNDERSTANDING_HOMEOWNER_TEXT_APPROVED: 'true', ASK_UNDERSTANDING_PLANNER_ENABLED: 'true', ASK_UNDERSTANDING_PLANNER_KILL_SWITCH: 'true' },
   ]) {
     assert.equal(resolveDefaultSemanticProviderPolicy(env).approvalStatus, 'UNRESOLVED_OWNER_APPROVAL');
   }
@@ -188,6 +191,7 @@ test('Track P enforces deterministic-first short-circuit, dual-producer reconcil
     ASK_SEMANTIC_PROVIDER_APPROVED: 'true',
     ASK_UNDERSTANDING_PROVIDER_TERMS_RECORDED: 'true',
     ASK_UNDERSTANDING_HOMEOWNER_TEXT_APPROVED: 'true',
+    ASK_UNDERSTANDING_PLANNER_ENABLED: 'true',
   }).approvalStatus, 'APPROVED_FOR_STRUCTURED_PLANNING');
   const geminiBlocked = await executeTwoStageProviderRetrieval({
     rawText: detPrompt,

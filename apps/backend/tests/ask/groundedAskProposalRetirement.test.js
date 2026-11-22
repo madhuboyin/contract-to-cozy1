@@ -1,7 +1,7 @@
 const test = require('node:test');
 const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
+const { existsSync, readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
 
 require('ts-node/register');
@@ -33,8 +33,6 @@ require('ts-node/register');
 
 const serviceSource = readFileSync(resolve(__dirname, '../../src/services/groundedAsk.service.ts'), 'utf8');
 const contractSource = readFileSync(resolve(__dirname, '../../src/productFramework/groundedAsk.contract.ts'), 'utf8');
-const controllerSource = readFileSync(resolve(__dirname, '../../src/controllers/gemini.controller.ts'), 'utf8');
-const routesSource = readFileSync(resolve(__dirname, '../../src/routes/gemini.routes.ts'), 'utf8');
 const schemaSource = readFileSync(resolve(__dirname, '../../prisma/schema.prisma'), 'utf8');
 const clientSource = readFileSync(resolve(__dirname, '../../../frontend/src/lib/api/client.ts'), 'utf8');
 const orchestratorSource = readAskOrchestratorSources();
@@ -58,19 +56,18 @@ test('the proposal-creation input contract is gone, but the still-live response 
   assert.match(contractSource, /export const GroundedAskResponseSchema/);
 });
 
-test('the controller no longer exposes createProposal/confirmProposal/rejectProposal', () => {
-  assert.doesNotMatch(controllerSource, /createProposal|confirmProposal|rejectProposal/);
-  assert.match(controllerSource, /sendMessageToChat/);
-});
-
-test('the /api/gemini/proposals* routes are gone, but /api/gemini/chat is not', () => {
-  assert.doesNotMatch(routesSource, /\/proposals/);
-  assert.match(routesSource, /\/chat/);
+// BICC-0.2 / owner decision 2026-11-22: the legacy POST /api/gemini/chat endpoint (a thin wrapper over answerGroundedAsk with no
+// frontend caller) is retired along with its route, controller and API-client method. GeminiService.sendMessageToChat remains
+// because the Guidance Advisor service calls it directly.
+test('the legacy /api/gemini routes and controller are retired', () => {
+  assert.equal(existsSync(resolve(__dirname, '../../src/routes/gemini.routes.ts')), false);
+  assert.equal(existsSync(resolve(__dirname, '../../src/controllers/gemini.controller.ts')), false);
+  assert.doesNotMatch(readFileSync(resolve(__dirname, '../../src/index.ts'), 'utf8'), /gemini\.routes|\/api\/gemini/);
 });
 
 test('the frontend API client no longer exposes the proposal create/confirm/reject methods', () => {
   assert.doesNotMatch(clientSource, /createGroundedAskProposal|confirmGroundedAskProposal|rejectGroundedAskProposal/);
-  assert.match(clientSource, /sendMessageToChat/);
+  assert.doesNotMatch(clientSource, /sendMessageToChat|\/api\/gemini\/chat/);
 });
 
 test('the GroundedAskProposal/GroundedAskArtifact models and their enums are gone from the schema', () => {

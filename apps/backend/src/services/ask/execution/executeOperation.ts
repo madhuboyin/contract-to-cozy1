@@ -14,7 +14,7 @@ import { skillContextProviderKey } from '../../skills/context/skillContextProvid
 import { PROPERTY_JOURNEY_CONTEXT_PROVIDER } from '../../skills/context/propertyJourneyContext.contract';
 import type { ComposedSkillContext } from '../../skills/context/skillContext.contract';
 import { evaluateAskAudienceApplicability, getAskAudiencePolicy, type AskAudienceApplicabilityDecision } from '../askAudiencePolicy';
-import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResolution, type AskOperationResult } from '../askOperationRegistry';
+import { ASK_OPERATION_DEFINITIONS, REMOTE_GENERATION_OPTIONAL_OPERATIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResolution, type AskOperationResult } from '../askOperationRegistry';
 import { capabilityInvoke, needsPropertyResult, operationalUnavailableResult, permissionRequiredResult, skillRuntimeUnavailableReason, type CapabilityInvocationDependencies } from '../capabilityHandlerRegistry';
 import type { CapabilityInvocationEnvelope } from '../capabilityInvocation.contract';
 import { buildAskNextActionsBlock } from '../askNextActions';
@@ -219,7 +219,7 @@ export async function executeOperationCore(
   const skillUnavailableReason = skillRuntimeUnavailableReason(input.operation.operationId, controls);
   if (skillUnavailableReason) return operationalUnavailableResult(skillUnavailableReason);
   const effectivePolicy = skill ? resolveEffectiveSkillOperationPolicy(skill.id, input.operation.operationId, 'ASK') : null;
-  if (definition.executionMode === 'REMOTE_GENERATION' && !controls.remoteGenerationEnabled) {
+  if (definition.executionMode === 'REMOTE_GENERATION' && !controls.remoteGenerationEnabled && !REMOTE_GENERATION_OPTIONAL_OPERATIONS.has(input.operation.operationId)) {
     askRemoteGenerationTotal.inc({ outcome: 'disabled' });
     return operationalUnavailableResult('REMOTE_GENERATION_DISABLED');
   }

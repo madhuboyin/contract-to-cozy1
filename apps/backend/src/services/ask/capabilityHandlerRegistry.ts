@@ -12,6 +12,7 @@ import type { ComposedSkillContext } from '../skills/context/skillContext.contra
 import type { SkillExecutionTimingTrace } from '../skills/skillExecutionTelemetry';
 import {
   ASK_OPERATION_DEFINITIONS,
+  REMOTE_GENERATION_OPTIONAL_OPERATIONS,
   getAskOperationDefinition,
   type AskOperationId,
   type AskOperationResult,
@@ -221,7 +222,7 @@ async function invokeGuarded(
   if (!controls.operationEnabled(operationId)) return operationalUnavailableResult('OPERATION_DISABLED');
   const skillUnavailable = skillRuntimeUnavailableReason(operationId, controls);
   if (skillUnavailable) return operationalUnavailableResult(skillUnavailable);
-  if (definition.executionMode === 'REMOTE_GENERATION' && !controls.remoteGenerationEnabled) {
+  if (definition.executionMode === 'REMOTE_GENERATION' && !controls.remoteGenerationEnabled && !REMOTE_GENERATION_OPTIONAL_OPERATIONS.has(operationId)) {
     askRemoteGenerationTotal.inc({ outcome: 'disabled' });
     return operationalUnavailableResult('REMOTE_GENERATION_DISABLED');
   }
@@ -283,6 +284,7 @@ async function invokeGuarded(
           deps.semanticProvider
           || deps.semanticProviderPolicy?.approvalStatus === 'APPROVED_FOR_STRUCTURED_PLANNING'
           || (process.env.ASK_SEMANTIC_PROVIDER_APPROVED === 'true'
+            && controls.understandingPlannerEnabled
             && controls.understandingProviderTermsRecorded
             && controls.understandingHomeownerTextApproved),
         ),

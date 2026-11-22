@@ -33,7 +33,8 @@ data:
   # AI Home Concierge / Ask operational controls. Individual operations can
   # be paused with ASK_OPERATION_<OPERATION_ID>_ENABLED=false.
   ASK_ENABLED: "true"
-  ASK_REMOTE_GENERATION_ENABLED: "true"
+  # Off until a provider approval is recorded for the grounded-guidance claim selection (BICC-OPS-006/008, owner decision 2026-11-22).
+  ASK_REMOTE_GENERATION_ENABLED: "false"
   ASK_EXECUTION_TIMEOUT_MS: "15000"
   # Optional EPA ArcGIS input to Environment Report/Home Actions. Keep it
   # well below Ask's overall budget so a slow source degrades instead of

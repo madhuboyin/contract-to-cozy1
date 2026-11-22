@@ -83,7 +83,7 @@ test('the validator rejects inherited approvals, an approval without evidence, a
 
 test('no flow is approved for real homeowner data today, so each live path is listed as lacking an approval', () => {
   assert.ok(PROVIDER_BOUNDARY_REGISTER.every((entry) => entry.realHomeownerData === 'NOT_APPROVED'));
-  assert.deepEqual(flowsLackingRealDataApproval().sort(), ['CAPTURE_EXTRACTION', 'LEGACY_GEMINI_CHAT', 'REMOTE_FALLBACK_TYPED_CLAIM_SELECTION', 'SEMANTIC_REQUEST_PLAN', 'SEMANTIC_STAGED_UNDERSTANDING']);
+  assert.deepEqual(flowsLackingRealDataApproval().sort(), ['CAPTURE_EXTRACTION', 'GUIDANCE_ADVISOR_CHAT', 'REMOTE_FALLBACK_TYPED_CLAIM_SELECTION', 'SEMANTIC_REQUEST_PLAN', 'SEMANTIC_STAGED_UNDERSTANDING']);
 });
 
 // BICC-OPS-007: captured-payload evidence. The provider client is replaced, the real serializer runs, and the outbound request
@@ -145,4 +145,38 @@ test('the capture-extraction request carries only the registered context fields 
   // Only the registered context is present: no address, owner name, email, or database identifiers outside the supplied lists.
   assert.doesNotMatch(text, /@|userId|propertyId|\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b/);
   assert.deepEqual(Object.keys(captured[0].config), ['responseMimeType']);
+});
+
+// Owner decision 2026-11-22 (decision 3): a real-data model flow stays disabled until its exact provider terms and data approval are
+// recorded. Every Ask-controlled flow below has no approval, so its shipped default must be off, and the Kubernetes base must agree.
+test('every Ask-controlled real-data model flow is off by default, and the deployment config does not turn one on', () => {
+  const { readAskOperationalControls } = require('../../src/config/askOperationalControls.ts');
+  const { resolveDefaultSemanticProviderPolicy } = require('../../src/services/ask/semantic/evaluation/semanticProviderOrchestrator.ts');
+  const controls = readAskOperationalControls({});
+  assert.equal(controls.remoteGenerationEnabled, false, 'REMOTE_FALLBACK_TYPED_CLAIM_SELECTION');
+  assert.equal(controls.askConversationalCaptureEnabled, false, 'CAPTURE_EXTRACTION');
+  assert.equal(controls.understandingPlannerEnabled, false, 'SEMANTIC_REQUEST_PLAN');
+  assert.equal(resolveDefaultSemanticProviderPolicy({}).approvalStatus, 'UNRESOLVED_OWNER_APPROVAL', 'SEMANTIC_STAGED_UNDERSTANDING');
+  // The staged provider needs the planner controls as well as its own approvals, and the kill switch always wins.
+  const approvals = { ASK_SEMANTIC_PROVIDER_APPROVED: 'true', ASK_UNDERSTANDING_PROVIDER_TERMS_RECORDED: 'true', ASK_UNDERSTANDING_HOMEOWNER_TEXT_APPROVED: 'true' };
+  assert.equal(resolveDefaultSemanticProviderPolicy(approvals).approvalStatus, 'UNRESOLVED_OWNER_APPROVAL');
+  assert.equal(resolveDefaultSemanticProviderPolicy({ ...approvals, ASK_UNDERSTANDING_PLANNER_ENABLED: 'true' }).approvalStatus, 'APPROVED_FOR_STRUCTURED_PLANNING');
+  assert.equal(resolveDefaultSemanticProviderPolicy({ ...approvals, ASK_UNDERSTANDING_PLANNER_ENABLED: 'true', ASK_UNDERSTANDING_PLANNER_KILL_SWITCH: 'true' }).approvalStatus, 'UNRESOLVED_OWNER_APPROVAL');
+  const configmap = fs.readFileSync(path.resolve(backendRoot, '../../infrastructure/kubernetes/base/configmap.yaml'), 'utf8');
+  for (const flag of ['ASK_REMOTE_GENERATION_ENABLED', 'ASK_CONVERSATIONAL_CAPTURE_ENABLED', 'ASK_UNDERSTANDING_PLANNER_ENABLED', 'ASK_SEMANTIC_PROVIDER_APPROVED']) {
+    const line = configmap.split('\n').find((entry) => new RegExp(`^\\s*${flag}:`).test(entry));
+    if (line) assert.match(line, /"false"/, `${flag} must not be enabled in the base config`);
+  }
+});
+
+test('the legacy /api/gemini endpoint is retired and the register records it', () => {
+  assert.equal(PROVIDER_BOUNDARY_REGISTER.find((entry) => entry.id === 'LEGACY_GEMINI_CHAT_ENDPOINT').status, 'RETIRED');
+  assert.equal(fs.existsSync(path.join(backendRoot, 'src/routes/gemini.routes.ts')), false);
+});
+
+// Model-assisted typed-claim selection must not run when remote generation is off.
+test('with remote generation off no provider is passed and nothing is selected', async () => {
+  const { selectAndRenderAskRemoteFallbackClaims } = require('../../src/services/ask/askRemoteFallbackTypedClaims.ts');
+  const rendered = await selectAndRenderAskRemoteFallbackClaims({ question: 'How old is my roof?', facts: [{ key: 'roof.age', value: '12', source: 'USER', observedAt: '2026-01-01', confidence: 1 }], provider: null });
+  assert.deepEqual(rendered, []);
 });

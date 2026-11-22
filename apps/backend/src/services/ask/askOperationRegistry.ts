@@ -458,6 +458,12 @@ export interface AskOperationResolution {
 }
 
 export type AskExecutionMode = 'DETERMINISTIC' | 'REMOTE_GENERATION';
+
+/**
+ * Operations whose model call is optional. With remote generation off they still run their deterministic branch (authored and
+ * Knowledge Hub guidance) and skip the model-assisted selection, so turning the flag off never withdraws deterministic content.
+ */
+export const REMOTE_GENERATION_OPTIONAL_OPERATIONS: ReadonlySet<string> = new Set(['GROUNDED_GUIDANCE']);
 export type AskSafetyClass = 'STANDARD' | 'MATERIAL_DECISION' | 'EMERGENCY_BOUNDARY' | 'UNSAFE_RESTRICTED_BOUNDARY' | 'OUT_OF_SCOPE_BOUNDARY';
 export type AskPropertyRoleFloor = 'VIEWER' | 'CONTRIBUTOR' | 'OWNER' | null;
 

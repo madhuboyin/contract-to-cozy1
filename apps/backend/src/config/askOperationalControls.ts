@@ -53,7 +53,9 @@ export function readAskOperationalControls(env: NodeJS.ProcessEnv = process.env)
   return {
     askEnabled: booleanEnv(env.ASK_ENABLED, true)
       && !booleanEnv(env.ASK_KILL_SWITCH, false),
-    remoteGenerationEnabled: booleanEnv(env.ASK_REMOTE_GENERATION_ENABLED, true),
+    // Owner decision 2026-11-22: default off. The only flagged call is the model-assisted typed-claim selection inside GROUNDED_GUIDANCE;
+    // it sends home-fact values to a provider and has no recorded provider or data approval (BICC-OPS-006/008).
+    remoteGenerationEnabled: booleanEnv(env.ASK_REMOTE_GENERATION_ENABLED, false),
     localRoutingEnabled: booleanEnv(env.ASK_LOCAL_ROUTING_ENABLED, true),
     semanticRetrievalEnabled: booleanEnv(env.ASK_SEMANTIC_RETRIEVAL_ENABLED, true)
       && !booleanEnv(env.ASK_SEMANTIC_RETRIEVAL_KILL_SWITCH, false),

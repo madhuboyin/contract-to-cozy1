@@ -355,7 +355,9 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
           .filter((point) => initialPropertyAccess && roleMayRead(String(initialPropertyAccess.role), point))
           .map((point) => point.id)),
         controls: {
-          enabled: controls.understandingPlannerEnabled && controls.remoteGenerationEnabled,
+          // The planner has its own controls (planner flag and kill switch, provider terms, homeowner-text approval); it does not depend on the
+          // generic remote-generation flag, which now only governs the optional grounded-guidance claim selection.
+          enabled: controls.understandingPlannerEnabled,
           providerTermsRecorded: controls.understandingProviderTermsRecorded,
           homeownerTextApproved: controls.understandingHomeownerTextApproved,
         },

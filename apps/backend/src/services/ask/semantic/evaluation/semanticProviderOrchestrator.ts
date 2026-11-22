@@ -1,3 +1,4 @@
+import { readAskOperationalControls } from '../../../../config/askOperationalControls';
 import { performance } from 'node:perf_hooks';
 import { GoogleGenAI } from '@google/genai';
 import { z } from 'zod';
@@ -67,8 +68,12 @@ export function resolveDefaultSemanticProviderPolicy(
   const providerApproved = env.ASK_SEMANTIC_PROVIDER_APPROVED === 'true';
   const providerTermsRecorded = env.ASK_UNDERSTANDING_PROVIDER_TERMS_RECORDED === 'true';
   const homeownerTextApproved = env.ASK_UNDERSTANDING_HOMEOWNER_TEXT_APPROVED === 'true';
-  const approved = providerApproved && providerTermsRecorded && homeownerTextApproved;
+  // Owner decision 2026-11-22: the staged provider inherits the semantic-planner controls (planner flag on and kill switch off) rather
+  // than carrying an independent default-on control. The per-stratum certification gate is BICC-1B.2.
+  const plannerEnabled = readAskOperationalControls(env).understandingPlannerEnabled;
+  const approved = providerApproved && providerTermsRecorded && homeownerTextApproved && plannerEnabled;
   const missingApprovals = [
+    !plannerEnabled ? 'semantic planner enablement (planner flag on, kill switch off)' : null,
     !providerApproved ? 'semantic provider activation' : null,
     !providerTermsRecorded ? 'provider terms' : null,
     !homeownerTextApproved ? 'homeowner-text processing' : null,

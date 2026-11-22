@@ -197,27 +197,6 @@ type ProviderProfile = Provider & {
   services: Service[];
 };
 
-// --- NEW GEMINI CHAT TYPES ---
-interface SendMessageToChatPayload {
-  sessionId: string;
-  message: string;
-  propertyId?: string; // [MODIFICATION] Add optional propertyId
-}
-
-interface ChatResponse {
-  text: string;
-  groundingMode: 'PROPERTY' | 'GENERAL';
-  knownFacts: Array<{ key: string; label: string; value: unknown; source: string | null; observedAt: string | null }>;
-  assumptions: string[];
-  missingFacts: string[];
-  evidence: Array<{ factKey: string; label: string; source: string | null; observedAt: string | null; confidence: number | null }>;
-  confidence: { score: number | null; label: 'LOW' | 'MEDIUM' | 'HIGH'; rationale: string };
-  safetyBoundary: string;
-  nextAction: string;
-  proposals: Array<{ id: string; kind: string; summary: string; requiresConfirmation: true }>;
-  propertyContext?: PropertyContextEnvelope;
-}
-
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 const MAX_BOOKINGS_LIST_LIMIT = 50;
 
@@ -1059,12 +1038,6 @@ class APIClient {
   // NEW GEMINI/AI CHAT ENDPOINTS 
   // ==========================================================================
 
-  async sendMessageToChat(payload: SendMessageToChatPayload): Promise<APIResponse<ChatResponse>> {
-    return this.request<ChatResponse>('/api/gemini/chat', {
-      method: 'POST',
-      body: payload,
-    });
-  }
   async createAskExecution(payload: CreateAskExecutionPayload, options: { signal?: AbortSignal } = {}): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>('/api/ask/executions', { method: 'POST', body: payload, signal: options.signal });
   }

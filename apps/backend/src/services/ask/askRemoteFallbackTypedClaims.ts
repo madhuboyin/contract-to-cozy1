@@ -308,10 +308,11 @@ function renderClaim(claim: AskRemoteFallbackTypedClaim, factsByKey: ReadonlyMap
 export async function selectAndRenderAskRemoteFallbackClaims(input: {
   question: string;
   facts: readonly AskRemoteFallbackFact[];
-  provider: AskRemoteFallbackClaimProvider;
+  /** Null means no provider is permitted (remote generation off): no call is made and nothing is selected. */
+  provider: AskRemoteFallbackClaimProvider | null;
 }): Promise<RenderedAskRemoteFallbackClaim[]> {
   const candidates = buildAskRemoteFallbackClaimCandidates(input.facts);
-  if (!candidates.length) return [];
+  if (!candidates.length || !input.provider) return [];
   const allowed = new Map(candidates.map((claim) => [signature(claim), claim]));
   let selected: typeof candidates = [];
   try {

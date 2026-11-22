@@ -48,7 +48,6 @@ import serviceCategoryRoutes from './routes/service-category.routes';
 import maintenanceRoutes from './routes/maintenance.routes';
 import homeownerManagementRoutes from './routes/home-management.routes';
 import riskRoutes from './routes/risk.routes';
-import geminiRoutes from './routes/gemini.routes';
 import askRoutes from './routes/ask.routes';
 import emergencyRoutes from './routes/emergency.routes';
 import documentRoutes from './routes/document.routes';
@@ -643,7 +642,6 @@ app.use('/api/risk', riskRoutes);
 app.use(communityRoutes(prisma));
 
 // Other feature routes
-app.use('/api/gemini', geminiRoutes);
 app.use('/api', askRoutes);
 app.use('/api/emergency', emergencyRoutes);
 app.use('/api/documents', documentRoutes);

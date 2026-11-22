@@ -11,6 +11,7 @@ import { type AskCaptureRequest, type AskPresentationBlock, type CreateAskExecut
 import { askModelDurationSeconds, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal } from '../../../lib/metrics';
 import { PropertyMaintenanceTaskService } from '../../PropertyMaintenanceTask.service';
 import { answerGroundedAsk } from '../../groundedAsk.service';
+import { readAskOperationalControls } from '../../../config/askOperationalControls';
 import { isTaxFilingRequest, resolveAskOperation, type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import type { CapabilityInvocationEnvelope } from '../capabilityInvocation.contract';
@@ -761,8 +762,11 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
   let answer: Awaited<ReturnType<typeof answerGroundedAsk>>;
   const modelStartedAt = process.hrtime.bigint();
   if (trace) {
-    trace.modelUsage = 'OPERATION_GENERATION';
-    trace.modelCharacters = groundedMessage.length;
+    // Only a call that can actually reach the provider is recorded as model usage.
+    if (readAskOperationalControls().remoteGenerationEnabled) {
+      trace.modelUsage = 'OPERATION_GENERATION';
+      trace.modelCharacters = groundedMessage.length;
+    }
   }
   let modelOutcome = 'failure';
   try {
