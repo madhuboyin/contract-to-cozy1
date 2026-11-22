@@ -1,3 +1,4 @@
+import { detectUnsupportedLanguage, isPortfolioQuestion } from './support/portfolioAndLanguage';
 import { resolveDataPointsMulti, isReserveFactQuestion, isDataPointDetailQuestion, isDataPointOnlyQuestion, isSaleProfileQuestion, resolveDataPoint } from './dataPoint/dataPointCatalogue';
 import { parseProjectPermitFilter } from './support/projectPermitFilter';
 import { isDataPointComputedQuery, isDataPointQuery } from './dataPoint/dataPointQueryPlan';
@@ -1700,6 +1701,14 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (outOfScopePattern.test(message) || taxFilingRequestPattern.test(message)) {
     return resolved('OUT_OF_SCOPE_BOUNDARY', 0.99, 'DET_OUT_OF_SCOPE_BOUNDARY_01');
+  }
+  // BICC-PORT-003: a question about several homes is not answered for the selected home as if it represented the portfolio.
+  if (isPortfolioQuestion(message)) {
+    return resolved('OUT_OF_SCOPE_BOUNDARY', 0.99, 'DET_OUT_OF_SCOPE_BOUNDARY_02');
+  }
+  // BICC-UX-009: English is the v1 understanding language; another language gets a respectful recovery, not a guess.
+  if (detectUnsupportedLanguage(message).unsupported) {
+    return resolved('OUT_OF_SCOPE_BOUNDARY', 0.99, 'DET_OUT_OF_SCOPE_BOUNDARY_03');
   }
   // Home Buyer FRD §13.3: checked ahead of every generic pattern below (incl.
   // maintenanceCompletePattern and homeActionsPattern) since buyer phrasing

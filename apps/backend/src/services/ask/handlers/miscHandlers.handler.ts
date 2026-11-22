@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { detectUnsupportedLanguage, isPortfolioQuestion } from '../support/portfolioAndLanguage';
 import { EMERGENCY_BOUNDARY_BODY, EMERGENCY_BOUNDARY_SUGGESTIONS, EMERGENCY_BOUNDARY_TITLE } from '../support/emergencyBoundary';
 import { HouseholdRole, MaintenanceTaskStatus } from '@prisma/client';
 import { createHash } from 'node:crypto';
@@ -717,6 +718,34 @@ function taxFilingBoundaryResult(): AskOperationResult {
   };
 }
 
+// BICC-PORT-003: Ask answers for one home at a time. The boundary says so and offers to choose a home; it never answers for the selected home.
+function portfolioBoundaryResult(): AskOperationResult {
+  return {
+    status: 'OUT_OF_SCOPE',
+    reasonCode: 'ASK_PORTFOLIO_QUESTION_UNSUPPORTED',
+    blocks: [{
+      type: 'BOUNDARY', id: 'portfolio-boundary', title: 'Ask answers one home at a time', severity: 'INFO',
+      body: 'That question spans more than one of your homes, and I answer for a single home so I do not mix them up. Choose the home you mean from the home selector, then ask again, or ask me about each home in turn.',
+      suggestions: ['What maintenance is pending?', 'Which items are missing coverage?', 'Give me a summary of this home'],
+    }],
+    suggestions: [],
+  };
+}
+
+// BICC-UX-009: English is the v1 understanding language. The reply is respectful and does not discard the question (it stays in the conversation).
+function unsupportedLanguageResult(): AskOperationResult {
+  return {
+    status: 'OUT_OF_SCOPE',
+    reasonCode: 'ASK_LANGUAGE_UNSUPPORTED',
+    blocks: [{
+      type: 'BOUNDARY', id: 'language-boundary', title: 'Ask understands English for now', severity: 'INFO',
+      body: 'I can only understand questions written in English right now, so I did not try to answer this one. Your message is still here. Please ask again in English and I will help.',
+      suggestions: ['What maintenance is pending?', 'When was my home built?', 'Which items are missing coverage?'],
+    }],
+    suggestions: [],
+  };
+}
+
 function outOfScopeResult(): AskOperationResult {
   return {
     status: 'OUT_OF_SCOPE',
@@ -953,7 +982,13 @@ registerCapabilityHandler('boundary.emergency', async () => emergencyResult());
 
 registerCapabilityHandler('boundary.unsafe-restricted', async () => unsafeRestrictedResult());
 
-registerCapabilityHandler('boundary.out-of-scope', async (envelope) => (isTaxFilingRequest(envelope.message ?? '') ? taxFilingBoundaryResult() : outOfScopeResult()));
+registerCapabilityHandler('boundary.out-of-scope', async (envelope) => {
+  const message = envelope.message ?? '';
+  if (isTaxFilingRequest(message)) return taxFilingBoundaryResult();
+  if (isPortfolioQuestion(message)) return portfolioBoundaryResult();
+  if (detectUnsupportedLanguage(message).unsupported) return unsupportedLanguageResult();
+  return outOfScopeResult();
+});
 
 // External review [P1]: `envelope.suppliedInput` was declared on
 // CapabilityInvocationEnvelope but never read anywhere in the normal
