@@ -1,6 +1,6 @@
 # Ask Cozy Best-in-Class Conversational Concierge — Implementation Plan
 
-**Status:** Draft v0.3 for owner review; implementation slices and acceptance plan, not a delivery claim
+**Status:** Draft v0.4 for owner review; implementation slices and acceptance plan, not a delivery claim
 
 **Date:** 2026-11-22
 
@@ -33,6 +33,7 @@ General guidance and social turns use approved authored content or deterministic
 - No model-assisted stratum activates merely because its code compiles or its provider returns schema-valid output. Its privacy, calibration, availability, and held-out gates must pass.
 - No write family inherits certification from another family.
 - `BICC-GATE-006` and `BICC-EVAL-010` are continuous invariants for every applicable slice.
+- Owner review does not block implementation. FRD §18 defaults govern immediately; a later versioned override applies prospectively and updates affected slices and evidence.
 - Validation is repository-local and environment-independent unless an authoritative requirement explicitly requires more. No development database, service stack, browser environment, or staged user rollout is implied by this plan. One-stratum-at-a-time activation is technical capability gating based on evaluation evidence, not a cohort, canary, compatibility phase, or staged user release.
 
 ### 2.1 Model-call register
@@ -307,7 +308,7 @@ Contract tests pass, but no stratum activates until BICC-1B.2.
 
 **Scope**
 
-Enable exactly one owner-approved read stratum after calibration and provider approval. Additional strata repeat this slice.
+Enable exactly one read stratum selected under the FRD §18 default after calibration and provider-boundary approval. Additional strata repeat this slice; owner sign-off is not a prerequisite.
 
 **Expected existing files**
 
@@ -347,7 +348,7 @@ Mixed-facet answers retain separate modes and evidence; calculations use authori
 
 **Scope**
 
-Keep general guidance and small talk deterministic or approved-content based. Govern the existing guidance catalogue with stable identifiers, named ownership, evidence basis, review dates, deterministic lint, and a reviewed growth process. Freeze the owner-approved core homeowner/buyer topic taxonomy and denominator before certification; include topic/prompt families, demand or product-priority basis, safety/professional-boundary classes, and explicit exclusions. Do not add a model call.
+Keep general guidance and small talk deterministic or approved-content based. Govern the existing guidance catalogue with stable identifiers, role-based ownership until a person is named, evidence basis, review dates, deterministic lint, and a reviewed growth process. Freeze the FRD §18 default core homeowner/buyer topic taxonomy and denominator before certification; include topic/prompt families, demand or product-priority basis, safety/professional-boundary classes, and explicit exclusions. Do not add a model call.
 
 **Expected existing files**
 

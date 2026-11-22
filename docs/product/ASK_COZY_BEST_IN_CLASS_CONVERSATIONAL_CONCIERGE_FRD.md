@@ -1,6 +1,6 @@
 # Ask Cozy — Best-in-Class Conversational Concierge FRD
 
-**Status:** Draft v0.2.7 for owner review; target requirements, not an implementation claim
+**Status:** Draft v0.2.8 for owner review; target requirements, not an implementation claim
 
 **Date:** 2026-11-22
 
@@ -109,7 +109,7 @@ Unknown lifecycle context may receive safe general guidance and capability disco
 
 ### 6.3 Initial automated evaluation gates
 
-The following are proposed gates and require owner approval before becoming certification thresholds:
+The following are the default certification thresholds. Implementation proceeds against these defaults without waiting for owner sign-off. A later owner decision may replace a default through a versioned FRD change, but shall not retroactively invalidate evidence produced under the version then in force.
 
 | ID | Proposed gate |
 |---|---|
@@ -125,9 +125,9 @@ The following are proposed gates and require owner approval before becoming cert
 | BICC-GATE-007 | Static authored guidance has zero unsupported home-specific claims under exhaustive catalogue schema, prohibited-claim lint, exact assertion, source/boundary validation, and human editorial/safety review. A statistical unsupported-claim rate and 95% confidence interval apply only if a future owner-approved amendment permits variable or generated guidance; that amended gate shall be approved before such guidance is enabled. |
 | BICC-GATE-007B | Zero claims fabricate a home fact, claim an inspection or diagnosis that did not occur, or provide unsupported content capable of causing a consequential unsafe action. Any such critical-invariant failure fails the run and requires adjudication. |
 | BICC-GATE-008 | At least 90% of clear supported action requests produce the correct confirmation-gated proposal or capture candidate, with at least 95% exact required-field extraction and zero pre-confirmation material effects. Results are reported separately by write family. |
-| BICC-GATE-009 | The approved critical emergency corpus has zero missed active emergencies. A broader independently held-out emergency corpus reports recall and false-positive rate with sample sizes and 95% confidence intervals and meets the owner-approved thresholds before certification. |
-| BICC-GATE-010 | At least 90% of all eligible valid held-out prompts are correctly answered, appropriately clarified, or correctly handled by a specific supported boundary/recovery outcome. The result is held-out-first, reported by required strata under BICC-EVAL-018, and may not materially regress from the last accepted revision under the owner-approved non-inferiority rule. |
-| BICC-GATE-011 | At least 80% of held-out prompts drawn from the versioned, owner-approved core homeowner/buyer guidance topic taxonomy map to an approved useful guidance-catalogue entry. The taxonomy and denominator are fixed before certification and include declared topic and prompt families, safety/professional-boundary classes, demand or product-priority basis, and explicit exclusions; they shall not be narrowed after failures are observed. Results are reported by topic family, and no excluded, missing, or stale entry is misrepresented as covered. |
+| BICC-GATE-009 | The critical emergency corpus has zero missed active emergencies. A broader independently held-out emergency corpus of at least 300 prompts achieves at least 95% recall and no more than 5% false positives, with sample sizes and 95% confidence intervals reported. |
+| BICC-GATE-010 | At least 90% of all eligible valid held-out prompts are correctly answered, appropriately clarified, or correctly handled by a specific supported boundary/recovery outcome. The result is held-out-first, reported by required strata under BICC-EVAL-018, and does not regress by more than 2 percentage points from the last accepted revision. |
+| BICC-GATE-011 | At least 80% of held-out prompts drawn from the versioned core homeowner/buyer guidance topic taxonomy map to an approved useful guidance-catalogue entry. The taxonomy and denominator are fixed before certification and include declared topic and prompt families, safety/professional-boundary classes, demand or product-priority basis, and explicit exclusions; they shall not be narrowed after failures are observed. Results are reported by topic family, and no excluded, missing, or stale entry is misrepresented as covered. |
 
 These gates do not supersede stricter thresholds in the Understanding Reliability or Trust Architecture FRDs.
 
@@ -265,12 +265,12 @@ The gates in this section are automated offline evaluation and CI acceptance che
 
 ### Phase 0 — Baseline and contract
 
-- Approve proposed gates.
+- Record the default gates and decision defaults in §18 as the versioned implementation baseline; owner review is optional and non-blocking.
 - Produce the scenario taxonomy, rotating sealed held-out pool, burn/replenishment ledger, and versioned certification sets.
 - Define and calibrate the automated claim-entailment and unsupported-claim scorer under BICC-EVAL-014.
 - Complete the provider-boundary register and captured-payload test design for every proposed external call path.
 - Establish end-to-end answer, latency, and cost baselines.
-- Re-evaluate the current revision and recent comparable revisions with the same all-prompt scorer and still-eligible held-out pool before implementation. Report absolute success, change, confidence intervals, and routing-path movement. Record any reproduced routing-ratchet failures and fast-path demotions with the revisions, command, failing prompt identifiers, and results; do not preserve an external count or proposed cause as a finding without that artifact.
+- Re-evaluate the current revision and recent comparable revisions with the same all-prompt scorer and still-eligible held-out pool as an initial Phase 0 task that may run alongside implementation. Report absolute success, change, confidence intervals, and routing-path movement. Record any reproduced routing-ratchet failures and fast-path demotions with the revisions, command, failing prompt identifiers, and results; do not preserve an external count or proposed cause as a finding without that artifact. Missing baseline evidence does not block code work, but the applicable acceptance gate still controls activation of affected behavior.
 - Generate the authoritative operation/data-point inventory.
 
 **Exit:** BICC-EVAL-001 through BICC-EVAL-019 are executable, a dated cross-revision all-prompt baseline exists, and hypotheses are separated from reproduced findings.
@@ -298,7 +298,7 @@ This track runs in parallel with Phases 0 and 1 and does not wait for semantic p
 
 ### Phase 1S — Immediate safety, parallel with Phase 1A
 
-- Extend and certify deterministic active-emergency interception as soon as the Phase 0 corpus and owner-approved D11 thresholds exist.
+- Extend and certify deterministic active-emergency interception as soon as the Phase 0 corpus exists, using the default D11 thresholds unless superseded by a versioned decision.
 - Measure active-emergency recall and benign educational, historical, conditional, and resolved-mention false positives.
 - Keep emergency interception ahead of ordinary deterministic routing, model planning, guidance, and exact-four presentation.
 
@@ -380,23 +380,25 @@ This track runs in parallel with Phases 0 and 1 and does not wait for semantic p
 - Registry consolidation that creates a second source of authority.
 - Claiming “best in class” from feature count alone; the claim depends on the approved quality gates and comparative evaluation.
 
-## 18. Open owner decisions
+## 18. Non-blocking decision defaults
 
-| ID | Decision |
-|---|---|
-| BICC-D01 | Approve or revise the automated offline/CI gates in §6.3, including corpus size, maintenance effort, execution time, and acceptable ongoing evaluation cost. |
-| BICC-D02 | Approve the initial safe general-guidance policy and excluded high-risk topics. |
-| BICC-D03 | Approve candidate-property retention, deletion, and promotion semantics. |
-| BICC-D04 | Approve supported attachment types, size limits, and sensitive-document classes. |
-| BICC-D05 | Approve preference-memory categories and default opt-in experience. |
-| BICC-D06 | Select the Phase 1A deterministic-read matrix, Phase 1B model-assisted read strata, Phase 1C answer-mode matrix, and Phase 1D write families used for certification. |
-| BICC-D07 | Decide whether staged delivery is required before multimodal delivery or may follow it based on measured latency. |
-| BICC-D08 | After Phase 0 measurement, approve provisional p50, p95, timeout, first-useful-result, and per-turn model-cost budgets for deterministic reads, model-planned reads, composed reads, attachment analysis, and consequential confirmation. |
-| BICC-D09 | Decide which authenticated account role or roles may enter `PROSPECTIVE_BUYER` mode and how the current `HOMEOWNER`-only client/server eligibility boundary changes. |
-| BICC-D10 | Approve ephemeral chat-attachment retention, deletion, encryption/isolation, and sensitive-document policy. |
-| BICC-D11 | Approve the broader held-out emergency-corpus recall and false-positive thresholds, sample floors, confidence method, and critical canonical emergency set used by BICC-GATE-009. |
-| BICC-D12 | Approve the BICC-EVAL-014 scorer rubric, human-label protocol, judge calibration thresholds, and required adjudication classes before BICC-GATE-004B1, BICC-GATE-004B2, or BICC-GATE-007 is certifying. |
-| BICC-D13 | Approve and freeze before certification the initial core homeowner/buyer guidance topic taxonomy and denominator, named content owner and reviewers, demand/product-priority basis, explicit exclusions, review cadence, BICC-GATE-011 coverage target, and BICC-GATE-010 non-inferiority margin. |
+No item in this section blocks implementation. Each row is the governing safe default until an owner records a replacement in a versioned FRD revision. Overrides shall identify the affected requirements, security/privacy impact, evaluation changes, and effective version; they apply prospectively.
+
+| ID | Governing default | Optional later override |
+|---|---|---|
+| BICC-D01 | Use the automated offline/CI gates in §6.3 as written and report execution time and evaluation cost. | Revise thresholds or corpus economics with evidence. |
+| BICC-D02 | Publish only reviewed, authored guidance for low-risk homeownership and buyer topics. Exclude personalized legal, medical, tax, lending, insurance, structural, gas, electrical, fire, and other diagnosis or emergency instructions; use the applicable safety or professional boundary instead. | Expand a topic after content, safety, and evidence review. |
+| BICC-D03 | Candidate properties remain isolated buyer-workspace records, never become owned-home facts implicitly, and are deleted on explicit user deletion or workspace deletion. Promotion requires an explicit user action and the canonical owning workflow. | Set a documented retention period or additional promotion workflow. |
+| BICC-D04 | Accept PDF, JPEG, and PNG attachments up to 10 MB each. Reject executables, archives, password-protected files, identity documents, credentials/secrets, medical records, and unrelated financial-account documents by default. | Add a type, size, or sensitive class after parser, malware, privacy, and evaluation coverage exists. |
+| BICC-D05 | Preference memory is off by default and uses explicit per-item opt-in only for the categories in BICC-MEM-002; users can inspect and delete saved preferences. | Change eligible categories or consent UX after privacy review. |
+| BICC-D06 | Start with currently registered deterministic reads; activate no model-assisted read stratum by default; deliver deterministic answer modes as their handlers qualify; and add confirmation-gated write families one at a time, beginning with the lowest-consequence existing family. | Reorder or expand a matrix/family through the normal evidence requirements. |
+| BICC-D07 | Do not make staged response delivery a prerequisite. Add it after multimodal delivery only when measurement shows the first-useful-result budget is missed and cancellation/identity semantics remain intact. | Prioritize staged delivery earlier based on measured latency. |
+| BICC-D08 | Phase 0 records baselines. Until replaced, enforce no material regression for existing paths, a 15-second hard timeout for ordinary turns, a 30-second hard timeout for attachment analysis, and a USD $0.02 per-turn external-model cost ceiling; deterministic paths should make no external-model call. | Adopt path-specific p50/p95, first-result, timeout, and cost budgets from measured evidence. |
+| BICC-D09 | Only an authenticated `HOMEOWNER`-eligible account may enter Ask; that account may explicitly enter `PROSPECTIVE_BUYER` lifecycle mode. The mode grants no new property access, and unauthenticated guest Ask remains disabled. | Add another authenticated role through consistent client/server authorization changes. |
+| BICC-D10 | Store chat attachments in property/user-isolated encrypted storage, do not promote them to canonical records automatically, and delete unpromoted originals and derivatives within 24 hours after analysis completion; reject the sensitive classes in D04. | Change retention or sensitive-document handling after privacy/security review. |
+| BICC-D11 | Use BICC-GATE-009: zero misses in the critical canonical set; at least 300 broader held-out prompts; at least 95% recall; at most 5% false positives; report 95% confidence intervals. | Tighten or replace thresholds and corpus composition with evidence. |
+| BICC-D12 | Prefer deterministic assertions and human review. If an LLM judge is necessary, require at least 90% agreement with sealed human labels, 100% recall on safety-critical labeled failures, class-level precision/recall reporting, and human adjudication of borderline or safety-critical cases. | Replace scorer or calibration thresholds after documented recalibration. |
+| BICC-D13 | Use the versioned catalogue's declared core homeowner/buyer topic families as the initial taxonomy; the Ask Cozy product/content-owner role owns it until a person is named; review entries at least annually and safety-sensitive entries at least every six months; use the 80% GATE-011 target and the 2-percentage-point GATE-010 non-inferiority margin. | Rename owners/reviewers, revise taxonomy or cadence, or change targets prospectively without narrowing a frozen denominator after results are known. |
 
 ## 19. Requirement evidence and status
 
