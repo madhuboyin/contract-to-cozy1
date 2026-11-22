@@ -96,7 +96,7 @@ BICC-0.2 shall trace the repository for additional model/provider call sites and
 - Implement the versioned claim segmentation and entailment/unsupported-claim scorer contract.
 - Record human-label protocol, reviewer independence, adjudication, scorer calibration, and exact confidence methods.
 - Define reusable deterministic fidelity partition manifests separately from burnable human-authored NLU shards.
-- Re-evaluate the current and recent comparable revisions using the same all-prompt success definition and still-eligible held-out prompts. Record routing-path movement. Record any reproduced ratchet failure with revision, command, prompt identifier, and result; do not carry an unsourced external count or cause into the evidence record.
+- Re-evaluate the current and recent comparable revisions using the same all-prompt success definition and still-eligible held-out prompts. Record routing-path movement. Record any reproduced ratchet failure with revision, command, prompt identifier, and result; do not carry an unsourced external count or cause into the evidence record. Phase 0 result (2026-11-22): the fall is reproduced and located at `558b506b` (fast-path certification enforcement); the eight-failure count is not reproduced. See `ASK_COZY_BICC_PHASE0_BASELINE.md`.
 - Keep offline evaluator models synthetic-only and use deterministic lint, exact assertions, and human review for fixed authored content wherever sufficient.
 
 **Expected existing files**
