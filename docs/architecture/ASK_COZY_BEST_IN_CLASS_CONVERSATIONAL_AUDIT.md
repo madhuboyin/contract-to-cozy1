@@ -48,7 +48,7 @@ This review did not run a browser, database, Redis, external model, or productio
 | “Circuit breakers/rate windows live in process-local Maps rather than Redis” | Too broad. Shared rate-limit middleware includes Redis-backed stores. Any remaining process-local AI governance state must be identified by exact control and file before being promoted to a platform requirement. |
 | “No compound query support” | Stale as a blanket claim. Bounded read composition now has a dedicated FRD and implementation paths under `services/ask/composition/`. Coverage and certification remain incomplete; the gap is quality, eligibility, and end-to-end verification rather than total absence. |
 | “Almost zero route context awareness” | Directionally correct but time-sensitive. Current `routeContext.ts` still has one reviewed inventory-item rule. This should be measured from the current rules and expanded only where the destination entity and operation can be reauthorized. |
-| UI overlap and duplicate-close findings | Treat as reproduction candidates, not established defects. The relevant components have changed since earlier screenshots and reviews. Each item needs a current narrow/mobile reproduction before implementation. |
+| UI overlap and duplicate-close findings | Partly confirmed in current source: the floating launcher lacks the dashboard bottom-navigation offset, and both `AIChat` and panel-mode `AskWorkspace` render close controls. Other reported collisions remain reproduction candidates. Each item still needs a focused current regression before correction. |
 | “Replace lexical hashing with dense embeddings” | Dense retrieval is a reasonable candidate, not a requirement by itself. The requirement is calibrated candidate recall and end-to-end answer quality. The implementation may use dense, sparse, hybrid, or another evaluated index. |
 | “Use pgvector for document RAG” | `pgvector` is an implementation option, not the product requirement. The requirement is authorized, version-aware, deletion-aware retrieval with page/chunk citations and source provenance. |
 | “SSE streaming is P1” | Streaming improves perceived latency, but it does not repair wrong answers. Staged delivery belongs after correctness metrics and cancellation semantics are defined, unless measurement proves it is the dominant usability problem. |
@@ -137,6 +137,8 @@ Cancellation should stop client work and propagate a server cancellation signal 
 
 Route-aware starters, attachment ergonomics, copy/regenerate/feedback behavior, offline messaging, mobile navigation clearance, and bundle cost are valid experience concerns. They should be measured and reproduced against the current build, then fixed under explicit accessibility and performance criteria.
 
+The confirmed launcher and duplicate-close defects, request cancellation, copy/persisted feedback, mobile headings, and lazy loading do not depend on the semantic or buyer architecture. They should run as a parallel quick-wins track rather than wait behind multimodal retrieval and buyer discovery.
+
 ### P3 — Maintainability
 
 Registry and renderer size increase the cost of adding capabilities. Consolidation is worthwhile only where it preserves a single authoritative operation contract and reduces required synchronized edits. It must not create a parallel plugin authority or weaken startup validation.
@@ -148,7 +150,7 @@ Registry and renderer size increase the cost of adding capabilities. Consolidati
 3. **Continuity and composition:** certify and extend current bounded read composition; add structured turn summaries and reference resolution.
 4. **Multimodal and document answers:** inline attachments, authorized cited retrieval, and explicit promotion into the record.
 5. **Prospective Buyer Discovery:** candidate-home workspace and lifecycle promotion.
-6. **Transport and experience:** cancellation, staged delivery, current UI defects, contextual starters, accessibility, and performance.
+6. **Transport and experience:** staged delivery, broader contextual starters, offline behavior, and measured performance. Independent cancellation, overlap, copy/feedback, heading, and lazy-loading fixes begin in parallel after current reproduction.
 7. **Opt-in memory and proactive concierge:** user-reviewable preferences and explainable proactive recommendations.
 8. **Modularity:** colocated operation modules and generated inventories after product quality is stable.
 
@@ -163,3 +165,20 @@ A best-in-class Ask Cozy response answers five user questions:
 5. What, if anything, will change in my home record?
 
 The governing FRD converts this conclusion into requirements and measurable acceptance gates.
+
+## 8. Existing subsystem disposition
+
+This table prevents the program from creating a second conversational platform. Final activation or retirement still requires exact consumer and call-path tracing.
+
+| Existing subsystem | Disposition | Boundary |
+|---|---|---|
+| Cross-domain semantic planner, ontology, executor, rollout manifest, and evaluation harness | **Extend as governing architecture** | New BICC semantic behavior updates its existing FRD and implementation ledger. |
+| `GeminiUnderstandingProvider` | **Refactor and evaluate** | It may propose only eligible typed plans and remains subject to deterministic validation and existing semantic gates. |
+| `semanticProviderOrchestrator` | **Consolidate with the governing planner** | Do not introduce another orchestration layer. Retire duplicated branches after consumer tracing. |
+| Deterministic regex rules and local lexical/feature-hash classifier | **Retain as candidate evidence; certify or demote claiming paths** | Safe provisional reads remain governed by the Understanding Reliability FRD. |
+| Result synthesis behind `ASK_RESULT_SYNTHESIS_ENABLED` | **Refactor, evaluate, then activate or retire** | It must preserve per-facet answer mode, validated values, citations, limitations, and entailment. |
+| Conversational capture | **Retain and certify by write family** | Clear-intent recall is measured; canonical confirmation, authorization, idempotency, and reconciliation remain mandatory. |
+| Bounded read composition | **Extend** | It is the existing multi-facet read mechanism; writes are never composed. |
+| `PROSPECTIVE_BUYER` audience value | **Activate only through an approved account/lifecycle design, otherwise keep unreachable or remove** | The enum does not override the current authenticated account-role boundary. |
+| Legacy `POST /api/gemini/chat` | **Trace consumers, migrate, then retire if unneeded** | Do not remove until all current clients and exceptional behaviors are identified. |
+| Existing grounded fallback | **Refactor into declared answer modes** | Separate authorized home facts, general guidance, and unavailable outcomes; never relax record grounding implicitly. |

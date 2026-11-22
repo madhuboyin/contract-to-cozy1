@@ -1,6 +1,6 @@
 # Ask Cozy — Best-in-Class Conversational Concierge FRD
 
-**Status:** Draft v0.1 for owner review; target requirements, not an implementation claim
+**Status:** Draft v0.2 for owner review; target requirements, not an implementation claim
 
 **Date:** 2026-11-22
 
@@ -21,10 +21,13 @@ This FRD defines the cross-domain outcome and acceptance contract for a best-in-
 5. `AI_HOME_CONCIERGE_ASK_AUDIENCE_CONTEXT_ADDENDUM_FRD.md` — audience and journey applicability;
 6. `AI_HOME_CONCIERGE_ASK_TRUST_ARCHITECTURE_ADDENDUM_FRD.md` — safety, evidence, bounded model use, and confirmation;
 7. `ASK_COZY_UNDERSTANDING_RELIABILITY_FRD.md` — routing, data-point reach, calibration, and evaluation;
-8. `ASK_COZY_CONVERSATIONAL_CONCIERGE_COMPOSITION_FRD.md` — bounded multi-facet read composition; and
-9. relevant domain FRDs, services, contracts, and schema for domain-specific authority.
+8. `ASK_COZY_CROSS_DOMAIN_SEMANTIC_ARCHITECTURE_FRD.md` — governing cross-domain ontology, semantic request plan, recognizer-retirement manifest, duplicate-definition governance, implementation ledger, and semantic rollout contract;
+9. `ASK_COZY_CONVERSATIONAL_CONCIERGE_COMPOSITION_FRD.md` — bounded multi-facet read composition; and
+10. relevant domain FRDs, services, contracts, and schema for domain-specific authority.
 
 If this FRD conflicts with a domain authorization, safety, data-integrity, privacy, or consequential-action rule, the stricter domain rule remains controlling. This FRD does not declare any current feature implemented.
+
+`BICC-UND-*` and `BICC-EVAL-*` define cross-domain product outcomes and acceptance measures; they do not create a parallel semantic planner, ontology, recognizer ledger, rollout manifest, or implementation ledger. Existing `FR-UND-*`, `FR-DEC-*`, and semantic-architecture requirements govern how those outcomes are implemented. Any new cross-domain semantic behavior shall update the existing semantic architecture and ledger rather than introduce a BICC-specific execution stack.
 
 ## 2. Product outcome
 
@@ -89,6 +92,7 @@ Unknown lifecycle context may receive safe general guidance and capability disco
 - **BICC-EVAL-008.** General guidance shall be evaluated for usefulness, safety, consistency with declared scope, and absence of false home-specific claims.
 - **BICC-EVAL-009.** Attachment answers shall be evaluated for citation correctness, document/version identity, unsupported-claim rate, and privacy/authorization behavior.
 - **BICC-EVAL-010.** Consequential actions retain a zero-tolerance gate for unauthorized execution, confirmation bypass, duplicate effect, wrong-property effect, and wrong-entity effect.
+- **BICC-EVAL-011.** Supported write families shall report clear-intent proposal recall, correct operation and entity selection, required-field extraction accuracy, clarification appropriateness, and absence of pre-confirmation material effects. Refusal or fallback on a clear supported action request counts as a recall failure.
 
 ### 6.3 Initial release gates
 
@@ -99,12 +103,16 @@ The following are proposed gates and require owner approval before becoming cert
 | BICC-GATE-001 | At least 90% end-to-end correctness on common populated-data read scenarios, with no domain below 85%. |
 | BICC-GATE-002 | At least 95% correct answer or appropriate clarification on safety-sensitive scenarios. |
 | BICC-GATE-003 | At least 90% entity and filter/slot accuracy on turns that execute a read. |
-| BICC-GATE-004 | At least 90% factual entailment for delivered record, document, calculation, and estimate claims. |
+| BICC-GATE-004A | Home-record delivery and deterministic calculations have zero observed wrong entity, value, date, unit, or numeric result in certification; the statistical bound is reported separately. |
+| BICC-GATE-004B | At least 95% claim-level entailment for user-document and estimate claims, with 100% correct document/version identity for document citations. |
 | BICC-GATE-005 | At least 95% answer-mode and evidence-label accuracy. |
 | BICC-GATE-006 | Zero BICC-EVAL-010 violations in certification. |
-| BICC-GATE-007 | No more than 2% unsupported home-specific claims in general-guidance certification, with every such failure blocking release until reviewed. |
+| BICC-GATE-007 | No more than 2% unsupported home-specific claims in general-guidance evaluation. A newly observed failure fails the automated run until it is adjudicated and the corrected behavior passes a fresh eligible evaluation set. |
+| BICC-GATE-008 | At least 90% of clear supported action requests produce the correct confirmation-gated proposal or capture candidate, with at least 95% exact required-field extraction and zero pre-confirmation material effects. Results are reported separately by write family. |
 
 These gates do not supersede stricter thresholds in the Understanding Reliability or Trust Architecture FRDs.
+
+The gates in this section are automated offline evaluation and CI acceptance checks. They do not require a pilot cohort, staged user rollout, or recurring manual release certification. Human review is required to approve or change labels, policy, corpus provenance, or thresholds and to adjudicate a newly discovered safety or unsupported-home-specific failure; routine passing runs remain automated. Existing provisional safe-read behavior under the governing understanding requirements remains available and is not blocked merely because an unconditional fast-path claim is uncertified.
 
 ## 7. Functional requirements — understanding and planning
 
@@ -119,8 +127,8 @@ These gates do not supersede stricter thresholds in the Understanding Reliabilit
 
 ## 8. Functional requirements — answer modes and response contract
 
-- **BICC-ANS-001.** Each substantive answer shall declare exactly one primary answer mode: `HOME_RECORD`, `USER_DOCUMENT`, `CALCULATION`, `ESTIMATE`, `GENERAL_GUIDANCE`, or `UNAVAILABLE`.
-- **BICC-ANS-002.** A response may contain multiple facets with different modes, but each facet shall retain its own source, freshness, assumptions, and limitations.
+- **BICC-ANS-001.** Each substantive answer facet shall declare exactly one answer mode: `HOME_RECORD`, `USER_DOCUMENT`, `CALCULATION`, `ESTIMATE`, `GENERAL_GUIDANCE`, or `UNAVAILABLE`. A response may identify an optional primary facet for presentation, but shall not collapse or relabel supporting facets.
+- **BICC-ANS-002.** A response may contain multiple facets with different modes—for example a home-record age plus general lifespan guidance—but each facet shall retain its own source, freshness, assumptions, and limitations.
 - **BICC-ANS-003.** Home-record answers shall identify the property scope and meaningful as-of/freshness information.
 - **BICC-ANS-004.** User-document answers shall identify the document and version and cite page/chunk locations sufficient for the user to inspect the evidence.
 - **BICC-ANS-005.** Calculations shall disclose authoritative inputs, effective dates, units, and material formula assumptions.
@@ -150,6 +158,8 @@ These gates do not supersede stricter thresholds in the Understanding Reliabilit
 - **BICC-MM-007.** The index implementation is not prescribed. Any vector or hybrid store shall satisfy authorization, versioning, deletion, provenance, observability, and recovery requirements.
 - **BICC-MM-008.** “Save approved facts” shall present extracted candidates for review and use the owning confirmation-gated capture operation; the analysis response itself shall never become write authority.
 - **BICC-MM-009.** High-risk visual conditions shall provide calibrated urgency and emergency boundaries without claiming a definitive remote diagnosis.
+- **BICC-MM-010.** Ephemeral chat attachments shall have a declared storage scope, encryption and isolation policy, malware/content validation, retention duration, failed-upload cleanup, session-deletion behavior, and deletion policy for raw files, previews, OCR text, chunks, and derived indexes. They shall not silently inherit an unrelated retention period.
+- **BICC-MM-011.** Promotion to Home Records shall create or link the governed canonical document/version and then apply the canonical retention policy. Deleting or expiring the chat copy shall not delete a separately confirmed canonical record; deleting the canonical source shall invalidate its retrieval material.
 
 ## 11. Functional requirements — prospective buyer discovery
 
@@ -161,6 +171,14 @@ These gates do not supersede stricter thresholds in the Understanding Reliabilit
 - **BICC-BUY-006.** Disclosure and inspection review shall cite uploaded evidence, distinguish observed statements from inferred risk, and preserve professional-review boundaries.
 - **BICC-BUY-007.** Promotion of a candidate to an under-contract canonical property shall require explicit user review, deduplication, field-level provenance, and confirmation. The candidate shall remain linked for audit or be deleted by explicit user choice.
 - **BICC-BUY-008.** Buyer inline actions may assign, reschedule, or prepare drafts only when the governing buyer service and role policy allow them. Sending, filing, signing, accepting, or changing a contract remains separately confirmed under domain policy.
+- **BICC-BUY-009.** `PROSPECTIVE_BUYER` is a lifecycle mode for an authenticated account role approved by the owner; it does not itself grant account eligibility. Before implementation, account-role eligibility and migration from the current `HOMEOWNER`-only Ask boundary shall be explicitly decided and enforced consistently on client and server.
+- **BICC-BUY-010.** Anonymous, unauthenticated, and public guest Ask are not included in this FRD. They require a separate privacy, abuse, data-retention, and capability-boundary specification.
+
+## 11A. Functional requirements — multi-property scope
+
+- **BICC-PORT-001.** A single-property turn remains the default. Every property-specific facet retains its property identifier and authorization scope.
+- **BICC-PORT-002.** Portfolio questions such as “which of my homes has overdue maintenance?” are a v1 non-goal unless a separately approved portfolio-read operation declares its eligible properties, per-property authorization, comparison semantics, provenance, and no-write behavior.
+- **BICC-PORT-003.** When a user asks an unsupported portfolio question, Ask shall explain the boundary and offer property selection; it shall not silently answer for the currently selected home as though it represented the portfolio.
 
 ## 12. Functional requirements — transport, cancellation, and responsiveness
 
@@ -191,6 +209,8 @@ These gates do not supersede stricter thresholds in the Understanding Reliabilit
 - **BICC-UX-005.** Dialogs, progress, clarification, errors, confirmations, and newly committed results shall have correct focus, heading, live-region, keyboard, and screen-reader behavior.
 - **BICC-UX-006.** Offline state shall be disclosed before submission where detectable. Recent cached conversations may be read offline only if sensitive-data and sign-out clearing policy are satisfied; offline writes are prohibited.
 - **BICC-UX-007.** Ask's optional bundle shall be lazy-loaded from non-Ask pages without losing launch context. Bundle and interaction budgets shall be measured rather than inferred from source line count.
+- **BICC-UX-008.** Existing voice dictation shall disclose browser support and permission state, provide explicit start/listening/stop/error states, allow transcript review before submission, never submit automatically, and support keyboard, focus, screen-reader, and dismissible-error behavior. Real-time duplex spoken conversation is not required by this FRD.
+- **BICC-UX-009.** English is the v1 supported understanding language. Unsupported-language input shall receive a respectful, non-destructive recovery response. Additional languages require language-specific routing, entity, safety, answer-quality, and accessibility evaluation; passing English evaluation shall not certify another language.
 
 ## 15. Operational and observability requirements
 
@@ -198,7 +218,7 @@ These gates do not supersede stricter thresholds in the Understanding Reliabilit
 - **BICC-OPS-002.** Quality dashboards shall separate deterministic, provisional, model-planned, composed, document-grounded, and general-guidance outcomes.
 - **BICC-OPS-003.** Provider/model failure shall degrade to deterministic reads, focused clarification, or a transparent unavailable result; it shall never broaden execution authority.
 - **BICC-OPS-004.** An operation/capability inventory shall be generated from authoritative registries. Product documentation shall not maintain an unqualified hand-counted total.
-- **BICC-OPS-005.** Each newly enabled answer mode or planning stratum shall have an owner, certification artifact, operational control, rollback procedure, and failure review path. This is an operational safety control, not a user cohort rollout or product approval gate.
+- **BICC-OPS-005.** Each newly enabled answer mode or planning stratum shall have a named engineering owner, versioned automated evaluation artifact, operational control, rollback procedure, and failure-triage path. Passing is evaluated automatically in CI or the offline evaluation runner. This is not a user cohort rollout, staged release, or recurring manual release-certification gate.
 
 ## 16. Phased delivery
 
@@ -209,7 +229,19 @@ These gates do not supersede stricter thresholds in the Understanding Reliabilit
 - Establish end-to-end answer, latency, and cost baselines.
 - Generate the authoritative operation/data-point inventory.
 
-**Exit:** BICC-EVAL-001 through BICC-EVAL-010 are executable and a dated baseline exists.
+**Exit:** BICC-EVAL-001 through BICC-EVAL-011 are executable and a dated baseline exists.
+
+### Phase 0.5 — Independent experience quick wins
+
+This track runs in parallel with Phases 0 and 1 and does not wait for semantic planning, multimodal retrieval, or buyer-discovery architecture.
+
+- Reproduce and correct mobile launcher/navigation, duplicate-close, FeedbackWidget, keyboard, and heading conflicts.
+- Add real client cancellation and propagate cancellation to cancellable work; represent user stop as a normal state.
+- Add copy and persisted feedback under the existing execution identity.
+- Lazy-load the Ask workspace from non-Ask dashboard pages without losing launch context.
+- Add focused accessibility and narrow-viewport tests for each corrected defect.
+
+**Exit:** each accepted defect has a current reproduction, focused regression evidence, and no change to authorization, execution, confirmation, or result identity.
 
 ### Phase 1 — Conversational reach and answer modes
 
@@ -218,7 +250,7 @@ These gates do not supersede stricter thresholds in the Understanding Reliabilit
 - Deliver declared answer modes, warm small talk, general guidance, and focused clarification.
 - Correct emergency-intent false positives through evaluated classification.
 
-**Exit:** BICC-GATE-001 through BICC-GATE-007 pass for the approved Phase 1 domain matrix; BICC-EVAL-010 remains zero.
+**Exit:** BICC-GATE-001 through BICC-GATE-008 pass for the approved Phase 1 domain and write-family matrix; BICC-EVAL-010 remains zero.
 
 ### Phase 2 — Continuity and composed reads
 
@@ -262,6 +294,10 @@ These gates do not supersede stricter thresholds in the Understanding Reliabilit
 - Treating candidate homes as owned homes before explicit promotion.
 - Silent durable memory inferred from conversation.
 - Diagnosing a home condition definitively from an image.
+- Anonymous or unauthenticated guest Ask.
+- Portfolio-wide multi-property questions until an explicit portfolio-read contract is approved.
+- Languages other than English in v1; they require language-specific certification.
+- Real-time duplex conversational voice; reviewed voice dictation remains in scope.
 - Selecting `pgvector`, SSE, a model provider, or another specific technology without measured evidence.
 - Registry consolidation that creates a second source of authority.
 - Claiming “best in class” from feature count alone; the claim depends on the approved quality gates and comparative evaluation.
@@ -270,13 +306,16 @@ These gates do not supersede stricter thresholds in the Understanding Reliabilit
 
 | ID | Decision |
 |---|---|
-| BICC-D01 | Approve or revise the initial release gates in §6.3. |
+| BICC-D01 | Approve or revise the automated offline/CI gates in §6.3, including corpus size, maintenance effort, execution time, and acceptable ongoing evaluation cost. |
 | BICC-D02 | Approve the initial safe general-guidance policy and excluded high-risk topics. |
 | BICC-D03 | Approve candidate-property retention, deletion, and promotion semantics. |
 | BICC-D04 | Approve supported attachment types, size limits, and sensitive-document classes. |
 | BICC-D05 | Approve preference-memory categories and default opt-in experience. |
 | BICC-D06 | Select the Phase 1 domain matrix used for certification. |
 | BICC-D07 | Decide whether staged delivery is required before multimodal delivery or may follow it based on measured latency. |
+| BICC-D08 | After Phase 0 measurement, approve provisional p50, p95, timeout, first-useful-result, and per-turn model-cost budgets for deterministic reads, model-planned reads, composed reads, attachment analysis, and consequential confirmation. |
+| BICC-D09 | Decide which authenticated account role or roles may enter `PROSPECTIVE_BUYER` mode and how the current `HOMEOWNER`-only client/server eligibility boundary changes. |
+| BICC-D10 | Approve ephemeral chat-attachment retention, deletion, encryption/isolation, and sensitive-document policy. |
 
 ## 19. Requirement evidence and status
 

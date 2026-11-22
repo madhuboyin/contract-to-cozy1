@@ -8,7 +8,7 @@
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-|  | [Ask Cozy — Best-in-Class Conversational Concierge FRD](../product/ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_CONCIERGE_FRD.md) | v0.1 · Draft v0.1 for owner review; target requirements, not an implementation claim | 2026-11-22 | 280 |
+|  | [Ask Cozy — Best-in-Class Conversational Concierge FRD](../product/ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_CONCIERGE_FRD.md) | v0.2 · Draft v0.2 for owner review; target requirements, not an implementation claim | 2026-11-22 | 322 |
 |  | [Ask Cozy — Cross-Domain Semantic Request Architecture FRD](../product/ASK_COZY_CROSS_DOMAIN_SEMANTIC_ARCHITECTURE_FRD.md) | v1.34 · Draft v1.34 for owner review | 2026-11-22 | 1390 |
 |  | [Ask Cozy — Understanding Reliability: Reaching 90% Resolved Prompts Without Controlling th](../product/ASK_COZY_UNDERSTANDING_RELIABILITY_FRD.md) | v0.19 · Draft v0.19 for owner review (v0.18 committed as `e9827f8a`; v0.19 answers a sev | 2026-11-21 | 1077 |
 |  | [Ask Cozy — Inline Workspace Product Requirements Document](../product/ASK_COZY_INLINE_WORKSPACE_FRD.md) |  | 2026-11-20 | 2478 |
@@ -82,7 +82,7 @@
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-|  | [Ask Cozy Best-in-Class Conversational Concierge — Corrected Audit](../architecture/ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_AUDIT.md) | Corrected product and architecture audit; evidence review, not a delivery claim | 2026-11-22 | 162 |
+|  | [Ask Cozy Best-in-Class Conversational Concierge — Corrected Audit](../architecture/ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_AUDIT.md) | Corrected product and architecture audit; evidence review, not a delivery claim | 2026-11-22 | 184 |
 |  | [Ask Cozy cross-domain semantic architecture — Phase 1 evidence](../product/ASK_COZY_PHASE1_EVIDENCE.md) |  | 2026-11-16 | 13 |
 |  | [Buyer and seller read operations vs the owner audience policy (audit, 2026-11-12)](../architecture/ASK_COZY_BUYER_SELLER_FLOOR_AUDIT.md) |  | 2026-11-12 | 29 |
 |  | [Ask Cozy: Natural Language & Free-Form Prompts Comprehensive Audit (Revision 9)](../architecture/ASK_COZY_NATURAL_LANGUAGE_FREE_FORM_PROMPTS_AUDIT.md) |  | 2026-11-10 | 471 |
