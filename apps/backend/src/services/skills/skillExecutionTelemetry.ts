@@ -15,7 +15,7 @@ export type SkillLatencyBand =
   | 'GTE_5_S';
 
 export type SkillConfidenceBand = 'NOT_AVAILABLE' | 'LOW' | 'MEDIUM' | 'HIGH';
-export type SkillModelUsage = 'NONE' | 'ROUTING' | 'NARRATIVE_SYNTHESIS' | 'OPERATION_GENERATION';
+export type SkillModelUsage = 'NONE' | 'ROUTING' | 'OPERATION_GENERATION';
 export type SkillModelCostBand = 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN';
 
 export interface SkillAudienceTelemetrySnapshot {

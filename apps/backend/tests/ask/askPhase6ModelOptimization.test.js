@@ -9,7 +9,6 @@ const {
   minimizeAskQuestion,
   selectRelevantAskFacts,
 } = require('../../src/services/ask/askPromptMinimization.ts');
-const { buildAskResultSynthesisPayload } = require('../../src/services/ask/askResultSynthesis.service.ts');
 
 test('routing cascade preserves safety precedence and deterministic high-confidence matches', () => {
   assert.equal(resolveAskRoutingCascade('I smell gas by the furnace').stage, 'SAFETY');
@@ -70,17 +69,4 @@ test('prompt context bridges homeowner HVAC and urgency language to canonical fa
   ];
   const selected = selectRelevantAskFacts('How serious is the furnace issue?', facts);
   assert.deepEqual(new Set(selected.map((fact) => fact.key)), new Set(['risk.severity', 'systems.hvacCondition']));
-});
-
-test('result-only synthesis payload excludes actions, routes, identifiers, and unsafe block families', () => {
-  const payload = buildAskResultSynthesisPayload('MAINTENANCE_STATUS', [{
-    type: 'SUMMARY', id: 'private-block-id', title: 'Maintenance status', body: 'Two tasks are pending for owner@example.com.', tone: 'DEFAULT',
-    actions: [{ id: 'open-private', label: 'Open tasks', href: '/dashboard/properties/private-id/tasks', style: 'PRIMARY' }],
-  }]);
-  assert.ok(payload);
-  assert.match(payload, /Two tasks are pending/);
-  assert.doesNotMatch(payload, /owner@example\.com|private-block-id|open-private|dashboard\/properties|"actions"\s*:|"href"\s*:/);
-  assert.equal(buildAskResultSynthesisPayload('OUT_OF_SCOPE_BOUNDARY', [{
-    type: 'BOUNDARY', id: 'boundary', title: 'Boundary', body: 'No.', severity: 'INFO', suggestions: [],
-  }]), null);
 });

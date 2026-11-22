@@ -337,7 +337,6 @@ const CORE_RUNTIME_AND_BOUNDARY_RECOGNIZER_FILES: readonly string[] = Object.fre
   'src/services/ask/askRecordExportSelection.ts',
   'src/services/ask/askRecordIndex.service.ts',
   'src/services/ask/askRemoteFallbackTypedClaims.ts',
-  'src/services/ask/askResultSynthesis.service.ts',
   'src/services/ask/askRoutingCalibrationEvidence.ts',
   'src/services/ask/askSaved.service.ts',
   'src/services/ask/askSearch.contract.ts',

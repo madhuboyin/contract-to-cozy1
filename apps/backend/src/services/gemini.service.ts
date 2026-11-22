@@ -337,35 +337,6 @@ class GeminiService {
     if (!response.text) throw new APIError('AI domain selection returned an empty response.', 502, 'AI_EMPTY_RESPONSE');
     return JSON.parse(response.text);
   }
-
-  public async synthesizeAskResult(resultOnlyPayload: string): Promise<unknown> {
-    const response = await geminiChatCircuit.execute(async () =>
-      withTimeout(
-        async () => {
-          const model = resolveGovernedAIModel('FAST');
-          return executeGovernedAIRequest({ routeId: 'ai:ask', model, structuredOutputRequired: true, structuredOutputConfigured: true, work: () => this.getAI().models.generateContent({
-          model,
-          contents: resultOnlyPayload,
-          config: {
-            systemInstruction: 'You format validated Contract to Cozy result data. Return JSON only. Never add facts, advice, numbers, dates, links, actions, or conclusions.',
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: 'object',
-              properties: { summary: { type: 'string' } },
-              required: ['summary'],
-              additionalProperties: false,
-            },
-            temperature: 0.1,
-            maxOutputTokens: 220,
-          },
-        }) });
-        },
-        { timeoutMs: GEMINI_CHAT_TIMEOUT_MS, operation: 'ask_result_synthesis' },
-      ),
-    );
-    if (!response.text) throw new APIError('AI result synthesis returned an empty response.', 502, 'AI_EMPTY_RESPONSE');
-    return JSON.parse(response.text);
-  }
 }
 
 export const geminiService = new GeminiService();

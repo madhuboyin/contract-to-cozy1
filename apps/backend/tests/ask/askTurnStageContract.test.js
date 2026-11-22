@@ -43,11 +43,11 @@ test('the cumulative clocks are the three that are not additive, and only REQUES
 test('the additive stages are exactly the consecutive marks of the execution phase plus request setup', () => {
   assert.deepEqual(
     [...ASK_TURN_ADDITIVE_STAGES].sort(),
-    ['ACTIONS_FINALIZE', 'INLINE_EXTRACTION', 'PERSIST_BASE', 'POST_PERSIST_EVENTS', 'PROPERTY_SUMMARY', 'REQUEST_SETUP', 'ROUTE_AND_EXECUTE', 'SYNTHESIS', 'TRUST_VALIDATION'],
+    ['ACTIONS_FINALIZE', 'INLINE_EXTRACTION', 'PERSIST_BASE', 'POST_PERSIST_EVENTS', 'PROPERTY_SUMMARY', 'REQUEST_SETUP', 'ROUTE_AND_EXECUTE', 'TRUST_VALIDATION'],
   );
   // Every additive execution-phase stage except setup is a markStage call, in this order, and nothing else is marked.
   const marked = [...create.matchAll(/markStage\('([A-Z_]+)'/g)].map((match) => match[1]);
-  assert.deepEqual(marked, ['ROUTE_AND_EXECUTE', 'SYNTHESIS', 'ACTIONS_FINALIZE', 'TRUST_VALIDATION', 'PERSIST_BASE', 'POST_PERSIST_EVENTS', 'INLINE_EXTRACTION', 'PROPERTY_SUMMARY']);
+  assert.deepEqual(marked, ['ROUTE_AND_EXECUTE', 'ACTIONS_FINALIZE', 'TRUST_VALIDATION', 'PERSIST_BASE', 'POST_PERSIST_EVENTS', 'INLINE_EXTRACTION', 'PROPERTY_SUMMARY']);
 });
 
 test('every stage the code observes is a contract stage, and every contract stage is observed', () => {

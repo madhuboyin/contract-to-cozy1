@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResolution, type AskOperationResult } from '../askOperationRegistry';
 import { prisma } from '../../../lib/prisma';
 import { logger } from '../../../lib/logger';
-import { askAnswerTrustTotal, askAnswerTrustUnlistedActionTotal, askResultSynthesisTotal, askSemanticAnswerValidationDurationSeconds, askSemanticAnswerValidationTotal, askSkillPresentationDurationSeconds } from '../../../lib/metrics';
+import { askAnswerTrustTotal, askAnswerTrustUnlistedActionTotal, askSemanticAnswerValidationDurationSeconds, askSemanticAnswerValidationTotal, askSkillPresentationDurationSeconds } from '../../../lib/metrics';
 import { operatingModeForOwnershipState, type PropertyJourneyContext } from '../../skills/context/propertyJourneyContext.contract';
 import { isAskOperationDiscoverableForAudience, type AskAudienceApplicabilityDecision } from '../askAudiencePolicy';
 import { getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../../skills/skillRegistry';
@@ -15,7 +15,6 @@ import { resolveAskAudienceContext } from '../askAudienceContext';
 import { validateAskAnswerTrustPipeline } from '../askAnswerTrustValidator';
 import { skillRuntimeUnavailableReason } from '../capabilityHandlerRegistry';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
-import { synthesizeAskResult } from '../askResultSynthesis.service';
 import { mapPersistedExecution } from './executionState';
 import { HOME_JOURNEY_SET_MESSAGE } from './homeSettingsConstants';
 
@@ -226,22 +225,6 @@ export function askFailureBlocks(error: unknown, retryable: boolean): AskPresent
       ? { title: 'Guidance temporarily unavailable', body: 'Generated guidance is temporarily unavailable. Record-based Ask operations remain available.' }
       : { title: 'Ask could not complete this request', body: 'No changes were made. Your question is preserved below — you can try again.' };
   return [{ type: 'ERROR_STATE', id: 'execution-failed', title, body, retryable, actions: [] }];
-}
-
-export async function maybeSynthesizeDeterministicResult(operationId: AskOperationResolution['operationId'], result: AskOperationResult, enabled: boolean, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
-  if (!enabled) return result;
-  const startedAt = process.hrtime.bigint();
-  if (trace) trace.modelUsage = 'NARRATIVE_SYNTHESIS';
-  try {
-    const synthesized = await synthesizeAskResult(operationId, result);
-    askResultSynthesisTotal.inc({ outcome: synthesized === result ? 'ineligible' : 'success' });
-    return synthesized;
-  } catch {
-    askResultSynthesisTotal.inc({ outcome: 'failure_fallback' });
-    return result;
-  } finally {
-    if (trace) trace.modelLatencyMs = (trace.modelLatencyMs ?? 0) + Number(process.hrtime.bigint() - startedAt) / 1_000_000;
-  }
 }
 
 export async function withAskTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {

@@ -8,7 +8,7 @@ import { prisma } from '../../../lib/prisma';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type ResolveAskExecutionProperty, type SubmitAskClarification } from '../../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
 import { getAskOperationDefinition, type AskOperationId, type AskOperationResolution } from '../askOperationRegistry';
-import { asInputJson, askFailureBlocks, askFailureStatus, assertSkillResultBlocksAllowed, discoverableAskOperationIds, ensurePropertyAccess, enterAskPropertyTimezoneContext, expireIfSkillBindingChanged, mapPersistedExecution, maybeSynthesizeDeterministicResult, preservedExecutionHistory, propertySummary, recordAskAnswerTrustMetrics, terminalStatus, withAskTimeout } from '../askHandlerSupport';
+import { asInputJson, askFailureBlocks, askFailureStatus, assertSkillResultBlocksAllowed, discoverableAskOperationIds, ensurePropertyAccess, enterAskPropertyTimezoneContext, expireIfSkillBindingChanged, mapPersistedExecution, preservedExecutionHistory, propertySummary, recordAskAnswerTrustMetrics, terminalStatus, withAskTimeout } from '../askHandlerSupport';
 import { executeOperation } from '../execution/executeOperation';
 import { isSettledForCompletion, recordSelectedSuggestedActionCompletion } from '../suggestedActions/suggestedActionCompletion';
 import { propertyScopeForAskRouting, resolveAskRoutingCascade } from '../askRoutingCascade';
@@ -172,9 +172,7 @@ async function submitAskClarificationCore(userId: string, executionId: string, i
       }),
       controls.executionTimeoutMs,
     );
-    const presentedResult = operationDefinition.executionMode === 'DETERMINISTIC'
-      ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled)
-      : rawResult;
+    const presentedResult = rawResult;
     const validation = validateAskAnswerTrustPipeline({
       question: clarifiedMessage,
       operationId: operation.operationId,
@@ -280,9 +278,7 @@ async function resolveAskExecutionPropertyCore(userId: string, executionId: stri
       executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: input.propertyId, operation, deferSemanticValidation: true }),
       controls.executionTimeoutMs,
     );
-    const presentedResult = operationDefinition.executionMode === 'DETERMINISTIC'
-      ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled)
-      : rawResult;
+    const presentedResult = rawResult;
     const validation = validateAskAnswerTrustPipeline({ question: execution.message, operationId: operation.operationId, result: presentedResult, propertyId: input.propertyId, semanticEnabled: controls.semanticResponseValidatorEnabled });
     const result = validation.result;
     recordAskAnswerTrustMetrics(operation.operationId, validation);

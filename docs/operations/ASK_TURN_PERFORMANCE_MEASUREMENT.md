@@ -15,7 +15,7 @@
 | `ask_turn_stage_duration_seconds{stage,operation}` | Per stage, see the contract | Mixed | 15 stages after Phase 3; the contract file `apps/backend/src/services/ask/askTurnStageContract.ts` defines each one |
 | `ask_execution_duration_seconds{operation,generation_mode}` | `startedAt` to just after the post-persist events (success), or to the end of the failure branch | Cumulative from execution start | Excludes request setup; on success it stops **before** inline extraction and the property summary, so it is not `TURN_TOTAL` |
 | `ask_executions_total{operation,status,generation_mode}` | Counter | n/a | Terminal status per turn |
-| `ask_model_duration_seconds{stage,outcome}` | Around one optional model call (`result_synthesis`, `grounded_guidance`) | Span | `result_synthesis` sits inside `SYNTHESIS`; `grounded_guidance` inside `ROUTE_AND_EXECUTE`. Result synthesis is **off by default** (`ASK_RESULT_SYNTHESIS_ENABLED`) |
+| `ask_model_duration_seconds{stage,outcome}` | Around one optional model call (`grounded_guidance`) | Span | `grounded_guidance` sits inside `ROUTE_AND_EXECUTE`. Model-backed result synthesis and its `SYNTHESIS` stage were retired under BICC-0.3 |
 | `ask_suggested_actions_pipeline_duration_seconds{mode}` | The shared finalizer's own `durationMs` | Span | Approximately `SUGGESTION_FINALIZE`, which is nested in `ROUTE_AND_EXECUTE` |
 | `ask_skill_*` (routing, context providers and composition, adapter, canonical operation, presentation) | Hand-timed spans | Spans | Skill routing is inside `REQUEST_SETUP`; the rest are inside `ROUTE_AND_EXECUTE`. Not re-audited beyond their registered definitions here |
 | `ask_inline_captures_total{operation,outcome}` | Counter | n/a | Inline capture **form** lifecycle, not conversational extraction |
@@ -45,9 +45,9 @@ All labels are registry-bounded or fixed enums. No operation, user, property, se
 
 The authoritative definitions are in `askTurnStageContract.ts`. In order along the success path:
 
-`REQUEST_SETUP` → `ROUTE_AND_EXECUTE` (contains `SUGGESTION_FINALIZE`) → `SYNTHESIS` → `ACTIONS_FINALIZE` → `TRUST_VALIDATION` → `PERSIST_BASE` → `POST_PERSIST_EVENTS` → `INLINE_EXTRACTION` (concurrent with `PROPERTY_SUMMARY_READ`) → `PROPERTY_SUMMARY` (residual wait).
+`REQUEST_SETUP` → `ROUTE_AND_EXECUTE` (contains `SUGGESTION_FINALIZE`) → `ACTIONS_FINALIZE` → `TRUST_VALIDATION` → `PERSIST_BASE` → `POST_PERSIST_EVENTS` → `INLINE_EXTRACTION` (concurrent with `PROPERTY_SUMMARY_READ`) → `PROPERTY_SUMMARY` (residual wait).
 
-The additive stages are `REQUEST_SETUP`, `ROUTE_AND_EXECUTE`, `SYNTHESIS`, `ACTIONS_FINALIZE`, `TRUST_VALIDATION`, `PERSIST_BASE`, `POST_PERSIST_EVENTS`, `INLINE_EXTRACTION`, `PROPERTY_SUMMARY`. Their sum should approximate `REQUEST_TOTAL`; the difference is unattributed time and should be reported.
+The additive stages are `REQUEST_SETUP`, `ROUTE_AND_EXECUTE`, `ACTIONS_FINALIZE`, `TRUST_VALIDATION`, `PERSIST_BASE`, `POST_PERSIST_EVENTS`, `INLINE_EXTRACTION`, `PROPERTY_SUMMARY`. Their sum should approximate `REQUEST_TOTAL`; the difference is unattributed time and should be reported.
 
 ## 4. Not measured (stated so nobody assumes otherwise)
 
@@ -63,12 +63,10 @@ Each scenario names an operation class; the owner chooses a representative messa
 
 | Id | Scenario | Operation class (registry id) | Toggle or condition | Stages and counters to read |
 |---|---|---|---|---|
-| S1 | Deterministic read | `PROPERTY_SUMMARY` or `RECALL_REVIEW` | Defaults | All additive stages; `SYNTHESIS` should be near zero |
+| S1 | Deterministic read | `PROPERTY_SUMMARY` or `RECALL_REVIEW` | Defaults | All additive stages |
 | S2 | Write proposal | `HOME_WORK_ITEM_COMMAND` or `MATERIAL_SPEC_ADD` | Defaults | `ROUTE_AND_EXECUTE`, `PERSIST_BASE` |
 | S3 | Confirmation of S2 | same operation | n/a | **Not stage-instrumented**; record wall-clock from the client or the access log |
 | S4 | Clarification | any ambiguous message | n/a | `ACTIONS_FINALIZE` is populated only here |
-| S5a | Remote synthesis disabled | a deterministic read | `ASK_RESULT_SYNTHESIS_ENABLED=false` (default) | `SYNTHESIS` near zero |
-| S5b | Remote synthesis enabled | the same read | `ASK_RESULT_SYNTHESIS_ENABLED=true` and remote generation on | `SYNTHESIS`, `ask_model_duration_seconds{stage="result_synthesis"}` |
 | S6 | Extraction pre-filter miss | a message with no home fact | Defaults | `ask_inline_extraction_total{outcome="PREFILTER_MISS"}`; `INLINE_EXTRACTION` small |
 | S7 | Inline extraction success | a message stating a home fact | Defaults | `outcome="COMPLETED"`; `INLINE_EXTRACTION`, `PROPERTY_SUMMARY_READ` |
 | S8 | Extraction budget expiry and fallback | a fact message when the model is slow | Observed, not forced | `outcome="BUDGET_TIMEOUT"`; `INLINE_EXTRACTION` capped near the 1.5 s budget |

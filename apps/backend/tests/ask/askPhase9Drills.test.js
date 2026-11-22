@@ -81,7 +81,7 @@ test('a Saved type that hangs is reported as unavailable and the page is partial
 // ---- LLM unavailable ---------------------------------------------------------------------------------------------------------------------------------------
 
 test('with every model-backed control off, exactly one registered operation depends on remote generation, and it says so plainly', () => {
-  const controls = readAskOperationalControls({ ASK_REMOTE_GENERATION_ENABLED: 'false', ASK_SEMANTIC_RETRIEVAL_ENABLED: 'false', ASK_EMBEDDING_RETRIEVAL_ENABLED: 'false', ASK_CONSTRAINED_CLASSIFIER_ENABLED: 'false', ASK_RESULT_SYNTHESIS_ENABLED: 'false' });
+  const controls = readAskOperationalControls({ ASK_REMOTE_GENERATION_ENABLED: 'false', ASK_SEMANTIC_RETRIEVAL_ENABLED: 'false', ASK_EMBEDDING_RETRIEVAL_ENABLED: 'false', ASK_CONSTRAINED_CLASSIFIER_ENABLED: 'false' });
   assert.equal(controls.remoteGenerationEnabled, false);
   assert.equal(controls.semanticRetrievalEnabled, false);
   const remote = Object.values(ASK_OPERATION_DEFINITIONS).filter((definition) => definition.executionMode === 'REMOTE_GENERATION').map((definition) => definition.operationId);

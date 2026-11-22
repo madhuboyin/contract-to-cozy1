@@ -66,17 +66,9 @@ export const ASK_TURN_STAGE_CONTRACT: Readonly<Record<AskTurnStage, AskTurnStage
     overlaps: 'ROUTE_AND_EXECUTE',
     observedOn: 'SUCCESS',
   },
-  SYNTHESIS: {
-    kind: 'DELTA',
-    start: 'End of ROUTE_AND_EXECUTE.',
-    end: 'maybeSynthesizeDeterministicResult returns.',
-    includes: 'The optional remote result-synthesis call when synthesis and remote generation are enabled for a deterministic operation; effectively zero otherwise.',
-    additive: true,
-    observedOn: 'SUCCESS',
-  },
   ACTIONS_FINALIZE: {
     kind: 'DELTA',
-    start: 'End of SYNTHESIS.',
+    start: 'End of ROUTE_AND_EXECUTE.',
     end: 'The routing-clarification suggested-action finalizer returns.',
     includes: 'Only a routing clarification is finalized here; an ordinary answer is finalized earlier as SUGGESTION_FINALIZE inside ROUTE_AND_EXECUTE, so this is effectively zero for ordinary turns.',
     additive: true,

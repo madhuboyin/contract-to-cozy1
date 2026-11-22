@@ -64,7 +64,7 @@ export const askExecutionDurationSeconds = new Histogram({
 // execution start until the validated base result is persisted, as distinct from the whole API turn (TURN_TOTAL).
 // Findings Implementation Plan Phase 3 added REQUEST_SETUP, PROPERTY_SUMMARY_READ, REQUEST_TOTAL and FAILED_REQUEST_TOTAL. Each stage's exact start and end,
 // and whether it is additive, nested, concurrent or cumulative, is defined in services/ask/askTurnStageContract.ts and locked by a test.
-export const ASK_TURN_STAGES = ['REQUEST_SETUP', 'ROUTE_AND_EXECUTE', 'SYNTHESIS', 'ACTIONS_FINALIZE', 'SUGGESTION_FINALIZE', 'TRUST_VALIDATION', 'PERSIST_BASE', 'DURABLE_BASE_RESULT', 'POST_PERSIST_EVENTS', 'PROPERTY_SUMMARY', 'PROPERTY_SUMMARY_READ', 'INLINE_EXTRACTION', 'TURN_TOTAL', 'REQUEST_TOTAL', 'FAILED_REQUEST_TOTAL'] as const;
+export const ASK_TURN_STAGES = ['REQUEST_SETUP', 'ROUTE_AND_EXECUTE', 'ACTIONS_FINALIZE', 'SUGGESTION_FINALIZE', 'TRUST_VALIDATION', 'PERSIST_BASE', 'DURABLE_BASE_RESULT', 'POST_PERSIST_EVENTS', 'PROPERTY_SUMMARY', 'PROPERTY_SUMMARY_READ', 'INLINE_EXTRACTION', 'TURN_TOTAL', 'REQUEST_TOTAL', 'FAILED_REQUEST_TOTAL'] as const;
 export type AskTurnStage = typeof ASK_TURN_STAGES[number];
 export const askTurnStageDurationSeconds = new Histogram({
   name: 'ask_turn_stage_duration_seconds',
@@ -390,13 +390,6 @@ export const askCorrectionsTotal = new Counter({
   name: 'ask_corrections_total',
   help: 'Ask conversational correction requests by bounded kind and outcome',
   labelNames: ['kind', 'outcome'] as const,
-  registers: [register],
-});
-
-export const askResultSynthesisTotal = new Counter({
-  name: 'ask_result_synthesis_total',
-  help: 'Optional result-only Ask synthesis attempts by bounded outcome',
-  labelNames: ['outcome'] as const,
   registers: [register],
 });
 

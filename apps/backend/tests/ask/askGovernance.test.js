@@ -493,12 +493,11 @@ test('golden and negative prompts route before remote generation', () => {
   }
 });
 
-test('Ask operational controls support global, routing, synthesis, remote, per-operation, retention, and timeout overrides', () => {
+test('Ask operational controls support global, routing, remote, per-operation, retention, and timeout overrides', () => {
   const controls = readAskOperationalControls({
     ASK_ENABLED: 'false',
     ASK_REMOTE_GENERATION_ENABLED: '0',
     ASK_LOCAL_ROUTING_ENABLED: 'false',
-    ASK_RESULT_SYNTHESIS_ENABLED: 'true',
     ASK_ACCOUNT_ROLE_ELIGIBILITY_ENABLED: 'false',
     ASK_AUDIENCE_POLICY_KILL_SWITCH: 'true',
     ASK_AUDIENCE_DISCOVERY_ENABLED: 'false',
@@ -513,7 +512,6 @@ test('Ask operational controls support global, routing, synthesis, remote, per-o
   assert.equal(controls.askEnabled, false);
   assert.equal(controls.remoteGenerationEnabled, false);
   assert.equal(controls.localRoutingEnabled, false);
-  assert.equal(controls.resultSynthesisEnabled, true);
   assert.equal(controls.accountRoleEligibilityEnabled, false);
   assert.equal(controls.audiencePolicyEnabled, false);
   assert.equal(controls.audienceDiscoveryEnabled, false);
@@ -528,12 +526,9 @@ test('Ask operational controls support global, routing, synthesis, remote, per-o
 
   const killed = readAskOperationalControls({
     ASK_KILL_SWITCH: 'true',
-    ASK_RESULT_SYNTHESIS_ENABLED: 'true',
-    ASK_RESULT_SYNTHESIS_KILL_SWITCH: 'true',
     ASK_OPERATION_PROPERTY_SUMMARY_KILL_SWITCH: 'true',
   });
   assert.equal(killed.askEnabled, false);
-  assert.equal(killed.resultSynthesisEnabled, false);
   assert.equal(killed.operationEnabled('PROPERTY_SUMMARY'), false);
   assert.equal(killed.operationEnabled('MAINTENANCE_STATUS'), true);
 });

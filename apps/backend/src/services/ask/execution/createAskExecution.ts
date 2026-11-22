@@ -13,7 +13,7 @@ import { askCompositionTotal, askRecoveryOutcomeTotal, askTurnStageDurationSecon
 import { type AskAccountRole } from '../askAccountEligibility';
 import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, hasCoverageComparisonWording, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
 import { runConversationalCaptureForTurn } from '../conversationalUnderstanding/conversationalCapture';
-import { asInputJson, askFailureBlocks, askFailureStatus, assertSkillResultBlocksAllowed, audienceTelemetryFor, discoverableAskOperationIds, ensureAskServiceAccountEligibility, ensurePropertyAccess, enterAskPropertyTimezoneContext, mapPersistedExecution, maybeSynthesizeDeterministicResult, preservedExecutionHistory, propertySummary, recordAskAnswerTrustMetrics, terminalStatus, withAskTimeout } from '../askHandlerSupport';
+import { asInputJson, askFailureBlocks, askFailureStatus, assertSkillResultBlocksAllowed, audienceTelemetryFor, discoverableAskOperationIds, ensureAskServiceAccountEligibility, ensurePropertyAccess, enterAskPropertyTimezoneContext, mapPersistedExecution, preservedExecutionHistory, propertySummary, recordAskAnswerTrustMetrics, terminalStatus, withAskTimeout } from '../askHandlerSupport';
 import { executeOperation } from '../execution/executeOperation';
 import { classifyLaunchedOutcome, recordHandoffOutcome, resolveHandoffAttribution, type AskHandoffAttribution } from './askHandoffTelemetry';
 import { propertyScopeForAskRouting, resolveAskRoutingCascade, type AskRoutingDecision } from '../askRoutingCascade';
@@ -803,17 +803,13 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
         result: rawExecutedResult,
       }).result;
     markStage('ROUTE_AND_EXECUTE', operation.operationId);
-    const synthesizedResult = operationDefinition.executionMode === 'DETERMINISTIC' && !routingDecision.requiresClarification
-      ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled, skillTelemetryTrace)
-      : rawResult;
-    markStage('SYNTHESIS', operation.operationId);
     // A routing clarification is built here rather than in executeOperation, so it needs the shared finalizer itself (plan §7.4).
     const presentedResult = routingDecision.requiresClarification
       ? await finalizeSuggestedNextActions({
-        result: synthesizedResult, executionId: execution.id, userId, sessionId: session.id, propertyId: executionPropertyId ?? null,
+        result: rawResult, executionId: execution.id, userId, sessionId: session.id, propertyId: executionPropertyId ?? null,
         operationId: null, message: routingMessage,
       })
-      : synthesizedResult;
+      : rawResult;
     markStage('ACTIONS_FINALIZE', operation.operationId);
     // The semantic layer guards against routing the wrong operation from free
     // text; a declared item action named its operation explicitly, so a

@@ -25,7 +25,6 @@ export interface AskOperationalControls {
   embeddingRetrievalEnabled: boolean;
   constrainedClassifierEnabled: boolean;
   semanticResponseValidatorEnabled: boolean;
-  resultSynthesisEnabled: boolean;
   /** Reliability FRD Phase 3 planner. Requires separate provider-terms, homeowner-text and calibrated-stratum gates. */
   understandingPlannerEnabled: boolean;
   understandingProviderTermsRecorded: boolean;
@@ -68,8 +67,6 @@ export function readAskOperationalControls(env: NodeJS.ProcessEnv = process.env)
       && !booleanEnv(env.ASK_UNDERSTANDING_PLANNER_KILL_SWITCH, false),
     understandingProviderTermsRecorded: booleanEnv(env.ASK_UNDERSTANDING_PROVIDER_TERMS_RECORDED, false),
     understandingHomeownerTextApproved: booleanEnv(env.ASK_UNDERSTANDING_HOMEOWNER_TEXT_APPROVED, false),
-    resultSynthesisEnabled: booleanEnv(env.ASK_RESULT_SYNTHESIS_ENABLED, false)
-      && !booleanEnv(env.ASK_RESULT_SYNTHESIS_KILL_SWITCH, false),
     // Ask Cozy Stage 3, Phase 3 (implementation plan §22). Defaults off,
     // unlike most flags here that default on -- this gates a genuinely new,
     // unproven capability (LLM-driven writes-by-proposal from ordinary
