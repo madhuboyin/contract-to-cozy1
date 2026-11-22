@@ -1,10 +1,17 @@
 'use client';
 
 import { CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
-import { MessageCircle, Sparkles, X } from 'lucide-react';
-import { AskWorkspace } from '@/components/ask/AskWorkspace';
+import dynamic from 'next/dynamic';
+import { MessageCircle, Sparkles } from 'lucide-react';
 import { resolveRouteAskContext, type RouteAskContext } from '@/features/ask/routeContext';
 import { resolveDashboardBackHref } from '@/lib/navigation/backNavigation';
+
+// BICC-UX-007: the workspace is loaded only when the launcher opens, so non-Ask dashboard pages do not pay for it. The launch
+// context (question, surface, capability, back target, route context) lives in this component's state and survives the load.
+const AskWorkspace = dynamic(() => import('@/components/ask/AskWorkspace').then((module) => module.AskWorkspace), {
+  ssr: false,
+  loading: () => <div className="grid h-full place-items-center text-sm text-slate-500" role="status">Opening Ask Cozy…</div>,
+});
 
 const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -23,20 +30,19 @@ export function AIChat() {
   const dialogRef = useRef<HTMLDivElement>(null);
   const confirmDialogRef = useRef<HTMLDivElement>(null);
   const keepWorkingRef = useRef<HTMLButtonElement>(null);
-  const panelCloseButtonRef = useRef<HTMLButtonElement>(null);
   const wasConfirmingRef = useRef(false);
 
   // Moves focus into the "Close Ask Cozy?" overlay when it appears (it
   // previously gave screen-reader users no cue it had opened), defaulting
   // to the non-destructive "Keep working" control rather than the first
   // DOM control, which happens to be the one that discards pending work.
-  // Returns focus to the panel's own close button when the overlay is
+  // Returns focus to the workspace header's single Close button when the overlay is
   // dismissed via "Keep working"; on the full-close path this is a no-op
   // since the panel (and this ref) has already unmounted by then, and
   // close() already restores focus to the launcher itself.
   useEffect(() => {
     if (confirmClose) keepWorkingRef.current?.focus();
-    else if (wasConfirmingRef.current) panelCloseButtonRef.current?.focus();
+    else if (wasConfirmingRef.current) dialogRef.current?.querySelector<HTMLElement>('[data-ask-panel-close]')?.focus();
     wasConfirmingRef.current = confirmClose;
   }, [confirmClose]);
 
@@ -119,20 +125,20 @@ export function AIChat() {
           ref={triggerRef}
           onClick={() => { setInitialQuestion(''); setLaunchSurface(''); setLaunchCapabilityId(''); setBackTo(`${window.location.pathname}${window.location.search}${window.location.hash}`); setRouteContext(resolveRouteAskContext(window.location.pathname)); setIsOpen(true); }}
           aria-label="Open Ask Cozy"
-          className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-40 flex h-14 items-center gap-2 rounded-full bg-teal-700 px-5 font-semibold text-white shadow-[0_18px_45px_-15px_rgba(15,118,110,0.8)] transition hover:bg-teal-800 lg:bottom-6 lg:right-6"
+          className="fixed bottom-[calc(env(safe-area-inset-bottom)+5rem)] right-4 z-40 flex h-14 items-center gap-2 rounded-full bg-teal-700 px-5 font-semibold text-white shadow-[0_18px_45px_-15px_rgba(15,118,110,0.8)] transition hover:bg-teal-800 lg:bottom-6 lg:right-6"
         >
           <Sparkles className="h-5 w-5" /><span className="hidden sm:inline">Ask Cozy</span><MessageCircle className="h-5 w-5 sm:hidden" />
         </button>
       )}
       {isOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-[2px] lg:flex lg:items-end lg:justify-end lg:p-6" role="dialog" aria-modal="true" aria-label="Ask Cozy">
-          <button className="absolute inset-0 cursor-default" aria-label="Close Ask Cozy" onClick={requestClose} />
+          {/* A pointer-only backdrop: Escape and the header Close button are the keyboard and assistive routes, so this is not a second named close control. */}
+          <div className="absolute inset-0 cursor-default" aria-hidden="true" onClick={requestClose} />
           <div
             ref={dialogRef}
             style={viewportHeight != null ? ({ '--ask-viewport-height': `${viewportHeight}px` } as CSSProperties) : undefined}
             className="relative h-[var(--ask-viewport-height,100%)] w-full overflow-hidden bg-white shadow-2xl lg:h-[min(780px,calc(100vh-3rem))] lg:w-[560px] lg:rounded-[28px] lg:border lg:border-slate-200"
           >
-            <button ref={panelCloseButtonRef} onClick={requestClose} aria-label="Close Ask Cozy" className="absolute right-3 top-3 z-20 grid h-9 w-9 place-items-center rounded-xl bg-white text-slate-500 shadow-sm hover:bg-slate-100"><X className="h-4 w-4" /></button>
             <AskWorkspace mode="panel" onClose={requestClose} onPendingStateChange={setHasPendingWork} initialQuestion={initialQuestion} initialBackTo={backTo} launchSurface={launchSurface} launchCapabilityId={launchCapabilityId} routeContext={routeContext} />
             {confirmClose && <div ref={confirmDialogRef} className="absolute inset-x-4 top-16 z-30 rounded-2xl border border-amber-200 bg-white p-4 shadow-xl" role="alertdialog" aria-modal="true" aria-labelledby="ask-close-title"><h2 id="ask-close-title" className="font-semibold text-slate-950">Close Ask Cozy?</h2><p className="mt-1 text-sm text-slate-600">Your typed and inline-capture drafts are saved on this device. Any unconfirmed action will remain pending.</p><div className="mt-4 flex gap-2"><button type="button" onClick={close} className="min-h-10 rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white">Close</button><button ref={keepWorkingRef} type="button" onClick={() => setConfirmClose(false)} className="min-h-10 rounded-xl px-4 text-sm font-semibold text-slate-700">Keep working</button></div></div>}
           </div>

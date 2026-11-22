@@ -90,6 +90,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // BICC-TRN-002: a calm status line (for example after the person stops waiting); never an error alert.
+  const [notice, setNotice] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   // UX-10: the page's soft context is cleared by dismissing it or by starting another conversation.
   const [routeContextDismissed, setRouteContextDismissed] = useState(false);
@@ -221,7 +223,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
   const scopeLabel = selectedPropertyId ? 'Answers use your selected home record' : 'General home guidance';
 
-  const { ask, retryExecution, stopAsking, editAndResend } = useAskRequest({ sessionId, loading, executions, selectedPropertyId, mode, launchSurface, launchCapabilityId, launchRecord: launchRecord ? { ...launchRecord, message: initialQuestion } : undefined, safeBackTo, requests, inFlight, stoppedRequests, deniedProperties, activeSessionRef, textareaRef, setInput, setError, setLoading, setServiceUnavailable, setExecutions, setJustUpdatedExecutionId, setRecentSessionsEpoch });
+  const { ask, retryExecution, stopAsking, editAndResend } = useAskRequest({ sessionId, loading, executions, selectedPropertyId, mode, launchSurface, launchCapabilityId, launchRecord: launchRecord ? { ...launchRecord, message: initialQuestion } : undefined, safeBackTo, requests, inFlight, stoppedRequests, deniedProperties, activeSessionRef, textareaRef, setInput, setError, setNotice, setLoading, setServiceUnavailable, setExecutions, setJustUpdatedExecutionId, setRecentSessionsEpoch });
 
   const { submit, keyDown, isComposingRef } = useComposerKeys({
     input,
@@ -385,6 +387,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const moreIdeas = <CapabilityExplorer row {...explorerProps} />;
   const renderComposer = (placement: 'hero' | 'footer') => (
     <form onSubmit={submit} className={cn('group mx-auto w-full', placement === 'hero' ? 'max-w-none' : calm ? 'max-w-[1140px]' : 'max-w-3xl')} aria-label="Ask Cozy question">
+      {notice && !error && <p className="mb-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600" role="status" data-ask-notice="">{notice}</p>}
       {error && <div className="mb-2 flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700" role="alert"><AlertTriangle className="h-4 w-4 shrink-0" /><span className="min-w-0 flex-1">{error}</span>
         {input.trim() && !loading && sessionId && <button type="button" onClick={() => void ask(input)} className="shrink-0 rounded-lg border border-red-200 bg-white px-2 py-1 font-semibold text-red-800 hover:bg-red-100">Try again</button>}</div>}
       <div className={cn('flex gap-2 border border-slate-300 bg-white p-2 shadow-sm transition focus-within:border-emerald-700 focus-within:ring-2 focus-within:ring-emerald-100', placement === 'hero' ? cn('rounded-2xl p-3 shadow-[0_12px_28px_-20px_rgba(15,23,42,0.45)]', calm && (input.includes('\n') ? 'min-h-16 items-end rounded-3xl border-stone-300 px-4 py-2 shadow-[0_4px_16px_-8px_rgba(15,23,42,0.35)] sm:px-5' : 'min-h-16 items-center rounded-full border-stone-300 px-4 py-2 shadow-[0_4px_16px_-8px_rgba(15,23,42,0.35)] max-sm:flex-wrap max-sm:justify-end max-sm:rounded-3xl sm:px-5')) : 'items-end rounded-2xl')}>
@@ -434,7 +437,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
             {executions.length > 0 && <button type="button" aria-label="Delete current conversation" onClick={() => setConfirmClear(true)} className="inline-flex min-h-10 items-center rounded-xl px-3 py-2 text-slate-600 hover:bg-slate-100"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>}
           </>}
           {mode === 'panel' && <Link href={fullWorkspaceHref} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50"><Maximize2 className="h-4 w-4" />Full workspace</Link>}
-          {onClose && <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Close</button>}
+          {onClose && <button type="button" onClick={onClose} aria-label="Close Ask Cozy" data-ask-panel-close="" className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Close</button>}
         </div>
       </header>
 

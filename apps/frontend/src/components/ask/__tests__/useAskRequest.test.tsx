@@ -15,7 +15,7 @@ const exec = (id: string, extra: Record<string, unknown> = {}) => ({ executionId
 const ok = (data: unknown) => Promise.resolve({ success: true, data });
 
 function setup(overrides: Record<string, unknown> = {}) {
-  const fns = { setInput: jest.fn(), setError: jest.fn(), setLoading: jest.fn(), setServiceUnavailable: jest.fn(), setExecutions: jest.fn(), setJustUpdatedExecutionId: jest.fn(), setRecentSessionsEpoch: jest.fn() };
+  const fns = { setInput: jest.fn(), setError: jest.fn(), setNotice: jest.fn(), setLoading: jest.fn(), setServiceUnavailable: jest.fn(), setExecutions: jest.fn(), setJustUpdatedExecutionId: jest.fn(), setRecentSessionsEpoch: jest.fn() };
   const refs = {
     requests: { current: createResultRequestTracker() }, inFlight: { current: null as any }, stoppedRequests: { current: new Set<number>() },
     deniedProperties: { current: new Set<string>() }, activeSessionRef: { current: 's1' }, textareaRef: { current: null },
@@ -178,7 +178,9 @@ describe('stopAsking and editAndResend', () => {
     expect(refs.inFlight.current).toBeNull();
     expect(fns.setInput).toHaveBeenLastCalledWith('Is my roof ok?');
     expect(window.localStorage.getItem(draftStorageKey('p1', 's1'))).toBe('Is my roof ok?');
-    expect(fns.setError).toHaveBeenLastCalledWith(expect.stringMatching(/^Stopped\./));
+    // BICC-TRN-002: stopping is a calm notice, never an error alert.
+    expect(fns.setNotice).toHaveBeenLastCalledWith(expect.stringMatching(/^Stopped\./));
+    expect(fns.setError).not.toHaveBeenCalledWith(expect.stringMatching(/./));
     expect(fns.setLoading).toHaveBeenLastCalledWith(false);
     const loadingCalls = fns.setLoading.mock.calls.length;
     await act(async () => { release({ success: true, data: exec('late') }); await pending; });

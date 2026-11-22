@@ -8,7 +8,7 @@ import { askServiceIsPaused, draftStorageKey, newId, updateAskLocation, type Ask
 // Sending a question: the request, its stale-answer guards, restoring the text on failure, stopping a request and
 // bringing an earlier question back to edit. Moved out of AskWorkspace unchanged (P2, FRD v1.107). The refs are shared
 // with result refresh, so the workspace owns them and passes them in.
-export function useAskRequest({ sessionId, loading, executions, selectedPropertyId, mode, launchSurface, launchCapabilityId, launchRecord, safeBackTo, requests, inFlight, stoppedRequests, deniedProperties, activeSessionRef, textareaRef, setInput, setError, setLoading, setServiceUnavailable, setExecutions, setJustUpdatedExecutionId, setRecentSessionsEpoch }: {
+export function useAskRequest({ sessionId, loading, executions, selectedPropertyId, mode, launchSurface, launchCapabilityId, launchRecord, safeBackTo, requests, inFlight, stoppedRequests, deniedProperties, activeSessionRef, textareaRef, setInput, setError, setNotice, setLoading, setServiceUnavailable, setExecutions, setJustUpdatedExecutionId, setRecentSessionsEpoch }: {
   sessionId: string;
   loading: boolean;
   executions: AskExecutionResponse[];
@@ -27,6 +27,8 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
   textareaRef: RefObject<HTMLTextAreaElement>;
   setInput: (value: string) => void;
   setError: (value: string | null) => void;
+  /** A calm, non-error status line (for example after the person stops waiting). */
+  setNotice?: (value: string | null) => void;
   setLoading: (value: boolean) => void;
   setServiceUnavailable: (value: boolean) => void;
   setExecutions: Dispatch<SetStateAction<AskExecutionResponse[]>>;
@@ -34,6 +36,9 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
   setRecentSessionsEpoch: Dispatch<SetStateAction<number>>;
 }) {
   const editResendContextRef = useRef<{ question: string; declaredOperationId: string } | null>(null);
+  // BICC-TRN-001: one controller per in-flight request, keyed by its token, so stopping aborts the browser request itself.
+  const controllers = useRef<Map<number, AbortController>>(new Map());
+  const beginController = (token: number) => { const controller = new AbortController(); controllers.current.set(token, controller); return controller; };
   const ask = async (question: string, attribution?: AskPromptAttribution, promptContext?: AskCapabilityPrompt['context'], options?: { presentInConversation?: boolean; suggestedAction?: { actionId: string; fromExecutionId: string }; sessionIdOverride?: string; firstMessageOverride?: boolean }) => {
     const message = question.trim();
     const requestedSessionId = options?.sessionIdOverride ?? sessionId;
@@ -60,9 +65,11 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
     const requestKey = source ? resultRequestKey(source) : `${requestedSessionId}:question`;
     const requestToken = requests.current.begin(requestKey);
     inFlight.current = { key: requestKey, token: requestToken, message };
+    const controller = beginController(requestToken);
     setInput('');
     window.localStorage.removeItem(draftStorageKey(selectedPropertyId, requestedSessionId));
     setError(null);
+    setNotice?.(null);
     setLoading(true);
     try {
       // Launch surface/capability describe how Ask was *opened* (e.g. from
@@ -99,7 +106,7 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
           documentId: promptContext?.documentId,
           batchDecisions: promptContext?.batchDecisions,
         },
-      });
+      }, { signal: controller.signal });
       if (!response.success || !response.data) throw new Error(response.message || 'Ask could not complete that request.');
       if (activeSessionRef.current !== requestedSessionId || !requests.current.current(requestKey, requestToken) || deniedProperties.current.has(`${requestedSessionId}:${selectedPropertyId}`)) {
         // The homeowner switched property/session while this was in
@@ -144,6 +151,7 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
       }
       if (attribution) track('ask_prompt_outcome', { propertyId: selectedPropertyId ?? null, ...attribution, status: 'REQUEST_FAILED', succeeded: false });
     } finally {
+      controllers.current.delete(requestToken);
       // A request the homeowner stopped must not clear the loading state of one started after it.
       if (!stoppedRequests.current.delete(requestToken)) {
         setLoading(false);
@@ -158,10 +166,12 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
     const requestKey = resultRequestKey(execution);
     const requestToken = requests.current.begin(requestKey);
     inFlight.current = { key: requestKey, token: requestToken, message: execution.question };
+    const controller = beginController(requestToken);
     setError(null);
+    setNotice?.(null);
     setLoading(true);
     try {
-      const response = await api.retryAskExecution(execution.executionId, newId());
+      const response = await api.retryAskExecution(execution.executionId, newId(), { signal: controller.signal });
       if (!response.success || !response.data) throw new Error(response.message || 'Ask could not retry that request.');
       if (activeSessionRef.current !== requestedSessionId || !requests.current.current(requestKey, requestToken)) return;
       setExecutions((current) => mergeResultExecutions(current, [response.data!, ...(response.data!.childExecutions ?? [])]));
@@ -172,6 +182,7 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
       if (activeSessionRef.current !== requestedSessionId || !requests.current.current(requestKey, requestToken)) return;
       setError(caught instanceof Error ? caught.message : 'Ask is temporarily unavailable.');
     } finally {
+      controllers.current.delete(requestToken);
       if (!stoppedRequests.current.delete(requestToken)) {
         setLoading(false);
         if (inFlight.current?.token === requestToken) inFlight.current = null;
@@ -185,6 +196,8 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
     const pending = inFlight.current;
     if (!pending) return;
     stoppedRequests.current.add(pending.token);
+    // BICC-TRN-001: abort the browser request. Work the server already committed still finishes there and shows in history.
+    controllers.current.get(pending.token)?.abort();
     // A newer token for the same key makes this request's late answer stale, without touching other requests.
     requests.current.begin(pending.key);
     inFlight.current = null;
@@ -192,7 +205,9 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
     setInput(pending.message);
     if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), pending.message);
     // UX-02 / D-01 ("Stop waiting"): say plainly that only the waiting stopped. Nothing is recalled or reversed on the server.
-    setError('Stopped. Your question is back in the box. Cozy may still finish it, and if it does the answer will be in your conversation history.');
+    // BICC-TRN-002: stopping is a normal state, not an error alert.
+    setError(null);
+    setNotice?.('Stopped. Your question is back in the box. If Cozy had already finished it, the answer will be in your conversation history.');
     window.setTimeout(() => textareaRef.current?.focus(), 0);
   };
   // FRD v1.96: bring an earlier question back into the composer to change and send again. The earlier answer stays.

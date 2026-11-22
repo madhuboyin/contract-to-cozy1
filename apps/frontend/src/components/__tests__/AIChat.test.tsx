@@ -9,6 +9,10 @@ jest.mock('@/lib/property/PropertyContext', () => ({
   usePropertyContext: () => ({ selectedPropertyId: 'property-1' }),
 }));
 
+jest.mock('@/lib/auth/AuthContext', () => ({
+  useAuth: () => ({ user: { id: 'user-1', role: 'HOMEOWNER', firstName: 'Test', lastName: 'Owner', email: 'owner@example.com' }, logout: jest.fn() }),
+}));
+
 jest.mock('@/lib/api/client', () => ({
   api: {
     getAskSession: jest.fn().mockResolvedValue({ success: true, data: { executions: [] } }),
@@ -55,12 +59,27 @@ describe('Ask Cozy global workspace continuity', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open Ask Cozy' }));
     const composer = await screen.findByPlaceholderText('Ask anything about your home…');
     fireEvent.change(composer, { target: { value: 'Show overdue roof work' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close Ask Cozy' }));
     const confirmClose = screen.getByRole('alertdialog').querySelector<HTMLButtonElement>('button');
     expect(confirmClose).not.toBeNull();
     fireEvent.click(confirmClose!);
     fireEvent.click(screen.getByRole('button', { name: 'Open Ask Cozy' }));
 
     await waitFor(() => expect(screen.getByPlaceholderText('Ask anything about your home…')).toHaveValue('Show overdue roof work'));
+  });
+
+  // BICC-0.5: the launcher must sit above the dashboard bottom navigation, and the panel exposes exactly one named close control.
+  it('keeps the launcher clear of the mobile bottom navigation', () => {
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><AIChat /></QueryClientProvider>);
+    const launcher = screen.getByRole('button', { name: 'Open Ask Cozy' });
+    expect(launcher.className).toContain('bottom-[calc(env(safe-area-inset-bottom)+5rem)]');
+    expect(launcher.className).toContain('lg:bottom-6');
+  });
+
+  it('shows one close control, not a scrim button and a second header button with the same name', async () => {
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><AIChat /></QueryClientProvider>);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Ask Cozy' }));
+    await screen.findByPlaceholderText('Ask anything about your home…');
+    expect(screen.getAllByRole('button', { name: /close ask cozy/i })).toHaveLength(1);
   });
 });
