@@ -168,7 +168,7 @@ test('ACUI-001..006 on a phone: nothing scrolls sideways, the explanation, trust
   await page.getByRole('button', { name: 'Why this appeared' }).first().click();
   await expect(page.locator('[data-why-panel]').first()).toBeVisible();
   await noSidewaysScroll(page);
-  // The desktop rail does not exist here. Reaching history on a phone is the parked test below (open decision W-3).
+  // The desktop rail does not exist here; History on a phone is the separate test below.
   await expect(page.locator('#ask-history-toggle')).toBeHidden();
 
   await ask(page, 'Show my maintenance tasks with sources');
@@ -180,15 +180,17 @@ test('ACUI-001..006 on a phone: nothing scrolls sideways, the explanation, trust
   await noSidewaysScroll(page);
 });
 
-// OPEN DECISION W-3: the calm shell hides the header (no top bar, owner direction 2026-10-20), and that header held the only phone button that opens
-// the conversation history sheet, so on a phone history cannot be reached from the landing. Un-fixme once the owner picks where it lives.
-test.fixme('on a phone, history is reachable and opens the existing sheet', async ({ page }) => {
+// The calm shell has no header, so on a phone History lives beside Explore with Cozy and opens the existing conversation sheet.
+test('on a phone, history is reachable and opens the existing sheet', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page, { recentSessions: true });
   await open(page);
-  await page.getByRole('button', { name: /history/i }).first().click();
-  await expect(page.getByRole('dialog', { name: 'Ask Cozy conversations' }).getByPlaceholder('Search conversations')).toBeVisible();
+  await page.getByRole('button', { name: 'Open conversation history' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Ask Cozy conversations' });
+  await expect(sheet.getByPlaceholder('Search conversations')).toBeVisible();
+  await noSidewaysScroll(page);
   await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
 });
 
 test('accessibility: keyboard reaches and operates the explanation, the status region announces the answer, and controls have names', async ({ page }) => {

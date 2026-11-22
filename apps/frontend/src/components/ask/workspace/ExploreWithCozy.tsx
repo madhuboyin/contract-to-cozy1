@@ -5,7 +5,7 @@
 // navigates nowhere. A starter is the only thing that launches, through the ordinary Ask path. Topics, order, starters and their
 // availability are rendered exactly as the server returned them; nothing here infers an operation from a label.
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { ArrowRight, Bookmark, BriefcaseBusiness, ChevronDown, ChevronRight, Compass, Download, NotebookTabs } from 'lucide-react';
+import { ArrowRight, Bookmark, BriefcaseBusiness, ChevronDown, ChevronRight, Compass, Download, History, NotebookTabs } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AskDiscoveryStarter, AskDiscoveryTopic, AskDiscoveryTopicId, AskTargetOption } from '@/features/ask/types';
 import type { ExploreSelectorState } from './useExploreWithCozy';
@@ -198,7 +198,7 @@ export function ExploreRailGroup({ state, activeTopicId, onOpen, onAskShortcut, 
 }
 
 /** Narrow screens: one compact disclosure above the conversation. It is not a drawer and never overlays the page. */
-export function ExploreDisclosure({ state, activeTopicId, onOpen, onAskShortcut, moreIdeas, onPanelVisible }: {
+export function ExploreDisclosure({ state, activeTopicId, onOpen, onAskShortcut, moreIdeas, onPanelVisible, onOpenHistory }: {
   state: ExploreState;
   activeTopicId: AskDiscoveryTopicId | null;
   onOpen: (topicId: AskDiscoveryTopicId, from: HTMLElement) => void;
@@ -206,17 +206,23 @@ export function ExploreDisclosure({ state, activeTopicId, onOpen, onAskShortcut,
   moreIdeas?: ReactNode;
   /** Fired once, only after the expanded panel's topics are on screen (a collapsed disclosure shows no topics). */
   onPanelVisible?: () => void;
+  /** On a phone the calm shell has no header, so this strip also carries the one control that opens the conversation history sheet. */
+  onOpenHistory?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const panelRef = useVisibleOnce<HTMLDivElement>(expanded && state.topics.length ? 'topics' : 'none', expanded && state.topics.length ? onPanelVisible : undefined);
   const toggleRef = useRef<HTMLButtonElement>(null);
   return (
     <div className="shrink-0 border-b border-slate-200 bg-[#f7f7f5] px-4 py-1.5 lg:hidden" data-ask-explore="disclosure">
-      <button ref={toggleRef} type="button" aria-expanded={expanded} aria-controls="ask-explore-disclosure-panel" onClick={() => setExpanded((current) => !current)}
-        className="flex min-h-10 w-full items-center justify-between gap-2 rounded-lg text-sm font-medium text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600">
-        <span className="inline-flex items-center gap-2"><Compass className="h-4 w-4 text-teal-700" aria-hidden="true" />Explore with Cozy</span>
-        <ChevronDown className={cn('h-4 w-4 text-slate-400 transition', expanded && 'rotate-180')} aria-hidden="true" />
-      </button>
+      <div className="flex items-center gap-1">
+        <button ref={toggleRef} type="button" aria-expanded={expanded} aria-controls="ask-explore-disclosure-panel" onClick={() => setExpanded((current) => !current)}
+          className="flex min-h-10 min-w-0 flex-1 items-center justify-between gap-2 rounded-lg text-sm font-medium text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600">
+          <span className="inline-flex items-center gap-2"><Compass className="h-4 w-4 text-teal-700" aria-hidden="true" />Explore with Cozy</span>
+          <ChevronDown className={cn('h-4 w-4 text-slate-400 transition', expanded && 'rotate-180')} aria-hidden="true" />
+        </button>
+        {onOpenHistory && <button type="button" onClick={onOpenHistory} aria-label="Open conversation history" title="History"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"><History className="h-4 w-4" aria-hidden="true" /></button>}
+      </div>
       {expanded && <div ref={panelRef} id="ask-explore-disclosure-panel" className="pb-2">
         <ExploreStatus state={state} />
         {state.topics.length > 0 && <TopicButtons topics={state.topics} activeTopicId={activeTopicId} moreIdeas={moreIdeas}
