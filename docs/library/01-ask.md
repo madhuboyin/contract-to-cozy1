@@ -8,7 +8,7 @@
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-|  | [Ask Cozy — Best-in-Class Conversational Concierge FRD](../product/ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_CONCIERGE_FRD.md) | v0.2.3 · Draft v0.2.3 for owner review; target requirements, not an implementation claim | 2026-11-22 | 332 |
+|  | [Ask Cozy — Best-in-Class Conversational Concierge FRD](../product/ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_CONCIERGE_FRD.md) | v0.2.4 · Draft v0.2.4 for owner review; target requirements, not an implementation claim | 2026-11-22 | 357 |
 |  | [Ask Cozy — Cross-Domain Semantic Request Architecture FRD](../product/ASK_COZY_CROSS_DOMAIN_SEMANTIC_ARCHITECTURE_FRD.md) | v1.34 · Draft v1.34 for owner review | 2026-11-22 | 1390 |
 |  | [Ask Cozy — Understanding Reliability: Reaching 90% Resolved Prompts Without Controlling th](../product/ASK_COZY_UNDERSTANDING_RELIABILITY_FRD.md) | v0.19 · Draft v0.19 for owner review (v0.18 committed as `e9827f8a`; v0.19 answers a sev | 2026-11-21 | 1077 |
 |  | [Ask Cozy — Inline Workspace Product Requirements Document](../product/ASK_COZY_INLINE_WORKSPACE_FRD.md) |  | 2026-11-20 | 2478 |
