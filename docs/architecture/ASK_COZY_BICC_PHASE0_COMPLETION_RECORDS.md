@@ -71,11 +71,18 @@ Every record states what ran, what did not, and what is still open. Nothing here
 | 6 | Retire the legacy chat; staged provider inherits planner controls | `/api/gemini/chat` route, controller and client method removed (it was a wrapper over `answerGroundedAsk` with no frontend caller); `GeminiService.sendMessageToChat` stays for the Guidance Advisor. The staged provider now also requires the planner flag on and kill switch off, in `resolveDefaultSemanticProviderPolicy` and the capability handler check. The per-stratum certification check already exists for the planner (`isUnderstandingStratumCertified`) and is added to the staged path with `BICC-1B.2`. | `crossDomainSemanticEvaluation.test.js`, `groundedAskProposalRetirement.test.js` |
 | 7 | Role-based sealed-pool ownership | `EVALUATION_ROLES` in `biccShardManifest.ts`; a safety-critical certification prompt also needs the Home Safety/Policy Reviewer. FRD §18 D19. | `biccEvaluationContract.test.js` 17 pass |
 
+### Follow-up decisions (2026-11-22, second round)
+
+| Decision | Implementation | Evidence |
+|---|---|---|
+| Guidance Advisor: same real-data rule across the product | `GUIDANCE_ADVISOR_AI_ENABLED` (default off), `GUIDANCE_ADVISOR_AI_KILL_SWITCH`, provider-terms and property-data approvals in `config/guidanceAdvisorControls.ts`; an allowlisted, minimized serializer (`guidanceAdvisorPayload.ts`: eight fields, free text redacted and capped, cost rounded, no identifier or property context); a stateless `generateGuidanceAdvice` provider method replaces the old `sendMessageToChat`, which injected property facts and is removed; a new governed route `ai:guidance-advisor`; failure returns no advice and the authored journey output is unchanged. Registered as `GUIDANCE_ADVISOR_STRATEGIC_TAKE`. No Ask approval enables it. | `tests/unit/guidanceAdvisorProviderFlow.test.js` 7 pass (default off, no Ask approval enables it, captured payload, fallback) |
+| Cancellation through composed reads | `ComposedTurnInput.signal`; a part not yet dispatched is recorded `CANCELLED` and named ("You stopped this part before it finished"), started read children observe the signal, completed parts keep their answers, attempt recording keeps its compare-and-set so a stop racing a completion is consistent, and a stopped part is terminal so recovery never replays it. | `composedTurn.test.js` 5 new tests (45 pass) |
+| Prompt authoring, first wave | See `ASK_COZY_BICC_CERTIFICATION_WORK_QUEUE.md` and `tests/fixtures/certification/` (tuning prompts; no shard sealed). | See the work queue |
+
 ### Still open after these decisions
 
-- **Prompt authoring** for the first certification wave (decision 1) and for the sealed pool: needs the Ask Evaluation Author and Reviewer roles to be filled.
-- **Provider terms and approvals** (decision 3): none recorded; every real-data flow stays off.
-- **Guidance Advisor** (`GUIDANCE_ADVISOR_CHAT`): a live non-Ask flow that sends advisor prompts with property details to the provider. Decision 3 says every real-data model flow stays disabled until approved; this one was not changed because it is a separate product feature. Confirm whether it should be brought under the same rule.
-- **Cancellation scope:** only the Ask execution paths were wired. Document analysis and other long-running reads will observe the same signal as they are built (`BICC-3.x`). The composed-read child path does not yet take the signal.
+- **A different human must be assigned as Ask Evaluation Reviewer** before any shard is sealed; the sealed shards for the first wave do not exist yet.
+- **Provider terms and approvals**: none recorded; every real-data flow stays off (Ask flows and the Guidance Advisor).
+- **Document analysis** must observe the abort signal before `BICC-3.2` activation (recorded in the plan gate).
 - **Regeneration** (`BICC-CTX-006`) still belongs to `BICC-2.3`.
-- **No browser verification** of any frontend change and **no real-database run** of the feedback overlay or the cancelled execution persistence; both are unit-tested against stubs.
+- **No browser verification** of any frontend change and **no real-database run** of the feedback overlay or cancelled-execution persistence; both are unit-tested against stubs.

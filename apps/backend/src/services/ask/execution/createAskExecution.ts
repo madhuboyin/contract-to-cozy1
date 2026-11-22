@@ -210,7 +210,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       try {
         const recovered = await recoverComposedTurn({
           db: prisma as never, userId, accountRole, parent: current, message: current.message, sessionId: current.sessionId, propertyId: recoveredPropertyId,
-          createChild: createAskExecution, executionTimeoutMs: controls.executionTimeoutMs,
+          createChild: createAskExecution, executionTimeoutMs: controls.executionTimeoutMs, signal: internal.signal,
           loadAuthorizationView: () => buildAuthorizationView(userId, recoveredPropertyId, controls),
         });
         return mapPersistedExecution(recovered, await propertySummary(recoveredPropertyId));
@@ -322,7 +322,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       try {
         merged = await resumeClarifiedComposedTurn({
           db: prisma as never, userId, accountRole, parent: waiting, message: input.message, sessionId: session.id, propertyId: executionPropertyId,
-          clause: input.message, selectedOperationId: input.launchContext.operationId as AskOperationId, createChild: createAskExecution, executionTimeoutMs: controls.executionTimeoutMs,
+          clause: input.message, selectedOperationId: input.launchContext.operationId as AskOperationId, createChild: createAskExecution, executionTimeoutMs: controls.executionTimeoutMs, signal: internal.signal,
           loadAuthorizationView: () => buildAuthorizationView(userId, executionPropertyId, controls),
           finalizeResult: (result) => finalizeSuggestedNextActions({ result, executionId: waiting.id, userId, sessionId: session.id, propertyId: executionPropertyId, operationId: null, message: input.message }),
         });
@@ -408,7 +408,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       try {
       composed = await runComposedTurn({
         db: prisma as never, userId, accountRole, parent: execution, message: input.message, sessionId: session.id, propertyId: composedPropertyId,
-        clauses: composedClauses, deferred: composedDeferred, createChild: createAskExecution, executionTimeoutMs: controls.executionTimeoutMs,
+        clauses: composedClauses, deferred: composedDeferred, createChild: createAskExecution, executionTimeoutMs: controls.executionTimeoutMs, signal: internal.signal,
         loadAuthorizationView: () => buildAuthorizationView(userId, composedPropertyId, controls),
         finalizeResult: (result) => finalizeSuggestedNextActions({
           result, executionId: execution.id, userId, sessionId: session.id, propertyId: composedPropertyId,

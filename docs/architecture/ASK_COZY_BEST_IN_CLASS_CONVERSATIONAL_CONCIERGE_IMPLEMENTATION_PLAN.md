@@ -73,10 +73,10 @@ BICC-0.2 shall trace the repository for additional model/provider call sites and
 | `BICC-1C.2` | Authored general guidance and social turns | `BICC-1C.1`, D13 | GATE-007/007B/010/011 and EVAL-016 pass without a model answer call |
 | `BICC-1D.n` | One write-proposal family | `BICC-1A.2`; family selected under active D06 default | Family-specific GATE-008 and EVAL-010 pass |
 | `BICC-2.1` | Structured continuity and follow-ups | Phase 1A; applicable Phase 1C modes | CTX-001–005 follow-up corpus passes |
-| `BICC-2.2` | Bounded composed reads | `BICC-2.1` | Compound/facet coverage passes with no silent loss or retargeting |
+| `BICC-2.2` | Bounded composed reads | `BICC-2.1` | Compound/facet coverage passes with no silent loss or retargeting, and composed-read cancellation tests pass (stop before start, stop racing a running child, completion winning, no replay of a stopped part) |
 | `BICC-2.3` | Safe regeneration and per-attempt feedback | `BICC-2.1`; execution identity and retry paths | CTX-006 and UX-003 attempt-linking, preservation, feedback, and no-write-replay corpus passes |
 | `BICC-3.1` | Attachment lifecycle and isolation | D04, D10, `BICC-0.2` | MM-001–005 and MM-010 pass |
-| `BICC-3.2` | Document-grounded answers with injection isolation | `BICC-3.1`, scorer from `BICC-0.1` | EVAL-015 and MM-012/MM-013 injection-isolation evidence, GATE-004B2, and `USER_DOCUMENT` GATE-005 subset pass; no document-grounded answer activates before all pass |
+| `BICC-3.2` | Document-grounded answers with injection isolation | `BICC-3.1`, scorer from `BICC-0.1` | EVAL-015 and MM-012/MM-013 injection-isolation evidence, GATE-004B2, and `USER_DOCUMENT` GATE-005 subset pass; no document-grounded answer activates before all pass; document analysis observes the same abort signal as Ask reads (`BICC-TRN-001`, FRD §18 D21) |
 | `BICC-3.3` | Reviewed promotion into canonical records | `BICC-3.2` | MM-008 and MM-011 promotion, confirmation, and retention-boundary corpus passes |
 | `BICC-4.1` | Candidate workspace and buyer reads | D03, D09; Phase 1A | BUY-001–006 and buyer read matrix pass |
 | `BICC-4.2` | Fair-housing boundary | `BICC-4.1` | EVAL-017 and BUY-011 pass |

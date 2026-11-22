@@ -37,7 +37,7 @@ test('the provider-boundary register is complete and well formed (OPS-006)', () 
 // BICC-0.2 scope: the inventory fails if a call site exists that the register does not describe.
 test('every model call site under the Ask paths is registered, and every registered site still exists', () => {
   const registeredFiles = new Set(PROVIDER_BOUNDARY_REGISTER.flatMap((entry) => entry.callSites));
-  const askFiles = [...walk(path.join(backendRoot, 'src/services/ask')), path.join(backendRoot, 'src/services/gemini.service.ts'), path.join(backendRoot, 'src/services/groundedAsk.service.ts')];
+  const askFiles = [...walk(path.join(backendRoot, 'src/services/ask')), path.join(backendRoot, 'src/services/gemini.service.ts'), path.join(backendRoot, 'src/services/groundedAsk.service.ts'), path.join(backendRoot, 'src/services/guidanceEngine/guidanceAdvisor.service.ts')];
   const callers = askFiles
     .filter((file) => /\.models\.generateContent\(|\.chats\.create\(|\bexecuteGovernedAIRequest\s*[<(]/.test(fs.readFileSync(file, 'utf8')))
     .map((file) => path.relative(backendRoot, file).split(path.sep).join('/'))
@@ -54,7 +54,7 @@ test('every model call site under the Ask paths is registered, and every registe
 
 test('every geminiService method that Ask reaches is covered by a registered marker', () => {
   const markers = PROVIDER_BOUNDARY_REGISTER.flatMap((entry) => entry.callSiteMarkers);
-  const askFiles = [...walk(path.join(backendRoot, 'src/services/ask')), path.join(backendRoot, 'src/services/groundedAsk.service.ts')];
+  const askFiles = [...walk(path.join(backendRoot, 'src/services/ask')), path.join(backendRoot, 'src/services/groundedAsk.service.ts'), path.join(backendRoot, 'src/services/guidanceEngine/guidanceAdvisor.service.ts')];
   const used = new Set();
   for (const file of askFiles) for (const match of fs.readFileSync(file, 'utf8').matchAll(/geminiService\.([A-Za-z]+)\(/g)) used.add(match[1]);
   for (const method of used) assert.ok(markers.includes(method), `geminiService.${method} is called from Ask but not registered`);
@@ -83,7 +83,7 @@ test('the validator rejects inherited approvals, an approval without evidence, a
 
 test('no flow is approved for real homeowner data today, so each live path is listed as lacking an approval', () => {
   assert.ok(PROVIDER_BOUNDARY_REGISTER.every((entry) => entry.realHomeownerData === 'NOT_APPROVED'));
-  assert.deepEqual(flowsLackingRealDataApproval().sort(), ['CAPTURE_EXTRACTION', 'GUIDANCE_ADVISOR_CHAT', 'REMOTE_FALLBACK_TYPED_CLAIM_SELECTION', 'SEMANTIC_REQUEST_PLAN', 'SEMANTIC_STAGED_UNDERSTANDING']);
+  assert.deepEqual(flowsLackingRealDataApproval().sort(), ['CAPTURE_EXTRACTION', 'GUIDANCE_ADVISOR_STRATEGIC_TAKE', 'REMOTE_FALLBACK_TYPED_CLAIM_SELECTION', 'SEMANTIC_REQUEST_PLAN', 'SEMANTIC_STAGED_UNDERSTANDING']);
 });
 
 // BICC-OPS-007: captured-payload evidence. The provider client is replaced, the real serializer runs, and the outbound request
@@ -156,6 +156,8 @@ test('every Ask-controlled real-data model flow is off by default, and the deplo
   assert.equal(controls.remoteGenerationEnabled, false, 'REMOTE_FALLBACK_TYPED_CLAIM_SELECTION');
   assert.equal(controls.askConversationalCaptureEnabled, false, 'CAPTURE_EXTRACTION');
   assert.equal(controls.understandingPlannerEnabled, false, 'SEMANTIC_REQUEST_PLAN');
+  const { readGuidanceAdvisorControls } = require('../../src/config/guidanceAdvisorControls.ts');
+  assert.equal(readGuidanceAdvisorControls({}).enabled, false, 'GUIDANCE_ADVISOR_STRATEGIC_TAKE');
   assert.equal(resolveDefaultSemanticProviderPolicy({}).approvalStatus, 'UNRESOLVED_OWNER_APPROVAL', 'SEMANTIC_STAGED_UNDERSTANDING');
   // The staged provider needs the planner controls as well as its own approvals, and the kill switch always wins.
   const approvals = { ASK_SEMANTIC_PROVIDER_APPROVED: 'true', ASK_UNDERSTANDING_PROVIDER_TERMS_RECORDED: 'true', ASK_UNDERSTANDING_HOMEOWNER_TEXT_APPROVED: 'true' };

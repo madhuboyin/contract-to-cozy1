@@ -28,7 +28,7 @@ import {
 
 export type CreateChild = (
   userId: string, request: CreateAskExecutionRequest, accountRole: AskAccountRole | undefined,
-  internal: { composition: { parentExecutionId: string; expiresAt: Date | null } },
+  internal: { composition: { parentExecutionId: string; expiresAt: Date | null }; signal?: AbortSignal },
 ) => Promise<AskExecutionResponse>;
 
 /** The slice of the Prisma client this module uses; the real client satisfies it. */
@@ -61,6 +61,12 @@ export interface ComposedTurnInput {
   executionTimeoutMs: number;
   /** A manual retry's clientRequestId; bound to each reservation it makes (FR-PER-10). */
   requestKey?: string;
+  /**
+   * Aborted when the person stops the request (BICC-TRN-001). A component not yet dispatched is recorded as CANCELLED instead of started; a started
+   * read child observes the same signal. A component that completed first keeps its answer: committed work is never cancelled or rolled back, and the
+   * same compare-and-set attempt recording and deterministic child keys keep the parent consistent when a stop races a completion.
+   */
+  signal?: AbortSignal;
   now?: () => Date;
 }
 
@@ -245,6 +251,8 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
 
   const callChild = async (run: ComponentRun, number: number): Promise<{ executionId: string; status: string }> => {
     const clientRequestId = childClientRequestId(parent.clientRequestId, run.key, number);
+    // A stop before this child starts: it is not started, and the attempt is recorded as CANCELLED (a terminal, honest state for this part).
+    if (input.signal?.aborted) return { executionId: `unstarted:${clientRequestId}`, status: 'CANCELLED' };
     try {
       const response = await input.createChild(input.userId, {
         clientRequestId, sessionId: input.sessionId, message: run.clause.clause, propertyId: input.propertyId,
@@ -255,7 +263,7 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
           ...(run.clause.requiredSlots?.length ? { dataPointRequiredSlots: run.clause.requiredSlots } : {}),
           ...(run.clause.entityRef !== undefined ? { dataPointEntityRef: run.clause.entityRef } : {}),
         },
-      } as CreateAskExecutionRequest, input.accountRole, { composition: { parentExecutionId: parent.id, expiresAt: parent.expiresAt } });
+      } as CreateAskExecutionRequest, input.accountRole, { composition: { parentExecutionId: parent.id, expiresAt: parent.expiresAt }, ...(input.signal ? { signal: input.signal } : {}) });
       return { executionId: response.executionId, status: response.status };
     } catch {
       // The child never persisted a result: a retryable failure, recorded by the caller.
@@ -444,7 +452,7 @@ async function driveComposite(input: ComposedTurnInput & { clauses: ComposedClau
       clarificationBlocks.push(...blocksOf(childById.get(attempt!.executionId)).slice(0, 1));
       return [{ clause: run.clause.clause, reasonCode: 'NEEDS_CLARIFICATION', detail: 'I need one more detail for this part — see the question below.' }];
     }
-    return [{ clause: run.clause.clause, reasonCode: attempt?.status === 'FAILED_RETRYABLE' ? 'AskExecutionTimeoutError' : `COMPONENT_${attempt?.status ?? 'FAILED'}`, detail: 'This part could not be answered right now.' }];
+    return [{ clause: run.clause.clause, reasonCode: attempt?.status === 'FAILED_RETRYABLE' ? 'AskExecutionTimeoutError' : `COMPONENT_${attempt?.status ?? 'FAILED'}`, detail: attempt?.status === 'CANCELLED' ? 'You stopped this part before it finished. Ask again to get it.' : 'This part could not be answered right now.' }];
   });
   // FR-DEC-4a: the parts that were never run are named beside the parts that were, with the reason, so nothing the homeowner asked is silently dropped.
   for (const part of input.deferred ?? storedDeferredOf(input.parent)) {

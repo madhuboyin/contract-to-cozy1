@@ -35,6 +35,7 @@ const ai = (sourceId: string, sourceFile: string, capabilityConsumers: readonly 
 
 export const AI_SOURCE_REGISTRY: readonly IntelligenceSourceRegistryEntry[] = Object.freeze([
   ai('ai:ask', 'apps/backend/src/services/gemini.service.ts', ['ask'], 'Return a typed unavailable response; never fabricate a record-grounded answer.'),
+  ai('ai:guidance-advisor', 'apps/backend/src/services/gemini.service.ts', ['guidance-advisor'], 'Return no advice; the authored and deterministic Guidance Engine output is unchanged. Off by default (GUIDANCE_ADVISOR_AI_ENABLED).'),
   ai('ai:document-intelligence', 'apps/backend/src/services/documentIntelligence.service.ts', ['document-intelligence'], 'Fail closed to manual review with no promotable fields.'),
   ai('ai:inspection-extraction', 'apps/backend/src/services/inspectionExtraction.service.ts', ['inspection-findings'], 'Retain the document for manual extraction.'),
   ai('ai:tax-appeal', 'apps/backend/src/services/taxAppeal.service.ts', ['property-tax'], 'Require homeowner confirmation/manual entry.'),

@@ -662,3 +662,70 @@ test('the six-child composite refreshes on the same parent with all six componen
   assert.equal(second.calls.length, 6, 'every component reruns on refresh');
   assert.equal(refreshed.resultJson.composite.sections.length, 6);
 });
+
+// ---- BICC-TRN-001 (owner decision 2026-11-22): a stop reaches composed reads without touching committed work ----
+const attemptsOf = (db) => db.table.get('parent-1').parametersJson.composition.attempts;
+
+test('a stop before any component starts creates no child and records every component as CANCELLED, named in the answer', async () => {
+  const db = fakeDb([parentRow()]);
+  const { createChild, calls } = scriptedChildren(db);
+  const stop = new AbortController(); stop.abort();
+  const parent = await run(db, createChild, { signal: stop.signal });
+  assert.equal(calls.length, 0, 'no child was started for a stopped request');
+  assert.deepEqual(attemptsOf(db).map((a) => a.status), ['CANCELLED', 'CANCELLED']);
+  assert.notEqual(parent.status, 'ANSWERED');
+  assert.match(JSON.stringify(parent.resultJson), /You stopped this part before it finished/);
+});
+
+test('every started read child receives the stop signal', async () => {
+  const db = fakeDb([parentRow()]);
+  const { createChild, calls } = scriptedChildren(db);
+  const stop = new AbortController();
+  await run(db, createChild, { signal: stop.signal });
+  assert.equal(calls.length, 2);
+  for (const call of calls) assert.equal(call.internal.signal, stop.signal);
+});
+
+test('a stop that races a running child keeps the part that already completed and reports only the stopped part as stopped', async () => {
+  const db = fakeDb([parentRow()]);
+  const stop = new AbortController();
+  const { createChild: base } = scriptedChildren(db);
+  // The roof-age child completes; the cost child is mid-flight when the person stops, and its own execution ends CANCELLED.
+  const createChild = async (userId, request, role, internal) => {
+    if (request.launchContext.operationId === 'ITEM_REPLACEMENT_COST') {
+      stop.abort();
+      const id = 'child-cancelled';
+      db.table.set(id, { id, userId, clientRequestId: request.clientRequestId, status: 'CANCELLED', parentExecutionId: internal.composition.parentExecutionId, parentRole: 'COMPONENT', reasonCode: null, resultJson: { blocks: [{ type: 'ERROR_STATE', id: 'execution-failed', title: 'Stopped', body: 'You stopped this request before it finished. Nothing was changed. You can ask again.', retryable: false, actions: [] }] }, parametersJson: null, expiresAt: internal.composition.expiresAt });
+      return { executionId: id, status: 'CANCELLED' };
+    }
+    return base(userId, request, role, internal);
+  };
+  const parent = await run(db, createChild, { signal: stop.signal });
+  const statuses = Object.fromEntries(attemptsOf(db).map((a) => [a.componentKey, a.status]));
+  assert.ok(Object.values(statuses).includes('ANSWERED'), 'the completed component keeps its committed answer');
+  assert.ok(Object.values(statuses).includes('CANCELLED'));
+  assert.equal(parent.status, 'READY_WITH_LIMITATIONS');
+  assert.match(JSON.stringify(parent.resultJson), /7 years old/, 'the completed section is still delivered');
+  assert.match(JSON.stringify(parent.resultJson), /You stopped this part before it finished/);
+});
+
+test('a stop that arrives after every component finished changes nothing: completion wins', async () => {
+  const db = fakeDb([parentRow()]);
+  const { createChild } = scriptedChildren(db);
+  const stop = new AbortController();
+  const parent = await run(db, createChild, { signal: stop.signal });
+  stop.abort();
+  assert.equal(parent.status, 'ANSWERED');
+  assert.deepEqual(attemptsOf(db).map((a) => a.status), ['ANSWERED', 'ANSWERED']);
+});
+
+test('idempotency: recovering a stopped parent creates no second child for a stopped part', async () => {
+  const db = fakeDb([parentRow()]);
+  const { createChild, calls } = scriptedChildren(db);
+  const stop = new AbortController(); stop.abort();
+  await run(db, createChild, { signal: stop.signal });
+  const before = attemptsOf(db).map((a) => `${a.componentKey}:${a.number}:${a.status}`);
+  await recoverComposedTurn({ db, userId: 'u1', parent: db.table.get('parent-1'), message: 'how old is my roof and what would a new one cost', sessionId: 's1', propertyId: 'p1', createChild, loadAuthorizationView: allowAll, executionTimeoutMs: 30_000, now: () => NOW });
+  assert.equal(calls.length, 0, 'a stopped part is terminal; asking again is a new turn, not a replay');
+  assert.deepEqual(attemptsOf(db).map((a) => `${a.componentKey}:${a.number}:${a.status}`), before);
+});
