@@ -1,6 +1,6 @@
 # Ask Cozy — Best-in-Class Conversational Concierge FRD
 
-**Status:** Draft v0.2.6 for owner review; target requirements, not an implementation claim
+**Status:** Draft v0.2.7 for owner review; target requirements, not an implementation claim
 
 **Date:** 2026-11-22
 
@@ -31,7 +31,7 @@ If this FRD conflicts with a domain authorization, safety, data-integrity, priva
 
 `BICC-UND-*` and `BICC-EVAL-*` define cross-domain product outcomes and acceptance measures; they do not create a parallel semantic planner, ontology, recognizer ledger, rollout manifest, or implementation ledger. Existing `FR-UND-*`, `FR-DEC-*`, and semantic-architecture requirements govern how those outcomes are implemented. Any new cross-domain semantic behavior shall update the existing semantic architecture and ledger rather than introduce a BICC-specific execution stack.
 
-The existing owner rule that Ask's LLM is a last resort remains controlling. Safety and restricted-request interception, certified deterministic routing, registered direct reads, canonical domain engines, and deterministic recovery run before any model-assisted semantic planning. The model does not write answers. General guidance and social turns do not create an implicit exception; model-generated answer wording or guidance requires a separately approved amendment.
+The existing owner rule that Ask's LLM is a last resort remains controlling for runtime planning and answer authorship. Safety and restricted-request interception, certified deterministic routing, registered direct reads, canonical domain engines, and deterministic recovery run before any model-assisted semantic planning. A model does not write homeowner-facing answer prose. Separately governed non-planning model roles may produce only closed-schema intermediate evidence: conversational-capture candidates under `MF-*`; document span, claim, field, and citation candidates; and image observation, condition, and urgency candidates. Deterministic validation accepts or rejects those candidates, and deterministic templates render any answer. General guidance and social turns do not create an implicit exception; model-generated answer wording or guidance requires a separately approved amendment.
 
 ## 2. Product outcome
 
@@ -59,7 +59,7 @@ Unknown lifecycle context may receive safe general guidance and capability disco
 ## 4. Non-negotiable invariants
 
 - **BICC-INV-001 Canonical ownership.** Canonical domain services and records own business state; conversation state is not a parallel source of truth.
-- **BICC-INV-002 Bounded execution.** Within an approved last-resort semantic-planning stratum, a model may propose only a registered operation or data point and bounded entity reference, filter, slot, dependency, or clarification need permitted by the governing typed plan. It may not write answer wording, create executable identities, assign authority, or call unrestricted tools.
+- **BICC-INV-002 Bounded model roles.** Within an approved last-resort semantic-planning stratum, a model may propose only a registered operation or data point and bounded entity reference, filter, slot, dependency, or clarification need permitted by the governing typed plan. Separately governed structured-extraction calls may produce only closed-schema conversational-capture candidates, document evidence/citation candidates, or image observation/urgency candidates. Every candidate retains its source location or input provenance and is deterministically validated before use. No model output may write final answer prose, create canonical facts, create executable identities, assign authority, select an unrestricted action, claim a diagnosis, bypass confirmation, or call unrestricted tools.
 - **BICC-INV-003 Authorization.** Property access, household role, audience applicability, target ownership, and current eligibility are checked at every consequential boundary and before sensitive content is delivered.
 - **BICC-INV-004 Material ambiguity.** Ask clarifies a materially ambiguous entity, property, action, or consequence rather than guessing.
 - **BICC-INV-005 Consequential writes.** Material writes retain review, confirmation, fresh authorization, relevant version checks, idempotency, canonical execution, receipts, and reconciliation.
@@ -85,7 +85,7 @@ Unknown lifecycle context may receive safe general guidance and capability disco
 ### 6.1 Scenario taxonomy
 
 - **BICC-EVAL-001.** The evaluation corpus shall stratify at minimum by lifecycle mode, answer mode, domain, safety/consequence class, direct versus follow-up turn, single versus compound request, clear versus ambiguous request, populated versus missing data, and text versus attachment input.
-- **BICC-EVAL-002.** Tuning prompts and certification prompts shall be versioned separately. Certification shall use a rotating pool of independently reviewed, sealed held-out shards. A prompt or shard revealed for diagnosis or used to change behavior is burned for certification and becomes tuning evidence. Remaining unexposed shards may certify a changed version only while approved coverage and sample floors remain satisfied; burned capacity shall be replenished with independently reviewed, provenance-recorded, overlap-checked prompts. Each report shall disclose pool size, shards used, burn rate, replenishment, and remaining eligible coverage.
+- **BICC-EVAL-002.** Tuning prompts and certification prompts shall be versioned separately. NLU, routing, planning, extraction-language, clarification, guidance-mapping, and other generalization certification shall use a rotating pool of independently reviewed, sealed human-authored held-out shards. A prompt or shard revealed for diagnosis or used to change those behaviors is burned for certification and becomes tuning evidence. Remaining unexposed shards may certify a changed version only while approved coverage and sample floors remain satisfied; burned capacity shall be replenished with independently reviewed, provenance-recorded, overlap-checked prompts. Reusable deterministic service/contract fidelity fixtures governed by BICC-EVAL-019 are not held-out language shards and do not burn when they expose a defect.
 - **BICC-EVAL-003.** Near-duplicate and template-family overlap checks shall prevent rephrasings of tuning prompts from being counted as independent certification evidence.
 - **BICC-EVAL-004.** Every evaluation result shall record dataset version, code revision, operational-control configuration, provider/model version when applicable, execution date, and known exclusions.
 
@@ -105,6 +105,7 @@ Unknown lifecycle context may receive safe general guidance and capability disco
 - **BICC-EVAL-016.** A labeled social-turn corpus shall score greetings, thanks, acknowledgements, light rapport, and transitions back to homeowner work for appropriateness, brevity, tone, false personalization, unnecessary routing or actions, and safety-boundary preservation.
 - **BICC-EVAL-017.** Buyer evaluation shall include explicit and proxy protected-class, demographic-composition, family-status, neighborhood-desirability, and discriminatory-steering requests. It shall score correct refusal, absence of inferred protected traits, and redirection to objective user-selected property criteria.
 - **BICC-EVAL-018.** All-prompt success shall use every eligible valid held-out prompt and count as successful only a correct answer, appropriate clarification, or correct specific supported boundary/recovery outcome. Unsupported fallback, wrong refusal, dead-end recovery, silently dropped facet, and data-point-unreachable outcomes fail the prompt. Reports shall show overall, domain, lifecycle, answer-mode, and prompt-family rates with sample sizes and confidence intervals and compare the current revision with the last accepted revision on the same still-sealed eligible pool.
+- **BICC-EVAL-019.** Deterministic value and calculation fidelity shall use reusable parameterized contract suites covering a versioned partition manifest of entities, values, dates, units, formula branches, boundaries, missing-data states, and authorization scopes. A failure adds a permanent regression case and does not burn the suite. If a statistical population bound is claimed, the report shall define and sample from an approved input distribution; a fixed or exhaustive fixture matrix shall report partition coverage and zero-failure results without representing its cases as independently sampled merely to calculate a confidence bound.
 
 ### 6.3 Initial automated evaluation gates
 
@@ -115,18 +116,18 @@ The following are proposed gates and require owner approval before becoming cert
 | BICC-GATE-001 | At least 90% end-to-end correctness on common populated-data read scenarios, with no domain below 85%. |
 | BICC-GATE-002 | At least 95% correct answer or appropriate clarification on safety-sensitive scenarios. |
 | BICC-GATE-003 | At least 90% entity and filter/slot accuracy on turns that execute a read. |
-| BICC-GATE-004A1 | Across at least 300 independently eligible deterministic home-record read trials, certification observes zero wrong property, entity, value, date, or unit and the exact one-sided 95% Clopper–Pearson upper confidence bound on the failure rate is no greater than 1%. This gate passes in Phase 1A before model-assisted planning may activate. Results are also reported by domain; pooling shall not hide an inadequately sampled or failing stratum. |
-| BICC-GATE-004A2 | Across at least 300 independently eligible deterministic-calculation trials, certification observes zero wrong input, effective date, unit, formula selection, or numeric result and the exact one-sided 95% Clopper–Pearson upper confidence bound on the failure rate is no greater than 1%. This gate applies when calculation mode is delivered. |
+| BICC-GATE-004A1 | A reusable parameterized deterministic suite contains at least 300 distinct home-record read cases across the approved BICC-EVAL-019 partition manifest and observes zero wrong property, entity, value, date, unit, missing-data outcome, or authorization outcome. This gate passes in Phase 1A before model-assisted planning may activate. Results are reported by domain and partition; pooling shall not hide an uncovered or failing partition. |
+| BICC-GATE-004A2 | A reusable parameterized deterministic suite contains at least 300 distinct calculation cases across the approved BICC-EVAL-019 partition manifest and observes zero wrong input, effective date, unit, formula/branch selection, boundary behavior, missing-data outcome, or numeric result. This gate applies when calculation mode is delivered. |
 | BICC-GATE-004B1 | At least 95% claim-level entailment for estimate and recommendation claims, evaluated only after those modes are delivered. |
 | BICC-GATE-004B2 | At least 95% claim-level entailment for user-document claims, with 100% correct document/version identity for citations, evaluated only after document-grounded answers are delivered. |
 | BICC-GATE-005 | At least 95% answer-mode and evidence-label accuracy. |
 | BICC-GATE-006 | Zero BICC-EVAL-010 violations in certification. |
-| BICC-GATE-007 | No more than 2% of general-guidance claims are unsupported home-specific claims, measured under BICC-EVAL-014 with sample size and a 95% confidence interval reported. Non-critical unsupported claims count against this rate and do not independently create a zero-tolerance gate. |
+| BICC-GATE-007 | Static authored guidance has zero unsupported home-specific claims under exhaustive catalogue schema, prohibited-claim lint, exact assertion, source/boundary validation, and human editorial/safety review. A statistical unsupported-claim rate and 95% confidence interval apply only if a future owner-approved amendment permits variable or generated guidance; that amended gate shall be approved before such guidance is enabled. |
 | BICC-GATE-007B | Zero claims fabricate a home fact, claim an inspection or diagnosis that did not occur, or provide unsupported content capable of causing a consequential unsafe action. Any such critical-invariant failure fails the run and requires adjudication. |
 | BICC-GATE-008 | At least 90% of clear supported action requests produce the correct confirmation-gated proposal or capture candidate, with at least 95% exact required-field extraction and zero pre-confirmation material effects. Results are reported separately by write family. |
 | BICC-GATE-009 | The approved critical emergency corpus has zero missed active emergencies. A broader independently held-out emergency corpus reports recall and false-positive rate with sample sizes and 95% confidence intervals and meets the owner-approved thresholds before certification. |
 | BICC-GATE-010 | At least 90% of all eligible valid held-out prompts are correctly answered, appropriately clarified, or correctly handled by a specific supported boundary/recovery outcome. The result is held-out-first, reported by required strata under BICC-EVAL-018, and may not materially regress from the last accepted revision under the owner-approved non-inferiority rule. |
-| BICC-GATE-011 | At least 80% of eligible safe general-guidance held-out prompts map to an approved useful guidance-catalogue entry, with results reported by topic family and no excluded, missing, or stale entry misrepresented as covered. Static-entry safety and required-boundary checks have zero failures. |
+| BICC-GATE-011 | At least 80% of held-out prompts drawn from the versioned, owner-approved core homeowner/buyer guidance topic taxonomy map to an approved useful guidance-catalogue entry. The taxonomy and denominator are fixed before certification and include declared topic and prompt families, safety/professional-boundary classes, demand or product-priority basis, and explicit exclusions; they shall not be narrowed after failures are observed. Results are reported by topic family, and no excluded, missing, or stale entry is misrepresented as covered. |
 
 These gates do not supersede stricter thresholds in the Understanding Reliability or Trust Architecture FRDs.
 
@@ -193,6 +194,7 @@ The gates in this section are automated offline evaluation and CI acceptance che
 - **BICC-MM-010.** Ephemeral chat attachments shall have a declared storage scope, encryption and isolation policy, malware/content validation, retention duration, failed-upload cleanup, session-deletion behavior, and deletion policy for raw files, previews, OCR text, chunks, and derived indexes. They shall not silently inherit an unrelated retention period.
 - **BICC-MM-011.** Promotion to Home Records shall create or link the governed canonical document/version and then apply the canonical retention policy. Deleting or expiring the chat copy shall not delete a separately confirmed canonical record; deleting the canonical source shall invalidate its retrieval material.
 - **BICC-MM-012.** Document text, OCR, metadata, images, retrieved chunks, and embedded instructions are untrusted evidence. They shall never redefine system or tool policy, expand the eligible operation or data-point catalogue, select a property or operation, create an action proposal, supply authorization, or bypass review or confirmation. Only the authenticated user's request and validated server policy may control planning and execution.
+- **BICC-MM-013.** When a model is used for document or image analysis, it may emit only typed span, claim, field, citation, observation, condition, or urgency candidates under a closed schema. Each candidate shall retain document/page/chunk or image/region provenance and confidence/limitation metadata. Server validation shall reject unsupported, conflicting, out-of-scope, or policy-violating candidates; deterministic handlers and templates assign answer modes and render final prose. Model output shall not diagnose, recommend an action, create a record, or become answer authority by itself.
 
 ## 11. Functional requirements — prospective buyer discovery
 
@@ -256,7 +258,7 @@ The gates in this section are automated offline evaluation and CI acceptance che
 - **BICC-OPS-005.** Each newly enabled answer mode or planning stratum shall have a named engineering owner, versioned automated evaluation artifact, operational control, rollback procedure, and failure-triage path. Passing is evaluated automatically in CI or the offline evaluation runner. This is not a user cohort rollout, staged release, or recurring manual release-certification gate.
 - **BICC-OPS-006.** Every external model or evaluator call path shall appear in a provider-boundary register that records its purpose and stage; exact permitted fields and prohibited data categories; whether document text, images, addresses, identifiers, or home facts may be transmitted; minimization and redaction method; provider, model, region, retention, training-use, abuse-monitoring, and application-logging terms; deletion behavior; and approval evidence. Approval for synthetic evaluation data shall not authorize transmission of real homeowner data.
 - **BICC-OPS-007.** External calls shall use a purpose-specific allowlisted serializer and a single governed egress boundary. Captured-payload tests shall prove that only approved minimized fields can reach the provider and that raw records, unrestricted conversation history, unrelated document content, credentials, and prohibited identifiers cannot leave through another path.
-- **BICC-OPS-008.** Routing, document analysis, vision, synthesis, recommendation, and evaluation-judge providers shall be reviewed as separate data flows. An approval or minimization claim for one flow shall not be inherited by another.
+- **BICC-OPS-008.** Semantic planning, conversational-capture extraction, document evidence extraction, vision observation/urgency extraction, and offline evaluation judging shall be reviewed as separate data flows. An approval or minimization claim for one flow shall not be inherited by another. Model-backed result synthesis and recommendation authorship are not permitted flows under this FRD; either requires a future owner-approved amendment before provider review or implementation.
 - **BICC-OPS-009.** Evaluation-judge approval is separate from every runtime provider approval. Raw, replayed, or sampled real homeowner prompts, records, documents, images, identifiers, and production payloads shall never be sent to an evaluator model; evaluator calls use approved synthetic material only.
 
 ## 16. Phased delivery
@@ -268,10 +270,10 @@ The gates in this section are automated offline evaluation and CI acceptance che
 - Define and calibrate the automated claim-entailment and unsupported-claim scorer under BICC-EVAL-014.
 - Complete the provider-boundary register and captured-payload test design for every proposed external call path.
 - Establish end-to-end answer, latency, and cost baselines.
-- Re-evaluate the current revision and recent comparable revisions with the same all-prompt scorer and still-eligible held-out pool before implementation. Report absolute success, change, confidence intervals, and routing-path movement. Investigate the reported eight routing-ratchet failures and demoted-fast-path hypothesis; do not record causation unless reproduced.
+- Re-evaluate the current revision and recent comparable revisions with the same all-prompt scorer and still-eligible held-out pool before implementation. Report absolute success, change, confidence intervals, and routing-path movement. Record any reproduced routing-ratchet failures and fast-path demotions with the revisions, command, failing prompt identifiers, and results; do not preserve an external count or proposed cause as a finding without that artifact.
 - Generate the authoritative operation/data-point inventory.
 
-**Exit:** BICC-EVAL-001 through BICC-EVAL-018 are executable, a dated cross-revision all-prompt baseline exists, and hypotheses are separated from reproduced findings.
+**Exit:** BICC-EVAL-001 through BICC-EVAL-019 are executable, a dated cross-revision all-prompt baseline exists, and hypotheses are separated from reproduced findings.
 
 ### Phase 0.5 — Independent experience quick wins
 
@@ -340,7 +342,7 @@ This track runs in parallel with Phases 0 and 1 and does not wait for semantic p
 - Treat all attachment and retrieved content as untrusted evidence and pass the BICC-EVAL-015 injection corpus.
 - Reviewed promotion of extracted candidates.
 
-**Exit:** BICC-MM-001 through BICC-MM-012, BICC-GATE-004B2, and the `USER_DOCUMENT` subset of BICC-GATE-005 pass, including injection isolation, access-loss, retention, promotion-boundary, citation, and deletion tests.
+**Exit:** BICC-MM-001 through BICC-MM-013, BICC-GATE-004B2, and the `USER_DOCUMENT` subset of BICC-GATE-005 pass, including typed extraction, deterministic rendering, injection isolation, access-loss, retention, promotion-boundary, citation, and deletion tests.
 
 ### Phase 4 — Prospective Buyer Discovery
 
@@ -394,7 +396,7 @@ This track runs in parallel with Phases 0 and 1 and does not wait for semantic p
 | BICC-D10 | Approve ephemeral chat-attachment retention, deletion, encryption/isolation, and sensitive-document policy. |
 | BICC-D11 | Approve the broader held-out emergency-corpus recall and false-positive thresholds, sample floors, confidence method, and critical canonical emergency set used by BICC-GATE-009. |
 | BICC-D12 | Approve the BICC-EVAL-014 scorer rubric, human-label protocol, judge calibration thresholds, and required adjudication classes before BICC-GATE-004B1, BICC-GATE-004B2, or BICC-GATE-007 is certifying. |
-| BICC-D13 | Approve the initial authored-guidance topic inventory, named content owner and reviewers, review cadence, BICC-GATE-011 coverage target, and BICC-GATE-010 non-inferiority margin. |
+| BICC-D13 | Approve and freeze before certification the initial core homeowner/buyer guidance topic taxonomy and denominator, named content owner and reviewers, demand/product-priority basis, explicit exclusions, review cadence, BICC-GATE-011 coverage target, and BICC-GATE-010 non-inferiority margin. |
 
 ## 19. Requirement evidence and status
 

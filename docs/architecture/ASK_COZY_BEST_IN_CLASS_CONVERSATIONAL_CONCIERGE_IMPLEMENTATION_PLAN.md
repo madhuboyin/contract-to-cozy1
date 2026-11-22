@@ -1,6 +1,6 @@
 # Ask Cozy Best-in-Class Conversational Concierge — Implementation Plan
 
-**Status:** Draft v0.2 for owner review; implementation slices and acceptance plan, not a delivery claim
+**Status:** Draft v0.3 for owner review; implementation slices and acceptance plan, not a delivery claim
 
 **Date:** 2026-11-22
 
@@ -43,6 +43,8 @@ Every Ask-related model call shall be present in the provider-boundary register 
 |---|---|---|---|---|
 | Conversational extraction — `apps/backend/src/services/ask/conversationalUnderstanding/extractionContract.ts`, route `ai:ask-conversational-capture-extraction` | Extract typed fact, event, warranty, evidence, or goal candidates after a deterministic pre-filter | `MF-014`, `MF-017`, `MF-034`, `MF-038`, `MF-046` | Candidate proposals only; it does not route, change the answer, or commit a material write | `ASK_CONVERSATIONAL_CAPTURE_ENABLED`, default off; retain and certify by candidate/write family |
 | Semantic understanding — `apps/backend/src/services/ask/modelRouting/understandingProvider.ts` | Last-resort typed target/plan proposal after certified deterministic paths do not resolve the request | `FR-UND-*`, `FR-PRV-*`, BICC-INV-011, BICC-UND-012 | Validated plan only; handlers remain answer authority; write targets are preview-only | `ASK_UNDERSTANDING_PLANNER_ENABLED`, provider-terms and homeowner-text approvals, all default off; retain disabled until each stratum passes |
+| Document evidence extraction — implementation selected by BICC-3.2 | Extract typed spans, claims, fields, and citation candidates from authorized document chunks | BICC-MM-004–008, BICC-MM-012–013 | Evidence candidates only, with page/chunk provenance; deterministic handler assigns mode and renders prose | No call may activate before BICC-0.2 registration and BICC-3.2 gates pass |
+| Vision observation/urgency extraction — implementation selected by BICC-3.2 | Extract typed observations, condition candidates, and urgency class from an authorized image | BICC-MM-009, BICC-MM-012–013, BICC-SAFE-* | Observation/urgency candidates only, with image/region provenance; no diagnosis or recommendation authority | No call may activate before BICC-0.2 registration and BICC-3.2 gates pass |
 | Result synthesis — `apps/backend/src/services/ask/askResultSynthesis.service.ts` | Generate homeowner-facing summary text from result blocks | No compatible named exception | Writes answer wording | `ASK_RESULT_SYNTHESIS_ENABLED`, default off; retire service, control, call site, provider method, metrics, and dedicated tests after consumer tracing |
 | Offline evaluation judge — implementation selected by BICC-0.1 | Score semantic properties that deterministic checks and human review cannot decide economically | BICC-EVAL-014, BICC-OPS-006–009 | Evaluation evidence only; never runtime behavior | Synthetic approved evaluation material only; never real or replayed homeowner payloads |
 
@@ -52,7 +54,7 @@ BICC-0.2 shall trace the repository for additional model/provider call sites and
 
 | Slice | Outcome | Depends on | Activation or completion gate |
 |---|---|---|---|
-| `BICC-0.1` | Evaluation contract, sealed pools, and cross-revision baseline | Owner decisions D01, D06, D11, D12, D13 | BICC-EVAL-001–018 executable; scorer, pool provenance, and historical comparison approved |
+| `BICC-0.1` | Evaluation contract, sealed pools, deterministic fidelity suites, and cross-revision baseline | Owner decisions D01, D06, D11, D12, D13 | BICC-EVAL-001–019 executable; scorer, pool provenance, fixture partitions, and historical comparison approved |
 | `BICC-0.2` | Provider-boundary and model-call inventory | `BICC-0.1`; applicable provider facts | BICC-OPS-006–009 evidence complete before any new external call |
 | `BICC-0.3` | Retire model-backed result synthesis | Model-call inventory in `BICC-0.2` | No consumer or configuration path can invoke model-written result synthesis |
 | `BICC-0.5` | Independent UX corrections | Current defect reproduction | Focused regression and accessibility evidence per accepted defect |
@@ -87,7 +89,8 @@ BICC-0.2 shall trace the repository for additional model/provider call sites and
 - Build the rotating sealed-shard manifest, burn/replenishment ledger, overlap checks, sample floors, and held-out-first report.
 - Implement the versioned claim segmentation and entailment/unsupported-claim scorer contract.
 - Record human-label protocol, reviewer independence, adjudication, scorer calibration, and exact confidence methods.
-- Re-evaluate the current and recent comparable revisions using the same all-prompt success definition and still-eligible held-out prompts. Record routing-path movement and treat the eight routing-ratchet failures/demoted-fast-path explanation as a hypothesis until reproduced.
+- Define reusable deterministic fidelity partition manifests separately from burnable human-authored NLU shards.
+- Re-evaluate the current and recent comparable revisions using the same all-prompt success definition and still-eligible held-out prompts. Record routing-path movement. Record any reproduced ratchet failure with revision, command, prompt identifier, and result; do not carry an unsourced external count or cause into the evidence record.
 - Keep offline evaluator models synthetic-only and use deterministic lint, exact assertions, and human review for fixed authored content wherever sufficient.
 
 **Expected existing files**
@@ -105,7 +108,8 @@ BICC-0.2 shall trace the repository for additional model/provider call sites and
 
 - Manifest rejects tuning/certification overlap and burned shards.
 - Report cannot emit a certification headline from main-corpus results alone.
-- Confidence-bound fixtures include zero-event and non-zero-event cases.
+- Deterministic fidelity fixtures cover the approved entity/value/date/unit/formula/boundary/missing-data/authorization partitions, remain reusable after failure, and gain permanent regression cases.
+- A fixed or exhaustive fixture matrix reports partition coverage without a population confidence claim; any statistical bound uses an approved sampled input distribution.
 - LLM-judge fixtures pin provider/model/prompt/schema versions and fail when calibration is absent or stale.
 - Evaluator egress rejects real or replayed homeowner prompts and production payloads.
 - Human-label fixtures cover agreement, adjudication, and safety-critical escalation.
@@ -119,7 +123,7 @@ All BICC-EVAL requirements are executable and the cross-revision baseline exists
 
 **Scope**
 
-- Inventory routing, conversational extraction, document, vision, synthesis, recommendation, and evaluator call paths separately; reconcile every path with the §2.1 register.
+- Inventory semantic planning, conversational extraction, document evidence, vision observation/urgency, and evaluator call paths separately; reconcile every path with the §2.1 register. Trace model-backed synthesis only for BICC-0.3 retirement and verify that no model-backed recommendation-authoring path is enabled or treated as permitted.
 - Add purpose-specific allowlisted serializers and captured-payload evidence at the governed egress boundary.
 - Record real-data versus synthetic-only approvals.
 
@@ -225,7 +229,7 @@ Implement missing deterministic reads and query shapes one domain slice at a tim
 - Positive, adjacent-negative, wrong-entity, wrong-property, missing-value, and authorization cases.
 - Parser/legacy agreement and containment remain intact.
 - Values come only from the canonical reader.
-- At least 300 independently eligible deterministic home-record read trials satisfy the GATE-004A1 zero-error and confidence-bound contract before BICC-1B activation.
+- At least 300 distinct reusable parameterized deterministic home-record cases cover the approved BICC-EVAL-019 partition manifest with zero errors before BICC-1B activation. These contract fixtures are not burnable NLU shards.
 - All-prompt held-out success and change from the last accepted revision are reported under GATE-010; improved precision cannot conceal lost reach.
 
 **Gate**
@@ -343,7 +347,7 @@ Mixed-facet answers retain separate modes and evidence; calculations use authori
 
 **Scope**
 
-Keep general guidance and small talk deterministic or approved-content based. Govern the existing guidance catalogue with stable identifiers, named ownership, evidence basis, topic inventory, review dates, deterministic lint, and a reviewed growth process. Do not add a model call.
+Keep general guidance and small talk deterministic or approved-content based. Govern the existing guidance catalogue with stable identifiers, named ownership, evidence basis, review dates, deterministic lint, and a reviewed growth process. Freeze the owner-approved core homeowner/buyer topic taxonomy and denominator before certification; include topic/prompt families, demand or product-priority basis, safety/professional-boundary classes, and explicit exclusions. Do not add a model call.
 
 **Expected existing files**
 
@@ -357,7 +361,7 @@ Keep general guidance and small talk deterministic or approved-content based. Go
 
 **Focused evidence and gate**
 
-Social turns do not route, execute, clarify, or create an action row; guidance is clearly not home-record-derived and never claims inspection, eligibility, coverage, diagnosis, or a guaranteed outcome. Catalogue schema, prohibited-claim lint, required boundaries, evidence/source checks, duplicate/conflict checks, stale-review checks, and human content/safety review pass before any optional semantic evaluator is considered. GATE-007, GATE-007B, GATE-010, GATE-011, and EVAL-016 pass.
+Social turns do not route, execute, clarify, or create an action row; guidance is clearly not home-record-derived and never claims inspection, eligibility, coverage, diagnosis, or a guaranteed outcome. Catalogue schema, prohibited-claim lint, required boundaries, evidence/source checks, duplicate/conflict checks, stale-review checks, and human content/safety review exhaustively gate static entries. The statistical unsupported-claim gate remains inapplicable unless a future amendment permits variable/generated guidance. Held-out mapping measures coverage only against the frozen core taxonomy and cannot narrow the denominator after failures. GATE-007, GATE-007B, GATE-010, GATE-011, and EVAL-016 pass.
 
 ### BICC-1D.n — Write-proposal family
 
@@ -404,7 +408,7 @@ Follow-up identity, property switching, access loss, expired/deleted entity, dep
 
 **Scope**
 
-Deliver upload/preview lifecycle, authorized retrieval, citations, version/deletion invalidation, untrusted-content isolation, and reviewed promotion into canonical records.
+Deliver upload/preview lifecycle, authorized retrieval, citations, version/deletion invalidation, untrusted-content isolation, and reviewed promotion into canonical records. Any document or vision model emits only typed evidence/observation candidates with source provenance; deterministic validation and templates assign answer modes and render final prose.
 
 **Expected existing files**
 
@@ -420,7 +424,7 @@ Deliver upload/preview lifecycle, authorized retrieval, citations, version/delet
 
 **Focused evidence and gate**
 
-Wrong user/property/version, access loss, deletion, replacement, retention expiry, citation mismatch, incomplete/conflicting evidence, injection attempts, and promotion confirmation. GATE-004B2, the `USER_DOCUMENT` GATE-005 subset, EVAL-009, EVAL-015, and MM-001–012 pass.
+Wrong user/property/version, access loss, deletion, replacement, retention expiry, citation mismatch, incomplete/conflicting evidence, typed-schema rejection, provenance loss, injection attempts, and promotion confirmation. Tests prove model candidates cannot diagnose, recommend, write records, select actions, or become free-form answer prose. GATE-004B2, the `USER_DOCUMENT` GATE-005 subset, EVAL-009, EVAL-015, and MM-001–013 pass.
 
 ### BICC-4.1 to BICC-4.3 — Prospective Buyer Discovery
 

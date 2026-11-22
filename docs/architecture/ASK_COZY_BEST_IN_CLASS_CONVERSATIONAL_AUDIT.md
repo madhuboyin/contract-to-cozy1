@@ -19,7 +19,7 @@ Ask Cozy has a stronger governed execution foundation than a typical consumer ch
 The target is therefore not an unrestricted general-purpose agent. The target is a conversational home concierge that:
 
 1. understands ordinary, multi-turn, and compound requests;
-2. distinguishes home-record facts, document evidence, calculations, estimates, and general guidance;
+2. distinguishes home-record facts, document evidence, calculations, estimates, recommendations, and general guidance;
 3. answers from authorized deterministic sources whenever possible;
 4. uses models only inside bounded, evaluated contracts;
 5. supports photos and documents as first-class conversational inputs;
@@ -100,8 +100,9 @@ Ask must distinguish at least:
 2. **Your document** — an authorized uploaded source with page/chunk citation;
 3. **Calculated** — deterministic computation with inputs and as-of time;
 4. **Estimate** — assumptions, range, and uncertainty disclosed;
-5. **General guidance** — useful guidance explicitly not derived from the home record; and
-6. **Cannot answer yet** — missing data, ambiguity, authorization, unsupported scope, or unavailable source.
+5. **Recommendation** — decision support whose evidence, assumptions, uncertainty, tradeoffs, and professional-review boundaries remain visible;
+6. **General guidance** — useful guidance explicitly not derived from the home record; and
+7. **Cannot answer yet** — missing data, ambiguity, authorization, unsupported scope, or unavailable source.
 
 The current fallback architecture is intentionally constrained, but gaps in deterministic reach and the authored guidance catalogue can produce robotic refusal for safe general questions. The fix is to improve deterministic reach and govern a versioned, reviewed guidance catalogue with measured held-out topic coverage. `GENERAL_GUIDANCE` remains the declared presentation/evidence mode for those authored answers; the mode itself does not create content and does not relax record-grounding.
 
