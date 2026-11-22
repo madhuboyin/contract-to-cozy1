@@ -1,0 +1,2129 @@
+{
+ "id": "wave1-tuning-2026-11-22",
+ "role": "TUNING",
+ "humanConfirmed": false,
+ "note": "TUNING evidence only. It can find rules to fix; it can never certify one (FR-FAST-6/8, BICC-EVAL-002). Not independently reviewed and not sealed.",
+ "provenance": {
+  "authoredBy": "Ask Evaluation Author (the implementing engineer; an AI assistant drafted the prompts under the engineer's direction)",
+  "reviewedBy": null,
+  "aiAssisted": true,
+  "authoredOn": "2026-11-22",
+  "owner decision": "FRD §18 D22: AI-generated prompts are never independently reviewed certification evidence without human authorship or review and recorded provenance.",
+  "labels": "Expected operations are the author's judgement of what the homeowner meant, not what the router currently returns."
+ },
+ "pools": [
+  "DATA_POINT_READ",
+  "INVENTORY_LOOKUP",
+  "SELL_HOLD_RENT_ANALYSIS"
+ ],
+ "rows": [
+  {
+   "family": "dpr-p-001",
+   "prompt": "What year was my house built?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-002",
+   "prompt": "When was the home built?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-003",
+   "prompt": "How many bedrooms does my house have?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-004",
+   "prompt": "how many bathrooms are in the house",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-005",
+   "prompt": "What is the square footage of my home?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-006",
+   "prompt": "How big is my place in square feet?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-007",
+   "prompt": "What type of heating do I have?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-008",
+   "prompt": "What kind of cooling system does the house have?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-009",
+   "prompt": "What is my zip code on file?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-010",
+   "prompt": "Which county is my property in?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-011",
+   "prompt": "What's the roof type on my house?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-012",
+   "prompt": "When was my roof replaced?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-013",
+   "prompt": "Who is my homeowners insurance carrier?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-014",
+   "prompt": "What is my insurance deductible?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-015",
+   "prompt": "When does my homeowners policy expire?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-016",
+   "prompt": "How much is my insurance premium?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-017",
+   "prompt": "What is my personal property limit?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-018",
+   "prompt": "What type of coverage does my policy have?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-019",
+   "prompt": "When does the dishwasher warranty expire?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-020",
+   "prompt": "Who is the warranty provider for my water heater?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-021",
+   "prompt": "What is the model number of my refrigerator?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-022",
+   "prompt": "What's the serial number on the furnace?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-023",
+   "prompt": "What brand is my washing machine?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-024",
+   "prompt": "Who manufactured my dryer?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-025",
+   "prompt": "When was the HVAC installed?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-026",
+   "prompt": "When was the water heater last serviced?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-027",
+   "prompt": "What did the oven cost when I bought it?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-028",
+   "prompt": "What is the recorded replacement cost of the furnace?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-029",
+   "prompt": "What is my property tax bill amount?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-030",
+   "prompt": "What is my effective tax rate?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-031",
+   "prompt": "What is the assessed value of my property?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-032",
+   "prompt": "What is the taxable value on my latest assessment?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-033",
+   "prompt": "What is my reserve fund balance?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-034",
+   "prompt": "What is the recommended monthly contribution to my reserve?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-035",
+   "prompt": "What is the status of my open insurance claim?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-036",
+   "prompt": "What is my claim number?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-037",
+   "prompt": "What is the settlement amount on my claim?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-038",
+   "prompt": "When is the next follow-up on my claim?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-039",
+   "prompt": "When is my target closing date?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-040",
+   "prompt": "What stage of buying am I in?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-041",
+   "prompt": "Which items in my inventory are missing a model number?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-p-042",
+   "prompt": "Which appliances have no warranty?",
+   "kind": "POSITIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "dpr-a-001",
+   "prompt": "Show me everything in my inventory",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "dpr-a-002",
+   "prompt": "List all the appliances in my kitchen",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "dpr-a-003",
+   "prompt": "Give me a summary of my property",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "PROPERTY_SUMMARY"
+  },
+  {
+   "family": "dpr-a-004",
+   "prompt": "How is my home doing overall?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "PROPERTY_SUMMARY"
+  },
+  {
+   "family": "dpr-a-005",
+   "prompt": "Show my home status board",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "HOME_STATUS_BOARD"
+  },
+  {
+   "family": "dpr-a-006",
+   "prompt": "Which of my warranties expire this year?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "WARRANTY_LOOKUP"
+  },
+  {
+   "family": "dpr-a-007",
+   "prompt": "List all my warranties",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "WARRANTY_LOOKUP"
+  },
+  {
+   "family": "dpr-a-008",
+   "prompt": "Do I have any coverage gaps?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "COVERAGE_GAPS"
+  },
+  {
+   "family": "dpr-a-009",
+   "prompt": "What maintenance is coming up?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "MAINTENANCE_FORECAST"
+  },
+  {
+   "family": "dpr-a-010",
+   "prompt": "What maintenance tasks are overdue?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "MAINTENANCE_STATUS"
+  },
+  {
+   "family": "dpr-a-011",
+   "prompt": "Which appliances are likely to fail soon?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "APPLIANCE_FAILURE_RISK"
+  },
+  {
+   "family": "dpr-a-012",
+   "prompt": "Should I repair or replace my furnace?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "REPLACEMENT_GUIDANCE"
+  },
+  {
+   "family": "dpr-a-013",
+   "prompt": "Which documents do I have for my roof?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "DOCUMENT_LOOKUP"
+  },
+  {
+   "family": "dpr-a-014",
+   "prompt": "Show me my inspection reports",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "INSPECTION_REPORTS"
+  },
+  {
+   "family": "dpr-a-015",
+   "prompt": "What are my total ownership costs?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "OWNERSHIP_COSTS"
+  },
+  {
+   "family": "dpr-a-016",
+   "prompt": "Where can I save money on my home?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "SAVINGS_OPPORTUNITIES"
+  },
+  {
+   "family": "dpr-a-017",
+   "prompt": "What changed on my home recently?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "HOME_CHANGE_SUMMARY"
+  },
+  {
+   "family": "dpr-a-018",
+   "prompt": "Show the timeline of events for my house",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "HOME_TIMELINE_EVENTS"
+  },
+  {
+   "family": "dpr-a-019",
+   "prompt": "What needs my attention right now?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "HOME_ACTIONS"
+  },
+  {
+   "family": "dpr-a-020",
+   "prompt": "Which claims are open and what are their next steps?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "INCIDENT_CLAIM_STATUS"
+  },
+  {
+   "family": "dpr-a-021",
+   "prompt": "How much should I be setting aside for repairs?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "CAPITAL_RESERVE_PLAN"
+  },
+  {
+   "family": "dpr-a-022",
+   "prompt": "Is it better to sell, hold or rent my home?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "dpr-a-023",
+   "prompt": "Compare these two roof quotes",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "QUOTE_COMPARISON_REVIEW"
+  },
+  {
+   "family": "dpr-a-024",
+   "prompt": "What can you help me with?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "CAPABILITY_DISCOVERY"
+  },
+  {
+   "family": "dpr-a-025",
+   "prompt": "How can I lower my insurance premium?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "SAVINGS_OPPORTUNITIES"
+  },
+  {
+   "family": "dpr-a-026",
+   "prompt": "Remind me to change the furnace filter",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "MAINTENANCE_TASK_CREATE"
+  },
+  {
+   "family": "dpr-a-027",
+   "prompt": "Add a note that the water heater was serviced",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": null
+  },
+  {
+   "family": "dpr-a-028",
+   "prompt": "Update the deductible on my policy",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": null
+  },
+  {
+   "family": "dpr-a-029",
+   "prompt": "Which appliances are covered under warranty?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "WARRANTY_LOOKUP"
+  },
+  {
+   "family": "dpr-a-030",
+   "prompt": "How do I file an insurance claim for water damage?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "DATA_POINT_READ",
+   "expected": "CLAIM_FILE"
+  },
+  {
+   "family": "dpr-c-001",
+   "prompt": "How's the weather going to affect my roof this week?",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": null
+  },
+  {
+   "family": "dpr-c-002",
+   "prompt": "What is the mortgage rate today?",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "REFINANCE_ANALYSIS"
+  },
+  {
+   "family": "dpr-c-003",
+   "prompt": "Should I refinance my mortgage?",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "REFINANCE_ANALYSIS"
+  },
+  {
+   "family": "dpr-c-004",
+   "prompt": "Help me prepare my house to sell",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "SELLER_PREP_CHECKLIST"
+  },
+  {
+   "family": "dpr-c-005",
+   "prompt": "What is the best time to buy a home?",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "GROUNDED_GUIDANCE"
+  },
+  {
+   "family": "dpr-c-006",
+   "prompt": "Tell me a joke",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "GROUNDED_GUIDANCE"
+  },
+  {
+   "family": "dpr-c-007",
+   "prompt": "I smell gas in my kitchen",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "EMERGENCY_BOUNDARY"
+  },
+  {
+   "family": "dpr-c-008",
+   "prompt": "How do I bypass the permit for my deck?",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "UNSAFE_RESTRICTED_BOUNDARY"
+  },
+  {
+   "family": "dpr-c-009",
+   "prompt": "Write me a Python script",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "OUT_OF_SCOPE_BOUNDARY"
+  },
+  {
+   "family": "dpr-c-010",
+   "prompt": "Find a plumber near me",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": null
+  },
+  {
+   "family": "dpr-c-011",
+   "prompt": "What plants grow well in my yard?",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "PLANT_CARE_OUTLOOK"
+  },
+  {
+   "family": "dpr-c-012",
+   "prompt": "How can I lower my property taxes?",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "PROPERTY_TAX_APPEAL_READINESS"
+  },
+  {
+   "family": "dpr-c-013",
+   "prompt": "Plan my renovation budget",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "HOME_UPGRADE_SCENARIOS"
+  },
+  {
+   "family": "dpr-c-014",
+   "prompt": "Start a DIY project for my deck",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "DIY_PROJECTS"
+  },
+  {
+   "family": "dpr-c-015",
+   "prompt": "What is the radon level in my area?",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "ENVIRONMENT_REPORT"
+  },
+  {
+   "family": "dpr-c-016",
+   "prompt": "Create a seasonal maintenance plan",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "SEASONAL_HOME_CARE"
+  },
+  {
+   "family": "dpr-c-017",
+   "prompt": "Hello",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": null
+  },
+  {
+   "family": "dpr-c-018",
+   "prompt": "Thanks so much",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": null
+  },
+  {
+   "family": "dpr-c-019",
+   "prompt": "How do I negotiate after my inspection?",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "INSPECTION_NEGOTIATION_PACKAGE"
+  },
+  {
+   "family": "dpr-c-020",
+   "prompt": "What closing costs should I expect?",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "BUYER_PLAN_STATUS"
+  },
+  {
+   "family": "dpr-c-021",
+   "prompt": "Draft a message to my contractor",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": null
+  },
+  {
+   "family": "dpr-c-022",
+   "prompt": "Track the status of my HOA compliance",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "HOA_COMPLIANCE_STATUS"
+  },
+  {
+   "family": "dpr-c-023",
+   "prompt": "Which neighbors are selling their homes?",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "NEIGHBORHOOD_CHANGE_FEED"
+  },
+  {
+   "family": "dpr-c-024",
+   "prompt": "Estimate my home value",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": null
+  },
+  {
+   "family": "dpr-c-025",
+   "prompt": "Export my home records",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "HOME_RECORD_EXPORT"
+  },
+  {
+   "family": "dpr-c-026",
+   "prompt": "Delete my account",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "OUT_OF_SCOPE_BOUNDARY"
+  },
+  {
+   "family": "dpr-c-027",
+   "prompt": "Set up a monitor for rate drops",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "REFINANCE_RATE_MONITOR"
+  },
+  {
+   "family": "dpr-c-028",
+   "prompt": "What's a good way to organize my receipts?",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "GROUNDED_GUIDANCE"
+  },
+  {
+   "family": "dpr-c-029",
+   "prompt": "Explain what a deductible is",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "GROUNDED_GUIDANCE"
+  },
+  {
+   "family": "dpr-c-030",
+   "prompt": "Who won the game last night?",
+   "kind": "CROSS_OPERATION",
+   "pool": "DATA_POINT_READ",
+   "expected": "OUT_OF_SCOPE_BOUNDARY"
+  },
+  {
+   "family": "inv-p-001",
+   "prompt": "What appliances do I have?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-002",
+   "prompt": "List everything in my inventory",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-003",
+   "prompt": "Show me all the items I've recorded",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-004",
+   "prompt": "What is in my kitchen?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-005",
+   "prompt": "What do I have in the garage?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-006",
+   "prompt": "Which items are in the basement?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-007",
+   "prompt": "What's in the primary bedroom?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-008",
+   "prompt": "Show me the items in each room",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-009",
+   "prompt": "Show my inventory by room",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-010",
+   "prompt": "How many items are in my inventory?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-011",
+   "prompt": "What HVAC equipment do I own?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-012",
+   "prompt": "Which appliances are more than ten years old?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-013",
+   "prompt": "Which of my appliances are older than 15 years?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-014",
+   "prompt": "Show me everything that was installed before 2010",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-015",
+   "prompt": "What items do I still need to add details for?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-016",
+   "prompt": "Show me the items in poor condition",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-017",
+   "prompt": "Which appliances are in good condition?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-018",
+   "prompt": "List my large appliances",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-019",
+   "prompt": "Which items have no photos?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-020",
+   "prompt": "Show the history of my water heater",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-021",
+   "prompt": "What work has been done on the furnace?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-022",
+   "prompt": "When was my refrigerator last serviced?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-023",
+   "prompt": "What is the full record for my dishwasher?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-024",
+   "prompt": "Do I have a dehumidifier?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-025",
+   "prompt": "Do I have a smoke detector in the hallway?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-026",
+   "prompt": "Is there a generator in my inventory?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-027",
+   "prompt": "Do I own a sump pump?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-028",
+   "prompt": "What items are expected to wear out soon?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-029",
+   "prompt": "What is the oldest item I own?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-030",
+   "prompt": "Which items did I buy this year?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-031",
+   "prompt": "Which items cost more than $1,000?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-032",
+   "prompt": "Show the electrical items I recorded",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-033",
+   "prompt": "What plumbing fixtures do I have recorded?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-034",
+   "prompt": "What's in the laundry room?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-035",
+   "prompt": "Which items belong in the attic?",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-036",
+   "prompt": "Show me only the kitchen appliances",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-p-037",
+   "prompt": "Tell me about my washer",
+   "kind": "POSITIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "inv-a-001",
+   "prompt": "Which items are missing their model numbers?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "inv-a-002",
+   "prompt": "Which appliances have no serial number recorded?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "inv-a-003",
+   "prompt": "Give me a summary of my property",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "PROPERTY_SUMMARY"
+  },
+  {
+   "family": "inv-a-004",
+   "prompt": "How is my home doing overall?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "PROPERTY_SUMMARY"
+  },
+  {
+   "family": "inv-a-005",
+   "prompt": "Should I replace my furnace or repair it?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "REPLACEMENT_GUIDANCE"
+  },
+  {
+   "family": "inv-a-006",
+   "prompt": "Is it worth fixing the old water heater?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "REPLACEMENT_GUIDANCE"
+  },
+  {
+   "family": "inv-a-007",
+   "prompt": "What is the model number of my refrigerator?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "inv-a-008",
+   "prompt": "When was the furnace installed?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "inv-a-009",
+   "prompt": "Which appliances have no warranty?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "COVERAGE_GAPS"
+  },
+  {
+   "family": "inv-a-010",
+   "prompt": "Which warranties expire soon?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "WARRANTY_LOOKUP"
+  },
+  {
+   "family": "inv-a-011",
+   "prompt": "When does the dishwasher warranty expire?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "inv-a-012",
+   "prompt": "Which appliances are likely to fail this year?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "APPLIANCE_FAILURE_RISK"
+  },
+  {
+   "family": "inv-a-013",
+   "prompt": "What is the replacement cost for my roof?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "ITEM_REPLACEMENT_COST"
+  },
+  {
+   "family": "inv-a-014",
+   "prompt": "How much would a new furnace cost?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "ITEM_REPLACEMENT_COST"
+  },
+  {
+   "family": "inv-a-015",
+   "prompt": "What maintenance does my HVAC need?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "MAINTENANCE_FORECAST"
+  },
+  {
+   "family": "inv-a-016",
+   "prompt": "Add a new refrigerator to my inventory",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_ITEM_CREATE"
+  },
+  {
+   "family": "inv-a-017",
+   "prompt": "Delete the old dryer from my inventory",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": null
+  },
+  {
+   "family": "inv-a-018",
+   "prompt": "Update the model number of my oven",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INVENTORY_ITEM_CORRECT"
+  },
+  {
+   "family": "inv-a-019",
+   "prompt": "Mark the washer as serviced yesterday",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": null
+  },
+  {
+   "family": "inv-a-020",
+   "prompt": "Upload a receipt for my dishwasher",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": null
+  },
+  {
+   "family": "inv-a-021",
+   "prompt": "Find the manual for my furnace",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "DOCUMENT_LOOKUP"
+  },
+  {
+   "family": "inv-a-022",
+   "prompt": "Show my maintenance tasks",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "MAINTENANCE_STATUS"
+  },
+  {
+   "family": "inv-a-023",
+   "prompt": "What are the safety recalls on my appliances?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "RECALL_REVIEW"
+  },
+  {
+   "family": "inv-a-024",
+   "prompt": "What should I budget for appliance replacements?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "MAINTENANCE_BUDGET_FORECAST"
+  },
+  {
+   "family": "inv-a-025",
+   "prompt": "How are my appliances rated for efficiency?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": null
+  },
+  {
+   "family": "inv-a-026",
+   "prompt": "What can I do to save on energy bills?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "SAVINGS_OPPORTUNITIES"
+  },
+  {
+   "family": "inv-a-027",
+   "prompt": "Which items need my attention?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "HOME_ACTIONS"
+  },
+  {
+   "family": "inv-a-028",
+   "prompt": "Show the timeline of my home",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "HOME_TIMELINE_EVENTS"
+  },
+  {
+   "family": "inv-a-029",
+   "prompt": "Compare quotes for a new heat pump",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "QUOTE_COMPARISON_REVIEW"
+  },
+  {
+   "family": "inv-a-030",
+   "prompt": "What does my insurance cover for appliances?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "COVERAGE_REVIEW_STATUS"
+  },
+  {
+   "family": "inv-a-031",
+   "prompt": "Do I have coverage for my roof?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "COVERAGE_GAPS"
+  },
+  {
+   "family": "inv-a-032",
+   "prompt": "Plan the replacement of my aging systems",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "CAPITAL_RESERVE_PLAN"
+  },
+  {
+   "family": "inv-c-001",
+   "prompt": "What's the weather like this weekend?",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": null
+  },
+  {
+   "family": "inv-c-002",
+   "prompt": "What is my mortgage rate?",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "REFINANCE_ANALYSIS"
+  },
+  {
+   "family": "inv-c-003",
+   "prompt": "Help me stage my home for sale",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "SELLER_PREP_CHECKLIST"
+  },
+  {
+   "family": "inv-c-004",
+   "prompt": "I smell smoke in the kitchen",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "EMERGENCY_BOUNDARY"
+  },
+  {
+   "family": "inv-c-005",
+   "prompt": "Hi there",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": null
+  },
+  {
+   "family": "inv-c-006",
+   "prompt": "Tell me a joke",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "GROUNDED_GUIDANCE"
+  },
+  {
+   "family": "inv-c-007",
+   "prompt": "Find me an electrician",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": null
+  },
+  {
+   "family": "inv-c-008",
+   "prompt": "What is my property tax bill?",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "inv-c-009",
+   "prompt": "How can I appeal my property taxes?",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "PROPERTY_TAX_APPEAL_READINESS"
+  },
+  {
+   "family": "inv-c-010",
+   "prompt": "Plan my kitchen remodel",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "HOME_UPGRADE_SCENARIOS"
+  },
+  {
+   "family": "inv-c-011",
+   "prompt": "Start a DIY fence project",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "DIY_PROJECTS"
+  },
+  {
+   "family": "inv-c-012",
+   "prompt": "What is my radon risk?",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "ENVIRONMENT_REPORT"
+  },
+  {
+   "family": "inv-c-013",
+   "prompt": "Create a spring maintenance checklist",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "SEASONAL_HOME_CARE"
+  },
+  {
+   "family": "inv-c-014",
+   "prompt": "What closing costs should I expect?",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "BUYER_PLAN_STATUS"
+  },
+  {
+   "family": "inv-c-015",
+   "prompt": "How do I negotiate repairs after inspection?",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "INSPECTION_NEGOTIATION_PACKAGE"
+  },
+  {
+   "family": "inv-c-016",
+   "prompt": "Is my neighborhood getting more expensive?",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "NEIGHBORHOOD_CHANGE_FEED"
+  },
+  {
+   "family": "inv-c-017",
+   "prompt": "What is my home worth?",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": null
+  },
+  {
+   "family": "inv-c-018",
+   "prompt": "Track my HOA compliance",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "HOA_COMPLIANCE_STATUS"
+  },
+  {
+   "family": "inv-c-019",
+   "prompt": "Export all my records",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "HOME_RECORD_EXPORT"
+  },
+  {
+   "family": "inv-c-020",
+   "prompt": "Who won the game last night?",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "OUT_OF_SCOPE_BOUNDARY"
+  },
+  {
+   "family": "inv-c-021",
+   "prompt": "Write a poem",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "OUT_OF_SCOPE_BOUNDARY"
+  },
+  {
+   "family": "inv-c-022",
+   "prompt": "Help me bypass the building inspection",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "UNSAFE_RESTRICTED_BOUNDARY"
+  },
+  {
+   "family": "inv-c-023",
+   "prompt": "What plants should I put in the backyard?",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "PLANT_CARE_OUTLOOK"
+  },
+  {
+   "family": "inv-c-024",
+   "prompt": "Explain what homeowners insurance is",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "GROUNDED_GUIDANCE"
+  },
+  {
+   "family": "inv-c-025",
+   "prompt": "Draft a message to my contractor",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": null
+  },
+  {
+   "family": "inv-c-026",
+   "prompt": "What is my insurance deductible?",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "inv-c-027",
+   "prompt": "How many bedrooms does my house have?",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "inv-c-028",
+   "prompt": "What is the status of my open claim?",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "inv-c-029",
+   "prompt": "What can you do for me?",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "CAPABILITY_DISCOVERY"
+  },
+  {
+   "family": "inv-c-030",
+   "prompt": "Is it better to sell or keep my house?",
+   "kind": "CROSS_OPERATION",
+   "pool": "INVENTORY_LOOKUP",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-001",
+   "prompt": "Should I sell my house or keep it?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-002",
+   "prompt": "Is it better to sell, hold or rent my home?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-003",
+   "prompt": "Should I rent out my house instead of selling?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-004",
+   "prompt": "Would I make more money selling or renting?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-005",
+   "prompt": "Compare selling versus renting my property",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-006",
+   "prompt": "Is now a good time to sell my home?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-007",
+   "prompt": "Should I hold onto my house for another few years?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-008",
+   "prompt": "What would I net if I sold my house today?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-009",
+   "prompt": "Run a sell, hold or rent analysis",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-010",
+   "prompt": "Help me decide whether to sell or rent out the house",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-011",
+   "prompt": "Is it smarter to keep the house as a rental?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-012",
+   "prompt": "Sell or rent: which is better for me?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-013",
+   "prompt": "If I rent the house out, how does it compare to selling?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-014",
+   "prompt": "Should I keep my home and rent it, or sell it?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-015",
+   "prompt": "What are my options: sell, hold, or rent?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-016",
+   "prompt": "Would renting beat selling for me?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-017",
+   "prompt": "I'm moving and can't decide between selling and renting the place",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-018",
+   "prompt": "We're relocating. Should we sell the house or turn it into a rental?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-019",
+   "prompt": "Rent it out or sell it, what makes sense?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-020",
+   "prompt": "Evaluate selling versus holding my property",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-021",
+   "prompt": "Is holding my home better than selling it right now?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-022",
+   "prompt": "What is better for my finances, selling or renting out the house?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-023",
+   "prompt": "Should we sell the home or keep it as an investment property?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-024",
+   "prompt": "Analyze whether I should sell or rent",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-025",
+   "prompt": "Does it make sense to keep and rent my house?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-026",
+   "prompt": "Give me a sell hold rent breakdown",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-027",
+   "prompt": "Help me think through selling versus keeping my house",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-028",
+   "prompt": "Show me the numbers for selling versus renting",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-029",
+   "prompt": "Is it worth renting out my house rather than selling?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-030",
+   "prompt": "Do the sell or rent math for my property",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-031",
+   "prompt": "Should I list the house or lease it out?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-032",
+   "prompt": "Compare the return of selling against renting my home",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-033",
+   "prompt": "If we move, is it better to sell or keep the house as a rental?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-034",
+   "prompt": "Walk me through the sell versus hold versus rent decision",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-035",
+   "prompt": "Can you compare selling my house to renting it for the next five years?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-036",
+   "prompt": "Would I come out ahead if I rented rather than sold?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-037",
+   "prompt": "I'm unsure whether to sell or rent my home",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-038",
+   "prompt": "Run the sell vs rent numbers",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-039",
+   "prompt": "What is the best move for my house: sell, rent, or hold?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-p-040",
+   "prompt": "Time to decide: sell or keep and rent?",
+   "kind": "POSITIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELL_HOLD_RENT_ANALYSIS"
+  },
+  {
+   "family": "shr-a-001",
+   "prompt": "What are my total ownership costs?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "OWNERSHIP_COSTS"
+  },
+  {
+   "family": "shr-a-002",
+   "prompt": "How much does it cost me to own this house each year?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "OWNERSHIP_COSTS"
+  },
+  {
+   "family": "shr-a-003",
+   "prompt": "Should I refinance my mortgage?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "REFINANCE_ANALYSIS"
+  },
+  {
+   "family": "shr-a-004",
+   "prompt": "What is the break-even point on refinancing?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "BREAK_EVEN_ANALYSIS"
+  },
+  {
+   "family": "shr-a-005",
+   "prompt": "What is my home worth?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": null
+  },
+  {
+   "family": "shr-a-006",
+   "prompt": "How much has my home appreciated?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": null
+  },
+  {
+   "family": "shr-a-007",
+   "prompt": "Help me get my house ready to sell",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELLER_PREP_CHECKLIST"
+  },
+  {
+   "family": "shr-a-008",
+   "prompt": "What repairs should I do before listing?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELLER_PREP_CHECKLIST"
+  },
+  {
+   "family": "shr-a-009",
+   "prompt": "What is the status of my sale?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELLER_PREP_CHECKLIST"
+  },
+  {
+   "family": "shr-a-010",
+   "prompt": "When is my target list date?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "shr-a-011",
+   "prompt": "When is my target closing date on the sale?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "shr-a-012",
+   "prompt": "Should I buy a bigger house?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "BUYER_PLAN_STATUS"
+  },
+  {
+   "family": "shr-a-013",
+   "prompt": "What closing costs will I pay as a buyer?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "BUYER_PLAN_STATUS"
+  },
+  {
+   "family": "shr-a-014",
+   "prompt": "Is it worth replacing the roof before I sell?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "HOME_UPGRADE_SCENARIOS"
+  },
+  {
+   "family": "shr-a-015",
+   "prompt": "Which upgrades add the most value?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "HOME_UPGRADE_SCENARIOS"
+  },
+  {
+   "family": "shr-a-016",
+   "prompt": "How much should I set aside for repairs?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "CAPITAL_RESERVE_PLAN"
+  },
+  {
+   "family": "shr-a-017",
+   "prompt": "What will maintenance cost me over the next five years?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "MAINTENANCE_BUDGET_FORECAST"
+  },
+  {
+   "family": "shr-a-018",
+   "prompt": "Which expenses can I cut on my home?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SAVINGS_OPPORTUNITIES"
+  },
+  {
+   "family": "shr-a-019",
+   "prompt": "Appeal my property tax assessment",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "PROPERTY_TAX_APPEAL_READINESS"
+  },
+  {
+   "family": "shr-a-020",
+   "prompt": "What is my property tax bill?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "shr-a-021",
+   "prompt": "How is my neighborhood changing?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "NEIGHBORHOOD_CHANGE_FEED"
+  },
+  {
+   "family": "shr-a-022",
+   "prompt": "What is my mortgage balance?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "REFINANCE_ANALYSIS"
+  },
+  {
+   "family": "shr-a-023",
+   "prompt": "What are current mortgage rates?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "REFINANCE_RATE_MONITOR"
+  },
+  {
+   "family": "shr-a-024",
+   "prompt": "Do I have enough insurance coverage for renting it out?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "COVERAGE_GAPS"
+  },
+  {
+   "family": "shr-a-025",
+   "prompt": "Show me my home summary",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "PROPERTY_SUMMARY"
+  },
+  {
+   "family": "shr-a-026",
+   "prompt": "What do I need to disclose when selling?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SELLER_PREP_CHECKLIST"
+  },
+  {
+   "family": "shr-a-027",
+   "prompt": "List my documents for the sale",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "DOCUMENT_LOOKUP"
+  },
+  {
+   "family": "shr-a-028",
+   "prompt": "Explain what a landlord policy is",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "GROUNDED_GUIDANCE"
+  },
+  {
+   "family": "shr-a-029",
+   "prompt": "What happens to my taxes if I sell?",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "GROUNDED_GUIDANCE"
+  },
+  {
+   "family": "shr-a-030",
+   "prompt": "Draft a listing description",
+   "kind": "ADJACENT_NEGATIVE",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "OUT_OF_SCOPE_BOUNDARY"
+  },
+  {
+   "family": "shr-c-001",
+   "prompt": "What maintenance is due this month?",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "MAINTENANCE_STATUS"
+  },
+  {
+   "family": "shr-c-002",
+   "prompt": "Which appliances do I have?",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "shr-c-003",
+   "prompt": "How many bedrooms does my house have?",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "shr-c-004",
+   "prompt": "What is the weather forecast for my area?",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": null
+  },
+  {
+   "family": "shr-c-005",
+   "prompt": "I smell gas",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "EMERGENCY_BOUNDARY"
+  },
+  {
+   "family": "shr-c-006",
+   "prompt": "Hello",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": null
+  },
+  {
+   "family": "shr-c-007",
+   "prompt": "Find a roofer near me",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": null
+  },
+  {
+   "family": "shr-c-008",
+   "prompt": "Which warranties expire this year?",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "WARRANTY_LOOKUP"
+  },
+  {
+   "family": "shr-c-009",
+   "prompt": "Show my inspection reports",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "INSPECTION_REPORTS"
+  },
+  {
+   "family": "shr-c-010",
+   "prompt": "Start a DIY garden bed project",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "DIY_PROJECTS"
+  },
+  {
+   "family": "shr-c-011",
+   "prompt": "What plants suit my yard?",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "PLANT_CARE_OUTLOOK"
+  },
+  {
+   "family": "shr-c-012",
+   "prompt": "Create a fall maintenance checklist",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "SEASONAL_HOME_CARE"
+  },
+  {
+   "family": "shr-c-013",
+   "prompt": "What is the radon level near me?",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "ENVIRONMENT_REPORT"
+  },
+  {
+   "family": "shr-c-014",
+   "prompt": "Compare two furnace quotes",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "QUOTE_COMPARISON_REVIEW"
+  },
+  {
+   "family": "shr-c-015",
+   "prompt": "Tell me a joke",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "GROUNDED_GUIDANCE"
+  },
+  {
+   "family": "shr-c-016",
+   "prompt": "Which items are in the garage?",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "INVENTORY_LOOKUP"
+  },
+  {
+   "family": "shr-c-017",
+   "prompt": "What is the status of my claim?",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "shr-c-018",
+   "prompt": "Add a task to clean the gutters",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "MAINTENANCE_TASK_CREATE"
+  },
+  {
+   "family": "shr-c-019",
+   "prompt": "Show my home timeline",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "HOME_TIMELINE_EVENTS"
+  },
+  {
+   "family": "shr-c-020",
+   "prompt": "What needs my attention today?",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "HOME_ACTIONS"
+  },
+  {
+   "family": "shr-c-021",
+   "prompt": "Export my records",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "HOME_RECORD_EXPORT"
+  },
+  {
+   "family": "shr-c-022",
+   "prompt": "Write a Python function",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "OUT_OF_SCOPE_BOUNDARY"
+  },
+  {
+   "family": "shr-c-023",
+   "prompt": "Help me avoid the permit process",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "UNSAFE_RESTRICTED_BOUNDARY"
+  },
+  {
+   "family": "shr-c-024",
+   "prompt": "Which appliances might fail soon?",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "APPLIANCE_FAILURE_RISK"
+  },
+  {
+   "family": "shr-c-025",
+   "prompt": "What can Ask Cozy do?",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "CAPABILITY_DISCOVERY"
+  },
+  {
+   "family": "shr-c-026",
+   "prompt": "When does my policy expire?",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "DATA_POINT_READ"
+  },
+  {
+   "family": "shr-c-027",
+   "prompt": "Set a reminder to replace the smoke detector batteries",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "MAINTENANCE_TASK_CREATE"
+  },
+  {
+   "family": "shr-c-028",
+   "prompt": "How do I negotiate after the inspection?",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "INSPECTION_NEGOTIATION_PACKAGE"
+  },
+  {
+   "family": "shr-c-029",
+   "prompt": "Message my contractor about the delay",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": null
+  },
+  {
+   "family": "shr-c-030",
+   "prompt": "What was the cost of the oven?",
+   "kind": "CROSS_OPERATION",
+   "pool": "SELL_HOLD_RENT_ANALYSIS",
+   "expected": "DATA_POINT_READ"
+  }
+ ],
+ "labelConvention": "expected = the registered operation the homeowner's intent belongs to; null = no registered operation owns the intent (it is still not the pool operation). Product contract: a missing-field filter over items (for example 'which appliances have no warranty') is a computed data-point read (DATA_POINT_READ), recorded 2026-11-13 and asserted by coverageComparisonStatus.test.js."
+}

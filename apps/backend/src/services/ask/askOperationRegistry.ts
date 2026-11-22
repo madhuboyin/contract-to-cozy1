@@ -2078,7 +2078,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (itemHistoryPattern.test(message) && !itemAttributeWriteIntentPattern.test(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message)) {
     return resolved('INVENTORY_LOOKUP', 0.96, 'DET_INVENTORY_LOOKUP_03');
   }
-  if (inventoryLookupPattern.test(message) && !compoundCapabilityFilterPattern.test(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message) && !missingFieldFilterWording.test(message) && !/\b(?:paperwork|uploaded|documents?)\b/i.test(message)) {
+  if (inventoryLookupPattern.test(message) && !compoundCapabilityFilterPattern.test(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message) && !missingFieldFilterWording.test(message) && !/\b(?:paperwork|uploaded|documents?|manuals?|receipts?|invoices?)\b/i.test(message) && !/\b(?:coverage|covered|insurance|insured)\b/i.test(message)) {
     return resolved('INVENTORY_LOOKUP', 0.96, 'DET_INVENTORY_LOOKUP_04');
   }
   if (propertyAreaCaptureCommandPattern.test(message)) {
@@ -2120,7 +2120,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (refinanceAnalysisPattern.test(message)) {
     return resolved('REFINANCE_ANALYSIS', 0.97, 'DET_REFINANCE_ANALYSIS_01');
   }
-  if (sellHoldRentAnalysisPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+  if (sellHoldRentAnalysisPattern.test(message) && !explicitCapabilityPattern.test(message) && !/\bdisclos\w*\b/i.test(message)) {
     return resolved('SELL_HOLD_RENT_ANALYSIS', 0.96, 'DET_SELL_HOLD_RENT_ANALYSIS_01');
   }
   if (householdInvitationPattern.test(message)) {

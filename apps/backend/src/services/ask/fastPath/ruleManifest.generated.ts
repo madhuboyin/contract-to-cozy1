@@ -1742,7 +1742,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "INVENTORY_LOOKUP",
   "confidence": 0.96,
   "order": 130,
-  "hash": "e2b68bdd84c65ef3",
+  "hash": "671cd05799572885",
   "condition": "inventoryLookupPattern.test(message) && !compoundCapabilityFilterPattern.test(message) && !explicitCapabilityPattern.test(message) && !re...",
   "references": [
    "askOperationRegistry.ts:compoundCapabilityFilterPattern",
@@ -1929,8 +1929,8 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "SELL_HOLD_RENT_ANALYSIS",
   "confidence": 0.96,
   "order": 144,
-  "hash": "287dce4138dae4a6",
-  "condition": "sellHoldRentAnalysisPattern.test(message) && !explicitCapabilityPattern.test(message)",
+  "hash": "9cc66fc683cecc9c",
+  "condition": "sellHoldRentAnalysisPattern.test(message) && !explicitCapabilityPattern.test(message) && !/\\bdisclos\\w*\\b/i.test(message)",
   "references": [
    "askOperationRegistry.ts:explicitCapabilityPattern",
    "askOperationRegistry.ts:sellHoldRentAnalysisPattern"

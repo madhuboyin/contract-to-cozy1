@@ -51,6 +51,28 @@ Volume proxy: how often a rule fires on the 805-prompt **tuning** set (`ask-fast
 
 Suggested first wave (reads only, highest volume): `DATA_POINT_READ`, `INVENTORY_LOOKUP`, `SELL_HOLD_RENT_ANALYSIS`, `DOCUMENT_LOOKUP`, `PROJECT_TRACKER_PROJECTS`, `MAINTENANCE_BUDGET_FORECAST`.
 
-## 4. Status
+## 4. First wave status (2026-11-22)
 
-Authoring has not started; it needs the named roles to produce prompts. Until a pool is certified, rules stay demoted and the existing provisional reads, the local classifier's clarification and recovery cards remain the only paths. Success is measured with `node scripts/ask-bicc-cross-revision.js` against the same pool; a pool's contribution is reported only from sealed, uncontaminated results.
+Wave 1 (owner decision, FRD §18 D22): `DATA_POINT_READ`, `INVENTORY_LOOKUP`, `SELL_HOLD_RENT_ANALYSIS`.
+
+**Done**
+
+- **Tuning prompts authored:** `tests/fixtures/certification/wave1-tuning.json`, 301 rows: `DATA_POINT_READ` 42 positive, 30 adjacent, 30 cross; `INVENTORY_LOOKUP` 37 positive, 32 adjacent, 30 cross; `SELL_HOLD_RENT_ANALYSIS` 40 positive, 30 adjacent, 30 cross. Role `TUNING`, `humanConfirmed: false`, AI-assisted provenance recorded (an AI assistant drafted them for the implementing engineer acting as Ask Evaluation Author). They cannot certify; the certify runner refuses the file as a sealed set. Labels are the author's judgement of the homeowner's intent informed by the recorded product contracts, not what the router returned.
+- **Routing corrected against the tuning set.** The first run found wrong claims by wave-1 rules. Three were genuine defects and are fixed with two narrow guards in `askOperationRegistry.ts`: manuals, receipts, invoices and coverage/insurance questions are no longer claimed by the inventory lookup (`DET_INVENTORY_LOOKUP_04`), and a disclosure question is no longer claimed by sell/hold/rent (`DET_SELL_HOLD_RENT_ANALYSIS_01`). Three were label problems, not router problems: two missing-field filters ("which appliances have no warranty", "which items are missing a model number") are by the recorded product contract (2026-11-13, asserted by `coverageComparisonStatus.test.js`) computed data-point reads, so they are `DATA_POINT_READ` positives (a first attempt to guard them away in the data-point rules broke that contract and was reverted); and two ambiguous prompts were replaced by clearer ones. Wrong claims by a wave-1 rule on the tuning set are now **0**. The routing ratchet and fast-path manifest tests pass; the remaining failures in the Ask suite are the same ones that fail before this change.
+- **Behaviour and thresholds frozen:** `tests/fixtures/certification/wave1-frozen.json` records the rule versions and thresholds; `tests/ask/certificationWave1Tuning.test.js` fails if any of them changes, which ends the freeze and burns any shard that saw them.
+- Reproduce: `node scripts/ask-certification-wave1-tuning.js --misses`.
+
+**Findings to act on**
+
+- **`DATA_POINT_READ` cannot be certified by the fast-path runner.** Its deterministic rules are not message-routable, so they are not in `FAST_PATH_RULES`. It is governed by the provisional-read and data-point reach path (`BICC-1A.2`: GATE-004A1 fixtures and the held-out GATE-001/003 subset), so for this pool the tuning prompts feed that work instead of a rule certificate.
+- **Recall is low for `INVENTORY_LOOKUP`:** 13 of 40 positives are claimed by an inventory rule; most of the rest are list or filter questions that fall through to grounded guidance or to `DATA_POINT_READ` (which is an accepted equivalent). Certification measures wrong claims, not recall, so this does not block a certificate, but it caps the success rate the pool can recover.
+- **A sealed run is large.** A pool needs at least 381 independent families for zero errors to bound the failure rate below 1%, with at most half positive and at least 30 adjacent and 30 cross negatives per rule. For the two pools the runner governs that is at least 762 human-authored, independently reviewed families.
+
+**Blocked on people (not on engineering)**
+
+1. A different human must be assigned as **Ask Evaluation Reviewer** before any shard is sealed.
+2. The sealed shards must be **human-authored or human-reviewed with recorded provenance**; AI-drafted prompts cannot be the independent evidence.
+3. Safety prompts remain uncertifiable until a distinct **Home Safety/Policy Reviewer** reviews them (none of the wave-1 pools is a safety class).
+4. The **Ask Product Owner** signs only the final evidence record.
+
+Until a pool is certified, its rules stay demoted. Success is measured with `node scripts/ask-bicc-cross-revision.js` against the same pool; a pool's contribution is reported only from sealed, uncontaminated results.

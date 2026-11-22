@@ -1,0 +1,27 @@
+{
+ "frozenOn": "2026-11-22",
+ "note": "Behaviour and thresholds frozen for the first certification wave. Any change to a rule version below, or to a threshold, ends the freeze: the rules must be re-frozen and any sealed shard that already exposed them is burned (BICC-EVAL-002).",
+ "ruleVersions": {
+  "INVENTORY_LOOKUP": {
+   "DET_INVENTORY_LOOKUP_01": "55e115cd2dac205e",
+   "DET_INVENTORY_LOOKUP_02": "668fb64586828b6b",
+   "DET_INVENTORY_LOOKUP_03": "b299f65389492e35",
+   "DET_INVENTORY_LOOKUP_04": "671cd05799572885",
+   "DET_INVENTORY_LOOKUP_05": "6f95f09c87063038"
+  },
+  "SELL_HOLD_RENT_ANALYSIS": {
+   "DET_SELL_HOLD_RENT_ANALYSIS_01": "9cc66fc683cecc9c"
+  }
+ },
+ "thresholds": {
+  "minTrials": 381,
+  "maxError": 0.01,
+  "minAdjacentPerRule": 30,
+  "minCrossPerRule": 30,
+  "maxPositiveShare": 0.5
+ },
+ "tuningSet": "tests/fixtures/certification/wave1-tuning.json",
+ "notGovernedByFastPath": {
+  "DATA_POINT_READ": "Its deterministic rules are not message-routable, so they are not in FAST_PATH_RULES and the fast-path certification runner cannot certify them. It is exercised through the provisional-read and data-point reach path (BICC-1A.2: GATE-004A1 fixtures, GATE-001/003 held-out). The wave-1 tuning prompts still serve as its tuning set."
+ }
+}
