@@ -83,7 +83,8 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
   if (rows.length > 0) {
     const grouped = new Map<string, SlicePresentationRow[]>();
     for (const row of rows) {
-      const key = row.groupKey ? humanizePresentationToken(row.groupKey) : 'Matched records';
+      // A row with no group of its own is simply a match: there is no "Matched records" heading to repeat the list's own title.
+      const key = row.groupKey ? humanizePresentationToken(row.groupKey) : '';
       const bucket = grouped.get(key) ?? [];
       bucket.push(row);
       grouped.set(key, bucket);
@@ -93,8 +94,11 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
       type: 'GROUPED_LIST',
       id: input.listId ?? `${receipt.answerVariantId}-list`,
       ...(input.recordKind ? { recordKind: input.recordKind } : {}),
-      title: humanizeEnumTokensInCopy(input.listTitle ?? input.title),
-      description: [input.listDescription ?? `Showing ${rows.length} of ${receipt.population.totalMatchCount} confirmed matches`, input.overflowNote].filter(Boolean).join(' '),
+      // Records are listed densely: a one-line row unless the record has more to say. The list's heading is not the answer's heading said again.
+      listDensity: 'DENSE',
+      title: input.listTitle ? humanizeEnumTokensInCopy(input.listTitle) : '',
+      // The count is stated once (in the answer). The list says how many are shown only when it is showing part of them.
+      description: [input.listDescription ?? (rows.length < receipt.population.totalMatchCount ? `Showing ${rows.length} of ${receipt.population.totalMatchCount}` : ''), input.overflowNote].filter(Boolean).join(' '),
       sections: [...grouped.entries()].map(([groupTitle, groupRows], index) => ({
         id: `${receipt.answerVariantId}-section-${index + 1}`,
         title: groupTitle,
@@ -127,6 +131,7 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
       id: `${receipt.answerVariantId}${UNCONFIRMED_LIST_SUFFIX}`,
       title: humanizeEnumTokensInCopy(input.unconfirmedTitle ?? 'Needs confirmation'),
       description: '',
+      listDensity: 'DENSE',
       sections: [{
         id: `${receipt.answerVariantId}-unconfirmed-section`,
         title: humanizeEnumTokensInCopy(input.unconfirmedTitle ?? 'Needs confirmation'),
@@ -151,15 +156,21 @@ export function buildSliceRichPresentation(input: SliceRichPresentationInput): A
     // The uncertainty note is about whatever relation the answer reads. Warranty wording only appears on warranty answers; any other
     // job (project permits, recalls, ...) gets a neutral note instead of a misleading "warranty" heading.
     const isWarranty = receipt.predicateIds.some((id) => /warrant/i.test(id));
+    const unknown = receipt.population.unknownCount;
+    const conflicted = receipt.population.conflictedCount;
+    const noun = isWarranty ? { one: 'item', many: 'items' } : { one: 'record', many: 'records' };
+    const sentences = [
+      unknown > 0 ? `${unknown} ${unknown === 1 ? noun.one : noun.many} could not be confirmed` : null,
+      conflicted > 0 ? `${conflicted} ${conflicted === 1 ? `${noun.one} has` : `${noun.many} have`} conflicting information` : null,
+    ].filter((part): part is string => part !== null);
+    // One calm line, no instruction the homeowner cannot act on from here. The records themselves are in the "Needs confirmation" list when the answer has one.
     blocks.push({
       type: 'BOUNDARY',
       id: `${receipt.answerVariantId}-boundary`,
-      title: isWarranty ? 'Warranty linkage requires confirmation' : 'Some records need confirmation',
-      body: isWarranty
-        ? `Conflicted links: ${receipt.population.conflictedCount}; unknown state: ${receipt.population.unknownCount}.`
-        : `${receipt.population.unknownCount > 0 ? `${receipt.population.unknownCount} could not be confirmed from your records` : ''}${receipt.population.unknownCount > 0 && receipt.population.conflictedCount > 0 ? '; ' : ''}${receipt.population.conflictedCount > 0 ? `${receipt.population.conflictedCount} have conflicting records` : ''}, so they are not counted either way.`,
-      severity: receipt.population.conflictedCount > 0 ? 'CAUTION' : 'INFO',
-      suggestions: isWarranty ? ['Confirm warranty coverage on the item detail page.'] : ['Add or correct the missing details so I can confirm them.'],
+      title: isWarranty ? 'Warranty linkage requires confirmation' : 'Not counted',
+      body: `${sentences.join(', and ')}, so ${unknown + conflicted === 1 ? 'it isn’t' : 'they aren’t'} counted either way.`,
+      severity: conflicted > 0 ? 'CAUTION' : 'INFO',
+      suggestions: [],
     });
   }
 

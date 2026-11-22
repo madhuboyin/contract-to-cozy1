@@ -409,6 +409,25 @@ function weekWindowYmd(referenceDate: string, timeZone: string): { startYmd: str
 
 const humanizeEnumTokens = humanizeEnumTokensInCopy;
 
+/**
+ * A summary says what the records mean, not which records they are: when it names two or more of the rows listed right below it, the enumeration is cut and the sentence before it
+ * is kept ("3 maintenance tasks due in December 2026: A, B, C." becomes "3 maintenance tasks due in December 2026.").
+ */
+export function withoutRowEnumeration(summary: string, labels: readonly string[]): string {
+  if (labels.length < 2) return summary;
+  // Only the sentence that lists the rows is shortened; a disclosure that follows it ("2 have no confirmed status, so ...") is kept as it is.
+  const sentences = summary.split(/(?<=\.)\s+(?=[A-Z0-9])/);
+  const trimmed = sentences.map((sentence) => {
+    const present = labels.filter((label) => label.length > 0 && sentence.includes(label));
+    if (present.length < 2) return sentence;
+    const first = Math.min(...present.map((label) => sentence.indexOf(label)));
+    const colon = sentence.lastIndexOf(': ', first);
+    const head = (colon >= 0 ? sentence.slice(0, colon) : sentence.slice(0, first)).trim().replace(/[:,(\s]+$/, '');
+    return head.length > 0 ? `${head}.` : sentence;
+  });
+  return trimmed.join(' ');
+}
+
 /** The list kind whose canonical domain renderer a source type's rows belong to. Source types without one render through the shared list. */
 const RECORD_KIND_OF_SOURCE_TYPE: Readonly<Record<string, AskListRecordKind>> = {
   InventoryItem: 'INVENTORY_ITEM', PropertyMaintenanceTask: 'MAINTENANCE_TASK', Claim: 'CLAIM', PropertyPermitRecord: 'PERMIT', Warranty: 'WARRANTY', HomeEvent: 'HOME_EVENT',
@@ -444,7 +463,7 @@ function finalizeReceiptAndPresentation(input: {
   const resolvedRecordIds = input.rows.map((r) => r.id);
   const cleanRows = input.rows.map((r) => ({ ...r, label: humanizeEnumTokens(r.label), ...(r.subtitle ? { subtitle: humanizeEnumTokens(r.subtitle) } : {}) }));
   const cleanTitle = humanizeEnumTokens(input.title);
-  const cleanSummary = humanizeEnumTokens(input.summaryBody);
+  const cleanSummary = input.projection === 'LIST' ? withoutRowEnumeration(humanizeEnumTokens(input.summaryBody), input.rows.map((r) => r.label)) : humanizeEnumTokens(input.summaryBody);
   const unknownCount = input.unknownCount ?? 0;
   const conflictedCount = input.conflictedCount ?? 0;
   const confirmedCount = resolvedRecordIds.length;

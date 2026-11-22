@@ -1,3 +1,4 @@
+import type { ComponentProps } from 'react';
 import { render, screen } from '@testing-library/react';
 import { BlockView } from '../blocks/registry';
 import { withCanonicalListId } from '../blocks/GroupedListBlock';
@@ -11,6 +12,7 @@ const claimList = (over: Partial<ListBlock> = {}): ListBlock => ({
   sections: [{ id: 'open-claims', title: 'Open claims', count: 1, items: [{ id: 'claim-1', title: 'Kitchen leak', meta: [], status: 'DRAFT', entityType: 'CLAIM' }] }],
   ...over,
 });
+const asProps = (block: ListBlock) => propsFor(block) as unknown as ComponentProps<typeof BlockView>;
 const propsFor = (block: ListBlock) => ({ block, executionId: 'e1', propertyId: 'home', itemActionsDisabled: false, onItemAction: jest.fn(), onFilterClick: jest.fn(), onAccessLost: jest.fn() });
 
 describe('list renderer follows the declared record kind', () => {
@@ -30,11 +32,11 @@ describe('list renderer follows the declared record kind', () => {
   });
 
   it('renders the claim list for a claim kind under a generated id, and the generic list without it', async () => {
-    const declared = render(<BlockView {...(propsFor(claimList({ recordKind: 'CLAIM' })) as never)} />);
+    const declared = render(<BlockView {...asProps(claimList({ recordKind: 'CLAIM' }))} />);
     expect(await screen.findByText('Kitchen leak')).toBeInTheDocument();
     expect(declared.container.querySelector('[data-claim-detail-trigger]')).not.toBeNull();
     declared.unmount();
-    const generic = render(<BlockView {...(propsFor(claimList()) as never)} />);
+    const generic = render(<BlockView {...asProps(claimList())} />);
     expect(await screen.findByText('Kitchen leak')).toBeInTheDocument();
     expect(generic.container.querySelector('[data-claim-detail-trigger]')).toBeNull();
   });

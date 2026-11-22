@@ -518,6 +518,10 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
   const isPlantCareList = block.id === 'plant-care-items';
   const isFramedDecisionList = isDriversBlock || isOwnershipCostList || isServicePriceRadarList || isCoverageGroupsList || isPlantCareList;
   const ownershipCostBadge = OWNERSHIP_COST_BADGE_BY_ID[block.id];
+  // A list whose producer gave it no heading, description, filters or layout choice has no header to draw (UI review 2026-11-21, slice 4): the answer above already says what it is.
+  const hasListHeader = Boolean(block.title.trim() || block.description || block.filters.length > 0 || (decision.offersChoice && controls) || isFramedDecisionList || block.id === 'home-work-items');
+  // A single section whose heading is empty or only repeats the list's heading adds a second heading and a second count: it stays for assistive technology and is not drawn.
+  const redundantSectionHeader = (sectionTitle: string) => block.sections.length === 1 && (!sectionTitle.trim() || sectionTitle.trim().toLowerCase() === block.title.trim().toLowerCase());
   return (
     <section
       data-ownership-cost-list={isOwnershipCostList ? block.id : undefined}
@@ -531,7 +535,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
       data-grouped-list-presentation={presentation.toLowerCase()}
       data-list-density={dense ? 'dense' : undefined}
     >
-      <div
+      {hasListHeader && <div
         className={cn(
           'border-b border-slate-100',
           block.id === 'home-work-items' && 'sr-only',
@@ -540,7 +544,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
         )}
       >
         <div className="flex items-baseline gap-2">
-          <h3 className={cn('text-slate-950', isFramedDecisionList ? 'text-sm font-bold tracking-tight sm:text-base' : 'font-semibold')}>{block.title}</h3>
+          {block.title.trim() ? <h3 className={cn('text-slate-950', isFramedDecisionList ? 'text-sm font-bold tracking-tight sm:text-base' : 'font-semibold')}>{block.title}</h3> : null}
           {isDriversBlock && <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Key Drivers</span>}
           {isServicePriceRadarList && <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Benchmark Comparison</span>}
           {isCoverageGroupsList && (
@@ -582,7 +586,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
             ))}
           </div>
         )}
-      </div>
+      </div>}
       <div className="divide-y divide-slate-100">
         {block.sections.map((section) => {
           const declaredVisibleCount = section.initialVisibleCount;
@@ -599,7 +603,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
           const isPlantCareRoutineSection = isPlantCareList && (section.id === 'plant-care-routine' || section.id === 'plant-care-garden');
           return (
           <div key={section.id} className={isFramedDecisionList ? 'px-4 py-3 sm:px-5' : dense ? 'px-3 py-2.5' : 'p-4'}>
-            <div className={cn('flex items-center justify-between', isFramedDecisionList && !isCoverageGroupsList && !isPlantCareList ? 'sr-only' : isCoverageGroupsList || isPlantCareList ? 'mb-2.5' : dense ? 'mb-1.5' : 'mb-3')}>
+            <div className={cn('flex items-center justify-between', (isFramedDecisionList && !isCoverageGroupsList && !isPlantCareList) || redundantSectionHeader(section.title) ? 'sr-only' : isCoverageGroupsList || isPlantCareList ? 'mb-2.5' : dense ? 'mb-1.5' : 'mb-3')}>
               <div className="flex items-center gap-2">
                 {(block.id === 'coverage-groups' || isPlantCareList) && (
                   <span
@@ -619,7 +623,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                   />
                 )}
                 <div>
-                  <h4 className={cn('font-semibold text-slate-800', isCoverageGroupsList || isPlantCareList ? 'text-xs font-bold uppercase tracking-wider text-slate-700' : 'text-sm')}>{section.title}</h4>
+                  <h4 className={cn('font-semibold text-slate-800', isCoverageGroupsList || isPlantCareList ? 'text-xs font-bold uppercase tracking-wider text-slate-700' : 'text-sm')}>{section.title.trim() ? section.title : 'Matching records'}</h4>
                   {section.caption && <p className="mt-0.5 text-xs text-slate-500">{section.caption}</p>}
                 </div>
               </div>

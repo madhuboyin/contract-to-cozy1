@@ -39,8 +39,11 @@ test('open and pending permits are the records not finaled, expired or voided, w
     const { parsed, execution, summary } = await ask(message);
     assert.deepEqual(parsed.plan.facets.map((f) => f.evidence.jobMatch), ['query.permit.filter'], message);
     assert.deepEqual(labels(execution), ['Electrical permit E-100', 'Plumbing permit P-200', 'Fire permit F-600'], message);
-    assert.match(summary, /^3 open permit\(s\) \(not finaled, expired or voided\): /);
-    assert.match(summary, /Plumbing permit P-200 \(Official status not confirmed · reported by the household: Submitted\)/);
+    // The summary says what the records mean, not which records they are (the rows below carry the names and statuses); its disclosure of the unconfirmed ones stays.
+    assert.match(summary, /^3 open permits \(not finaled, expired or voided\)\. /);
+    assert.ok(!/Plumbing permit P-200/.test(summary), 'the summary does not list the rows');
+    const plumbing = execution.facetResults[0].rows.find((row) => row.label === 'Plumbing permit P-200');
+    assert.equal(plumbing.subtitle, 'Official status not confirmed · reported by the household: Submitted');
     assert.match(summary, /2 have no confirmed official status, so they are counted as open on what the household reported\./);
     assert.equal(execution.facetResults[0].entailment.outcome, 'PASS');
   }
@@ -62,7 +65,7 @@ test('"open projects for this home" is not answered with seller readiness either
 test('expired uses only the official status', async () => {
   const { execution, summary } = await ask('which permits are expired');
   assert.deepEqual(labels(execution), ['Roofing permit R-400']);
-  assert.match(summary, /^1 expired permit\(s\): Roofing permit R-400 \(Official: Expired\)\.$/);
+  assert.match(summary, /^1 expired permit: Roofing permit R-400 \(Official: Expired\)\.$/);
 });
 
 test('finaled lists the official finaled record and names the one only the household reported as completed', async () => {

@@ -375,20 +375,26 @@ async function incidentClaimStatusResult(
 
   const canStartClaim = access.role !== HouseholdRole.VIEWER;
   const humanizeEnum = (value: string) => value.toLowerCase().replace(/_/g, ' ');
+  // A status badge is sentence case ("Draft"), and a secondary line says something the title does not ("Water damage claim" needs no "water damage" under it).
+  const sentenceCase = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
+  const addsToTitle = (title: string, text: string) => {
+    const words = text.toLowerCase().split(/\s+/).filter(Boolean);
+    return words.length > 0 && !words.every((word) => title.toLowerCase().includes(word));
+  };
 
   type Section = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>['sections'][number];
   const sections: Section[] = [];
   const incidentRow = (incident: (typeof activeIncidents)[number], dateLabel: string, date: Date | null) => ({
     id: incident.id, title: incident.title,
-    description: incident.summary ?? humanizeEnum(incident.typeKey),
-    meta: [humanizeEnum(incident.status), ...(dateLabel === 'Opened' && incident.severity ? [humanizeEnum(incident.severity)] : []), humanDate(date) ? `${dateLabel} ${humanDate(date)}` : null].filter((value): value is string => Boolean(value)),
+    description: incident.summary ?? (addsToTitle(incident.title, humanizeEnum(incident.typeKey)) ? humanizeEnum(incident.typeKey) : null),
+    meta: [sentenceCase(humanizeEnum(incident.status)), ...(dateLabel === 'Opened' && incident.severity ? [humanizeEnum(incident.severity)] : []), humanDate(date) ? `${dateLabel} ${humanDate(date)}` : null].filter((value): value is string => Boolean(value)),
     status: incident.status, href: null, entityType: 'INCIDENT',
     actions: canStartClaim ? [{ ...CLAIM_FILE_START_ACTION, label: 'Start a claim for this incident', interactionType: 'CONVERSATION_CONTINUE' as const }] : [],
   });
   const claimRow = (claim: (typeof activeClaims)[number], dateLabel: string, date: Date | null) => ({
     id: claim.id, title: claim.title,
-    description: [(claim as { providerName?: string | null }).providerName, humanizeEnum(claim.type)].filter(Boolean).join(' · ') || humanizeEnum(claim.type),
-    meta: [humanizeEnum(claim.status), humanDate(date) ? `${dateLabel} ${humanDate(date)}` : null].filter((value): value is string => Boolean(value)),
+    description: [(claim as { providerName?: string | null }).providerName, addsToTitle(claim.title, humanizeEnum(claim.type)) ? humanizeEnum(claim.type) : null].filter(Boolean).join(' · ') || null,
+    meta: [sentenceCase(humanizeEnum(claim.status)), humanDate(date) ? `${dateLabel} ${humanDate(date)}` : null].filter((value): value is string => Boolean(value)),
     status: claim.status, href: null, entityType: 'CLAIM', actions: claimActions,
   });
   if (wantIncidents && wantOpen) sections.push({ id: 'active-incidents', title: 'Active incidents', count: activeIncidentTotal, items: activeIncidents.map((incident) => incidentRow(incident, 'Opened', incident.openedAt)) });

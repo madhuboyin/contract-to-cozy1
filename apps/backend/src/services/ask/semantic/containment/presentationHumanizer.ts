@@ -90,9 +90,20 @@ export function humanizePresentationToken(code: string | null | undefined): stri
  * leaving user-recorded identifiers (e.g. serial/model codes with digits or hyphens)
  * untouched.
  */
+/** "1 project(s)" reads as "1 project" and "3 project(s)" as "3 projects": copy states the count and the noun agrees with it. */
+function pluralOf(word: string): string {
+  if (/[^aeiou]y$/i.test(word)) return `${word.slice(0, -1)}ies`;
+  if (/(?:s|x|z|ch|sh)$/i.test(word)) return `${word}es`;
+  return `${word}s`;
+}
+export function fixOptionalPlurals(text: string): string {
+  if (!text || !text.includes('(s)')) return text;
+  return text.replace(/\b(\d+)(\s+(?:[A-Za-z’'-]+\s+){0,2}?)([A-Za-z]+)\(s\)/g, (_match, count: string, middle: string, word: string) => `${count}${middle}${Number(count) === 1 ? word : pluralOf(word)}`);
+}
+
 export function humanizePresentationText(text: string): string {
   if (!text) return text;
-  return text.replace(REGISTERED_TOKEN_PATTERN, (match) => REGISTERED_PRESENTATION_TOKEN_LABELS[match] ?? match);
+  return fixOptionalPlurals(text.replace(REGISTERED_TOKEN_PATTERN, (match) => REGISTERED_PRESENTATION_TOKEN_LABELS[match] ?? match));
 }
 
 /**
