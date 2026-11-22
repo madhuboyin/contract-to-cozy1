@@ -2,13 +2,13 @@
 
 [Library home](README.md) · [Flags](FLAGS.md)
 
-91 documents. Flag key: 🔴 conflicting/superseded · 🟠 status lags reality or cites missing code · 🟡 historical snapshot. Blank = no issue found (not proof it is current - check *Last changed*).
+92 documents. Flag key: 🔴 conflicting/superseded · 🟠 status lags reality or cites missing code · 🟡 historical snapshot. Blank = no issue found (not proof it is current - check *Last changed*).
 
 ## Requirements (FRD/PRD) (17)
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-|  | [Ask Cozy — Best-in-Class Conversational Concierge FRD](../product/ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_CONCIERGE_FRD.md) | v0.2.4 · Draft v0.2.4 for owner review; target requirements, not an implementation claim | 2026-11-22 | 357 |
+|  | [Ask Cozy — Best-in-Class Conversational Concierge FRD](../product/ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_CONCIERGE_FRD.md) | v0.2.5 · Draft v0.2.5 for owner review; target requirements, not an implementation claim | 2026-11-22 | 385 |
 |  | [Ask Cozy — Cross-Domain Semantic Request Architecture FRD](../product/ASK_COZY_CROSS_DOMAIN_SEMANTIC_ARCHITECTURE_FRD.md) | v1.34 · Draft v1.34 for owner review | 2026-11-22 | 1390 |
 |  | [Ask Cozy — Understanding Reliability: Reaching 90% Resolved Prompts Without Controlling th](../product/ASK_COZY_UNDERSTANDING_RELIABILITY_FRD.md) | v0.19 · Draft v0.19 for owner review (v0.18 committed as `e9827f8a`; v0.19 answers a sev | 2026-11-21 | 1077 |
 |  | [Ask Cozy — Inline Workspace Product Requirements Document](../product/ASK_COZY_INLINE_WORKSPACE_FRD.md) |  | 2026-11-20 | 2478 |
@@ -26,10 +26,11 @@
 |  | [AI Home Concierge Ask — Audience Context and Persona-Aware Guidance Addendum](../product/AI_HOME_CONCIERGE_ASK_AUDIENCE_CONTEXT_ADDENDUM_FRD.md) | v1.0 · Implemented and verified | 2026-08-15 | 1024 |
 |  | [ContractToCozy Skill Platform](../product/CONTRACTTOCOZY_SKILL_PLATFORM_FRD.md) | v1.6 · "Implemented beta baseline" | 2026-08-14 | 1473 |
 
-## Plan (16)
+## Plan (17)
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
+|  | [Ask Cozy Best-in-Class Conversational Concierge — Implementation Plan](../architecture/ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_CONCIERGE_IMPLEMENTATION_PLAN.md) | v0.1 · Draft v0.1 for owner review; implementation slices and acceptance plan, not a de | 2026-11-22 | 449 |
 |  | [Ask Cozy UX Consolidation — Implementation Plan](../architecture/ASK_COZY_UX_CONSOLIDATED_IMPLEMENTATION_PLAN.md) | Phases 0, 1, 2, 3, 4, 5 (foundation), 7A and the first step of 8 implemented Nov | 2026-11-03 | 424 |
 |  | [Ask Cozy High-Precision Suggested Next Actions — Implementation Plan](../product/ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md) | v1.25 · Phases 1-5, exact-four engagement, governed opportunity backfill, the Phase 5 ze | 2026-11-03 | 1400 |
 |  | [Ask Cozy Sole Homeowner Interface — Implementation Plan](../architecture/ASK_COZY_SOLE_HOMEOWNER_INTERFACE_IMPLEMENTATION_PLAN.md) | In progress | 2026-11-02 | 687 |
@@ -82,7 +83,7 @@
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-|  | [Ask Cozy Best-in-Class Conversational Concierge — Corrected Audit](../architecture/ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_AUDIT.md) | Corrected product and architecture audit; evidence review, not a delivery claim | 2026-11-22 | 184 |
+|  | [Ask Cozy Best-in-Class Conversational Concierge — Corrected Audit](../architecture/ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_AUDIT.md) | Corrected product and architecture audit; evidence review, not a delivery claim | 2026-11-22 | 190 |
 |  | [Ask Cozy cross-domain semantic architecture — Phase 1 evidence](../product/ASK_COZY_PHASE1_EVIDENCE.md) |  | 2026-11-16 | 13 |
 |  | [Buyer and seller read operations vs the owner audience policy (audit, 2026-11-12)](../architecture/ASK_COZY_BUYER_SELLER_FLOOR_AUDIT.md) |  | 2026-11-12 | 29 |
 |  | [Ask Cozy: Natural Language & Free-Form Prompts Comprehensive Audit (Revision 9)](../architecture/ASK_COZY_NATURAL_LANGUAGE_FREE_FORM_PROMPTS_AUDIT.md) |  | 2026-11-10 | 471 |

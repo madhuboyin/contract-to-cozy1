@@ -67,12 +67,13 @@ Most recently changed first; showing area.
 | 🟡 | [ADR-0001: Personalization module foundation (Phase 0 "first implementation step")](../personalization/adr-0001-personalization-module-foundation.md) | Personalization Engine | 2026-07-14 |
 | 🟡 | [ADR-0002: Phase 1 foundation — migration steps 1–3](../personalization/adr-0002-phase1-foundation-migration-steps-1-3.md) | Personalization Engine | 2026-07-14 |
 
-## Plan (28)
+## Plan (29)
 
 Most recently changed first; showing area.
 
 | | Document | Area | Last changed |
 |---|---|---|---|
+|  | [Ask Cozy Best-in-Class Conversational Concierge — Implementation Plan](../architecture/ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_CONCIERGE_IMPLEMENTATION_PLAN.md) | Ask Cozy | 2026-11-22 |
 |  | [Ask Cozy UX Consolidation — Implementation Plan](../architecture/ASK_COZY_UX_CONSOLIDATED_IMPLEMENTATION_PLAN.md) | Ask Cozy | 2026-11-03 |
 |  | [Ask Cozy High-Precision Suggested Next Actions — Implementation Plan](../product/ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md) | Ask Cozy | 2026-11-03 |
 |  | [Ask Cozy Sole Homeowner Interface — Implementation Plan](../architecture/ASK_COZY_SOLE_HOMEOWNER_INTERFACE_IMPLEMENTATION_PLAN.md) | Ask Cozy | 2026-11-02 |

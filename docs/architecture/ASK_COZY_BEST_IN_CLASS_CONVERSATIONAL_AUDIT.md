@@ -8,6 +8,8 @@
 
 **Governing FRD:** [`ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_CONCIERGE_FRD.md`](../product/ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_CONCIERGE_FRD.md)
 
+**Implementation plan:** [`ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_CONCIERGE_IMPLEMENTATION_PLAN.md`](ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_CONCIERGE_IMPLEMENTATION_PLAN.md)
+
 **Supersedes:** the externally supplied capability audit reviewed on 2026-11-22; it does not supersede an existing repository requirement
 
 ## 1. Executive conclusion
@@ -146,13 +148,17 @@ Registry and renderer size increase the cost of adding capabilities. Consolidati
 ## 6. Recommended program order
 
 1. **Quality contract and baseline:** scenario taxonomy, hidden evaluation sets, end-to-end scoring, latency and cost baselines.
-2. **Conversational reach:** data-point reads, hybrid candidate retrieval, bounded model planning, entity/filter extraction, warm general guidance, and appropriate clarification.
-3. **Continuity and composition:** certify and extend current bounded read composition; add structured turn summaries and reference resolution.
-4. **Multimodal and document answers:** inline attachments, authorized cited retrieval, and explicit promotion into the record.
-5. **Prospective Buyer Discovery:** candidate-home workspace and lifecycle promotion.
-6. **Transport and experience:** staged delivery, broader contextual starters, offline behavior, and measured performance. Independent cancellation, overlap, copy/feedback, heading, and lazy-loading fixes begin in parallel after current reproduction.
-7. **Opt-in memory and proactive concierge:** user-reviewable preferences and explainable proactive recommendations.
-8. **Modularity:** colocated operation modules and generated inventories after product quality is stable.
+2. **Deterministic reach and recovery:** data-point reads, deterministic entity/filter extraction, focused clarification, and bounded recovery without new model authority.
+3. **Last-resort semantic planning:** only after certified deterministic paths do not safely resolve the request, enable approved and calibrated read strata under the governing privacy and fail-closed contract; the model never writes the answer.
+4. **Answer modes and safe proposals:** deliver deterministic/authored general guidance and social turns, certified answer modes and emergency handling, then add write-proposal families one at a time.
+5. **Continuity and composition:** certify and extend current bounded read composition; add structured turn summaries and reference resolution.
+6. **Multimodal and document answers:** inline attachments, authorized cited retrieval, injection isolation, and explicit promotion into the record.
+7. **Prospective Buyer Discovery:** candidate-home workspace, fair-housing boundaries, and lifecycle promotion.
+8. **Transport and experience:** staged delivery, broader contextual starters, offline behavior, and measured performance. Independent cancellation, overlap, copy/feedback, heading, and lazy-loading fixes begin in parallel after current reproduction.
+9. **Opt-in memory and proactive concierge:** user-reviewable preferences and explainable proactive recommendations.
+10. **Modularity:** colocated operation modules and generated inventories after product quality is stable.
+
+The executable slice order, dependencies, affected files, focused checks, and phase-scoped gates are defined in the linked implementation plan. This audit order is not itself an implementation plan.
 
 ## 7. Success definition
 

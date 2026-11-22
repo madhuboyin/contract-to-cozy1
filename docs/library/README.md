@@ -1,6 +1,6 @@
 # Documentation Library
 
-A searchable map of everything under `docs/` (403 files, snapshot 2026-09-24). Start here instead of scanning raw folders.
+A searchable map of everything under `docs/` (404 files, snapshot 2026-09-24). Start here instead of scanning raw folders.
 
 > This complements [`../wiki/`](../wiki/README.md), a code-grounded feature snapshot. **Use the wiki to locate the relevant workflow, then verify its route, service, schema, and render path before changing behavior. Use this library to find the governing requirement, plan, ADR, audit, or runbook and its review flags.**
 
@@ -33,7 +33,7 @@ python3 -c "import csv;[print(r['path']) for r in csv.DictReader(open('docs/libr
 
 | Area | Docs | 🔴 | 🟠 | 🟡 | Covers |
 |---|---|---|---|---|---|
-| [Ask Cozy, AI Concierge & Agentic Intelligence](01-ask.md) | 91 | 1 | 4 | 2 | Ask Cozy conversational workspace, AI concierge, skills, agentic architecture |
+| [Ask Cozy, AI Concierge & Agentic Intelligence](01-ask.md) | 92 | 1 | 4 | 2 | Ask Cozy conversational workspace, AI concierge, skills, agentic architecture |
 | [Personalization Engine](02-personalization.md) | 24 | 0 | 2 | 3 | Recommendation/personalization engine: discovery pack, FRD, ADRs, phase audits |
 | [Property Context & Property Setup](03-context.md) | 38 | 0 | 3 | 2 | Property Context platform, JIT capture slices, property setup/onboarding, RentCast |
 | [Guidance, Actions & Home Intelligence](04-guidance.md) | 20 | 1 | 3 | 6 | Guidance Engine, home actions, Home Intelligence, home operations, signals |

@@ -1,6 +1,6 @@
 # Ask Cozy — Best-in-Class Conversational Concierge FRD
 
-**Status:** Draft v0.2.4 for owner review; target requirements, not an implementation claim
+**Status:** Draft v0.2.5 for owner review; target requirements, not an implementation claim
 
 **Date:** 2026-11-22
 
@@ -9,6 +9,8 @@
 **Architecture owner:** TBD
 
 **Related audit:** [`ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_AUDIT.md`](../architecture/ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_AUDIT.md)
+
+**Implementation plan:** [`ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_CONCIERGE_IMPLEMENTATION_PLAN.md`](../architecture/ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_CONCIERGE_IMPLEMENTATION_PLAN.md)
 
 ## 1. Authority and precedence
 
@@ -28,6 +30,8 @@ This FRD defines the cross-domain outcome and acceptance contract for a best-in-
 If this FRD conflicts with a domain authorization, safety, data-integrity, privacy, or consequential-action rule, the stricter domain rule remains controlling. This FRD does not declare any current feature implemented.
 
 `BICC-UND-*` and `BICC-EVAL-*` define cross-domain product outcomes and acceptance measures; they do not create a parallel semantic planner, ontology, recognizer ledger, rollout manifest, or implementation ledger. Existing `FR-UND-*`, `FR-DEC-*`, and semantic-architecture requirements govern how those outcomes are implemented. Any new cross-domain semantic behavior shall update the existing semantic architecture and ledger rather than introduce a BICC-specific execution stack.
+
+The existing owner rule that Ask's LLM is a last resort remains controlling. Safety and restricted-request interception, certified deterministic routing, registered direct reads, canonical domain engines, and deterministic recovery run before any model-assisted semantic planning. The model does not write answers. General guidance and social turns do not create an implicit exception; model-generated answer wording or guidance requires a separately approved amendment.
 
 ## 2. Product outcome
 
@@ -55,7 +59,7 @@ Unknown lifecycle context may receive safe general guidance and capability disco
 ## 4. Non-negotiable invariants
 
 - **BICC-INV-001 Canonical ownership.** Canonical domain services and records own business state; conversation state is not a parallel source of truth.
-- **BICC-INV-002 Bounded execution.** A model may propose a registered operation, data point, entity reference, filter, slot, or response wording. It may not create executable operation identities, assign authority, or call unrestricted tools.
+- **BICC-INV-002 Bounded execution.** Within an approved last-resort semantic-planning stratum, a model may propose only a registered operation or data point and bounded entity reference, filter, slot, dependency, or clarification need permitted by the governing typed plan. It may not write answer wording, create executable identities, assign authority, or call unrestricted tools.
 - **BICC-INV-003 Authorization.** Property access, household role, audience applicability, target ownership, and current eligibility are checked at every consequential boundary and before sensitive content is delivered.
 - **BICC-INV-004 Material ambiguity.** Ask clarifies a materially ambiguous entity, property, action, or consequence rather than guessing.
 - **BICC-INV-005 Consequential writes.** Material writes retain review, confirmation, fresh authorization, relevant version checks, idempotency, canonical execution, receipts, and reconciliation.
@@ -64,6 +68,7 @@ Unknown lifecycle context may receive safe general guidance and capability disco
 - **BICC-INV-008 Access loss.** Access loss or visibility change removes actionable sensitive content and prevents replay from restoring it.
 - **BICC-INV-009 No silent partial.** A compound request discloses which facets were answered, not answered, or need clarification.
 - **BICC-INV-010 User control.** Persistent memory, candidate promotion, and record promotion are explicit, reviewable, correctable, and deletable.
+- **BICC-INV-011 Deterministic first; model last.** Ask shall apply safety and boundary interception, certified deterministic routing, registered direct reads, canonical domain engines, and deterministic recovery before invoking a model. A model may assist semantic planning only for an approved and certified stratum that the deterministic path did not safely resolve. It shall not replace an eligible deterministic answer or canonical engine merely to improve wording.
 
 ## 5. Definitions
 
@@ -110,7 +115,8 @@ The following are proposed gates and require owner approval before becoming cert
 | BICC-GATE-002 | At least 95% correct answer or appropriate clarification on safety-sensitive scenarios. |
 | BICC-GATE-003 | At least 90% entity and filter/slot accuracy on turns that execute a read. |
 | BICC-GATE-004A | Across at least 300 independently eligible home-record and deterministic-calculation trials, certification observes zero wrong entity, property, value, date, unit, or numeric result and the exact one-sided 95% Clopper–Pearson upper confidence bound on the failure rate is no greater than 1%. Results are also reported by domain and answer mode; pooling shall not hide an inadequately sampled or failing stratum. |
-| BICC-GATE-004B | At least 95% claim-level entailment for user-document and estimate claims, with 100% correct document/version identity for document citations. |
+| BICC-GATE-004B1 | At least 95% claim-level entailment for estimate and recommendation claims, evaluated only after those modes are delivered. |
+| BICC-GATE-004B2 | At least 95% claim-level entailment for user-document claims, with 100% correct document/version identity for citations, evaluated only after document-grounded answers are delivered. |
 | BICC-GATE-005 | At least 95% answer-mode and evidence-label accuracy. |
 | BICC-GATE-006 | Zero BICC-EVAL-010 violations in certification. |
 | BICC-GATE-007 | No more than 2% of general-guidance claims are unsupported home-specific claims, measured under BICC-EVAL-014 with sample size and a 95% confidence interval reported. Non-critical unsupported claims count against this rate and do not independently create a zero-tolerance gate. |
@@ -135,6 +141,7 @@ The gates in this section are automated offline evaluation and CI acceptance che
 - **BICC-UND-009.** Ask shall not guess through unresolved ambiguity involving property or entity identity, authorization, record mutation, a consequential action, safety, or legal or financial interpretation. It shall instead present a bounded selection, identify the information needed, or return a safe `UNAVAILABLE` result.
 - **BICC-UND-010.** Existing certified deterministic fast paths may remain. Uncertified paths shall not become unconditional execution authority merely because a model agrees with them.
 - **BICC-UND-011.** Compound reads shall use the existing bounded composition contract. Writes shall never be composed with reads or other writes; a requested write opens its own review and confirmation flow.
+- **BICC-UND-012.** Model-assisted planning shall follow the certified-fast-path ordering, privacy, provider, calibration, availability, and fail-closed requirements of the governing Understanding Reliability FRD. It shall select only eligible registered targets and shall never become answer authority. Any write target remains preview-only under the governing write contract and cannot execute from model output.
 
 ### 7.1 Immediate-safety handling
 
@@ -156,6 +163,7 @@ The gates in this section are automated offline evaluation and CI acceptance che
 - **BICC-ANS-010.** Synthesis may restate and connect validated results. It shall not introduce a new number, entity, causal claim, recommendation, or source not supported by the validated payload.
 - **BICC-ANS-011.** A `RECOMMENDATION` facet shall identify the evidence and assumptions that support the decision, material uncertainty and tradeoffs, and whether professional inspection or advice is appropriate. Supporting record, document, calculation, estimate, or guidance facets shall retain their own answer modes.
 - **BICC-ANS-012.** Suggested next actions for supported Ask journeys shall execute within the conversation and shall not route to a desktop page merely to complete a supported journey. Traditional navigation or an external handoff may be offered only when the user explicitly selects it or an approved governing exception requires it; the response shall explain why the handoff is necessary and preserve relevant context where supported.
+- **BICC-ANS-013.** General-guidance and social-turn responses shall use approved authored content, deterministic composition, or another explicitly governed non-generative source. Enabling model-generated answer wording or guidance requires a separate owner-approved amendment, provider-boundary review, evaluation stratum, and certification gate.
 
 ## 9. Functional requirements — conversation continuity
 
@@ -271,16 +279,36 @@ This track runs in parallel with Phases 0 and 1 and does not wait for semantic p
 
 **Exit:** each accepted defect has a current reproduction, focused regression evidence, and no change to authorization, execution, confirmation, or result identity.
 
-### Phase 1 — Conversational reach and answer modes
+### Phase 1A — Deterministic reach and recovery
 
-- Improve data-point and entity/value lookup.
-- Add bounded candidate retrieval and planner validation.
-- Deliver declared answer modes, the BICC-UX-010 warm social-turn contract, general guidance, and focused clarification.
-- Certify active-emergency recall and benign-mention false-positive behavior under BICC-SAFE-001 through BICC-SAFE-003 and BICC-GATE-009.
-- Deliver the explicit property-selection recovery required by BICC-PORT-003 for unsupported portfolio questions.
-- Deliver the respectful, non-destructive unsupported-language recovery required by BICC-UX-009.
+- Improve registered data-point reach, deterministic operation routing, entity/filter extraction, and focused clarification without adding model authority.
+- Deliver the explicit property-selection recovery required by BICC-PORT-003 and the respectful unsupported-language recovery required by BICC-UX-009.
+- Preserve BICC-INV-011 ordering and the governing deterministic fast-path certificates.
 
-**Exit:** BICC-GATE-001 through BICC-GATE-009, including BICC-GATE-007B, pass for the approved Phase 1 domain and write-family matrix; BICC-EVAL-010 remains zero.
+**Exit:** the Phase 1A read matrix passes the applicable portions of BICC-GATE-001 and BICC-GATE-003; BICC-GATE-006 remains zero. No Phase 1B, answer-mode, document, or write-recall gate is implied.
+
+### Phase 1B — Last-resort semantic planning for reads
+
+- Add bounded candidate retrieval and validated semantic plans only after certified deterministic paths do not safely resolve the request.
+- Activate only approved, calibrated, privacy-reviewed read strata; preserve provider failure and no-call recovery.
+- Keep canonical readers and domain engines as answer authority.
+
+**Exit:** approved model-assisted read strata pass their held-out routing, entity/filter, privacy, availability, and end-to-end portions of BICC-GATE-001 and BICC-GATE-003; BICC-GATE-006 remains zero. Write targets remain preview-only and are not certified here.
+
+### Phase 1C — Answer modes, guidance, social turns, and emergency handling
+
+- Deliver `HOME_RECORD`, `CALCULATION`, `ESTIMATE`, `RECOMMENDATION`, `GENERAL_GUIDANCE`, and `UNAVAILABLE` under BICC-ANS-001 through BICC-ANS-013; `USER_DOCUMENT` remains Phase 3.
+- Deliver deterministic approved general guidance and the BICC-UX-010 warm social-turn contract without a model-generated answer exception.
+- Certify active-emergency recall and benign-mention false-positive behavior under BICC-SAFE-001 through BICC-SAFE-003.
+
+**Exit:** BICC-GATE-004A, BICC-GATE-004B1, the Phase 1C answer-mode subset of BICC-GATE-005, BICC-GATE-007, BICC-GATE-007B, and BICC-GATE-009 pass; BICC-GATE-002 and BICC-GATE-006 remain satisfied. BICC-GATE-004B2 is not applicable.
+
+### Phase 1D — Write-proposal recall by approved family
+
+- Deliver one approved write family at a time through existing deterministic routing or the governing preview-only semantic-planning boundary.
+- Certify required-field extraction, authorization, review, confirmation, freshness, idempotency, receipt, and reconciliation behavior for each family.
+
+**Exit:** each enabled write family independently passes BICC-GATE-008 and BICC-EVAL-010; BICC-GATE-006 remains zero. A passing family does not certify an untested write family.
 
 ### Phase 2 — Continuity and composed reads
 
@@ -297,7 +325,7 @@ This track runs in parallel with Phases 0 and 1 and does not wait for semantic p
 - Treat all attachment and retrieved content as untrusted evidence and pass the BICC-EVAL-015 injection corpus.
 - Reviewed promotion of extracted candidates.
 
-**Exit:** BICC-MM-001 through BICC-MM-012 pass, including injection isolation, access-loss, retention, promotion-boundary, and deletion tests.
+**Exit:** BICC-MM-001 through BICC-MM-012, BICC-GATE-004B2, and the `USER_DOCUMENT` subset of BICC-GATE-005 pass, including injection isolation, access-loss, retention, promotion-boundary, citation, and deletion tests.
 
 ### Phase 4 — Prospective Buyer Discovery
 
@@ -344,13 +372,13 @@ This track runs in parallel with Phases 0 and 1 and does not wait for semantic p
 | BICC-D03 | Approve candidate-property retention, deletion, and promotion semantics. |
 | BICC-D04 | Approve supported attachment types, size limits, and sensitive-document classes. |
 | BICC-D05 | Approve preference-memory categories and default opt-in experience. |
-| BICC-D06 | Select the Phase 1 domain matrix used for certification. |
+| BICC-D06 | Select the Phase 1A deterministic-read matrix, Phase 1B model-assisted read strata, Phase 1C answer-mode matrix, and Phase 1D write families used for certification. |
 | BICC-D07 | Decide whether staged delivery is required before multimodal delivery or may follow it based on measured latency. |
 | BICC-D08 | After Phase 0 measurement, approve provisional p50, p95, timeout, first-useful-result, and per-turn model-cost budgets for deterministic reads, model-planned reads, composed reads, attachment analysis, and consequential confirmation. |
 | BICC-D09 | Decide which authenticated account role or roles may enter `PROSPECTIVE_BUYER` mode and how the current `HOMEOWNER`-only client/server eligibility boundary changes. |
 | BICC-D10 | Approve ephemeral chat-attachment retention, deletion, encryption/isolation, and sensitive-document policy. |
 | BICC-D11 | Approve the broader held-out emergency-corpus recall and false-positive thresholds, sample floors, confidence method, and critical canonical emergency set used by BICC-GATE-009. |
-| BICC-D12 | Approve the BICC-EVAL-014 scorer rubric, human-label protocol, judge calibration thresholds, and required adjudication classes before GATE-004B or GATE-007 is certifying. |
+| BICC-D12 | Approve the BICC-EVAL-014 scorer rubric, human-label protocol, judge calibration thresholds, and required adjudication classes before BICC-GATE-004B1, BICC-GATE-004B2, or BICC-GATE-007 is certifying. |
 
 ## 19. Requirement evidence and status
 
