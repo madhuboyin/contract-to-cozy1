@@ -1,6 +1,6 @@
 # Ask Cozy — Best-in-Class Conversational Concierge FRD
 
-**Status:** Draft v0.2.1 for owner review; target requirements, not an implementation claim
+**Status:** Draft v0.2.3 for owner review; target requirements, not an implementation claim
 
 **Date:** 2026-11-22
 
@@ -67,7 +67,7 @@ Unknown lifecycle context may receive safe general guidance and capability disco
 
 ## 5. Definitions
 
-- **Answer mode:** the declared origin and epistemic class of an answer: home record, user document, calculation, estimate, general guidance, or unavailable.
+- **Answer mode:** the declared origin, epistemic class, or decision-support role of an atomic answer facet: home record, user document, calculation, estimate, recommendation, general guidance, or unavailable.
 - **Candidate property:** a buyer-controlled pre-contract record used for comparison; not an owned or under-contract property.
 - **Conversation summary:** a bounded structured representation of relevant prior turns, entities, user corrections, and open questions. It is not an unlimited raw transcript.
 - **Direct answer:** an answer that resolves the user's requested information, not merely the route or capability.
@@ -80,6 +80,7 @@ Unknown lifecycle context may receive safe general guidance and capability disco
 ### 6.1 Scenario taxonomy
 
 - **BICC-EVAL-001.** The evaluation corpus shall stratify at minimum by lifecycle mode, answer mode, domain, safety/consequence class, direct versus follow-up turn, single versus compound request, clear versus ambiguous request, populated versus missing data, and text versus attachment input.
+- **BICC-EVAL-012.** **Single-owner default.** The default product and certification scenario is one authenticated owner operating on an authorized property or buyer workspace. Contributor, viewer, co-owner, invitation, delegation, and access-loss scenarios are included only where an existing domain route, service, operation, or governing requirement already distinguishes those roles, or where the change directly affects authorization. This FRD does not require every capability to be certified across a synthetic household-role matrix.
 - **BICC-EVAL-002.** Tuning prompts and certification prompts shall be versioned separately. A revealed certification failure becomes tuning evidence; certification after a behavior change uses a fresh independently reviewed set or is labeled non-certifying.
 - **BICC-EVAL-003.** Near-duplicate and template-family overlap checks shall prevent rephrasings of tuning prompts from being counted as independent certification evidence.
 - **BICC-EVAL-004.** Every evaluation result shall record dataset version, code revision, operational-control configuration, provider/model version when applicable, execution date, and known exclusions.
@@ -122,21 +123,26 @@ The gates in this section are automated offline evaluation and CI acceptance che
 - **BICC-UND-004.** A model-proposed plan shall be validated deterministically against the operation/data-point catalogue, audience policy, property scope, materiality, composition eligibility, entity ownership, and schema before execution.
 - **BICC-UND-005.** Model output shall never provide the authoritative record value. Values come from canonical readers, cited authorized documents, or deterministic calculations.
 - **BICC-UND-006.** When several eligible interpretations remain materially plausible, Ask shall ask one focused clarification whose options identify the real distinction.
-- **BICC-UND-007.** Existing certified deterministic fast paths may remain. Uncertified paths shall not become unconditional execution authority merely because a model agrees with them.
-- **BICC-UND-008.** Compound reads shall use the existing bounded composition contract. Writes shall never be composed with reads or other writes; a requested write opens its own review and confirmation flow.
+- **BICC-UND-007.** Ask shall ask no more than one consecutive focused clarification for the same unresolved intent, entity, property, or material distinction unless the user's response supplies material new information. Once that limit is reached, Ask shall stop the clarification loop and apply BICC-UND-008 or BICC-UND-009.
+- **BICC-UND-008.** After the clarification limit, Ask may answer using the best-supported interpretation only for non-consequential, read-only, or general-guidance requests. It shall explicitly label the interpretation and material assumptions and make correction easy.
+- **BICC-UND-009.** Ask shall not guess through unresolved ambiguity involving property or entity identity, authorization, record mutation, a consequential action, safety, or legal or financial interpretation. It shall instead present a bounded selection, identify the information needed, or return a safe `UNAVAILABLE` result.
+- **BICC-UND-010.** Existing certified deterministic fast paths may remain. Uncertified paths shall not become unconditional execution authority merely because a model agrees with them.
+- **BICC-UND-011.** Compound reads shall use the existing bounded composition contract. Writes shall never be composed with reads or other writes; a requested write opens its own review and confirmation flow.
 
 ## 8. Functional requirements — answer modes and response contract
 
-- **BICC-ANS-001.** Each substantive answer facet shall declare exactly one answer mode: `HOME_RECORD`, `USER_DOCUMENT`, `CALCULATION`, `ESTIMATE`, `GENERAL_GUIDANCE`, or `UNAVAILABLE`. A response may identify an optional primary facet for presentation, but shall not collapse or relabel supporting facets.
+- **BICC-ANS-001.** Each substantive atomic answer facet shall declare exactly one answer mode: `HOME_RECORD`, `USER_DOCUMENT`, `CALCULATION`, `ESTIMATE`, `RECOMMENDATION`, `GENERAL_GUIDANCE`, or `UNAVAILABLE`. A response may contain multiple atomic facets with different modes and may identify an optional primary facet for presentation, but shall not collapse or relabel supporting facets.
 - **BICC-ANS-002.** A response may contain multiple facets with different modes—for example a home-record age plus general lifespan guidance—but each facet shall retain its own source, freshness, assumptions, and limitations.
 - **BICC-ANS-003.** Home-record answers shall identify the property scope and meaningful as-of/freshness information.
 - **BICC-ANS-004.** User-document answers shall identify the document and version and cite page/chunk locations sufficient for the user to inspect the evidence.
-- **BICC-ANS-005.** Calculations shall disclose authoritative inputs, effective dates, units, and material formula assumptions.
-- **BICC-ANS-006.** Estimates shall disclose that they are estimates, their range or uncertainty where meaningful, material assumptions, and source/as-of context.
+- **BICC-ANS-005.** `CALCULATION` applies only to a deterministic transformation whose material inputs are authoritative or explicitly supplied by the user. Calculations shall disclose those inputs, effective dates, units, and material formula assumptions.
+- **BICC-ANS-006.** `ESTIMATE` applies whenever a computed result depends on an assumed, inferred, defaulted, predicted, ranged, or otherwise materially uncertain input, even when the arithmetic is deterministic. Estimates shall disclose that status, their range or uncertainty where meaningful, material assumptions, and source/as-of context.
 - **BICC-ANS-007.** General guidance shall be useful and conversational but visibly state that it is not derived from the user's home record. It shall not imply inspection, diagnosis, legal advice, insurance coverage, or guaranteed outcome.
 - **BICC-ANS-008.** `UNAVAILABLE` responses shall state the specific reason: missing data, ambiguity, authorization, unsupported scope, unavailable source, or temporary failure, and offer only relevant recovery.
-- **BICC-ANS-009.** Every completed response shall make clear what can happen next and whether any offered action changes the home record.
+- **BICC-ANS-009.** Where a useful and applicable next action exists, the response shall make that action clear and disclose whether it reads, creates, updates, or otherwise changes a home record. A complete answer shall not manufacture a next step solely to present an action.
 - **BICC-ANS-010.** Synthesis may restate and connect validated results. It shall not introduce a new number, entity, causal claim, recommendation, or source not supported by the validated payload.
+- **BICC-ANS-011.** A `RECOMMENDATION` facet shall identify the evidence and assumptions that support the decision, material uncertainty and tradeoffs, and whether professional inspection or advice is appropriate. Supporting record, document, calculation, estimate, or guidance facets shall retain their own answer modes.
+- **BICC-ANS-012.** Suggested next actions for supported Ask journeys shall execute within the conversation and shall not route to a desktop page merely to complete a supported journey. Traditional navigation or an external handoff may be offered only when the user explicitly selects it or an approved governing exception requires it; the response shall explain why the handoff is necessary and preserve relevant context where supported.
 
 ## 9. Functional requirements — conversation continuity
 
@@ -229,7 +235,7 @@ The gates in this section are automated offline evaluation and CI acceptance che
 - Establish end-to-end answer, latency, and cost baselines.
 - Generate the authoritative operation/data-point inventory.
 
-**Exit:** BICC-EVAL-001 through BICC-EVAL-011 are executable and a dated baseline exists.
+**Exit:** BICC-EVAL-001 through BICC-EVAL-012 are executable and a dated baseline exists.
 
 ### Phase 0.5 — Independent experience quick wins
 
@@ -301,6 +307,7 @@ This track runs in parallel with Phases 0 and 1 and does not wait for semantic p
 - Portfolio-wide multi-property questions until an explicit portfolio-read contract is approved.
 - Languages other than English in v1; they require language-specific certification.
 - Real-time duplex conversational voice; reviewed voice dictation remains in scope.
+- Expanding household collaboration, inventing new household roles, or requiring multi-role parity in domains that currently support only the primary owner.
 - Selecting `pgvector`, SSE, a model provider, or another specific technology without measured evidence.
 - Registry consolidation that creates a second source of authority.
 - Claiming “best in class” from feature count alone; the claim depends on the approved quality gates and comparative evaluation.
