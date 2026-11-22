@@ -8,8 +8,8 @@
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-|  | [Home Action Health-Factor Copy FRD and Implementation Plan](../product/HOME_ACTION_HEALTH_FACTOR_COPY_FRD.md) | v1.6 · Phase 1 shipped (`4d6bdfee`) · Phase 2 shipped (`81efe900`) · §12 decision-card  | 2026-09-02 | 877 |
-|  | [Home Intelligence Functional Completeness](../product/HOME_INTELLIGENCE_FUNCTIONAL_COMPLETENESS_FRD_AND_IMPLEMENTATION_PLAN.md) | v1.32 · "Approved for implementation planning" | 2026-08-30 | 1461 |
+|  | [Home Action Health-Factor Copy FRD and Implementation Plan](../product/HOME_ACTION_HEALTH_FACTOR_COPY_FRD.md) | v1.6 · Phase 1 shipped (`4d6bdfee`) · Phase 2 shipped (`81efe900`) · §12 decision-card  | 2026-11-04 | 989 |
+|  | [Home Intelligence Functional Completeness](../product/HOME_INTELLIGENCE_FUNCTIONAL_COMPLETENESS_FRD_AND_IMPLEMENTATION_PLAN.md) | v1.33 · "Approved for implementation planning" | 2026-10-25 | 1470 |
 |  | [Guidance Engine Homeowner CTA Audit FRD](../functional/GUIDANCE_ENGINE_HOMEOWNER_CTA_AUDIT_FRD.md) | v1.1 · Audit-only (no implementation changes) | 2026-07-28 | 260 |
 | 🟠 C3 | [Guidance Engine — Functional Requirements Document](../functional/GUIDANCE_ENGINE_FRD.md) | v2.1 · Living Document — reflects current implementation; resolved gaps removed as of v | 2026-07-27 | 998 |
 | 🔴 C3 | [GUIDANCE_ENGINE_FRD_Updated.md](../functional/GUIDANCE_ENGINE_FRD_Updated.md) | v1.0 · Ready for Implementation | 2026-03-31 | 94 |
@@ -35,8 +35,8 @@
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
+| 🟠 C9 | [Home Operations and Action Management Capability Audit and Implementation Plan](../product/HOME_OPERATIONS_AND_ACTION_MANAGEMENT_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Recommended implementation plan<br> | 2026-11-02 | 1584 |
 |  | [Home Operations & Action Management — Slice 0-8 Launch Review](../product/HOME_OPERATIONS_SLICE_0_8_LAUNCH_REVIEW.md) |  | 2026-07-30 | 40 |
-| 🟠 C9 | [Home Operations and Action Management Capability Audit and Implementation Plan](../product/HOME_OPERATIONS_AND_ACTION_MANAGEMENT_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Recommended implementation plan<br> | 2026-07-29 | 1582 |
 | 🟡 | [Guidance Engine — Gap Analysis](../functional/guidance-engine-gap-analysis.md) |  | 2026-03-29 | 631 |
 | 🟡 | [Deterministic Next Steps Findings](../functional/DETERMINISTIC_NEXT_STEPS_FINDINGS.md) |  | 2026-03-24 | 242 |
 
@@ -44,7 +44,7 @@
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-|  | [Home Intelligence Phase 0 — Registry and Ownership Report](../product/HOME_INTELLIGENCE_PHASE0_REGISTRY_REPORT.md) | "Phase 0 complete" | 2026-08-25 | 166 |
+|  | [Home Intelligence Phase 0 — Registry and Ownership Report](../product/HOME_INTELLIGENCE_PHASE0_REGISTRY_REPORT.md) | "Phase 0 complete" | 2026-09-25 | 172 |
 |  | [Home Intelligence Phase 1 — Source Parity Status](../product/HOME_INTELLIGENCE_PHASE1_SOURCE_PARITY_STATUS.md) | "Phase 1 functional implementation complete — source parity, Fix cutover, and bo | 2026-08-25 | 83 |
 |  | [Home Operations Slice 0 — Completion Endpoint Matrix](../product/HOME_OPERATIONS_SLICE_0_COMPLETION_ENDPOINT_MATRIX.md) |  | 2026-07-29 | 74 |
 

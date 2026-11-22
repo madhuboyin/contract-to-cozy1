@@ -32,7 +32,7 @@
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-| 🟠 C11 | [Contract to Cozy - Seasonal Maintenance Feature Handoff Document](../functional/SEASONAL_MAINTENANCE_HANDOFF.md) | 🟢 Canonical Home integration implemented; historical sections retained for subsy | 2026-07-20 | 1874 |
+| 🟠 C11 | [Contract to Cozy - Seasonal Maintenance Feature Handoff Document](../functional/SEASONAL_MAINTENANCE_HANDOFF.md) | 🟢 Canonical Home integration implemented; historical sections retained for subsy | 2026-11-04 | 1885 |
 |  | [Inspection Report Intelligence](../functional/INSPECTION_REPORT_INTELLIGENCE.md) |  | 2026-06-28 | 459 |
 | 🟠 C15 | [Home Material Specification Registry](../functional/MATERIAL_SPEC_REGISTRY.md) |  | 2026-06-27 | 708 |
 |  | [Permit History & Unpermitted Work Tracker](../functional/PERMIT_HISTORY_TRACKER.md) |  | 2026-06-27 | 1210 |

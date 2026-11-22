@@ -1,6 +1,6 @@
 # Documentation Library
 
-A searchable map of everything under `docs/` (313 files, snapshot 2026-09-24). Start here instead of scanning raw folders.
+A searchable map of everything under `docs/` (403 files, snapshot 2026-09-24). Start here instead of scanning raw folders.
 
 > This complements [`../wiki/`](../wiki/README.md), a code-grounded feature snapshot. **Use the wiki to locate the relevant workflow, then verify its route, service, schema, and render path before changing behavior. Use this library to find the governing requirement, plan, ADR, audit, or runbook and its review flags.**
 
@@ -33,22 +33,22 @@ python3 -c "import csv;[print(r['path']) for r in csv.DictReader(open('docs/libr
 
 | Area | Docs | 🔴 | 🟠 | 🟡 | Covers |
 |---|---|---|---|---|---|
-| [Ask Cozy, AI Concierge & Agentic Intelligence](01-ask.md) | 32 | 1 | 4 | 2 | Ask Cozy conversational workspace, AI concierge, skills, agentic architecture |
+| [Ask Cozy, AI Concierge & Agentic Intelligence](01-ask.md) | 91 | 1 | 4 | 2 | Ask Cozy conversational workspace, AI concierge, skills, agentic architecture |
 | [Personalization Engine](02-personalization.md) | 24 | 0 | 2 | 3 | Recommendation/personalization engine: discovery pack, FRD, ADRs, phase audits |
 | [Property Context & Property Setup](03-context.md) | 38 | 0 | 3 | 2 | Property Context platform, JIT capture slices, property setup/onboarding, RentCast |
 | [Guidance, Actions & Home Intelligence](04-guidance.md) | 20 | 1 | 3 | 6 | Guidance Engine, home actions, Home Intelligence, home operations, signals |
 | [Property Intelligence, Environment & Event Radar](05-intel.md) | 20 | 0 | 4 | 0 | Environment report, Home Event Radar, hazard exposure, neighborhood, briefs, recalls |
 | [Home Records, Maintenance & Digital Twin](06-records.md) | 14 | 2 | 3 | 2 | Maintenance/seasonal, timeline, digital twin, rooms, permits, materials, smart home |
-| [Coverage, Risk & Financial Tools](07-financial.md) | 25 | 0 | 5 | 3 | Coverage, claims, risk, ownership cost, tax, savings, mortgage, reserve fund |
-| [Providers, Pricing & Renovation Execution](08-providers.md) | 14 | 0 | 1 | 2 | Provider profiles/reviews, service pricing, renovation, DIY, negotiation |
-| [Buying, Selling & Life Transitions](09-transitions.md) | 4 | 0 | 2 | 1 | Home buyer, sale readiness, digital will, continuity |
-| [Product Framework & Capability Platform](10-platform.md) | 33 | 0 | 1 | 0 | Product Framework phases 0-6, capability discovery, decision platform, launch runbooks |
-| [Admin, Workers & Operations](11-admin.md) | 7 | 0 | 0 | 1 | Admin module, worker jobs, backup/DB ops, PWA |
+| [Coverage, Risk & Financial Tools](07-financial.md) | 26 | 0 | 5 | 3 | Coverage, claims, risk, ownership cost, tax, savings, mortgage, reserve fund |
+| [Providers, Pricing & Renovation Execution](08-providers.md) | 23 | 0 | 1 | 2 | Provider profiles/reviews, service pricing, renovation, DIY, negotiation |
+| [Buying, Selling & Life Transitions](09-transitions.md) | 4 | 0 | 2 | 0 | Home buyer, sale readiness, digital will, continuity |
+| [Product Framework & Capability Platform](10-platform.md) | 35 | 0 | 1 | 0 | Product Framework phases 0-6, capability discovery, decision platform, launch runbooks |
+| [Admin, Workers & Operations](11-admin.md) | 11 | 0 | 0 | 1 | Admin module, worker jobs, backup/DB ops, PWA |
 | [Data Architecture (Pass 1-7)](12-data.md) | 8 | 0 | 1 | 7 | Pass 1-7 schema/data-flow analyses |
 | [Pre-Launch Audits & Strategy (Mar-Apr 2026)](13-prelaunch.md) | 54 | 2 | 7 | 38 | Mar-Apr 2026 audits, 90-day plans, route audits, production readiness |
 | [Acquisition & Business](14-business.md) | 6 | 0 | 0 | 0 | Acquisition one-pagers, pilot/fundraise plan |
 | [Code-Grounded Wiki (existing docs/wiki)](15-wiki.md) | 12 | 0 | 0 | 12 | Existing code-grounded wiki (setup, architecture, 8 feature guides) |
-| [Meta & Methodology](16-meta.md) | 2 | 0 | 1 | 0 | Docs index and audit methodology |
+| [Meta & Methodology](16-meta.md) | 17 | 0 | 1 | 0 | Docs index and audit methodology |
 
 ## Which doc wins? (reading order when several overlap)
 

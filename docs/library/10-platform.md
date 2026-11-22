@@ -2,13 +2,13 @@
 
 [Library home](README.md) · [Flags](FLAGS.md)
 
-33 documents. Flag key: 🔴 conflicting/superseded · 🟠 status lags reality or cites missing code · 🟡 historical snapshot. Blank = no issue found (not proof it is current - check *Last changed*).
+35 documents. Flag key: 🔴 conflicting/superseded · 🟠 status lags reality or cites missing code · 🟡 historical snapshot. Blank = no issue found (not proof it is current - check *Last changed*).
 
 ## Requirements (FRD/PRD) (1)
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-| 🟠 C8 | [Capability Discovery and Recommendation Platform](../product/CAPABILITY_DISCOVERY_AND_RECOMMENDATION_PLATFORM_FRD.md) | v1.0 · Proposed \| | 2026-07-27 | 1427 |
+| 🟠 C8 | [Capability Discovery and Recommendation Platform](../product/CAPABILITY_DISCOVERY_AND_RECOMMENDATION_PLATFORM_FRD.md) | v1.9 · Proposed \| | 2026-10-10 | 1582 |
 
 ## ADR (decision) (4)
 
@@ -25,6 +25,12 @@
 |---|---|---|---|---|
 |  | [Capability Discovery and Recommendation Platform — Implementation Plan](../product/CAPABILITY_DISCOVERY_AND_RECOMMENDATION_IMPLEMENTATION_PLAN.md) | v1.0 · "Implementation in progress" | 2026-07-25 | 2516 |
 
+## Feature reference (1)
+
+| | Document | Status (as written) | Last changed | Lines |
+|---|---|---|---|---|
+|  | [ask-cozy-launch-validation.html](../product/prototypes/ask-cozy-launch-validation.html) |  | 2026-09-26 |  |
+
 ## Audit / analysis (5)
 
 | | Document | Status (as written) | Last changed | Lines |
@@ -35,12 +41,14 @@
 |  | [ContractToCozy Product Framework — Application Audit and Implementation Plan](../product/ContractToCozy_Product_Framework_Application_Audit_and_Implementation_Plan.md) | v1.0 · "Implementation planning baseline" | 2026-07-24 | 1263 |
 |  | [ContractToCozy Product Framework — Audit Verification Report](../product/ContractToCozy_Product_Framework_Audit_Verification_Report.md) | "Independent verification of self-reported implementation status" | 2026-07-24 | 174 |
 
-## Status / phase record (17)
+## Status / phase record (18)
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
+|  | [Product Framework Phase 1 — Trigger-First Activation](../product/phase1/README.md) | Code implementation complete; human launch approvals deferred during internal be | 2026-11-11 | 61 |
+|  | [Current Capability Inventory](../product/capability-discovery/current-capability-inventory.md) |  | 2026-10-28 | 88 |
+|  | [Ask Cozy Engineering Prototypes](../product/prototypes/README.md) |  | 2026-09-26 | 11 |
 |  | [Product Framework Phase 2 — Unified Home and Action System](../product/phase2/README.md) | Increments 1–3, post-cutover hardening, and August 10 Unified Home production po | 2026-08-31 | 464 |
-|  | [Current Capability Inventory](../product/capability-discovery/current-capability-inventory.md) |  | 2026-08-25 | 85 |
 |  | [Decision Platform — Phase 7A (P0 Contract Closure)](../product/decision-platform/README.md) | These artifacts self-describe as "Proposed — pending Product, Domain, Architectu | 2026-08-13 | 55 |
 |  | [Decision Platform — Metrics Dictionary and Zero-Tolerance Gates](../product/decision-platform/metrics-dictionary.md) | Proposed. Formalizes | 2026-08-13 | 75 |
 |  | [Decision Platform — Retention, Erasure, and Export Policy](../product/decision-platform/policy-retention-erasure-export.md) | Proposed — concrete durations below require Privacy, Security, and Domain approv | 2026-08-13 | 83 |
@@ -50,7 +58,6 @@
 |  | [Product Framework Phase 0 — Contract and Governance Foundation](../product/phase0/README.md) | Technical exit criteria complete; human policy approvals are explicitly deferred | 2026-07-19 | 168 |
 |  | [Phase 0 Approval Register](../product/phase0/approval-register.md) |  | 2026-07-19 | 34 |
 |  | [Recommendation Launch Gate](../product/phase0/recommendation-launch-gate.md) |  | 2026-07-19 | 70 |
-|  | [Product Framework Phase 1 — Trigger-First Activation](../product/phase1/README.md) | Code implementation complete; human launch approvals deferred during internal be | 2026-07-19 | 60 |
 |  | [Product Framework Phase 3 — Complete Major Repair / System Replacement](../product/phase3/README.md) | Increments 1–3 and the operational acceptance harness are implemented; target-en | 2026-07-19 | 101 |
 |  | [Phase 5 — Existing-home buyer acquisition journey](../product/phase5/README.md) | implemented in code; the updated Prisma schema must be applied by the operator.  | 2026-07-19 | 64 |
 |  | [Phase 6 — Specialized new-home path and controlled expansion](../product/phase6/README.md) | implemented in code; the updated Prisma schema must be applied by the operator.  | 2026-07-19 | 97 |
@@ -69,7 +76,7 @@
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-|  | [current-capability-inventory.json](../product/capability-discovery/current-capability-inventory.json) |  | 2026-09-13 |  |
+|  | [current-capability-inventory.json](../product/capability-discovery/current-capability-inventory.json) |  | 2026-10-28 |  |
 |  | [ContractToCozy_Product_Framework.docx](../product/ContractToCozy_Product_Framework.docx) |  | 2026-07-20 |  |
 
 ## Flag details for this area

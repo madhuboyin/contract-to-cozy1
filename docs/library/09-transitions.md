@@ -20,13 +20,13 @@
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-| 🟡 | [Home Digital Will](../functional/HOME_DIGITAL_WILL.md) |  | 2026-03-14 | 819 |
+|  | [Home Digital Will](../functional/HOME_DIGITAL_WILL.md) |  | 2026-10-18 | 849 |
 
 ## Audit / analysis (1)
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-| 🟠 C9 | [Home Continuity and Records Capability Audit and Implementation Plan](../product/HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Recommended implementation plan<br> | 2026-08-06 | 1933 |
+| 🟠 C9 | [Home Continuity and Records Capability Audit and Implementation Plan](../product/HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Recommended implementation plan<br> | 2026-09-28 | 2063 |
 
 ## Flag details for this area
 

@@ -2,36 +2,44 @@
 
 [Library home](README.md)
 
-## Requirements (FRD/PRD) (33)
+## Requirements (FRD/PRD) (41)
 
 Most recently changed first; showing area.
 
 | | Document | Area | Last changed |
 |---|---|---|---|
-|  | [Ask Cozy — Inline Workspace Product Requirements Document](../product/ASK_COZY_INLINE_WORKSPACE_FRD.md) | Ask Cozy | 2026-09-24 |
-|  | [Ask Cozy — Message-First Functional Requirements Document (Stage 3, Part A)](../product/ASK_COZY_MESSAGE_FIRST_FRD.md) | Ask Cozy | 2026-09-24 |
+|  | [Ask Cozy — Best-in-Class Conversational Concierge FRD](../product/ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_CONCIERGE_FRD.md) | Ask Cozy | 2026-11-22 |
+|  | [Ask Cozy — Cross-Domain Semantic Request Architecture FRD](../product/ASK_COZY_CROSS_DOMAIN_SEMANTIC_ARCHITECTURE_FRD.md) | Ask Cozy | 2026-11-22 |
+|  | [Ask Cozy — Understanding Reliability: Reaching 90% Resolved Prompts Without Controlling th](../product/ASK_COZY_UNDERSTANDING_RELIABILITY_FRD.md) | Ask Cozy | 2026-11-21 |
+|  | [Ask Cozy — Inline Workspace Product Requirements Document](../product/ASK_COZY_INLINE_WORKSPACE_FRD.md) | Ask Cozy | 2026-11-20 |
+|  | [Ask Cozy — Actionable Result Enrichment FRD](../product/ASK_COZY_ACTIONABLE_RESULT_ENRICHMENT_FRD.md) | Ask Cozy | 2026-11-19 |
+|  | [Ask Cozy Conversational Presentation Quality & Standardization](../product/ASK_COZY_CONVERSATIONAL_PRESENTATION_QUALITY_STANDARDIZATION_FRD.md) | Ask Cozy | 2026-11-18 |
+|  | [Ask Cozy — Conversational Concierge: Bounded Read Composition FRD](../product/ASK_COZY_CONVERSATIONAL_CONCIERGE_COMPOSITION_FRD.md) | Ask Cozy | 2026-11-11 |
+|  | [AI Home Concierge Ask — Natural-Language Trust Architecture Addendum](../product/AI_HOME_CONCIERGE_ASK_TRUST_ARCHITECTURE_ADDENDUM_FRD.md) | Ask Cozy | 2026-11-05 |
+|  | [Ask Cozy — Message-First Functional Requirements Document (Stage 3, Part A)](../product/ASK_COZY_MESSAGE_FIRST_FRD.md) | Ask Cozy | 2026-11-05 |
+|  | [Environment Report — Functional Requirements Document](../functional/ENVIRONMENT_REPORT_FRD.md) | Property Intelligence | 2026-11-04 |
+|  | [Home Action Health-Factor Copy FRD and Implementation Plan](../product/HOME_ACTION_HEALTH_FACTOR_COPY_FRD.md) | Guidance | 2026-11-04 |
+| 🟠 | [AI Home Concierge — Intelligence, Personalization, and Proactive Concierge](../product/AI_HOME_CONCIERGE_ASK_INTELLIGENCE_INCREMENTAL_FRD.md) | Ask Cozy | 2026-10-28 |
+|  | [Ask Cozy — Guided Journey Continuation (design)](../product/ASK_COZY_GUIDED_JOURNEY_CONTINUATION_FRD.md) | Ask Cozy | 2026-10-28 |
+|  | [Home Intelligence Functional Completeness](../product/HOME_INTELLIGENCE_FUNCTIONAL_COMPLETENESS_FRD_AND_IMPLEMENTATION_PLAN.md) | Guidance | 2026-10-25 |
+|  | [Ask Cozy Sole Homeowner Interface — Functional Requirements Document](../product/ASK_COZY_SOLE_HOMEOWNER_INTERFACE_FRD.md) | Ask Cozy | 2026-10-20 |
+| 🟠 | [AI Home Concierge — Ask Redo](../product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md) | Ask Cozy | 2026-10-15 |
+| 🟠 | [Capability Discovery and Recommendation Platform](../product/CAPABILITY_DISCOVERY_AND_RECOMMENDATION_PLATFORM_FRD.md) | Product Framework & Capability Platform | 2026-10-10 |
 | 🟠 | [Ask Cozy — Cross-Domain Interaction Rollout FRD](../product/ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md) | Ask Cozy | 2026-09-17 |
 |  | [Ask Cozy — Interaction Model & UI FRD](../product/ASK_COZY_INTERACTION_MODEL_UI_FRD.md) | Ask Cozy | 2026-09-17 |
 |  | [RentCast Property Setup Integration — Functional Requirements Document](../product/RENTCAST_PROPERTY_SETUP_INTEGRATION_FRD.md) | Property Context & Property Setup | 2026-09-10 |
 |  | [Property Setup Simplification — Minimal-Change FRD](../product/PROPERTY_SETUP_SIMPLIFICATION_MINIMAL_CHANGE_FRD.md) | Property Context & Property Setup | 2026-09-09 |
-|  | [Environment Report — Functional Requirements Document](../functional/ENVIRONMENT_REPORT_FRD.md) | Property Intelligence | 2026-09-03 |
-|  | [Home Action Health-Factor Copy FRD and Implementation Plan](../product/HOME_ACTION_HEALTH_FACTOR_COPY_FRD.md) | Guidance | 2026-09-02 |
-|  | [Home Intelligence Functional Completeness](../product/HOME_INTELLIGENCE_FUNCTIONAL_COMPLETENESS_FRD_AND_IMPLEMENTATION_PLAN.md) | Guidance | 2026-08-30 |
 | 🟠 | [Property Context Platform — Functional Requirements Document](../property-context/PROPERTY_CONTEXT_FRD.md) | Property Context & Property Setup | 2026-08-30 |
-| 🟠 | [AI Home Concierge — Intelligence, Personalization, and Proactive Concierge](../product/AI_HOME_CONCIERGE_ASK_INTELLIGENCE_INCREMENTAL_FRD.md) | Ask Cozy | 2026-08-29 |
 |  | [Provider Portfolio & Availability — Functional Requirements Document](../functional/PROVIDER_PORTFOLIO_AVAILABILITY_FRD.md) | Providers | 2026-08-21 |
 |  | [Provider Profile Management — Functional Requirements Document](../functional/PROVIDER_PROFILE_MANAGEMENT_FRD.md) | Providers | 2026-08-21 |
 |  | [Provider Reviews — Functional Requirements Document](../functional/PROVIDER_REVIEWS_FRD.md) | Providers | 2026-08-21 |
 |  | [Home Buyer Experience — Functional Requirements and Implementation Plan](../product/HOME_BUYER_FRD_AND_IMPLEMENTATION_PLAN.md) | Buying | 2026-08-21 |
-| 🟠 | [AI Home Concierge — Ask Redo](../product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md) | Ask Cozy | 2026-08-16 |
 |  | [AI Home Concierge Ask — Audience Context and Persona-Aware Guidance Addendum](../product/AI_HOME_CONCIERGE_ASK_AUDIENCE_CONTEXT_ADDENDUM_FRD.md) | Ask Cozy | 2026-08-15 |
-|  | [AI Home Concierge Ask — Natural-Language Trust Architecture Addendum](../product/AI_HOME_CONCIERGE_ASK_TRUST_ARCHITECTURE_ADDENDUM_FRD.md) | Ask Cozy | 2026-08-15 |
 |  | [ContractToCozy Skill Platform](../product/CONTRACTTOCOZY_SKILL_PLATFORM_FRD.md) | Ask Cozy | 2026-08-14 |
 |  | [Guidance Engine Homeowner CTA Audit FRD](../functional/GUIDANCE_ENGINE_HOMEOWNER_CTA_AUDIT_FRD.md) | Guidance | 2026-07-28 |
 |  | [Property Tax Center — Functional Requirements Document](../functional/PROPERTY_TAX_CENTER_FRD.md) | Coverage | 2026-07-28 |
 | 🟠 | [Guidance Engine — Functional Requirements Document](../functional/GUIDANCE_ENGINE_FRD.md) | Guidance | 2026-07-27 |
 | 🟠 | [Home Event Radar — Functional Requirements Document](../functional/HOME_EVENT_RADAR_FRD.md) | Property Intelligence | 2026-07-27 |
-| 🟠 | [Capability Discovery and Recommendation Platform](../product/CAPABILITY_DISCOVERY_AND_RECOMMENDATION_PLATFORM_FRD.md) | Product Framework & Capability Platform | 2026-07-27 |
 |  | [Property Context Platform — Just-in-Time Inline Context Capture FRD](../property-context/PROPERTY_CONTEXT_JUST_IN_TIME_CAPTURE_FRD.md) | Property Context & Property Setup | 2026-07-23 |
 |  | [Contract-to-Cozy ADMIN Platform — Functional Requirements Document](../functional/ADMIN_MODULE_FRD.md) | Admin | 2026-07-18 |
 | 🟠 | [Property Context Platform — Catalog, Operational Configuration, and Editorial Governance F](../property-context/PROPERTY_CONTEXT_CATALOG_GOVERNANCE_FRD.md) | Property Context & Property Setup | 2026-07-17 |
@@ -48,23 +56,37 @@ Most recently changed first; showing area.
 
 | | Document | Area | Last changed |
 |---|---|---|---|
+|  | [ADR — Home Event Radar Canonical Signal Pipeline](../architecture/adr-home-event-radar-canonical-pipeline.md) | Property Intelligence | 2026-11-04 |
 |  | [ADR-0001 — Decision Platform Ownership and Phase 7A Scope](../product/decision-platform/adr-0001-ownership-and-scope.md) | Product Framework & Capability Platform | 2026-08-13 |
 |  | [ADR-0002 — Decision Preference Registry and Schema](../product/decision-platform/adr-0002-preference-registry-and-schema.md) | Product Framework & Capability Platform | 2026-08-13 |
 |  | [ADR-0003 — Decision Thread, Scenario, and Recommendation Snapshot Schema](../product/decision-platform/adr-0003-decision-thread-and-scenario-schema.md) | Product Framework & Capability Platform | 2026-08-13 |
 |  | [ADR: Consolidate Ownership Cost Intelligence](../architecture/ADR-OWNERSHIP-COSTS-CONSOLIDATION.md) | Coverage | 2026-07-28 |
 |  | [ADR: Home Event Radar Insurance-Market Source](../architecture/adr-home-event-radar-insurance-source.md) | Property Intelligence | 2026-07-27 |
 |  | [ADR: Home Event Radar Utility-Outage Source](../architecture/adr-home-event-radar-utility-source.md) | Property Intelligence | 2026-07-27 |
-|  | [ADR — Home Event Radar Canonical Signal Pipeline](../architecture/adr-home-event-radar-canonical-pipeline.md) | Property Intelligence | 2026-07-26 |
 |  | [ADR-0001 — Canonical Capability Registry](../product/capability-discovery/adr-0001-canonical-capability-registry.md) | Product Framework & Capability Platform | 2026-07-24 |
 | 🟡 | [ADR-0001: Personalization module foundation (Phase 0 "first implementation step")](../personalization/adr-0001-personalization-module-foundation.md) | Personalization Engine | 2026-07-14 |
 | 🟡 | [ADR-0002: Phase 1 foundation — migration steps 1–3](../personalization/adr-0002-phase1-foundation-migration-steps-1-3.md) | Personalization Engine | 2026-07-14 |
 
-## Plan (14)
+## Plan (28)
 
 Most recently changed first; showing area.
 
 | | Document | Area | Last changed |
 |---|---|---|---|
+|  | [Ask Cozy UX Consolidation — Implementation Plan](../architecture/ASK_COZY_UX_CONSOLIDATED_IMPLEMENTATION_PLAN.md) | Ask Cozy | 2026-11-03 |
+|  | [Ask Cozy High-Precision Suggested Next Actions — Implementation Plan](../product/ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md) | Ask Cozy | 2026-11-03 |
+|  | [Ask Cozy Sole Homeowner Interface — Implementation Plan](../architecture/ASK_COZY_SOLE_HOMEOWNER_INTERFACE_IMPLEMENTATION_PLAN.md) | Ask Cozy | 2026-11-02 |
+|  | [Ask Cozy — Conversational Presentation Implementation Plan](../architecture/ASK_COZY_CONVERSATIONAL_PRESENTATION_IMPLEMENTATION_PLAN.md) | Ask Cozy | 2026-10-27 |
+|  | [Ask Cozy Lightweight Capability Discovery — Implementation Plan](../product/ASK_COZY_LIGHTWEIGHT_CAPABILITY_DISCOVERY_IMPLEMENTATION_PLAN.md) | Ask Cozy | 2026-10-26 |
+|  | [Ask Cozy Conversational Presentation Quality & Standardization — Full Implementation Plan](../architecture/ASK_COZY_CONVERSATIONAL_PRESENTATION_QUALITY_IMPLEMENTATION_PLAN.md) | Ask Cozy | 2026-10-16 |
+|  | [Start a DIY Project From Ask — Step 8 Implementation Plan](../architecture/ASK_COZY_DIY_PROJECT_START_PLAN.md) | Ask Cozy | 2026-10-07 |
+|  | [DIY Completion Effects Through the Outbox — Step 3 Implementation Plan](../architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md) | Ask Cozy | 2026-10-06 |
+|  | [Previous Step, Reopen, Finish, Stop and Recover From Ask — Step 7 Implementation Plan](../architecture/ASK_COZY_DIY_PROJECT_COMMANDS_PLAN.md) | Ask Cozy | 2026-10-06 |
+|  | [Read-Only `DIY_PROJECT_GUIDE` and `TASK_GUIDE` Progress — Step 5 Implementation Plan](../architecture/ASK_COZY_DIY_PROJECT_GUIDE_PLAN.md) | Ask Cozy | 2026-10-06 |
+|  | [`DIY_STEP_UPDATE`: Marking a Step Done or Skipping It From Ask — Step 6 Implementation Pla](../architecture/ASK_COZY_DIY_STEP_COMMANDS_PLAN.md) | Ask Cozy | 2026-10-06 |
+|  | [DIY Step and Project Transitions — Step 2 Implementation Plan](../architecture/ASK_COZY_DIY_STEP_TRANSITIONS_PLAN.md) | Ask Cozy | 2026-10-06 |
+|  | [DIY Reverse Reconciliation (Maintenance Task to DIY Project) — Step 4 Implementation Plan](../architecture/ASK_COZY_DIY_TASK_RECONCILIATION_PLAN.md) | Ask Cozy | 2026-10-06 |
+|  | [DIY Template Revisions — Step 1 Implementation Plan (immutable published content)](../architecture/ASK_COZY_DIY_TEMPLATE_REVISIONS_PLAN.md) | Ask Cozy | 2026-10-06 |
 |  | [Ask Cozy — Incremental Implementation Plan (Stage 3, Part B)](../architecture/ASK_COZY_INCREMENTAL_IMPLEMENTATION_PLAN.md) | Ask Cozy | 2026-09-17 |
 |  | [RentCast Property Setup Integration — Implementation Plan](../product/RENTCAST_PROPERTY_SETUP_INTEGRATION_IMPLEMENTATION_PLAN.md) | Property Context & Property Setup | 2026-09-10 |
 |  | [C2C Intelligence & Agentic Evolution — Implementation Plan](../architecture/C2C_INTELLIGENCE_AGENTIC_EVOLUTION_IMPLEMENTATION_PLAN.md) | Ask Cozy | 2026-08-31 |
@@ -80,18 +102,45 @@ Most recently changed first; showing area.
 | 🟡 | [HomeScore Report: Recommended DB Changes for Certification-Grade Durability and Scale](../architecture/HOMESCORE_DB_CERTIFICATION_GRADE_PLAN.md) | Data Architecture (Pass 1-7) | 2026-03-10 |
 | 🟡 | [OPTION B IMPLEMENTATION PLAN - CLEAN SLATE DEPLOYMENT](../functional/FINAL_IMPLEMENTATION_PLAN.md) | Pre-Launch Audits & Strategy (Mar-Apr 20 | 2026-01-03 |
 
-## Feature reference (69)
+## Feature reference (91)
 
 Most recently changed first; showing area.
 
 | | Document | Area | Last changed |
 |---|---|---|---|
+|  | [Ask Cozy Live Browser Evaluation Results](../ask-cozy-live-evaluation-results.md) | Meta & Methodology | 2026-11-16 |
+|  | [Relation-read design for DATA_POINT_READ (design only; nothing built)](../architecture/ASK_COZY_RELATION_READ_DESIGN.md) | Ask Cozy | 2026-11-13 |
+|  | [DATA_POINT_READ proposal: documents-records, buyer, seller prep (D13 domains 5-7)](../architecture/ASK_COZY_DATA_POINT_PROPOSAL_DOCUMENTS_BUYER_SELLER.md) | Ask Cozy | 2026-11-12 |
+|  | [DATA_POINT_READ proposal: reserve and ownership costs (D13 domain 4)](../architecture/ASK_COZY_DATA_POINT_PROPOSAL_RESERVE_OWNERSHIP_COSTS.md) | Ask Cozy | 2026-11-12 |
+|  | [Ask Cozy — Data-Point Catalogue: Phase 0b Results](../architecture/ASK_COZY_DATA_POINT_CATALOGUE_0B.md) | Ask Cozy | 2026-11-11 |
+|  | [Ask Cozy — Understanding Reliability: Phase 0a Baseline](../architecture/ASK_COZY_UNDERSTANDING_BASELINE_0A.md) | Ask Cozy | 2026-11-11 |
+|  | [Ask Cozy — Understanding Reliability: Phase 0c Baseline](../architecture/ASK_COZY_UNDERSTANDING_BASELINE_0C.md) | Ask Cozy | 2026-11-11 |
+|  | [Ask Cozy — Message-Routed Write Safety Trace (FR-WRT-1)](../architecture/ASK_COZY_WRITE_SAFETY_TRACE.md) | Ask Cozy | 2026-11-11 |
+|  | [Ask Cozy Routing Coverage and Calibration](../architecture/ASK_COZY_ROUTING_COVERAGE_AND_CALIBRATION.md) | Ask Cozy | 2026-11-06 |
+|  | [Ask Cozy — Target Product & Architecture (Stage 2)](../architecture/ASK_COZY_TARGET_PRODUCT_AND_ARCHITECTURE.md) | Ask Cozy | 2026-11-05 |
+|  | [Ask Cozy Calm Adoption Ledger](../architecture/ASK_COZY_CALM_ADOPTION_LEDGER.md) | Ask Cozy | 2026-11-03 |
+|  | [Ask Cozy all-tools desktop parity and conversational UI register](../product/ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md) | Ask Cozy | 2026-10-30 |
+|  | [Ask Cozy — Loan Estimate extraction (read an official Loan Estimate into a comparison): de](../architecture/ASK_COZY_REFINANCE_LOAN_ESTIMATE_EXTRACTION_DESIGN.md) | Ask Cozy | 2026-10-27 |
+|  | [Home Improvement Financing Center](../functional/HOME_IMPROVEMENT_FINANCING.md) | Coverage | 2026-10-27 |
+|  | [Mortgage Refinance Radar](../functional/mortgage-refinance-radar.md) | Coverage | 2026-10-27 |
+|  | [Ask Cozy — Negotiation Shield documents (attach, read, parse): design](../architecture/ASK_COZY_NEGOTIATION_SHIELD_DOCUMENTS_DESIGN.md) | Ask Cozy | 2026-10-26 |
+|  | [Around Your Home](../functional/NEIGHBORHOOD_CHANGE_RADAR.md) | Property Intelligence | 2026-10-25 |
+|  | [Ask Cozy Property Brief parity](../product/ASK_COZY_PROPERTY_BRIEF_PARITY_IMPLEMENTATION.md) | Ask Cozy | 2026-10-25 |
+|  | [Ask Cozy Reserve Fund parity](../product/ASK_COZY_RESERVE_FUND_PARITY_IMPLEMENTATION.md) | Ask Cozy | 2026-10-24 |
+|  | [Ask Cozy — Primary Interface Product Redesign](../product/ASK_COZY_PRIMARY_INTERFACE_REDESIGN.md) | Ask Cozy | 2026-10-20 |
+|  | [Home Digital Will](../functional/HOME_DIGITAL_WILL.md) | Buying | 2026-10-18 |
+|  | [Quote Comparison: importing a quote from a Home Record — design](../architecture/QUOTE_COMPARISON_HOME_RECORD_IMPORT_DESIGN.md) | Meta & Methodology | 2026-10-13 |
+|  | [Ask Cozy — Financing, Permits and Price Finalization: read pass and design](../architecture/ASK_COZY_FINANCING_PERMITS_PRICE_FINALIZATION_DESIGN.md) | Ask Cozy | 2026-10-12 |
+|  | [Ask Cozy — Negotiation Shield slice 2 (write path): design](../architecture/ASK_COZY_NEGOTIATION_SHIELD_SLICE2_DESIGN.md) | Ask Cozy | 2026-10-12 |
+|  | [How Ask Cozy Works: Orchestrator, Adapters, Skills and Friends](../architecture/ASK_COZY_ARCHITECTURE_EXPLAINED.md) | Ask Cozy | 2026-10-10 |
+|  | [Property Brief Functional Contract](../functional/PROPERTY_BRIEF.md) | Property Intelligence | 2026-10-10 |
+|  | [Ask Cozy — Stateful GUIDE Design (Phase 3 design gate)](../architecture/ASK_COZY_STATEFUL_GUIDE_DESIGN.md) | Ask Cozy | 2026-10-07 |
+|  | [ask-cozy-launch-validation.html](../product/prototypes/ask-cozy-launch-validation.html) | Product Framework & Capability Platform | 2026-09-26 |
 | 🔴 | [AI Features - Implementation Summary](../functional/AI_CARDS_SUMMARY.md) | Ask Cozy | 2026-09-24 |
 | 🔴 | [Smart Home Integration Hub](../functional/SMART_HOME_INTEGRATION_HUB.md) | Home Records | 2026-09-24 |
 | 🟡 | [Introduction](../wiki/00-introduction.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-09-22 |
 | 🟡 | [Guidance, AI Concierge & Personalization](../wiki/features/03-guidance-ai-concierge-and-personalization.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-09-22 |
 | 🟡 | [Home Events, Environment & Community](../wiki/features/06-home-events-environment-and-community.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-09-22 |
-|  | [Ask Cozy — Target Product & Architecture (Stage 2)](../architecture/ASK_COZY_TARGET_PRODUCT_AND_ARCHITECTURE.md) | Ask Cozy | 2026-09-17 |
 |  | [Worker Jobs — Feature Documentation](../functional/WORKER_JOBS.md) | Admin | 2026-09-09 |
 | 🟡 | [Onboarding, Auth & Property Setup](../wiki/features/01-onboarding-and-property-setup.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-09-09 |
 |  | [C2C Intelligence & Agentic Evolution Architecture (Stage 3)](../architecture/C2C_INTELLIGENCE_AGENTIC_EVOLUTION_ARCHITECTURE.md) | Ask Cozy | 2026-08-31 |
@@ -104,13 +153,10 @@ Most recently changed first; showing area.
 |  | [AI Home Concierge Ask — Manual Certification Living Addendum](../product/AI_HOME_CONCIERGE_ASK_MANUAL_CERTIFICATION_ADDENDUM.md) | Ask Cozy | 2026-08-16 |
 |  | [Unified Home Action Card Enhancement Brief](../product/UNIFIED_HOME_ACTION_CARD_ENHANCEMENT_BRIEF.md) | Guidance | 2026-08-10 |
 |  | [Home Event Radar](../functional/HOME_EVENT_RADAR.md) | Property Intelligence | 2026-08-06 |
-|  | [Mortgage Refinance Radar](../functional/mortgage-refinance-radar.md) | Coverage | 2026-08-01 |
-|  | [Around Your Home](../functional/NEIGHBORHOOD_CHANGE_RADAR.md) | Property Intelligence | 2026-07-31 |
 |  | [NYC ZAP Property Intelligence Provider](../functional/NYC_ZAP_PROPERTY_INTELLIGENCE_PROVIDER.md) | Property Intelligence | 2026-07-31 |
 |  | [Home Briefing](../functional/HOME_GAZETTE.md) | Property Intelligence | 2026-07-30 |
 | 🟠 | [Past Hazard Exposure](../functional/HOME_RISK_REPLAY.md) | Property Intelligence | 2026-07-30 |
 |  | [Knowledge Hub](../functional/KNOWLEDGE_HUB.md) | Property Intelligence | 2026-07-30 |
-|  | [Property Brief Functional Contract](../functional/PROPERTY_BRIEF.md) | Property Intelligence | 2026-07-30 |
 |  | [Property Intelligence Legacy Retirement](../functional/PROPERTY_INTELLIGENCE_LEGACY_RETIREMENT.md) | Property Intelligence | 2026-07-30 |
 |  | [Property Intelligence Unified Experience](../functional/PROPERTY_INTELLIGENCE_UNIFIED_EXPERIENCE.md) | Property Intelligence | 2026-07-30 |
 |  | [Renovation Workspace and Requirements Advisor](../functional/HOME_RENOVATION_RISK_ADVISOR.md) | Providers | 2026-07-29 |
@@ -131,7 +177,6 @@ Most recently changed first; showing area.
 |  | [07 — Frontend Experience](../personalization/07-frontend-experience.md) | Personalization Engine | 2026-07-13 |
 |  | [11 — Risks, Guardrails, and Open Questions](../personalization/11-risks-and-open-questions.md) | Personalization Engine | 2026-07-13 |
 |  | [DIY Project Center](../functional/DIY_PROJECT_CENTER.md) | Providers | 2026-06-27 |
-|  | [Home Improvement Financing Center](../functional/HOME_IMPROVEMENT_FINANCING.md) | Coverage | 2026-06-27 |
 |  | [Household Collaboration Layer](../functional/HOUSEHOLD_COLLABORATION.md) | Home Records | 2026-06-27 |
 |  | [Dashboard — Next Best Move: Changes Reference](../dashboard-next-best-move-changes.md) | Guidance | 2026-05-04 |
 | 🟡 | [PASS 7 - CtC Unified Data Architecture Design (Grounded)](../ctc-unified-data-architecture-pass7.md) | Data Architecture (Pass 1-7) | 2026-03-27 |
@@ -140,7 +185,6 @@ Most recently changed first; showing area.
 | 🟡 | [PASS 1 — Schema Intelligence Extraction](../schema-intelligence-pass1.md) | Data Architecture (Pass 1-7) | 2026-03-27 |
 | 🟠 | [Guidance Engine (Deterministic Resolution Journey)](../architecture/GUIDANCE_ENGINE.md) | Guidance | 2026-03-24 |
 | 🟡 | [ADMIN_ANALYTICS.md](../functional/ADMIN_ANALYTICS.md) | Admin | 2026-03-16 |
-| 🟡 | [Home Digital Will](../functional/HOME_DIGITAL_WILL.md) | Buying | 2026-03-14 |
 | 🟡 | [Negotiation Shield](../functional/NEGOTIATION_SHIELD.md) | Providers | 2026-03-13 |
 | 🟡 | [INTELLIGENCE_LAYERS.md](../functional/INTELLIGENCE_LAYERS.md) | Guidance | 2026-02-22 |
 | 🟠 | [Testing_Property_Onboarding.md](../functional/Testing_Property_Onboarding.md) | Property Context & Property Setup | 2026-02-22 |
@@ -156,19 +200,48 @@ Most recently changed first; showing area.
 | 🟡 | [🏡 Property Onboarding Enhancement - Complete Analysis](../functional/PROPERTY_ENHANCEMENT_ANALYSIS.md) | Property Context & Property Setup | 2026-01-03 |
 | 🟡 | [SERVICE_CATEGORY_CONFIG TABLE - COMPLETE IMPACT ANALYSIS](../functional/SERVICE_CATEGORY_CONFIG_ANALYSIS.md) | Providers | 2026-01-03 |
 
-## Audit / analysis (96)
+## Audit / analysis (119)
 
 Most recently changed first; showing area.
 
 | | Document | Area | Last changed |
 |---|---|---|---|
+|  | [Ask Cozy Best-in-Class Conversational Concierge — Corrected Audit](../architecture/ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_AUDIT.md) | Ask Cozy | 2026-11-22 |
+|  | [Ask Cozy cross-domain semantic architecture — Phase 1 evidence](../product/ASK_COZY_PHASE1_EVIDENCE.md) | Ask Cozy | 2026-11-16 |
+|  | [Buyer and seller read operations vs the owner audience policy (audit, 2026-11-12)](../architecture/ASK_COZY_BUYER_SELLER_FLOOR_AUDIT.md) | Ask Cozy | 2026-11-12 |
+|  | [Ask Presentation Adoption Ledger](../architecture/ask-cozy/presentation-audit/ASK_PRESENTATION_ADOPTION_LEDGER.md) | Meta & Methodology | 2026-11-11 |
+|  | [Ask Cozy: Natural Language & Free-Form Prompts Comprehensive Audit (Revision 9)](../architecture/ASK_COZY_NATURAL_LANGUAGE_FREE_FORM_PROMPTS_AUDIT.md) | Ask Cozy | 2026-11-10 |
+|  | [Ask Cozy: Compound, Cross-Tool Prompts Audit](../architecture/ASK_COZY_COMPOUND_CROSS_TOOL_PROMPTS_AUDIT.md) | Ask Cozy | 2026-11-09 |
+|  | [Ask Cozy Technical Architecture Findings — Implementation Plan](../architecture/ASK_COZY_TECHNICAL_ARCHITECTURE_FINDINGS_IMPLEMENTATION_PLAN.md) | Ask Cozy | 2026-11-06 |
+|  | [Ask Cozy Conversational UI — Prototype-to-Implementation Gap Audit](../product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md) | Ask Cozy | 2026-11-06 |
+|  | [Ask Cozy Provenance and Evidence Storage Impact Trace](../architecture/ASK_COZY_PROVENANCE_EVIDENCE_IMPACT_TRACE.md) | Ask Cozy | 2026-11-05 |
+|  | [Ask Cozy Skill-less Operation Governance Audit](../architecture/ASK_COZY_SKILL_LESS_OPERATION_GOVERNANCE_AUDIT.md) | Ask Cozy | 2026-11-05 |
+|  | [Comprehensive Technical Architecture Review: "Ask Cozy"](../architecture/ASK_COZY_TECHNICAL_ARCHITECTURE_REVIEW.md) | Ask Cozy | 2026-11-05 |
+|  | [Ask orchestrator decomposition: review, pilot and plan](../architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md) | Meta & Methodology | 2026-11-05 |
+|  | [Ask Cozy Suggested Next Actions — Current-State Audit](../audits/ASK_COZY_SUGGESTED_NEXT_ACTIONS_CURRENT_STATE_AUDIT_2026-11-02.md) | Ask Cozy | 2026-11-02 |
+| 🟠 | [Home Operations and Action Management Capability Audit and Implementation Plan](../product/HOME_OPERATIONS_AND_ACTION_MANAGEMENT_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Guidance | 2026-11-02 |
+|  | [Ask Cozy — Conversational Presentation, Phase 1 Pre-Edit Audit](../architecture/ASK_COZY_CONVERSATIONAL_PRESENTATION_PHASE_1_AUDIT.md) | Ask Cozy | 2026-10-27 |
+|  | [Property Tax: appeal evidence and document intake in Ask — design](../architecture/PROPERTY_TAX_EVIDENCE_AND_INTAKE_IN_ASK_DESIGN.md) | Coverage | 2026-10-25 |
+|  | [Ownership Cost Intelligence Capability Audit and Implementation Plan](../product/OWNERSHIP_COST_INTELLIGENCE_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Coverage | 2026-10-25 |
+|  | [Ask Cozy Cross-Domain Interaction Rollout — Phase 4 Sell/Hold/Rent Persistent-Decision UX ](../architecture/ASK_COZY_PHASE4_SELL_HOLD_RENT_UX_COMPLETION_VERIFICATION.md) | Ask Cozy | 2026-10-23 |
+|  | [Ask Cozy Conversational UI — Comprehensive Review](../architecture/ASK_COZY_CONVERSATIONAL_UI_COMPREHENSIVE_REVIEW.md) | Ask Cozy | 2026-10-17 |
+|  | [Ask Cozy Presentation Architecture Recommendation](../architecture/ask-cozy/presentation-audit/ARCHITECTURE_RECOMMENDATION.md) | Meta & Methodology | 2026-10-14 |
+|  | [Ask Cozy Conversational Presentation Audit](../architecture/ask-cozy/presentation-audit/CONVERSATIONAL_PRESENTATION_AUDIT.md) | Meta & Methodology | 2026-10-14 |
+|  | [Ask Cozy Conversational UX Findings](../architecture/ask-cozy/presentation-audit/CONVERSATIONAL_UX_FINDINGS.md) | Meta & Methodology | 2026-10-14 |
+|  | [Ask Cozy Presentation Architecture](../architecture/ask-cozy/presentation-audit/PRESENTATION_ARCHITECTURE.md) | Meta & Methodology | 2026-10-14 |
+|  | [Ask Cozy Presentation Pattern Matrix](../architecture/ask-cozy/presentation-audit/PRESENTATION_PATTERN_MATRIX.md) | Meta & Methodology | 2026-10-14 |
+|  | [Ask Cozy Tool Presentation Inventory](../architecture/ask-cozy/presentation-audit/TOOL_PRESENTATION_INVENTORY.md) | Meta & Methodology | 2026-10-14 |
+|  | [Mortgage Refinance Radar Capability Audit and Implementation Plan](../product/MORTGAGE_REFINANCE_RADAR_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Coverage | 2026-10-11 |
+|  | [Ask Empty-State Add-Path Audit](../architecture/ASK_EMPTY_STATE_ADD_PATH_AUDIT.md) | Meta & Methodology | 2026-10-10 |
+| 🟠 | [Capital Decision Planning Capability Audit and Implementation Plan](../product/CAPITAL_DECISION_PLANNING_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Coverage | 2026-10-04 |
+|  | [Ask Cozy Cross-Domain Interaction Rollout — Phase 5 Read-Only Attention Acceptance Scenari](../architecture/ASK_COZY_PHASE5_ATTENTION_ACCEPTANCE_VERIFICATION.md) | Ask Cozy | 2026-10-01 |
+| 🟠 | [Home Continuity and Records Capability Audit and Implementation Plan](../product/HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Buying | 2026-09-28 |
+| 🟠 | [Hidden Savings and Benefits Capability Audit and Implementation Plan](../product/HIDDEN_SAVINGS_AND_BENEFITS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Coverage | 2026-09-25 |
 | 🔴 | [ContractToCozy 90-Day Execution Plan](../audit/contracttocozy-90-day-execution-plan-2026-04-18.md) | Pre-Launch Audits & Strategy (Mar-Apr 20 | 2026-09-24 |
 | 🔴 | [ContractToCozy (CtC) Strategic Product Audit](../audit/contracttocozy-strategic-audit-2026-04-18.md) | Pre-Launch Audits & Strategy (Mar-Apr 20 | 2026-09-24 |
 |  | [Ask Cozy Cross-Domain Interaction Rollout — Phase 0 Coverage Audit](../architecture/ASK_COZY_PHASE0_COVERAGE_AUDIT.md) | Ask Cozy | 2026-09-22 |
 |  | [Ask Cozy Cross-Domain Interaction Rollout — Phase 1 Completed-Reference (Maintenance) Re-V](../architecture/ASK_COZY_PHASE1_COMPLETED_REFERENCE_REVERIFICATION.md) | Ask Cozy | 2026-09-17 |
 |  | [Ask Cozy Cross-Domain Interaction Rollout — Financial and Ownership Acceptance Scenario Ve](../architecture/ASK_COZY_PHASE3_PHASE7_FINANCIAL_ACCEPTANCE_VERIFICATION.md) | Ask Cozy | 2026-09-17 |
-|  | [Ask Cozy Cross-Domain Interaction Rollout — Phase 4 Sell/Hold/Rent Persistent-Decision UX ](../architecture/ASK_COZY_PHASE4_SELL_HOLD_RENT_UX_COMPLETION_VERIFICATION.md) | Ask Cozy | 2026-09-17 |
-|  | [Ask Cozy Cross-Domain Interaction Rollout — Phase 5 Read-Only Attention Acceptance Scenari](../architecture/ASK_COZY_PHASE5_ATTENTION_ACCEPTANCE_VERIFICATION.md) | Ask Cozy | 2026-09-17 |
 |  | [Ask Cozy Cross-Domain Interaction Rollout — Phase 6 Buyer Acceptance Scenario Verification](../architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md) | Ask Cozy | 2026-09-17 |
 |  | [Ask Cozy Cross-Domain Interaction Rollout — Phase 7 Decisions and Projects Acceptance Scen](../architecture/ASK_COZY_PHASE7_DECISIONS_ACCEPTANCE_VERIFICATION.md) | Ask Cozy | 2026-09-17 |
 |  | [Ask Cozy Cross-Domain Interaction Rollout — Phase 8 Protection and Claims Acceptance Scena](../architecture/ASK_COZY_PHASE8_PROTECTION_ACCEPTANCE_VERIFICATION.md) | Ask Cozy | 2026-09-17 |
@@ -181,19 +254,13 @@ Most recently changed first; showing area.
 |  | [ContractToCozy Intelligence Readiness Audit](../audits/CONTRACTTOCOZY_INTELLIGENCE_READINESS_AUDIT.md) | Ask Cozy | 2026-08-23 |
 |  | [Phase 2 implementation audit — revised greenfield scope](../personalization/phase2-implementation-audit.md) | Personalization Engine | 2026-08-21 |
 |  | [Decision Platform — Threat Model and Privacy Review](../product/decision-platform/policy-threat-model-and-privacy-review.md) | Product Framework & Capability Platform | 2026-08-11 |
-| 🟠 | [Home Continuity and Records Capability Audit and Implementation Plan](../product/HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Buying | 2026-08-06 |
-|  | [Mortgage Refinance Radar Capability Audit and Implementation Plan](../product/MORTGAGE_REFINANCE_RADAR_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Coverage | 2026-08-01 |
 | 🟠 | [Property Intelligence and Briefings Capability Audit and Implementation Plan](../product/PROPERTY_INTELLIGENCE_AND_BRIEFINGS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Property Intelligence | 2026-08-01 |
 |  | [ContractToCozy Worker Module Audit and Implementation Plan](../product/ContractToCozy_Worker_Module_Audit_and_Implementation_Plan.md) | Product Framework & Capability Platform | 2026-07-30 |
 |  | [Home Operations & Action Management — Slice 0-8 Launch Review](../product/HOME_OPERATIONS_SLICE_0_8_LAUNCH_REVIEW.md) | Guidance | 2026-07-30 |
-| 🟠 | [Hidden Savings and Benefits Capability Audit and Implementation Plan](../product/HIDDEN_SAVINGS_AND_BENEFITS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Coverage | 2026-07-29 |
-| 🟠 | [Home Operations and Action Management Capability Audit and Implementation Plan](../product/HOME_OPERATIONS_AND_ACTION_MANAGEMENT_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Guidance | 2026-07-29 |
 | 🟠 | [Renovation Compliance and Execution Capability Audit and Implementation Plan](../product/RENOVATION_COMPLIANCE_AND_EXECUTION_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Providers | 2026-07-29 |
 |  | [Capability Outcome and Experience Audit Framework](../product/CAPABILITY_OUTCOME_AND_EXPERIENCE_AUDIT_FRAMEWORK.md) | Product Framework & Capability Platform | 2026-07-28 |
-| 🟠 | [Capital Decision Planning Capability Audit and Implementation Plan](../product/CAPITAL_DECISION_PLANNING_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Coverage | 2026-07-28 |
 | 🟠 | [Coverage and Premium Optimization Capability Audit and Implementation Plan](../product/COVERAGE_AND_PREMIUM_OPTIMIZATION_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Coverage | 2026-07-28 |
 |  | [Home Digital Twin Capability Audit and Implementation Plan](../product/HOME_DIGITAL_TWIN_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Home Records | 2026-07-28 |
-|  | [Ownership Cost Intelligence Capability Audit and Implementation Plan](../product/OWNERSHIP_COST_INTELLIGENCE_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Coverage | 2026-07-28 |
 |  | [Ownership Cost Intelligence Slice 9 Launch Evidence](../product/OWNERSHIP_COST_SLICE_9_LAUNCH_EVIDENCE.md) | Coverage | 2026-07-28 |
 |  | [Property Tax and Tax Appeal Capability Audit and Implementation Plan](../product/PROPERTY_TAX_AND_TAX_APPEAL_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Coverage | 2026-07-28 |
 |  | [Service Price Radar Capability Audit and Implementation Plan](../product/SERVICE_PRICE_RADAR_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Providers | 2026-07-28 |
@@ -259,20 +326,32 @@ Most recently changed first; showing area.
 | 🟡 | [EXHAUSTIVE SYSTEM AUDIT - Option B Implementation](../functional/EXHAUSTIVE_SYSTEM_AUDIT.md) | Pre-Launch Audits & Strategy (Mar-Apr 20 | 2026-01-03 |
 | 🟡 | [Risk Assessment Feature - Comprehensive Documentation](../functional/RISK_ASSESSMENT_COMPREHENSIVE_DOCS.md) | Coverage | 2026-01-03 |
 
-## Status / phase record (58)
+## Status / phase record (67)
 
 Most recently changed first; showing area.
 
 | | Document | Area | Last changed |
 |---|---|---|---|
+|  | [Product Framework Phase 1 — Trigger-First Activation](../product/phase1/README.md) | Product Framework & Capability Platform | 2026-11-11 |
+| 🟠 | [Contract to Cozy - Seasonal Maintenance Feature Handoff Document](../functional/SEASONAL_MAINTENANCE_HANDOFF.md) | Home Records | 2026-11-04 |
+|  | [Ask Cozy — Staged Response Delivery: Stage Contract Design (D-03)](../architecture/ASK_COZY_STAGED_DELIVERY_CONTRACT_DESIGN.md) | Ask Cozy | 2026-11-03 |
+|  | [Current Capability Inventory](../product/capability-discovery/current-capability-inventory.md) | Product Framework & Capability Platform | 2026-10-28 |
+|  | [Saved tool overrides — contract](../architecture/TOOL_OVERRIDE_CONTRACT.md) | Meta & Methodology | 2026-10-17 |
+|  | [Project Tracker: moving the project document store to Home Records — design](../architecture/PROJECT_TRACKER_DOCUMENT_STORE_DESIGN.md) | Meta & Methodology | 2026-10-13 |
+|  | [Renovation: the project handoff in Ask — design](../architecture/RENOVATION_PROJECT_HANDOFF_IN_ASK_DESIGN.md) | Providers | 2026-10-13 |
+|  | [Ask Cozy Project Tracker parity](../product/ASK_COZY_PROJECT_TRACKER_PARITY_IMPLEMENTATION.md) | Ask Cozy | 2026-10-12 |
+|  | [Live Project Execution Tracker](../functional/LIVE_PROJECT_EXECUTION_TRACKER.md) | Providers | 2026-10-11 |
+|  | [Ask Cozy — Conversational Presentation, Phase 2 Inventory](../architecture/ASK_COZY_CONVERSATIONAL_PRESENTATION_PHASE_2_INVENTORY.md) | Ask Cozy | 2026-10-06 |
+|  | [Ask Cozy exact-four: opportunity and starter inventory (step 8b draft, revision 7, for own](../product/ASK_COZY_EXACT_FOUR_OPPORTUNITY_INVENTORY.md) | Ask Cozy | 2026-10-05 |
+|  | [Ask Cozy exact-four: actionable-profile registry packet (step 2 draft, for owner review)](../product/ASK_COZY_EXACT_FOUR_REGISTRY_PACKET.md) | Ask Cozy | 2026-10-05 |
+|  | [Ask Cozy Engineering Prototypes](../product/prototypes/README.md) | Product Framework & Capability Platform | 2026-09-26 |
+|  | [Home Intelligence Phase 0 — Registry and Ownership Report](../product/HOME_INTELLIGENCE_PHASE0_REGISTRY_REPORT.md) | Guidance | 2026-09-25 |
 | 🟡 | [Contract to Cozy — Wiki](../wiki/README.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-09-22 |
 | 🟠 | [Documentation](../README.md) | Meta & Methodology | 2026-09-19 |
 |  | [Ask Cozy Inline Workspace — Session Handoff](../architecture/ASK_COZY_INLINE_WORKSPACE_SESSION_HANDOFF.md) | Ask Cozy | 2026-09-18 |
 | 🟡 | [Home Health, Inventory & Maintenance](../wiki/features/02-home-health-inventory-and-maintenance.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-09-09 |
 |  | [Product Framework Phase 2 — Unified Home and Action System](../product/phase2/README.md) | Product Framework & Capability Platform | 2026-08-31 |
-|  | [Home Intelligence Phase 0 — Registry and Ownership Report](../product/HOME_INTELLIGENCE_PHASE0_REGISTRY_REPORT.md) | Guidance | 2026-08-25 |
 |  | [Home Intelligence Phase 1 — Source Parity Status](../product/HOME_INTELLIGENCE_PHASE1_SOURCE_PARITY_STATUS.md) | Guidance | 2026-08-25 |
-|  | [Current Capability Inventory](../product/capability-discovery/current-capability-inventory.md) | Product Framework & Capability Platform | 2026-08-25 |
 |  | [Decision Platform — Phase 7A (P0 Contract Closure)](../product/decision-platform/README.md) | Product Framework & Capability Platform | 2026-08-13 |
 |  | [Decision Platform — Metrics Dictionary and Zero-Tolerance Gates](../product/decision-platform/metrics-dictionary.md) | Product Framework & Capability Platform | 2026-08-13 |
 |  | [Decision Platform — Retention, Erasure, and Export Policy](../product/decision-platform/policy-retention-erasure-export.md) | Product Framework & Capability Platform | 2026-08-13 |
@@ -285,12 +364,10 @@ Most recently changed first; showing area.
 |  | [ContractToCozy — Living Home Record and Coverage Intelligence](../functional/INVENTORY_AND_COVERAGE.md) | Coverage | 2026-07-23 |
 |  | [acquisition-one-pager.md](../acquisition/acquisition-one-pager.md) | Acquisition & Business | 2026-07-20 |
 |  | [one-pager-variants.md](../acquisition/one-pager-variants.md) | Acquisition & Business | 2026-07-20 |
-| 🟠 | [Contract to Cozy - Seasonal Maintenance Feature Handoff Document](../functional/SEASONAL_MAINTENANCE_HANDOFF.md) | Home Records | 2026-07-20 |
 |  | [Product Framework Phase 4 — Trust, Cadence, Grounded Ask, and Recurring Care](../product/phase4/README.md) | Product Framework & Capability Platform | 2026-07-20 |
 |  | [Product Framework Phase 0 — Contract and Governance Foundation](../product/phase0/README.md) | Product Framework & Capability Platform | 2026-07-19 |
 |  | [Phase 0 Approval Register](../product/phase0/approval-register.md) | Product Framework & Capability Platform | 2026-07-19 |
 |  | [Recommendation Launch Gate](../product/phase0/recommendation-launch-gate.md) | Product Framework & Capability Platform | 2026-07-19 |
-|  | [Product Framework Phase 1 — Trigger-First Activation](../product/phase1/README.md) | Product Framework & Capability Platform | 2026-07-19 |
 |  | [Product Framework Phase 3 — Complete Major Repair / System Replacement](../product/phase3/README.md) | Product Framework & Capability Platform | 2026-07-19 |
 |  | [Phase 5 — Existing-home buyer acquisition journey](../product/phase5/README.md) | Product Framework & Capability Platform | 2026-07-19 |
 |  | [Phase 6 — Specialized new-home path and controlled expansion](../product/phase6/README.md) | Product Framework & Capability Platform | 2026-07-19 |
@@ -319,19 +396,30 @@ Most recently changed first; showing area.
 |  | [ContractToCozy Personalization Engine](../personalization/README.md) | Personalization Engine | 2026-07-16 |
 |  | [Phase 2.5 demo data setup through the UI](../personalization/phase2-5-demo-data-setup.md) | Personalization Engine | 2026-07-15 |
 |  | [Inspection Report Intelligence](../functional/INSPECTION_REPORT_INTELLIGENCE.md) | Home Records | 2026-06-28 |
-|  | [Live Project Execution Tracker](../functional/LIVE_PROJECT_EXECUTION_TRACKER.md) | Providers | 2026-06-28 |
 | 🟠 | [Home Material Specification Registry](../functional/MATERIAL_SPEC_REGISTRY.md) | Home Records | 2026-06-27 |
 |  | [Permit History & Unpermitted Work Tracker](../functional/PERMIT_HISTORY_TRACKER.md) | Home Records | 2026-06-27 |
 | 🔴 | [CONTRACT TO COZY - SEASONAL MAINTENANCE FEATURE CONTEXT](../functional/SEASONAL_FEATURE_SESSION_PROMPT.md) | Home Records | 2026-01-03 |
 
-## Runbook / ops (20)
+## Runbook / ops (32)
 
 Most recently changed first; showing area.
 
 | | Document | Area | Last changed |
 |---|---|---|---|
+|  | [AI request governance runbook](../operations/AI_REQUEST_GOVERNANCE_RUNBOOK.md) | Ask Cozy | 2026-11-05 |
+|  | [Ask Turn Performance Measurement](../operations/ASK_TURN_PERFORMANCE_MEASUREMENT.md) | Admin | 2026-11-05 |
+|  | [Ask Cozy: certification and operations runbook](../operations/ASK_CERTIFICATION_RUNBOOK.md) | Admin | 2026-11-04 |
+|  | [Ask exact-four: rollout and verification runbook](../operations/ASK_EXACT_FOUR_ROLLOUT_RUNBOOK.md) | Admin | 2026-10-10 |
+|  | [DIY project commands: rollout (step 7 of the stateful GUIDE)](../operations/DIY_PROJECT_COMMANDS_ROLLOUT.md) | Providers | 2026-10-07 |
+|  | [DIY project guide: rollout (step 5 of the stateful GUIDE)](../operations/DIY_PROJECT_GUIDE_ROLLOUT.md) | Providers | 2026-10-07 |
+|  | [DIY project start from Ask: rollout (step 8 of the stateful GUIDE)](../operations/DIY_PROJECT_START_ROLLOUT.md) | Providers | 2026-10-07 |
+|  | [DIY step commands: rollout (step 6 of the stateful GUIDE)](../operations/DIY_STEP_UPDATE_ROLLOUT.md) | Providers | 2026-10-07 |
+|  | [DIY completion outbox: rollout (step 3 of the stateful GUIDE)](../operations/DIY_COMPLETION_OUTBOX_ROLLOUT.md) | Providers | 2026-10-06 |
+|  | [DIY step and project transitions: rollout (step 2 of the stateful GUIDE)](../operations/DIY_STEP_TRANSITIONS_ROLLOUT.md) | Providers | 2026-10-06 |
+|  | [DIY reverse reconciliation: rollout (step 4 of the stateful GUIDE)](../operations/DIY_TASK_RECONCILIATION_ROLLOUT.md) | Providers | 2026-10-06 |
+|  | [DIY template revisions — rollout runbook](../operations/DIY_TEMPLATE_REVISIONS_ROLLOUT.md) | Providers | 2026-10-06 |
+|  | [Backend test suite triage](../operations/BACKEND_TEST_SUITE_TRIAGE.md) | Admin | 2026-09-25 |
 |  | [RentCast Property Enrichment Operations](../operations/RENTCAST_PROPERTY_ENRICHMENT_OPERATIONS.md) | Property Context & Property Setup | 2026-09-10 |
-|  | [AI request governance runbook](../operations/AI_REQUEST_GOVERNANCE_RUNBOOK.md) | Ask Cozy | 2026-08-25 |
 |  | [AI Home Concierge — Ask Operations and Governance](../operations/AI_HOME_CONCIERGE_ASK_OPERATIONS_AND_GOVERNANCE.md) | Ask Cozy | 2026-08-13 |
 |  | [Mortgage Refinance Radar alert rollout and incident runbook](../operations/MORTGAGE_REFINANCE_RADAR_ALERT_ROLLOUT_AND_INCIDENT_RUNBOOK.md) | Coverage | 2026-08-01 |
 |  | [Mortgage Refinance Radar measurement and optimization](../operations/MORTGAGE_REFINANCE_RADAR_MEASUREMENT_AND_OPTIMIZATION.md) | Coverage | 2026-08-01 |
@@ -351,13 +439,15 @@ Most recently changed first; showing area.
 |  | [Postgres Backup & Restore](../operations/BACKUP_RESTORE.md) | Admin | 2026-07-09 |
 | 🟡 | [Sprint 3 Provider Portal Smoke Report](../audit-gemini/sprint3-provider-smoke-report.md) | Pre-Launch Audits & Strategy (Mar-Apr 20 | 2026-04-20 |
 
-## Data / asset (13)
+## Data / asset (15)
 
 Most recently changed first; showing area.
 
 | | Document | Area | Last changed |
 |---|---|---|---|
-|  | [current-capability-inventory.json](../product/capability-discovery/current-capability-inventory.json) | Product Framework & Capability Platform | 2026-09-13 |
+|  | [ask-suggested-actions-persistence-sites.json](../architecture/ask-suggested-actions-persistence-sites.json) | Meta & Methodology | 2026-11-10 |
+|  | [current-capability-inventory.json](../product/capability-discovery/current-capability-inventory.json) | Product Framework & Capability Platform | 2026-10-28 |
+|  | [ask-raw-suggestion-producers.json](../architecture/ask-raw-suggestion-producers.json) | Meta & Methodology | 2026-10-07 |
 |  | [capability-inventory.csv](../acquisition/capability-inventory.csv) | Acquisition & Business | 2026-08-01 |
 |  | [mortgage-refinance-radar-enhancement-plan.docx](../product/mortgage-refinance-radar-enhancement-plan.docx) | Coverage | 2026-07-25 |
 |  | [ContractToCozy_Product_Framework.docx](../product/ContractToCozy_Product_Framework.docx) | Product Framework & Capability Platform | 2026-07-20 |

@@ -8,16 +8,16 @@
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-|  | [Environment Report — Functional Requirements Document](../functional/ENVIRONMENT_REPORT_FRD.md) | v1.4 · Implemented, including property-aware preparation and governed long-term hazard  | 2026-09-03 | 1430 |
+|  | [Environment Report — Functional Requirements Document](../functional/ENVIRONMENT_REPORT_FRD.md) | v1.4 · Implemented, including property-aware preparation and governed long-term hazard  | 2026-11-04 | 1431 |
 | 🟠 C4 | [Home Event Radar — Functional Requirements Document](../functional/HOME_EVENT_RADAR_FRD.md) | v1.0 · Proposed \| | 2026-07-27 | 1673 |
 
 ## ADR (decision) (3)
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
+|  | [ADR — Home Event Radar Canonical Signal Pipeline](../architecture/adr-home-event-radar-canonical-pipeline.md) |  | 2026-11-04 | 115 |
 |  | [ADR: Home Event Radar Insurance-Market Source](../architecture/adr-home-event-radar-insurance-source.md) | Accepted no-go; category remains unavailable \| | 2026-07-27 | 285 |
 |  | [ADR: Home Event Radar Utility-Outage Source](../architecture/adr-home-event-radar-utility-source.md) | Accepted; integration and commercial activation pending \| | 2026-07-27 | 229 |
-|  | [ADR — Home Event Radar Canonical Signal Pipeline](../architecture/adr-home-event-radar-canonical-pipeline.md) |  | 2026-07-26 | 102 |
 
 ## Plan (1)
 
@@ -29,13 +29,13 @@
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
+|  | [Around Your Home](../functional/NEIGHBORHOOD_CHANGE_RADAR.md) |  | 2026-10-25 | 115 |
+|  | [Property Brief Functional Contract](../functional/PROPERTY_BRIEF.md) | Slice 8 governed-sharing foundation | 2026-10-10 | 96 |
 |  | [Home Event Radar](../functional/HOME_EVENT_RADAR.md) |  | 2026-08-06 | 1297 |
-|  | [Around Your Home](../functional/NEIGHBORHOOD_CHANGE_RADAR.md) |  | 2026-07-31 | 109 |
 |  | [NYC ZAP Property Intelligence Provider](../functional/NYC_ZAP_PROPERTY_INTELLIGENCE_PROVIDER.md) |  | 2026-07-31 | 104 |
 |  | [Home Briefing](../functional/HOME_GAZETTE.md) |  | 2026-07-30 | 168 |
 | 🟠 C15 | [Past Hazard Exposure](../functional/HOME_RISK_REPLAY.md) |  | 2026-07-30 | 1194 |
 |  | [Knowledge Hub](../functional/KNOWLEDGE_HUB.md) |  | 2026-07-30 | 880 |
-|  | [Property Brief Functional Contract](../functional/PROPERTY_BRIEF.md) | Slice 8 governed-sharing foundation | 2026-07-30 | 90 |
 |  | [Property Intelligence Legacy Retirement](../functional/PROPERTY_INTELLIGENCE_LEGACY_RETIREMENT.md) |  | 2026-07-30 | 62 |
 |  | [Property Intelligence Unified Experience](../functional/PROPERTY_INTELLIGENCE_UNIFIED_EXPERIENCE.md) |  | 2026-07-30 | 96 |
 |  | [PRD: P2.2 – Recall & Safety Alerts](../functional/RECALL_SAFETY_ALERTS.MD) |  | 2026-01-07 | 284 |

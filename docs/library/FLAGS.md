@@ -96,4 +96,4 @@ Grouped by folder. Full list with dates in `catalog.csv` (filter `flag_id = H`).
 - **audits/ui-audit/** - 4 files, 2026-04-12 to 2026-04-12
 - **audits/ui-audit/scorecards/** - 1 files, 2026-04-13 to 2026-04-13
 - **audits/ui-audit/tracker/** - 1 files, 2026-04-13 to 2026-04-13
-- **functional/** - 18 files, 2026-01-04 to 2026-04-10
+- **functional/** - 17 files, 2026-01-04 to 2026-04-10

@@ -2,7 +2,7 @@
 
 [Library home](README.md) · [Flags](FLAGS.md)
 
-25 documents. Flag key: 🔴 conflicting/superseded · 🟠 status lags reality or cites missing code · 🟡 historical snapshot. Blank = no issue found (not proof it is current - check *Last changed*).
+26 documents. Flag key: 🔴 conflicting/superseded · 🟠 status lags reality or cites missing code · 🟡 historical snapshot. Blank = no issue found (not proof it is current - check *Last changed*).
 
 ## Requirements (FRD/PRD) (3)
 
@@ -28,20 +28,21 @@
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-|  | [Mortgage Refinance Radar](../functional/mortgage-refinance-radar.md) | Production in-product experience; external email and Web Push remain controlled- | 2026-08-01 | 243 |
+|  | [Home Improvement Financing Center](../functional/HOME_IMPROVEMENT_FINANCING.md) |  | 2026-10-27 | 845 |
+|  | [Mortgage Refinance Radar](../functional/mortgage-refinance-radar.md) | Production in-product experience; external email and Web Push remain controlled- | 2026-10-27 | 255 |
 | 🟠 C15 | [Hidden Asset Finder](../functional/HIDDEN_ASSET_FINDER.md) |  | 2026-07-28 | 1122 |
-|  | [Home Improvement Financing Center](../functional/HOME_IMPROVEMENT_FINANCING.md) |  | 2026-06-27 | 833 |
 | 🟡 | [CLAIMS_ASSISTANCE.md](../functional/CLAIMS_ASSISTANCE.md) | Backend + Frontend MVP complete, extensible foundation | 2026-01-07 | 638 |
 
-## Audit / analysis (8)
+## Audit / analysis (9)
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-|  | [Mortgage Refinance Radar Capability Audit and Implementation Plan](../product/MORTGAGE_REFINANCE_RADAR_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Implemented; controlled external-alert rollout gated \| | 2026-08-01 | 928 |
-| 🟠 C9 | [Hidden Savings and Benefits Capability Audit and Implementation Plan](../product/HIDDEN_SAVINGS_AND_BENEFITS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Recommended implementation plan | 2026-07-29 | 2557 |
-| 🟠 C9 | [Capital Decision Planning Capability Audit and Implementation Plan](../product/CAPITAL_DECISION_PLANNING_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Recommended implementation plan | 2026-07-28 | 2621 |
+|  | [Property Tax: appeal evidence and document intake in Ask — design](../architecture/PROPERTY_TAX_EVIDENCE_AND_INTAKE_IN_ASK_DESIGN.md) | v1.367 · Decisions D-T1 to D-T8 ruled by the owner on October 13, 2026 (§7, which superse | 2026-10-25 | 162 |
+|  | [Ownership Cost Intelligence Capability Audit and Implementation Plan](../product/OWNERSHIP_COST_INTELLIGENCE_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Technical implementation complete through Slice 9; real-user launch remains fail | 2026-10-25 | 2216 |
+|  | [Mortgage Refinance Radar Capability Audit and Implementation Plan](../product/MORTGAGE_REFINANCE_RADAR_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Implemented; controlled external-alert rollout gated \| | 2026-10-11 | 947 |
+| 🟠 C9 | [Capital Decision Planning Capability Audit and Implementation Plan](../product/CAPITAL_DECISION_PLANNING_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Recommended implementation plan | 2026-10-04 | 2624 |
+| 🟠 C9 | [Hidden Savings and Benefits Capability Audit and Implementation Plan](../product/HIDDEN_SAVINGS_AND_BENEFITS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Slices 0–10 implemented in code between July 28 and July 29, 2026; verified agai | 2026-09-25 | 2581 |
 | 🟠 C21 | [Coverage and Premium Optimization Capability Audit and Implementation Plan](../product/COVERAGE_AND_PREMIUM_OPTIMIZATION_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Implementation complete; real-user launch remains gated | 2026-07-28 | 2468 |
-|  | [Ownership Cost Intelligence Capability Audit and Implementation Plan](../product/OWNERSHIP_COST_INTELLIGENCE_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Technical implementation complete through Slice 9; real-user launch remains fail | 2026-07-28 | 2206 |
 |  | [Ownership Cost Intelligence Slice 9 Launch Evidence](../product/OWNERSHIP_COST_SLICE_9_LAUNCH_EVIDENCE.md) |  | 2026-07-28 | 67 |
 |  | [Property Tax and Tax Appeal Capability Audit and Implementation Plan](../product/PROPERTY_TAX_AND_TAX_APPEAL_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Implemented — Slices 0–9 complete July 28, 2026 | 2026-07-28 | 1876 |
 | 🟡 C12 | [Risk Assessment Feature - Comprehensive Documentation](../functional/RISK_ASSESSMENT_COMPREHENSIVE_DOCS.md) | ✅ Core Implementation Complete, ⚠️ Minor Issues Pending | 2026-01-03 | 1420 |

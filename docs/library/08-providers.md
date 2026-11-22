@@ -2,7 +2,7 @@
 
 [Library home](README.md) · [Flags](FLAGS.md)
 
-14 documents. Flag key: 🔴 conflicting/superseded · 🟠 status lags reality or cites missing code · 🟡 historical snapshot. Blank = no issue found (not proof it is current - check *Last changed*).
+23 documents. Flag key: 🔴 conflicting/superseded · 🟠 status lags reality or cites missing code · 🟡 historical snapshot. Blank = no issue found (not proof it is current - check *Last changed*).
 
 ## Requirements (FRD/PRD) (4)
 
@@ -30,17 +30,26 @@
 | 🟠 C9 | [Renovation Compliance and Execution Capability Audit and Implementation Plan](../product/RENOVATION_COMPLIANCE_AND_EXECUTION_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Recommended implementation plan<br> | 2026-07-29 | 1697 |
 |  | [Service Price Radar Capability Audit and Implementation Plan](../product/SERVICE_PRICE_RADAR_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Implemented; database reconciliation remains operator-owned | 2026-07-28 | 1450 |
 
-## Status / phase record (2)
+## Status / phase record (3)
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
+|  | [Renovation: the project handoff in Ask — design](../architecture/RENOVATION_PROJECT_HANDOFF_IN_ASK_DESIGN.md) | v1.371 · Decisions ruled by the owner on October 13, 2026 (§7, which supersedes §4 and th | 2026-10-13 | 159 |
+|  | [Live Project Execution Tracker](../functional/LIVE_PROJECT_EXECUTION_TRACKER.md) |  | 2026-10-11 | 606 |
 |  | [Service Quote Decision Capability Manifest](../product/capability-discovery/SERVICE_QUOTE_DECISION_MANIFEST.md) |  | 2026-07-28 | 78 |
-|  | [Live Project Execution Tracker](../functional/LIVE_PROJECT_EXECUTION_TRACKER.md) |  | 2026-06-28 | 604 |
 
-## Runbook / ops (1)
+## Runbook / ops (9)
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
+|  | [DIY project commands: rollout (step 7 of the stateful GUIDE)](../operations/DIY_PROJECT_COMMANDS_ROLLOUT.md) |  | 2026-10-07 | 67 |
+|  | [DIY project guide: rollout (step 5 of the stateful GUIDE)](../operations/DIY_PROJECT_GUIDE_ROLLOUT.md) |  | 2026-10-07 | 55 |
+|  | [DIY project start from Ask: rollout (step 8 of the stateful GUIDE)](../operations/DIY_PROJECT_START_ROLLOUT.md) |  | 2026-10-07 | 63 |
+|  | [DIY step commands: rollout (step 6 of the stateful GUIDE)](../operations/DIY_STEP_UPDATE_ROLLOUT.md) |  | 2026-10-07 | 62 |
+|  | [DIY completion outbox: rollout (step 3 of the stateful GUIDE)](../operations/DIY_COMPLETION_OUTBOX_ROLLOUT.md) |  | 2026-10-06 | 72 |
+|  | [DIY step and project transitions: rollout (step 2 of the stateful GUIDE)](../operations/DIY_STEP_TRANSITIONS_ROLLOUT.md) |  | 2026-10-06 | 34 |
+|  | [DIY reverse reconciliation: rollout (step 4 of the stateful GUIDE)](../operations/DIY_TASK_RECONCILIATION_ROLLOUT.md) |  | 2026-10-06 | 53 |
+|  | [DIY template revisions — rollout runbook](../operations/DIY_TEMPLATE_REVISIONS_ROLLOUT.md) | ready for the owner to run. Written October 6, 2026 with slice 1e of | 2026-10-06 | 137 |
 |  | [Service Price Benchmark Source Operations Runbook](../operations/SERVICE_PRICE_BENCHMARK_SOURCE_OPERATIONS_RUNBOOK.md) |  | 2026-07-28 | 212 |
 
 ## Flag details for this area
