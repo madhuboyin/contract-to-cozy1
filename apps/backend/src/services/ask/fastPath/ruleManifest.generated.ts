@@ -1844,10 +1844,26 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   ]
  },
  {
+  "id": "DET_INVENTORY_LOOKUP_10",
+  "operationId": "INVENTORY_LOOKUP",
+  "confidence": 0.94,
+  "order": 137,
+  "hash": "0b3075faf9fbdc31",
+  "condition": "inventoryAttributeQuestionPattern.test(message) && parseInventoryAttributeFilter(message) && !explicitCapabilityPattern.test(message) && ...",
+  "references": [
+   "askOperationRegistry.ts:explicitCapabilityPattern",
+   "askOperationRegistry.ts:inventoryAttributeQuestionPattern",
+   "askOperationRegistry.ts:repairRecordWritePattern",
+   "support/inventoryAttributeFilter.ts:WORD_NUMBERS",
+   "support/inventoryAttributeFilter.ts:numberOf",
+   "support/inventoryAttributeFilter.ts:parseInventoryAttributeFilter"
+  ]
+ },
+ {
   "id": "DET_PROPERTY_CONTEXT_AREA_CAPTURE_01",
   "operationId": "PROPERTY_CONTEXT_AREA_CAPTURE",
   "confidence": 1,
-  "order": 137,
+  "order": 138,
   "hash": "77684f8305dac521",
   "condition": "propertyAreaCaptureCommandPattern.test(message)",
   "references": [
@@ -1858,7 +1874,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "id": "DET_PROPERTY_SUMMARY_02",
   "operationId": "PROPERTY_SUMMARY",
   "confidence": 0.96,
-  "order": 138,
+  "order": 139,
   "hash": "2f5c5e470050b58b",
   "condition": "(propertySummaryPattern.test(message) || roomSummaryPattern.test(message) || isPropertyCompletenessRequest(message)) && !explicitCapabili...",
   "references": [
@@ -1873,7 +1889,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "id": "DET_HOME_ACTIONS_01",
   "operationId": "HOME_ACTIONS",
   "confidence": 0.96,
-  "order": 139,
+  "order": 140,
   "hash": "47c4b742cd539716",
   "condition": "(homeActionsPattern.test(message) || (homeConcernsPattern.test(message) && !homeConcernsOtherSubjectPattern.test(message))) && !explicitC...",
   "references": [
@@ -1888,7 +1904,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "id": "DET_SEASONAL_HOME_CARE_01",
   "operationId": "SEASONAL_HOME_CARE",
   "confidence": 0.98,
-  "order": 140,
+  "order": 141,
   "hash": "13d3e9ce80619152",
   "condition": "seasonalHomeCarePattern.test(message) && !seasonalHomeCareRecordedIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
@@ -1901,7 +1917,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "id": "DET_HOME_BASICS_GUIDE_01",
   "operationId": "HOME_BASICS_GUIDE",
   "confidence": 0.97,
-  "order": 141,
+  "order": 142,
   "hash": "a72619823b85993d",
   "condition": "homeBasicsGuidePattern.test(message) && !seasonalHomeCareRecordedIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
@@ -1914,7 +1930,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "id": "DET_MAINTENANCE_STATUS_01",
   "operationId": "MAINTENANCE_STATUS",
   "confidence": 0.94,
-  "order": 142,
+  "order": 143,
   "hash": "fc4d7c864a3c01b6",
   "condition": "maintenancePattern.test(message) && !maintenanceBudgetWordingPattern.test(message) && !snoozeDeferWording.test(message) && !explicitCapab...",
   "references": [
@@ -1928,7 +1944,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "id": "DET_HOME_CHANGE_SUMMARY_01",
   "operationId": "HOME_CHANGE_SUMMARY",
   "confidence": 0.9,
-  "order": 143,
+  "order": 144,
   "hash": "9012f761a3f90171",
   "condition": "homeChangeSummaryPattern.test(message) && !explicitCapabilityPattern.test(message) && !/\\b(?:decision|inspection)\\b/i.test(message)",
   "references": [
@@ -1940,7 +1956,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "id": "DET_REPLACEMENT_GUIDANCE_01",
   "operationId": "REPLACEMENT_GUIDANCE",
   "confidence": 0.95,
-  "order": 144,
+  "order": 145,
   "hash": "085a78eec60e1efc",
   "condition": "itemKeepOrReplacePattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
@@ -1954,7 +1970,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "id": "DET_REPLACEMENT_GUIDANCE_02",
   "operationId": "REPLACEMENT_GUIDANCE",
   "confidence": 0.96,
-  "order": 145,
+  "order": 146,
   "hash": "beeecd69ec716982",
   "condition": "replacementPattern.test(message)",
   "references": [
@@ -1965,7 +1981,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "id": "DET_REPLACEMENT_GUIDANCE_03",
   "operationId": "REPLACEMENT_GUIDANCE",
   "confidence": 0.95,
-  "order": 146,
+  "order": 147,
   "hash": "66630f3a11e637cb",
   "condition": "itemReplacementCostPattern.test(message) && !itemAttributeWriteIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
@@ -1980,7 +1996,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "id": "DET_INVENTORY_LOOKUP_05",
   "operationId": "INVENTORY_LOOKUP",
   "confidence": 0.96,
-  "order": 147,
+  "order": 148,
   "hash": "6f95f09c87063038",
   "condition": "itemAttributePattern.test(message) && !itemAttributeWriteIntentPattern.test(message) && !explicitCapabilityPattern.test(message) && !repa...",
   "references": [
@@ -1997,7 +2013,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "id": "DET_REFINANCE_RATE_MONITOR_01",
   "operationId": "REFINANCE_RATE_MONITOR",
   "confidence": 0.98,
-  "order": 148,
+  "order": 149,
   "hash": "d2b3dff27841ab92",
   "condition": "refinanceMonitorPattern.test(message)",
   "references": [
@@ -2008,7 +2024,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "id": "DET_REFINANCE_ANALYSIS_01",
   "operationId": "REFINANCE_ANALYSIS",
   "confidence": 0.97,
-  "order": 149,
+  "order": 150,
   "hash": "31b7c2ce36ca5db2",
   "condition": "refinanceAnalysisPattern.test(message)",
   "references": [
@@ -2019,7 +2035,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "id": "DET_SELL_HOLD_RENT_ANALYSIS_01",
   "operationId": "SELL_HOLD_RENT_ANALYSIS",
   "confidence": 0.96,
-  "order": 150,
+  "order": 151,
   "hash": "9cc66fc683cecc9c",
   "condition": "sellHoldRentAnalysisPattern.test(message) && !explicitCapabilityPattern.test(message) && !/\\bdisclos\\w*\\b/i.test(message)",
   "references": [
@@ -2031,7 +2047,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "id": "DET_HOUSEHOLD_INVITATION_01",
   "operationId": "HOUSEHOLD_INVITATION",
   "confidence": 0.98,
-  "order": 151,
+  "order": 152,
   "hash": "0f63ca5c0dbaca68",
   "condition": "householdInvitationPattern.test(message)",
   "references": [
@@ -2042,7 +2058,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "id": "DET_HOUSEHOLD_ACCESS_SUMMARY_01",
   "operationId": "HOUSEHOLD_ACCESS_SUMMARY",
   "confidence": 0.96,
-  "order": 152,
+  "order": 153,
   "hash": "09ddabc2ec8d0dc3",
   "condition": "householdAccessSummaryPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
@@ -2054,7 +2070,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "id": "DET_CAPABILITY_DISCOVERY_01",
   "operationId": "CAPABILITY_DISCOVERY",
   "confidence": 0.88,
-  "order": 153,
+  "order": 154,
   "hash": "8d5db5f6c952b04f",
   "condition": "explicitCapabilityPattern.test(message) || capabilityPattern.test(message)",
   "references": [
@@ -2066,7 +2082,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "id": "DET_COMMUNITY_UPDATES_01",
   "operationId": "COMMUNITY_UPDATES",
   "confidence": 0.95,
-  "order": 154,
+  "order": 155,
   "hash": "ea67f9e0ceeb3083",
   "condition": "communityPattern.test(message) && !communityOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)",
   "references": [
@@ -2079,7 +2095,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "id": "DET_DATA_POINT_READ_03",
   "operationId": "DATA_POINT_READ",
   "confidence": 0.9,
-  "order": 155,
+  "order": 156,
   "hash": "538526dfd626fbd6",
   "condition": "!compoundCapabilityFilterPattern.test(message) && ((dataPointQuestionPattern.test(message) && (resolveDataPoint(message) || resolveDataPo...",
   "references": [
@@ -2137,7 +2153,7 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "id": "DET_GROUNDED_GUIDANCE_01",
   "operationId": "GROUNDED_GUIDANCE",
   "confidence": 0.55,
-  "order": 156,
+  "order": 157,
   "hash": "a32c61a5d6574186",
   "condition": "",
   "references": []

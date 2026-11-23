@@ -196,3 +196,13 @@ The server-declared `answerMode` is now worded on the answer card (`features/ask
 
 Evidence: 4 label tests plus 162 workspace/feature jest tests pass; `next build` passes; backend `answerModes` 8 pass; backend typecheck clean.
 Not done: no component render test (the card needs a large prop surface and has none today) and no browser check, so placement, spacing and the folded state are unverified visually. Per-facet labels for composed answers wait on BICC-2.2. The existing HOME_RECORD label also appears on grounded-guidance answers that found nothing, which is the backend's existing classification and is not changed here.
+
+### Unblocked engineering round, 2026-11-23 (later)
+
+**Inventory attribute questions.** The inventory answer now reads condition ("in poor condition"), age ("more than ten years old", "older than 15 years"), install year ("installed before 2010"), purchase year ("did I buy this year"), cost ("cost more than $1,000") and "oldest" (`support/inventoryAttributeFilter.ts`, `DET_INVENTORY_LOOKUP_10`). The filter reads the recorded fields only. An item that lacks the field is never guessed at: it is left out and counted, and the answer says "N items have no recorded purchase cost, so they were not judged". Age uses the install date, else the purchase date. A cost exactly at the threshold is not "more than" it. An empty result says nothing matched and names the field it judged by. Tuning positives claimed: 21 → 25 of 37, 0 wrong claims; the wave-1 freeze was re-recorded again (no shard existed). Still not built: photos (the record has no photo field), electrical/plumbing categories (the answer knows HVAC, appliance and roof only), "wear out soon", and any condition word beyond new/good/fair/poor. Tests: 6 in `inventoryAttributeFilter.test.js` (filters, disclosure, handler list, empty result, routing and neighbours).
+
+**Calculation fidelity** grew from 519 to **593 cases** with the mortgage-rate resolver: the unit verdict for 27 values (a percent entered as a decimal, too low, out of range, not a number), basis-point conversion, percent formatting, the 24-way override/profile/assumption precedence matrix, and request refusal (HTTP 400, never rescaled). All pass first time. Break-even and the reserve fund calculators remain uncovered: they only run against a database.
+
+**Answer-mode badge** extracted to `AnswerModeBadge` with a render test (3 tests): label and assistive text, the general-guidance wording, and nothing for unavailable, none or unknown. `next build` passes.
+
+Evidence: Ask suite 6022 tests, 292 failing, none new (one known DB-dependent test shifted a line number); backend typecheck clean; frontend 13 workspace tests pass.

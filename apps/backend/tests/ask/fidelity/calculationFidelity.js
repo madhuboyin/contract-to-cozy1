@@ -221,6 +221,35 @@ for (const [name, handler, messages] of HANDLERS) for (const message of messages
   });
 }
 
+// ============ the mortgage interest rate every debt-aware estimate starts from (units, bounds, precedence) ============
+const rateLib = () => require('../../../src/services/mortgageRate.ts');
+// Value, then the verdict by the written rule: 0.001..0.25 usable; above 0.25 up to 100 looks like a percent; above 0 and below 0.001 too low; everything else out of range or not a number.
+const RATE_TABLE = [
+  [0.0009, 'TOO_LOW_FOR_A_RATE'], [0.00001, 'TOO_LOW_FOR_A_RATE'], [0.001, null], [0.0011, null], [0.01, null], [0.0399, null], [0.065, null], [0.0725, null], [0.15, null], [0.2499, null], [0.25, null],
+  [0.2501, 'LOOKS_LIKE_A_PERCENT'], [0.5, 'LOOKS_LIKE_A_PERCENT'], [1, 'LOOKS_LIKE_A_PERCENT'], [6.5, 'LOOKS_LIKE_A_PERCENT'], [7, 'LOOKS_LIKE_A_PERCENT'], [25, 'LOOKS_LIKE_A_PERCENT'], [99.9, 'LOOKS_LIKE_A_PERCENT'], [100, 'LOOKS_LIKE_A_PERCENT'],
+  [100.0001, 'OUT_OF_RANGE'], [101, 'OUT_OF_RANGE'], [0, 'OUT_OF_RANGE'], [-0.05, 'OUT_OF_RANGE'], [NaN, 'NOT_A_FINITE_NUMBER'], [Infinity, 'NOT_A_FINITE_NUMBER'], ['0.065', 'NOT_A_FINITE_NUMBER'], [null, 'NOT_A_FINITE_NUMBER'],
+];
+for (const [value, reason] of RATE_TABLE) add(`unit:rate-verdict:${typeof value}:${String(value)}`, 'UNIT', `rate ${String(value)} is ${reason ?? 'usable'}`, () => { const problem = rateLib().mortgageRateProblem(value); same(problem ? problem.reason : null, reason); });
+for (const [bps, decimal] of [[1, 0.0001], [50, 0.005], [100, 0.01], [325, 0.0325], [650, 0.065], [725, 0.0725], [1000, 0.1], [2500, 0.25]]) add(`unit:rate-bps:${bps}`, 'UNIT', `${bps} basis points`, () => same(rateLib().rateFromBasisPoints(bps), decimal));
+for (const [decimal, text] of [[0.065, '6.5%'], [0.0625, '6.25%'], [0.06, '6%'], [0.0725, '7.25%'], [0.001, '0.1%'], [0.25, '25%'], [0.06125, '6.125%'], [0.0612345, '6.123%']]) add(`unit:rate-format:${decimal}`, 'UNIT', `${decimal} is shown as ${text}`, () => same(rateLib().formatRatePercent(decimal), text));
+for (const override of [undefined, null, 0.05, 6.5]) for (const canonical of [undefined, 0.04, 0.0005]) for (const assume of [true, false]) {
+  add(`formula:rate-precedence:${String(override)}:${String(canonical)}:${assume}`, 'FORMULA_BRANCH', `override ${String(override)}, profile ${String(canonical)}, assume ${assume}`, () => {
+    const got = rateLib().resolveMortgageRate({ scenarioOverride: override, canonicalRate: canonical, assumeIfMissing: assume });
+    const overrideOk = override === 0.05; const canonicalOk = canonical === 0.04;
+    const expectedRate = overrideOk ? 0.05 : canonicalOk ? 0.04 : assume ? 0.065 : null;
+    const expectedSource = overrideOk ? 'SCENARIO_OVERRIDE' : canonicalOk ? 'CANONICAL_PROFILE' : assume ? 'MODELING_ASSUMPTION' : null;
+    const expectedIgnored = [...(override === 6.5 ? ['SCENARIO_OVERRIDE'] : []), ...(canonical === 0.0005 && !overrideOk ? ['CANONICAL_PROFILE'] : [])];
+    // a rejected candidate behind a usable earlier one is never examined, so it is not reported
+    same([got.rate, got.source, got.ignored.map((i) => i.source)], [expectedRate, expectedSource, expectedIgnored]);
+    same(got.disclosure === null, expectedRate === null);
+  });
+}
+for (const [value, field] of [[0.065, 'rate'], [undefined, 'rate'], [null, 'rate']]) add(`boundary:rate-assert-ok:${String(value)}`, 'BOUNDARY', `a ${String(value)} request rate is accepted`, () => { rateLib().assertMortgageRateInput(value, field); });
+for (const value of [6.5, 0.0005, 0, NaN]) add(`boundary:rate-assert-refuses:${String(value)}`, 'BOUNDARY', `a request rate of ${String(value)} is refused, never rescaled`, () => {
+  let error = null; try { rateLib().assertMortgageRateInput(value, 'rate'); } catch (caught) { error = caught; }
+  assert(error && error.statusCode === 400 && error.code === 'MORTGAGE_RATE_INVALID', `got ${error && error.message}`);
+});
+
 /** Cases recorded after a defect was found, so the suite only ever grows (EVAL-019). Each carries the defect it guards. */
 // value:grow:350bps:2y:100000 - float compounding rounded the exact tie 107122.5 down (found by this suite on its first run, 2026-11-23).
 const PERMANENT_REGRESSIONS = new Set(['value:grow:350bps:2y:100000']);

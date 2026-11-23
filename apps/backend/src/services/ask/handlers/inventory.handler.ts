@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { applyInventoryAttributeFilter, parseInventoryAttributeFilter, unjudgedSentence, type FilterOutcome } from '../support/inventoryAttributeFilter';
 import { missingCorrectableFields } from '../support/inventoryMissingFields';
 import { listedItems, sourceRef, withSources } from '../composition/sourceAuthorization';
 import { isItemDocumentsMessage, itemDocumentsResult } from './inventoryDocumentCommands.handler';
@@ -319,6 +320,9 @@ async function inventoryLookupCore(
   const exactNameMatches = quotedName ? allItems.filter((item) => item.name.trim().toLowerCase() === quotedName) : [];
   const genericList = /\b(?:inventory|systems?|equipment|appliances?)\b/i.test(message) && !specific && !categoryFilter && !exactNameMatches.length;
   const tokens = inventorySearchTokens(message);
+  // Condition, age, install or purchase year, cost and "oldest": answered from the recorded fields, never guessed (support/inventoryAttributeFilter.ts).
+  const attributeFilter = refinement || targetItemId || specific ? null : parseInventoryAttributeFilter(message);
+  let attributeOutcome: FilterOutcome<unknown> | null = null;
 
   let matches = allItems;
   if (targetItemId) {
@@ -334,6 +338,9 @@ async function inventoryLookupCore(
     matches = allItems.filter((item) => specific.terms.some((term) => containsWholeWord(inventoryItemSearchText(item), term)));
   } else if (eachRoomFocus) {
     matches = allItems;
+  } else if (attributeFilter) {
+    // The words of an attribute question ("older", "years", "poor") are not item names; the filter below decides, so no token search narrows first.
+    matches = allItems;
   } else if (!genericList && tokens.length) {
     const scored = allItems.map((item) => ({
       item,
@@ -341,6 +348,12 @@ async function inventoryLookupCore(
     })).filter((candidate) => candidate.score > 0).sort((left, right) => right.score - left.score || right.item.updatedAt.getTime() - left.item.updatedAt.getTime());
     const topScore = scored[0]?.score ?? 0;
     matches = scored.filter((candidate) => candidate.score === topScore).map((candidate) => candidate.item);
+  }
+
+  if (attributeFilter) {
+    const outcome = applyInventoryAttributeFilter(matches, attributeFilter);
+    matches = outcome.items;
+    attributeOutcome = outcome;
   }
 
   if (incompleteFocus) {
@@ -381,7 +394,7 @@ async function inventoryLookupCore(
   if (!matches.length) {
     const roofOnProfile = await profileRoofAnswer(propertyId, message, recordVersion);
     if (roofOnProfile) return roofOnProfile;
-    const focus = incompleteFocus ? 'incomplete inventory records' : lifecycleFocus ? 'items with a recorded end-of-life date in the next three years' : 'a matching inventory record';
+    const focus = attributeFilter ? `an inventory record that matches this (judged by ${attributeOutcome?.basis ?? 'the recorded fields'})` : incompleteFocus ? 'incomplete inventory records' : lifecycleFocus ? 'items with a recorded end-of-life date in the next three years' : 'a matching inventory record';
     return {
       status: 'ANSWERED', reasonCode: 'INVENTORY_MATCH_NOT_FOUND', contextVersion: recordVersion,
       blocks: [{
@@ -455,7 +468,7 @@ async function inventoryLookupCore(
   // The answer-trust contract (askInventoryIntent) keys the list title on the words of THIS question, so a chip like "Only show HVAC
   // items" is titled "Inventory details" even when a status focus carried over from the prior view; the headline states the real scope.
   const listTitle = isIncompleteInventoryRequest(message) ? 'Incomplete inventory records' : isLifecycleInventoryRequest(message) ? 'Recorded lifecycle dates approaching' : 'Inventory details';
-  const freshCollection = !specific && !historyFocus && (genericList || eachRoomFocus || Boolean(categoryFilter) || incompleteFocus || lifecycleFocus);
+  const freshCollection = !specific && !historyFocus && (genericList || eachRoomFocus || Boolean(categoryFilter) || incompleteFocus || lifecycleFocus || Boolean(attributeFilter));
   const collectionView = !selectedItem && (Boolean(refinement) || freshCollection);
   const activeStatus: InventoryStatusFilter = incompleteFocus ? 'INCOMPLETE' : lifecycleFocus ? 'LIFECYCLE' : 'ALL';
   const viewState = collectionView ? buildInventoryViewState(priorViewState, activeStatus, categoryFilter, ordering) : null;
@@ -464,7 +477,7 @@ async function inventoryLookupCore(
     title: selectedItem ? `Here is what the Home Record contains for ${selectedItem.name}` : `${matches.length} inventory records match this request`,
     body: selectedItem
       ? `${inventoryMissingFacts(selectedItem).length ? `${inventoryMissingFacts(selectedItem).length} important detail${inventoryMissingFacts(selectedItem).length === 1 ? ' is' : 's are'} still missing.` : 'The core identity, lifecycle, document, and coverage fields checked by Ask are present.'} Unknown fields remain unknown and are not inferred by a model.`
-      : `${shown.length === matches.length ? 'All matching records are shown.' : `Showing the first ${shown.length}.`} Each row reflects the canonical inventory record.`,
+      : `${shown.length === matches.length ? 'All matching records are shown.' : `Showing the first ${shown.length}.`} Each row reflects the canonical inventory record.${attributeOutcome ? unjudgedSentence(attributeOutcome) : ''}`,
     tone: selectedItem && inventoryMissingFacts(selectedItem).length ? 'CAUTION' : 'DEFAULT',
     // I-1: the calm anatomy for a list: a counted headline and chips. A single item keeps its own title and body (the calm answer shows
     // an undeclared summary as title plus plain text, so nothing is dropped). The full-record link also rides on the list (below).
