@@ -175,7 +175,7 @@ PERCENT_CASES.forEach(([value, text]) => add(`percent:${value}`, 'UNIT', `rate $
 const NUMBER_CASES = [['home.livingArea', 2150, '2,150 sq ft'], ['home.livingArea', 850, '850 sq ft'], ['home.livingArea', 10000, '10,000 sq ft'], ['home.bedrooms', 1, '1 bedroom'], ['home.bedrooms', 3, '3 bedrooms'], ['home.bedrooms', 0, '0 bedrooms'],
   ['home.bathrooms', 1, '1 bathroom'], ['home.bathrooms', 2, '2 bathrooms'], ['home.bathrooms', 1.5, '1.5 bathrooms'], ['home.yearBuilt', 1987, '1987']];
 NUMBER_CASES.forEach(([id, value, text]) => add(`number:${id}:${value}`, 'UNIT', `${id} ${value} reads ${text}`, async () => assert(fmt('number', value, id) === text, fmt('number', value, id))));
-[['IN_PROGRESS', 'in progress'], ['HIGH', 'HIGH'], ['NOT_STARTED', 'not started']].forEach(([value, text]) => add(`enum:${value}`, 'UNIT', `${value} reads ${text}`, async () => assert(fmt('enum', value) === text, fmt('enum', value))));
+[['IN_PROGRESS', 'in progress'], ['HIGH', 'high'], ['GOOD', 'good'], ['NOT_STARTED', 'not started'], ['HVAC', 'HVAC']].forEach(([value, text]) => add(`enum:${value}`, 'UNIT', `${value} reads ${text}`, async () => assert(fmt('enum', value) === text, fmt('enum', value))));
 add('flag:true', 'UNIT', 'true reads yes', async () => assert(fmt('flag', true) === 'yes', ''));
 add('flag:false', 'UNIT', 'false reads no (a recorded false is a value, not missing)', async () => assert(fmt('flag', false) === 'no', ''));
 add('tags:list', 'UNIT', 'tags read as a comma list', async () => assert(fmt('tags', ['a', 'b']) === 'a, b', ''));
@@ -244,6 +244,6 @@ function assert(condition, message) { if (!condition) throw new Error(message ||
 function assertDeepEqual(actual, expected) { if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`); }
 
 /** Cases recorded after a defect was found, so the suite only ever grows (EVAL-019). Each carries the defect it guards. */
-const PERMANENT_REGRESSIONS = new Set(['date:invalid-never-throws']);
+const PERMANENT_REGRESSIONS = new Set(['date:invalid-never-throws', 'enum:HIGH', 'enum:GOOD']);
 
 module.exports = { cases, PERMANENT_REGRESSIONS, manifest: () => ({ version: '1', suite: 'HOME_RECORD_READ', cases: cases.map((c) => ({ id: c.id, partition: c.partition, description: c.description, ...(PERMANENT_REGRESSIONS.has(c.id) ? { permanentRegression: true } : {}) })), claimsPopulationBound: false }) };

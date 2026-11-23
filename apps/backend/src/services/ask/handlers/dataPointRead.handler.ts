@@ -65,7 +65,15 @@ const ENTITY_COPY: Record<string, { plural: string; singular: string; collection
   PropertyTaxBillRecord: { plural: 'property tax bills', singular: 'property tax bill', collection: 'property tax bills', record: 'Property tax bill record', none: 'No property tax bill is recorded yet' },
   PropertyTaxAssessmentRecord: { plural: 'property tax assessments', singular: 'property tax assessment', collection: 'property tax assessments', record: 'Property tax assessment record', none: 'No property tax assessment is recorded yet' },
 };
-const words = (v: unknown) => humanizePresentationToken(String(v)) || String(v).toLowerCase().replace(/_/g, ' ');
+// A single upper-case enum word ("GOOD", "HIGH") reads as lower-case words. The shared humanizer only rewrites multi-word codes, so a one-word code passed
+// through unchanged; acronyms keep their capitals (fidelity suite BICC-GATE-004A1: enum cases).
+const ENUM_ACRONYMS = new Set(['HVAC', 'HOA', 'DIY', 'EPA', 'FHA', 'VA', 'LLC']);
+const words = (v: unknown) => {
+  const raw = String(v);
+  const human = humanizePresentationToken(raw);
+  if (human && human === raw && /^[A-Z][A-Z0-9]+$/.test(raw) && !ENUM_ACRONYMS.has(raw)) return raw.toLowerCase();
+  return human || raw.toLowerCase().replace(/_/g, ' ');
+};
 /** "How old is it": the recorded install date (or year) read back as an approximate age. Only for the install-date points, only when the question asks for an age, and never for a date in the future. */
 export function ageSentence(point: DataPointDefinition, value: unknown, message: string, now: Date = new Date()): string {
   if (!/\bhow old\b|\bage\b/i.test(message)) return '';
