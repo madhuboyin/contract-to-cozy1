@@ -219,3 +219,9 @@ A composed answer (two or more parts) now declares a mode per part. `facetModesO
 
 Evidence: backend `answerModes` 13 pass; frontend 170 pass; `next build` and backend typecheck pass; Ask suite 6216 tests, 292 failing, none new.
 Not done: not exercised against a real composed turn read back from a database, and not seen in a browser. USER_DOCUMENT mode waits on BICC-3.2; per-facet evidence and freshness display (ANS-002's other half) is not built.
+
+### Composed-read cancellation matrix (BICC-2.2 exit criterion, 2026-11-23)
+
+The plan's exit criterion names four cases: stop before start, stop racing a running child, completion winning, no replay of a stopped part. All four already had tests in `composedTurn.test.js` (and the signal is passed to every composed path in `createAskExecution`: start, recover, clarification resume, refresh; write-capable operations are never raced against it). Checking for what the matrix did not reach, I added five tests, all passing the first time, so no defect was found: a stop during the first facet of a dependency chain never starts the dependent facet and the finished facet keeps its answer; a stop between waves leaves the unstarted facet accounted for in the answer; a stop after a retryable failure suppresses the automatic retry (and without a stop the same failure IS retried once, so the stop is what suppressed it); and a fully stopped turn is not reported as a failure.
+
+Limits: all of this runs against a faked child runner and in-memory database, not a real request closed mid-flight; the "unstarted facet is accounted for" test accepts either a CANCELLED attempt or a stated not-answered part, so it does not pin which. The remaining 2.2 exit item, "compound/facet coverage with no silent loss or retargeting", is covered by existing composition tests but was not re-audited here.

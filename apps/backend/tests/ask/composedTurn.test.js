@@ -729,3 +729,66 @@ test('idempotency: recovering a stopped parent creates no second child for a sto
   assert.equal(calls.length, 0, 'a stopped part is terminal; asking again is a new turn, not a replay');
   assert.deepEqual(attemptsOf(db).map((a) => `${a.componentKey}:${a.number}:${a.status}`), before);
 });
+
+// ---- BICC-2.2 cancellation matrix, the cases the first four did not reach ----
+const dependent = [
+  { clause: 'How old is my roof?', operationId: 'INVENTORY_LOOKUP', confidence: 0.96, facetId: 'f1' },
+  { clause: 'What would a new roof cost?', operationId: 'ITEM_REPLACEMENT_COST', confidence: 0.95, facetId: 'f2', dependsOn: ['f1'] },
+];
+
+test('a stop during the first facet of a dependency chain never starts the facet that depends on it', async () => {
+  const db = fakeDb([parentRow()]);
+  const stop = new AbortController();
+  const { createChild: base, calls } = scriptedChildren(db);
+  const createChild = async (userId, request, role, internal) => {
+    const result = await base(userId, request, role, internal);
+    stop.abort(); // the person stops while the first facet is finishing
+    return result;
+  };
+  const parent = await run(db, createChild, { clauses: dependent, signal: stop.signal });
+  assert.deepEqual(calls.map((call) => call.operationId), ['INVENTORY_LOOKUP'], 'the dependent facet was never started');
+  const statuses = attemptsOf(db).map((a) => a.status);
+  assert.ok(statuses.includes('ANSWERED'), 'the facet that completed first keeps its answer');
+  assert.ok(!statuses.some((status) => status === 'RUNNING'), 'nothing is left running');
+  assert.notEqual(parent.status, 'ANSWERED', 'a part is missing, so the answer is not presented as complete');
+  assert.match(JSON.stringify(parent.resultJson), /7 years old/, 'the completed part is still delivered');
+});
+
+test('a stop that arrives before the second wave records the dependent facet as stopped, not started', async () => {
+  const db = fakeDb([parentRow()]);
+  const stop = new AbortController();
+  const { createChild: base, calls } = scriptedChildren(db);
+  // Stop fires when the first facet has COMPLETED and before the second is dispatched: the second must be the one recorded as CANCELLED.
+  const createChild = async (userId, request, role, internal) => { const out = await base(userId, request, role, internal); if (request.launchContext.operationId === 'INVENTORY_LOOKUP') stop.abort(); return out; };
+  await run(db, createChild, { clauses: dependent, signal: stop.signal });
+  assert.equal(calls.filter((call) => call.operationId === 'ITEM_REPLACEMENT_COST').length, 0);
+  const cancelledOrWithheld = attemptsOf(db).filter((a) => a.status === 'CANCELLED').length;
+  const stored = JSON.stringify(db.table.get('parent-1').resultJson);
+  assert.ok(cancelledOrWithheld >= 1 || /stopped|waiting|could not be answered|not answered/i.test(stored), 'the unstarted part is accounted for in the answer');
+});
+
+test('a stop after a retryable failure does not start the automatic retry', async () => {
+  const db = fakeDb([parentRow()]);
+  const stop = new AbortController();
+  const { createChild: base, calls } = scriptedChildren(db, (operationId, attempt) => (operationId === 'INVENTORY_LOOKUP' && attempt === 1 ? { status: 'FAILED_RETRYABLE', reasonCode: 'AskExecutionTimeoutError' } : null));
+  const createChild = async (userId, request, role, internal) => { const out = await base(userId, request, role, internal); if (request.launchContext.operationId === 'INVENTORY_LOOKUP') stop.abort(); return out; };
+  await run(db, createChild, { signal: stop.signal });
+  assert.equal(calls.filter((call) => call.operationId === 'INVENTORY_LOOKUP').length, 1, 'no second attempt is made for a stopped request');
+  assert.ok(!attemptsOf(db).some((a) => a.status === 'RUNNING'));
+});
+
+test('without a stop, the same retryable failure IS retried once (the stop is what suppressed it)', async () => {
+  const db = fakeDb([parentRow()]);
+  const { createChild, calls } = scriptedChildren(db, (operationId, attempt) => (operationId === 'INVENTORY_LOOKUP' && attempt === 1 ? { status: 'FAILED_RETRYABLE', reasonCode: 'AskExecutionTimeoutError' } : null));
+  await run(db, createChild);
+  assert.equal(calls.filter((call) => call.operationId === 'INVENTORY_LOOKUP').length, 2);
+});
+
+test('a stopped composed turn never presents a stopped part as answered, and never counts it as a failure to retry', async () => {
+  const db = fakeDb([parentRow()]);
+  const { createChild } = scriptedChildren(db);
+  const stop = new AbortController(); stop.abort();
+  const parent = await run(db, createChild, { signal: stop.signal });
+  assert.ok(attemptsOf(db).every((a) => a.status === 'CANCELLED'));
+  assert.ok(!['FAILED_RETRYABLE', 'FAILED_TERMINAL'].includes(parent.status), `a stop is not a failure (got ${parent.status})`);
+});
