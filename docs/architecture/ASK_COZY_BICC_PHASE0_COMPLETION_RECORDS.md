@@ -233,3 +233,11 @@ The owner directed that the governing default applies to every open decision fro
 - **Changes:** the decisions are no longer open. Cross-session continuity, buyer account eligibility, portfolio reads, `CALCULATION` mode, measurement headline, similarity threshold, performance ceilings, inventory scope and copy each have a recorded default.
 - **Does not change:** a default cannot supply a fact only a person or provider can. Provider approvals stay unrecorded and the flows stay off; the Ask Evaluation Reviewer and Home Safety/Policy Reviewer are still unnamed, so no shard is sealed, no emergency corpus is certified, and the guidance entries are still unreviewed. `BICC-GATE-009`, `GATE-001/003/010` certification and the guidance coverage gates remain unmet, and the ledger still says so.
 - **One default I chose, not the FRD:** D27 (only workflow ids resume across sessions, same user and home, ids only) had no prior default; it is the narrowest reading of CTX-005 and is flagged as such. It is not yet built.
+
+### Pre-launch amendment to the provider rule (FRD D32, 2026-11-23)
+
+Recorded at the owner's direction (there are no real users). FRD v0.3.6, row `BICC-D32`: real-data model flows may be enabled for owner and test data without a recorded provider approval until the first real user is onboarded; the provider facts (product, tier, billing, region, retention, training, abuse monitoring, logging, deletion) and a purpose-specific approval are then required for every enabled flow, and a flow without them is switched off at that point.
+
+What did not change: the register still reads `UNRECORDED` and `NOT_APPROVED` for every flow (the amendment defers the review, it does not claim one); no approval is inherited between flows; evaluator calls stay synthetic-only; no flow was enabled by this change and no flag, default or code was touched. Enabling a flow, for example the semantic planner, is a separate step and may need routing baselines re-recorded.
+
+Pre-launch checklist item: look up the tier and billing state of the key behind `GEMINI_API_KEY` and the data-use terms for that product and tier, and record them in the register for each enabled flow.
