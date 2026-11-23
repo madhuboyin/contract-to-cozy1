@@ -167,3 +167,15 @@ Not done: the old small-talk branch still routes its wider phrases ("what's up t
 **What this is not.** The corpus was visible while the patterns were tuned, so these numbers are tuning evidence, not certification (BICC-EVAL-002). BICC-GATE-009 is not met: it needs a sealed corpus written independently and a Home Safety/Policy Reviewer. The framing check is deliberately narrow; unseen educational or historical phrasing can still fire, and unseen present-tense phrasing can still be missed. English only.
 
 Evidence: `tests/ask/emergencyInterception.test.js` 5 pass plus the four existing emergency suites; typecheck clean; Ask suite 292 failing, none new (one known DB-dependent test shifted a line number).
+
+### Calculation fidelity suite, BICC-GATE-004A2 (2026-11-23)
+
+`tests/ask/fidelity/calculationFidelity.js` with `tests/ask/calculationFidelity.test.js`: **519 distinct cases** over the eight EVAL-019 partitions (VALUE 159, FORMULA_BRANCH 126, DATE 81, UNIT 80, ENTITY 30, BOUNDARY 22, MISSING_DATA 15, AUTHORIZATION 6), all passing, no population claim (a fixed matrix reports partition coverage). It runs the real calculators: `grow`, `itemCostBases`, `pointEstimate`, `monthsUntil`, `buildFundingPlan`, `depositsPerMonth`, the target-date and amount readers, the funding-item selectors, and the two capital handlers' access check. Expected values are not taken from the code: cost growth and rebasing use exact BigInt rational arithmetic, calendar months and deposit windows use separately written date arithmetic, and the funding plan is recomputed from first principles.
+
+**It found a real defect on its first run.** `grow` rounded floating-point compounding, so an exact half cent landed the wrong way: 100,000 cents at 3.5% for two years is exactly 107,122.5 but 1.035² evaluates to 1.0712249999999999, which rounded to 107,122. `grow` now rounds at twelve significant digits (restores the exact tie). The case is recorded as a permanent regression. A one-cent error is small, but the gate allows none.
+
+A second failure was the suite's own expectation (1,200 million exceeds the one-billion cap); corrected.
+
+Not covered: break-even, refinance and reserve-fund calculators, and any calculation delivered through a handler that needs a database. AUTHORIZATION here means the two capital handlers refuse a home the person cannot reach before reading anything; it is not a claim about every calculation. The gate applies when calculation mode is delivered (BICC-1C.1), which has not shipped.
+
+Evidence: 520 tests pass (519 cases plus the manifest check); typecheck clean; five pre-existing failures in `itemFundingGoal.test.js` and `ownerFailingPrompts.test.js` are unchanged by this work (same count with and without it).

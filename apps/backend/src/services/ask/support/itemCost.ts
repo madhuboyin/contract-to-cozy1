@@ -9,7 +9,9 @@
 
 /** Money in the future, from today's money: value × (1 + rate)^years. */
 export function grow(cents: number, rate: number, years: number): number {
-  return Math.round(cents * Math.pow(1 + rate, Math.max(0, years)));
+  // Compounding in floating point lands a hair under an exact half cent (100000 at 3.5% for 2 years is exactly 107122.5, but 1.035^2 is 1.0712249999999999), and
+  // Math.round then rounds the wrong way. Twelve significant digits is far inside a cent for any real amount and restores the exact tie.
+  return Math.round(Number((cents * Math.pow(1 + rate, Math.max(0, years))).toPrecision(12)));
 }
 
 export function yearsBetween(from: Date, to: Date): number {
