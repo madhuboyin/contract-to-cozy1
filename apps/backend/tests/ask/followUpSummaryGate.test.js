@@ -103,3 +103,63 @@ test('an old switch outside the recency window is not a reason to block', async 
     assert.equal(out.sourceExecutionId, 'p2-latest');
   } finally { s.restore(); }
 });
+
+// BICC-CTX-002: "complete it" resolves by the canonical task id, not by matching a title.
+const list = (items) => ({ blocks: [{ type: 'GROUPED_LIST', id: 'l', title: 'Tasks', sections: [{ id: 's', title: 'Open', count: items.length, items }], actions: [], filters: [] }] });
+const task = (id, title) => ({ id, title, entityType: 'MAINTENANCE_TASK', meta: [] });
+
+test('a single listed task is completed by its canonical id: no title is matched and the message is untouched', async () => {
+  const s = stub([turn('t1', 'p2', 2, { resultJson: list([task('task-9', 'Clean gutters')]) })]);
+  try {
+    const out = await resolve({ message: 'Now complete it' });
+    assert.equal(out.forcedOperationId, 'MAINTENANCE_TASK_COMPLETE');
+    assert.deepEqual(out.suppliedInput, { taskId: 'task-9' });
+    assert.equal(out.effectiveMessage, 'Now complete it', 'the title was not written into the message');
+    assert.equal(out.sourceExecutionId, 't1');
+  } finally { s.restore(); }
+});
+
+test('several listed tasks name nothing: "complete it" is not guessed', async () => {
+  const s = stub([turn('t1', 'p2', 2, { resultJson: list([task('a', 'Clean gutters'), task('b', 'Service furnace')]) })]);
+  try {
+    const out = await resolve({ message: 'Now complete it' });
+    assert.equal(out.forcedOperationId, null);
+    assert.equal(out.suppliedInput, null);
+  } finally { s.restore(); }
+});
+
+test('another verb keeps the existing title behaviour, and a non-task entity is never completed by id', async () => {
+  const one = stub([turn('t1', 'p2', 2, { resultJson: list([task('task-9', 'Clean gutters')]) })]);
+  try {
+    const out = await resolve({ message: 'Reschedule it' });
+    assert.equal(out.forcedOperationId, null);
+    assert.match(out.effectiveMessage, /Clean gutters/, 'the title rewrite path is unchanged for other verbs');
+  } finally { one.restore(); }
+  const other = stub([turn('t1', 'p2', 2, { resultJson: list([{ id: 'w-1', title: 'Roof warranty', entityType: 'WARRANTY', meta: [] }]) })]);
+  try {
+    const out = await resolve({ message: 'Now complete it' });
+    assert.equal(out.forcedOperationId, null);
+    assert.equal(out.suppliedInput, null);
+  } finally { other.restore(); }
+});
+
+test('the id path needs the summary to agree: without a user it falls back to the existing behaviour', async () => {
+  const s = stub([turn('t1', 'p2', 2, { resultJson: list([task('task-9', 'Clean gutters')]) })]);
+  try {
+    const out = await resolve({ message: 'Now complete it', userId: null });
+    assert.equal(out.suppliedInput, null);
+    assert.match(out.effectiveMessage, /Clean gutters/);
+  } finally { s.restore(); }
+});
+
+test('the singular-entity reader returns typed ids only and none for lists, tables or an unidentified row', () => {
+  const { singularEntityOf, digestFromRow } = require('../../src/services/ask/conversationSummary.ts');
+  assert.deepEqual(singularEntityOf(list([task('x', 'T')])), { entityType: 'MAINTENANCE_TASK', entityId: 'x' });
+  assert.equal(singularEntityOf(list([task('x', 'T'), task('y', 'U')])), null);
+  assert.equal(singularEntityOf(list([{ id: 'x', title: 'T', meta: [] }])), null, 'a row with no entity type names nothing');
+  assert.equal(singularEntityOf({ blocks: [{ type: 'SUMMARY', title: 'T', body: 'secret' }] }), null);
+  assert.equal(singularEntityOf(null), null);
+  const digest = digestFromRow({ id: 'e', status: 'ANSWERED', operationId: 'MAINTENANCE_STATUS', propertyId: 'p2', createdAt: new Date(), resultJson: list([task('task-9', 'Clean gutters')]) });
+  assert.deepEqual(digest.entities, [{ entityType: 'MAINTENANCE_TASK', entityId: 'task-9' }]);
+  assert.doesNotMatch(JSON.stringify(digest), /Clean gutters/);
+});

@@ -1,7 +1,7 @@
 import type { AskExecutionStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import type { AskOperationId } from './askOperationRegistry';
-import { evaluateContinuationContext } from './conversationSummary';
+import { evaluateContinuationContext, singularEntityOf, type ContinuationContext } from './conversationSummary';
 
 // A registered operation family that a bare filter/scope refinement ("only
 // show the urgent ones") may legitimately continue without the homeowner
@@ -342,14 +342,23 @@ export async function resolveAskFollowUpMessage(input: {
 
   // BICC-CTX-001/003: the structured conversation summary gates continuation. A declared control is pinned to one specific execution and bypasses it; an
   // ordinary follow-up does not continue from a result that belongs to a home the person has since left.
+  let continuation: ContinuationContext | null = null;
   if (input.userId && !input.declaredSourceExecutionId) {
-    const context = await evaluateContinuationContext({ userId: input.userId, sessionId: input.sessionId, propertyId: input.propertyId ?? null }, prisma as never);
+    const context = continuation = await evaluateContinuationContext({ userId: input.userId, sessionId: input.sessionId, propertyId: input.propertyId ?? null }, prisma as never);
     if (context.blocked) return { ...fallback, contextReset: { disclosure: context.disclosure ?? '', reasons: context.reasons } };
   }
   const prior = await findRecentPriorExecution(input.sessionId, input.propertyId, input.declaredSourceExecutionId);
   if (!prior || !prior.operationId) return fallback;
 
   if (entityMatch) {
+    // BICC-CTX-002: "complete it" resolves by the entity's CANONICAL id when the prior answer named exactly one maintenance task and the conversation summary
+    // agrees (same result, same id). The id goes to the same id-lookup a proactive card uses, so no title is matched and nothing can retarget by wording.
+    const canonical = singularEntityOf(prior.resultJson);
+    if (canonical?.entityType === 'MAINTENANCE_TASK' && MAINTENANCE_COMPLETE_VERB_PATTERN.test(input.message) && prior.operationId === 'MAINTENANCE_STATUS'
+      && continuation?.summary.referencedResult?.executionId === prior.id
+      && continuation.summary.activeEntities.some((entity) => entity.entityType === canonical.entityType && entity.entityId === canonical.entityId)) {
+      return { effectiveMessage: input.message, forcedOperationId: 'MAINTENANCE_TASK_COMPLETE', sourceExecutionId: prior.id, continuationCursor: null, suppliedInput: { taskId: canonical.entityId }, isFilterRefinement: false };
+    }
     const entityTitle = extractSingularEntityTitle(prior.resultJson);
     if (entityTitle) {
       const pronounSpan = entityMatch[1];

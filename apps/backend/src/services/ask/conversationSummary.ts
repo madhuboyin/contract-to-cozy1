@@ -216,6 +216,30 @@ export function reconcileConversationSummary(summary: ConversationSummary, curre
   return { summary: reconciled, resets, disclosure };
 }
 
+/**
+ * The ONE entity a stored answer named, by canonical identifier, or null. An answer that listed several things names none: "it" against a list is the ambiguity
+ * a follow-up must not guess through. Only typed identifiers are read (a grouped-list row's `id` and `entityType`), never a title or any text.
+ */
+export function singularEntityOf(resultJson: unknown): { entityType: string; entityId: string } | null {
+  const result = record(resultJson);
+  const blocks = Array.isArray(result?.blocks) ? result!.blocks as unknown[] : [];
+  const found: Array<{ entityType: string; entityId: string }> = [];
+  let listedRows = 0;
+  for (const raw of blocks) {
+    const block = record(raw);
+    if (block?.type !== 'GROUPED_LIST' || !Array.isArray(block.sections)) continue;
+    for (const sectionRaw of block.sections as unknown[]) {
+      const section = record(sectionRaw);
+      for (const itemRaw of Array.isArray(section?.items) ? section!.items as unknown[] : []) {
+        listedRows += 1;
+        const item = record(itemRaw); const entityType = str(item?.entityType); const entityId = str(item?.id);
+        if (entityType && entityId) found.push({ entityType, entityId });
+      }
+    }
+  }
+  return listedRows === 1 && found.length === 1 ? found[0] : null;
+}
+
 // ---------------- persistence read ----------------
 
 const record = (value: unknown): Record<string, unknown> | null => (value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null);
@@ -223,7 +247,7 @@ const str = (value: unknown): string | null => (typeof value === 'string' && val
 
 /** Turns one stored execution row into a digest of typed fields only. No message, answer text or free-form value is read. */
 export function digestFromRow(row: {
-  id: string; status: string; operationId: string | null; propertyId: string | null; createdAt: Date; parametersJson?: unknown; launchContextJson?: unknown;
+  id: string; status: string; operationId: string | null; propertyId: string | null; createdAt: Date; parametersJson?: unknown; launchContextJson?: unknown; resultJson?: unknown;
 }, corrections: ReadonlyArray<'INTENT' | 'ENTITY' | 'HOME_RECORD'> = []): TurnDigest {
   const parameters = record(row.parametersJson); const launch = record(row.launchContextJson);
   const view = record(parameters?.viewState); const slots = record(parameters?.slots);
@@ -232,6 +256,7 @@ export function digestFromRow(row: {
   const entityType = str(launch?.entityType); const entityId = str(launch?.entityId);
   if (entityType && entityId) entities.push({ entityType, entityId });
   const selectedTask = str(view?.selectedTaskId); if (selectedTask) entities.push({ entityType: 'MAINTENANCE_TASK', entityId: selectedTask });
+  const named = singularEntityOf(row.resultJson); if (named) entities.push(named);
   const sourcesRaw = Array.isArray(parameters?.sources) ? parameters!.sources as unknown[] : [];
   const sources = sourcesRaw.flatMap((entry) => { const item = record(entry); const sourceType = str(item?.sourceType); const sourceId = str(item?.sourceId); return sourceType && sourceId ? [{ sourceType, sourceId }] : []; });
   const workflows: NonNullable<TurnDigest['workflows']>[number][] = [];
@@ -250,14 +275,14 @@ export function digestFromRow(row: {
 export async function loadConversationSummary(input: {
   userId: string; sessionId: string; propertyId: string | null; lifecycleMode: LifecycleMode | null; now?: Date;
 }, db: {
-  askExecution: { findMany(args: Record<string, unknown>): Promise<Array<{ id: string; status: string; operationId: string | null; propertyId: string | null; createdAt: Date; parametersJson: unknown; launchContextJson: unknown }>> };
+  askExecution: { findMany(args: Record<string, unknown>): Promise<Array<{ id: string; status: string; operationId: string | null; propertyId: string | null; createdAt: Date; parametersJson: unknown; launchContextJson: unknown; resultJson?: unknown }>> };
   askExecutionEvent: { findMany(args: Record<string, unknown>): Promise<Array<{ executionId: string; metadataJson: unknown }>> };
 }): Promise<ConversationSummary> {
   const rows = await db.askExecution.findMany({
     where: { sessionId: input.sessionId, userId: input.userId, parentExecutionId: null },
     orderBy: { createdAt: 'desc' },
     take: SUMMARY_POLICY.maxTurns + 1,
-    select: { id: true, status: true, operationId: true, propertyId: true, createdAt: true, parametersJson: true, launchContextJson: true },
+    select: { id: true, status: true, operationId: true, propertyId: true, createdAt: true, parametersJson: true, launchContextJson: true, resultJson: true },
   });
   const events = rows.length ? await db.askExecutionEvent.findMany({ where: { executionId: { in: rows.map((row) => row.id) }, eventType: 'CORRECTION_REQUESTED' }, select: { executionId: true, metadataJson: true } }) : [];
   const correctionsBy = new Map<string, Array<'INTENT' | 'ENTITY' | 'HOME_RECORD'>>();

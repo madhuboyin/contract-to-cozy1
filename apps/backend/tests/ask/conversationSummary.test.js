@@ -135,7 +135,7 @@ test('the persistence read is scoped to the user and session and uses typed colu
   const summary = await loadConversationSummary({ userId: 'u1', sessionId: 's1', propertyId: 'p1', lifecycleMode: 'HOMEOWNER', now: NOW }, db);
   assert.deepEqual(calls[0].where, { sessionId: 's1', userId: 'u1', parentExecutionId: null });
   assert.ok(calls[0].take <= SUMMARY_POLICY.maxTurns + 1);
-  assert.deepEqual(Object.keys(calls[0].select).sort(), ['createdAt', 'id', 'launchContextJson', 'operationId', 'parametersJson', 'propertyId', 'status']);
+  assert.deepEqual(Object.keys(calls[0].select).sort(), ['createdAt', 'id', 'launchContextJson', 'operationId', 'parametersJson', 'propertyId', 'resultJson', 'status']);
   assert.deepEqual(summary.corrections, [{ kind: 'INTENT', executionId: 'e1' }]);
   assert.deepEqual(summary.stated.items, ['roof']);
 });
