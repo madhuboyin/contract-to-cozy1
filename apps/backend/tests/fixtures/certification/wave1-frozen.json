@@ -12,6 +12,7 @@
    "DET_INVENTORY_LOOKUP_08": "3effed17c9a02b5f",
    "DET_INVENTORY_LOOKUP_09": "40f3bdbfdc55acf8",
    "DET_INVENTORY_LOOKUP_10": "0b3075faf9fbdc31",
+   "DET_INVENTORY_LOOKUP_11": "dc9d488b999db7f3",
    "DET_INVENTORY_LOOKUP_05": "6f95f09c87063038"
   },
   "SELL_HOLD_RENT_ANALYSIS": {
@@ -40,6 +41,13 @@
   {
    "on": "2026-11-23",
    "reason": "INVENTORY_LOOKUP attribute questions (age, condition, install/purchase year, cost, oldest): new rule DET_INVENTORY_LOOKUP_10 and a handler filter. No sealed shard existed, so none was burned.",
+   "affected": [
+    "INVENTORY_LOOKUP"
+   ]
+  },
+  {
+   "on": "2026-11-23",
+   "reason": "INVENTORY_LOOKUP electrical and plumbing category questions: new rule DET_INVENTORY_LOOKUP_11 and handler categories. No sealed shard existed, so none was burned.",
    "affected": [
     "INVENTORY_LOOKUP"
    ]

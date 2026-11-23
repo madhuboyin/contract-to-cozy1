@@ -126,10 +126,10 @@ export function inventoryCalmCopy(counts: {
 // declared chip is a fresh authoritative query that carries a stable result id and the next revision, so the earlier result is
 // superseded rather than stacked. Two independent dimensions, each replaced on its own: a status focus and a category.
 export type InventoryStatusFilter = 'ALL' | 'INCOMPLETE' | 'LIFECYCLE';
-export type InventoryCategoryFilter = 'HVAC' | 'APPLIANCE' | 'ROOF_EXTERIOR';
+export type InventoryCategoryFilter = 'HVAC' | 'APPLIANCE' | 'ROOF_EXTERIOR' | 'ELECTRICAL' | 'PLUMBING';
 const INVENTORY_STATUS_FILTERS: ReadonlySet<string> = new Set(['ALL', 'INCOMPLETE', 'LIFECYCLE']);
-const INVENTORY_CATEGORY_FILTERS: ReadonlySet<string> = new Set(['HVAC', 'APPLIANCE', 'ROOF_EXTERIOR']);
-const INVENTORY_CATEGORY_LABELS: Record<InventoryCategoryFilter, string> = { HVAC: 'HVAC', APPLIANCE: 'Appliances', ROOF_EXTERIOR: 'Roof and exterior' };
+const INVENTORY_CATEGORY_FILTERS: ReadonlySet<string> = new Set(['HVAC', 'APPLIANCE', 'ROOF_EXTERIOR', 'ELECTRICAL', 'PLUMBING']);
+const INVENTORY_CATEGORY_LABELS: Record<InventoryCategoryFilter, string> = { HVAC: 'HVAC', APPLIANCE: 'Appliances', ROOF_EXTERIOR: 'Roof and exterior', ELECTRICAL: 'Electrical', PLUMBING: 'Plumbing' };
 // Each declared chip message must be recognized here AND begin with a phrase askFollowUpContext's FILTER_CONTINUATION_PATTERN accepts.
 const INVENTORY_CLEAR_FILTERS_MESSAGE = 'Now show all inventory items with no filters';
 const INVENTORY_CLEAR_PATTERN = /^\s*now show all inventory items with no filters\b/i;
@@ -143,7 +143,12 @@ function detectInventoryCategory(message: string): InventoryCategoryFilter | nul
       ? 'APPLIANCE'
       : /\broof\b/i.test(message)
         ? 'ROOF_EXTERIOR'
-        : null;
+        // Electrical and plumbing are recorded categories (InventoryItemCategory); "water heater" is deliberately not a plumbing word here because items of that name are filed under several categories.
+        : /\b(?:electrical|wiring|breakers?|outlets?|circuit)\b/i.test(message)
+          ? 'ELECTRICAL'
+          : /\b(?:plumbing|pipes?|faucets?|plumbing fixtures?)\b/i.test(message)
+            ? 'PLUMBING'
+            : null;
 }
 
 function inventoryMatchesCategory(item: Awaited<ReturnType<InventoryService['listItems']>>[number], category: InventoryCategoryFilter): boolean {
@@ -228,7 +233,11 @@ async function loadInventoryViewState(sourceExecutionId: string | null | undefin
 }
 
 /** The declared chips for a collection result; every message round-trips through resolveInventoryRefinement. */
-export function inventoryFilterChips(status: InventoryStatusFilter, category: InventoryCategoryFilter | null, ordering: string = INVENTORY_DEFAULT_ORDERING) {
+/**
+ * `presentCategories` are the recorded categories of this home's items. The electrical and plumbing chips appear only when the home has such items (or one is the active
+ * filter), which keeps the chip row inside its density cap and never offers a filter that can only return nothing.
+ */
+export function inventoryFilterChips(status: InventoryStatusFilter, category: InventoryCategoryFilter | null, ordering: string = INVENTORY_DEFAULT_ORDERING, presentCategories: ReadonlySet<string> = new Set()) {
   return [
     { id: 'status-all', label: 'All items', message: 'Now show all inventory items', active: status === 'ALL' },
     { id: 'status-incomplete', label: 'Missing details', message: 'Only show items with missing details', active: status === 'INCOMPLETE' },
@@ -237,6 +246,8 @@ export function inventoryFilterChips(status: InventoryStatusFilter, category: In
     { id: 'category-hvac', label: 'HVAC', message: 'Only show HVAC items', active: category === 'HVAC' },
     { id: 'category-appliance', label: 'Appliances', message: 'Only show appliances', active: category === 'APPLIANCE' },
     { id: 'category-roof', label: 'Roof and exterior', message: 'Only show roof items', active: category === 'ROOF_EXTERIOR' },
+    ...(presentCategories.has('ELECTRICAL') || category === 'ELECTRICAL' ? [{ id: 'category-electrical', label: 'Electrical', message: 'Only show electrical items', active: category === 'ELECTRICAL' }] : []),
+    ...(presentCategories.has('PLUMBING') || category === 'PLUMBING' ? [{ id: 'category-plumbing', label: 'Plumbing', message: 'Only show plumbing items', active: category === 'PLUMBING' }] : []),
     ...orderingChips(INVENTORY_ORDERINGS, ordering),
     ...(status !== 'ALL' || category || ordering !== INVENTORY_DEFAULT_ORDERING ? [{ id: 'clear-all', label: 'Clear filters', message: INVENTORY_CLEAR_FILTERS_MESSAGE, active: false }] : []),
   ];
@@ -381,7 +392,7 @@ async function inventoryLookupCore(
       }, {
         type: 'GROUPED_LIST', id: 'inventory-results',
         title: isIncompleteInventoryRequest(message) ? 'Incomplete inventory records' : isLifecycleInventoryRequest(message) ? 'Recorded lifecycle dates approaching' : 'Inventory details',
-        filters: inventoryFilterChips(refinement.status, refinement.category, ordering),
+        filters: inventoryFilterChips(refinement.status, refinement.category, ordering, new Set(allItems.map((item) => String(item.category)))),
         sections: [{ id: 'items', title: 'Living Home Record', count: 0, items: [] }],
         actions: [
           ...(access.role !== HouseholdRole.VIEWER ? [inventoryAddItemAction()] : []),
@@ -501,7 +512,7 @@ async function inventoryLookupCore(
     // href (it lists HomeEvent timeline entries, a different entity type
     // with no inline detail component yet) -- a genuine remaining "broader
     // entry points" gap, matching Maintenance's own flagship-first shape.
-    type: 'GROUPED_LIST', filters: viewState ? inventoryFilterChips(activeStatus, categoryFilter, ordering) : [], id: 'inventory-results', title: listTitle,
+    type: 'GROUPED_LIST', filters: viewState ? inventoryFilterChips(activeStatus, categoryFilter, ordering, new Set(allItems.map((item) => String(item.category)))) : [], id: 'inventory-results', title: listTitle,
     description: lifecycleFocus
       ? 'Only items with a recorded expected-expiry date within the next three years are included.'
       : incompleteFocus

@@ -202,7 +202,7 @@ test('every declared chip is recognised as a filter continuation, round-trips to
     const prior = view('ALL', null, 1);
     const expectations = {
       'status-all': { status: 'ALL' }, 'status-incomplete': { status: 'INCOMPLETE' }, 'status-lifecycle': { status: 'LIFECYCLE' },
-      'category-all': { category: null }, 'category-hvac': { category: 'HVAC' }, 'category-appliance': { category: 'APPLIANCE' }, 'category-roof': { category: 'ROOF_EXTERIOR' },
+      'category-all': { category: null }, 'category-hvac': { category: 'HVAC' }, 'category-appliance': { category: 'APPLIANCE' }, 'category-roof': { category: 'ROOF_EXTERIOR' }, 'category-electrical': { category: 'ELECTRICAL' }, 'category-plumbing': { category: 'PLUMBING' },
       'order-recorded': { ordering: 'RECORDED' }, 'order-name': { ordering: 'NAME' }, 'order-oldest': { ordering: 'OLDEST' }, 'order-newest': { ordering: 'NEWEST' },
       'order-unverified': { ordering: 'UNVERIFIED' }, 'order-end-of-life': { ordering: 'END_OF_LIFE' }, 'order-system': { ordering: 'SYSTEM' },
     };
@@ -350,4 +350,21 @@ test('ordering in words: each order sorts what is shown, names itself in the ans
     assert.equal(resolveInventoryRefinement('Only show HVAC items', result.parameters.viewState).ordering, 'NAME');
     assert.equal(resolveInventoryRefinement('Now show all inventory items with no filters', result.parameters.viewState)?.ordering ?? 'RECORDED', 'RECORDED');
   } finally { restore(); }
+});
+
+// Electrical and plumbing are recorded categories; their chips appear only when the home has such items (or one is active), so the chip row stays within its cap.
+test('electrical and plumbing chips are offered only when the home has such items, and typed words filter by them', () => {
+  const { inventoryFilterChips, resolveInventoryRefinement } = require('../../src/services/ask/handlers/inventory.handler.ts');
+  const ids = (chips) => chips.map((chip) => chip.id);
+  assert.ok(!ids(inventoryFilterChips('ALL', null)).includes('category-electrical'));
+  assert.ok(!ids(inventoryFilterChips('ALL', null, 'RECORDED', new Set(['HVAC']))).includes('category-plumbing'));
+  assert.ok(ids(inventoryFilterChips('ALL', null, 'RECORDED', new Set(['ELECTRICAL', 'PLUMBING']))).includes('category-electrical'));
+  assert.ok(ids(inventoryFilterChips('ALL', null, 'RECORDED', new Set(['ELECTRICAL', 'PLUMBING']))).includes('category-plumbing'));
+  assert.ok(ids(inventoryFilterChips('ALL', 'PLUMBING')).includes('category-plumbing'), 'an active filter is always shown so it can be cleared');
+  assert.ok(inventoryFilterChips('ALL', null, 'RECORDED', new Set(['ELECTRICAL', 'PLUMBING'])).length <= 18);
+  const prior = view('ALL', null, 1);
+  assert.equal(resolveInventoryRefinement('Only show electrical items', prior).category, 'ELECTRICAL');
+  assert.equal(resolveInventoryRefinement('Only show plumbing items', prior).category, 'PLUMBING');
+  assert.equal(resolveInventoryRefinement('Only show HVAC items', prior).category, 'HVAC', 'existing categories are unchanged');
+  assert.equal(resolveInventoryRefinement('Only show items for the water heater', prior), null, 'a water heater is not read as plumbing');
 });

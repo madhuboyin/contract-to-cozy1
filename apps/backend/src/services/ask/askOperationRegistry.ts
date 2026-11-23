@@ -1503,6 +1503,8 @@ const inventoryListAllPattern = /^\s*(?:(?:show|list|see|give) (?:me )?(?:all|ev
 const inventoryItemRecordPattern = new RegExp(`^\\s*(?:what(?:'s| is)|show me|give me|pull up)\\s+(?:the\\s+)?(?:full|complete|whole)\\s+(?:record|details|information|history|profile)\\s+(?:for|of|on)\\s+(?:my|our|the)\\s+${INVENTORY_ITEM_NOUNS}\\s*\\??\\s*$`, 'i');
 // An attribute question about the recorded items (age, condition, install or purchase year, cost, oldest): the question must be about items, appliances, systems or equipment.
 const inventoryAttributeQuestionPattern = /\b(?:items?|appliances?|systems?|equipment|things|everything|stuff|what(?:'s| is) my oldest|oldest (?:item|appliance|system))\b/i;
+// Electrical and plumbing are recorded inventory categories the answer can filter by.
+const inventoryTradeCategoryPattern = /^\s*(?:show|list|what|which)\b.{0,25}\b(?:electrical|plumbing)\s+(?:items?|fixtures?|equipment|systems?|things)\b.{0,35}\b(?:recorded|in (?:my|our) (?:inventory|home record)|do (?:i|we) have|(?:i|we) (?:have|recorded|added))\b[^.]{0,12}$/i;
 const inventoryNeedsDetailsPattern = /^\s*(?:what|which)\s+(?:items?|appliances?|systems?|equipment)\b.{0,25}\b(?:still\s+)?(?:need|needs|lack|are missing)\b.{0,15}\b(?:to add\s+)?(?:more\s+)?(?:details?|information|info)\b.{0,15}$/i;
 const roomContentsPattern = new RegExp(`\\b(?:items?|appliances?|things|stuff|equipment|inventory|everything|anything)\\b.{0,25}\\b(?:in|inside|from)\\b.{0,15}\\b${ROOM_NAME}\\b|\\bwhat(?:'s| is| do (?:i|we) have)\\s+in\\s+(?:my |our |the |this )?${ROOM_NAME}\\b`, 'i');
 const roomItemWordsPattern = /\b(?:items?|appliances?|stuff|things|equipment|inventory|what(?:'s| is) in)\b/i;
@@ -2128,6 +2130,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (inventoryAttributeQuestionPattern.test(message) && parseInventoryAttributeFilter(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message)
     && !/\b(?:warrant\w*|insur\w*|claims?|documents?|manuals?|receipts?|invoices?|tasks?|bills?|taxes|tax|mortgage|loan|rent\w*|sale|sell\w*)\b/i.test(message)) {
     return resolved('INVENTORY_LOOKUP', 0.94, 'DET_INVENTORY_LOOKUP_10');
+  }
+  if (inventoryTradeCategoryPattern.test(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message)) {
+    return resolved('INVENTORY_LOOKUP', 0.94, 'DET_INVENTORY_LOOKUP_11');
   }
   if (propertyAreaCaptureCommandPattern.test(message)) {
     return resolved('PROPERTY_CONTEXT_AREA_CAPTURE', 1, 'DET_PROPERTY_CONTEXT_AREA_CAPTURE_01');

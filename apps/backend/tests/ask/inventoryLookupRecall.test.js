@@ -42,3 +42,9 @@ test('"needs details" wording is read as the incomplete-records filter by the an
   for (const message of ['What items do I still need to add details for?', 'Which appliances still need more information?', 'Which items lack details?']) assert.equal(isIncompleteInventoryRequest(message), true, message);
   for (const message of ['What appliances do I have?', 'Show me all the items I\'ve recorded', 'Do I have a dehumidifier?']) assert.equal(isIncompleteInventoryRequest(message), false, message);
 });
+
+test('electrical and plumbing category questions are claimed by the inventory lookup, and neighbours are not', () => {
+  for (const m of ['Show the electrical items I recorded', 'What plumbing fixtures do I have recorded?']) assert.equal(claimed(m).rule, 'DET_INVENTORY_LOOKUP_11', m);
+  assert.ok(['INVENTORY_LOOKUP', 'DATA_POINT_READ'].includes(claimed('list the plumbing items in my inventory').op), 'an earlier data-point rule may claim this one, which is an accepted equivalent');
+  for (const m of ['How much does an electrical panel upgrade cost?', 'Schedule a plumbing inspection', 'Show my plumbing warranty', 'Who is my electrical contractor?', 'Add a plumbing item to my inventory', 'What plumbing work was done last year?']) assert.notEqual(claimed(m).rule, 'DET_INVENTORY_LOOKUP_11', m);
+});
