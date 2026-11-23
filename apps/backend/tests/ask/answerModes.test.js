@@ -54,3 +54,34 @@ test('a social reply declares no answer mode, so it is never labelled as a home 
   assert.equal(deriveAnswerMode({ status: 'ANSWERED', operationId: 'GROUNDED_GUIDANCE', hasProperty: true, reasonCode: 'ASK_SOCIAL_TURN' }), null);
   assert.equal(deriveAnswerMode({ status: 'ANSWERED', operationId: 'GROUNDED_GUIDANCE', hasProperty: true }), 'HOME_RECORD', 'other grounded-guidance answers are unchanged');
 });
+
+// BICC-ANS-001/002: a composed answer keeps each facet's own mode.
+const { facetModesOf } = require('../../src/services/ask/support/answerModes.ts');
+const section = (operationId, status = 'ANSWERED', clause = 'part') => ({ operationId, status, clause });
+
+test('a composed answer gets one mode per facet, in delivery order, with the block-id prefix the delivery projection uses', () => {
+  const modes = facetModesOf({ sections: [section('INVENTORY_LOOKUP', 'ANSWERED', 'how old is my roof'), section('ITEM_REPLACEMENT_COST', 'READY_WITH_LIMITATIONS', 'what would a new one cost'), section('REPLACEMENT_GUIDANCE')] });
+  assert.deepEqual(modes.map((m) => [m.blockIdPrefix, m.operationId, m.mode]), [['s1-', 'INVENTORY_LOOKUP', 'HOME_RECORD'], ['s2-', 'ITEM_REPLACEMENT_COST', 'ESTIMATE'], ['s3-', 'REPLACEMENT_GUIDANCE', 'RECOMMENDATION']]);
+  assert.equal(modes[0].clause, 'how old is my roof');
+});
+
+test('facets are never collapsed or relabelled: a record facet and an estimate facet keep different modes', () => {
+  const modes = facetModesOf({ sections: [section('INVENTORY_LOOKUP'), section('ITEM_REPLACEMENT_COST')] });
+  assert.notEqual(modes[0].mode, modes[1].mode);
+});
+
+test('an unavailable or limited facet is judged by its own status, not by its siblings', () => {
+  const modes = facetModesOf({ sections: [section('INVENTORY_LOOKUP'), section('ITEM_REPLACEMENT_COST', 'UNAVAILABLE')] });
+  assert.deepEqual(modes.map((m) => m.mode), ['HOME_RECORD', 'UNAVAILABLE']);
+});
+
+test('fewer than two sections is not a mixed answer, and malformed input yields nothing', () => {
+  assert.deepEqual(facetModesOf({ sections: [section('INVENTORY_LOOKUP')] }), []);
+  for (const bad of [null, undefined, 5, {}, { sections: 'x' }, { sections: [null, 3] }]) assert.deepEqual(facetModesOf(bad), []);
+  const partial = facetModesOf({ sections: [section('INVENTORY_LOOKUP'), { operationId: 7, status: 'ANSWERED' }, section('ITEM_REPLACEMENT_COST')] });
+  assert.deepEqual(partial.map((m) => m.blockIdPrefix), ['s1-', 's3-'], 'a malformed section is skipped without renumbering the others');
+});
+
+test('an unknown operation id gives a null mode rather than throwing', () => {
+  assert.equal(facetModesOf({ sections: [section('NOT_AN_OPERATION'), section('INVENTORY_LOOKUP')] })[0].mode, null);
+});

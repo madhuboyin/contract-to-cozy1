@@ -1701,6 +1701,11 @@ const AskExecutionResponseBaseSchema = z.object({
   regeneratedFromExecutionId: z.string().nullable().default(null),
   /** BICC-ANS-001: the origin and epistemic class of this answer, assigned by the deterministic handler's operation. Null when there is no substantive answer yet. */
   answerMode: z.enum(['HOME_RECORD', 'USER_DOCUMENT', 'CALCULATION', 'ESTIMATE', 'RECOMMENDATION', 'GENERAL_GUIDANCE', 'UNAVAILABLE']).nullable().default(null),
+  /** BICC-ANS-001/002: the mode of each facet of a composed answer, in delivery order. Absent for a single answer. The response-level `answerMode` is null when this is present. */
+  facetModes: z.array(z.object({
+    blockIdPrefix: z.string(), operationId: z.string(), clause: z.string(),
+    mode: z.enum(['HOME_RECORD', 'USER_DOCUMENT', 'CALCULATION', 'ESTIMATE', 'RECOMMENDATION', 'GENERAL_GUIDANCE', 'UNAVAILABLE']).nullable(),
+  })).optional(),
   suggestions: z.array(z.string()).max(5),
   // Present on every result that passed through the governed Suggested Next Action finalizer. Historical
   // executions predate this marker and may still render their string suggestions; governed results never do.

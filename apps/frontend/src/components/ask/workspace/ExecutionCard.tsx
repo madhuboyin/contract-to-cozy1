@@ -1,6 +1,6 @@
 'use client';
 
-import { MutableRefObject, ReactNode, useEffect, useRef, useState } from 'react';
+import { Fragment, MutableRefObject, ReactNode, useEffect, useRef, useState } from 'react';
 import { Check, Copy, MoreHorizontal, Pin, PinOff, RefreshCw, Send, Sparkles, ThumbsDown, ThumbsUp, ChevronDown, ChevronUp } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
@@ -23,6 +23,7 @@ import { askAnswerWidth, askAnswerWidthClass } from '@/features/ask/answerLayout
 import { handoffLabel, handoffPrompt } from '@/features/ask/skillHandoff';
 import { answerPlainText } from '@/features/ask/answerText';
 import { AnswerModeBadge } from './AnswerModeBadge';
+import { facetBadgeFor, facetClauseFor } from '@/features/ask/answerModeLabel';
 import { AskPromptAttribution, FOCUSABLE_SELECTOR, draftStorageKey } from './support';
 import { ClarificationCard, ConfirmationCard, InlineCaptureCard, PendingOutcomeCard, PropertySelectionCard } from './CaptureCards';
 
@@ -385,7 +386,7 @@ export function ExecutionCard({
         )}
         <div ref={bodyRef} className={cn('space-y-3', calmChrome && FRAMELESS_LISTS)}>
           <CalmReceiptContext.Provider value={receiptContinuation}><AskBlockActionContext.Provider value={{ disabled: loading || refreshing || refreshPending || Boolean(refreshError), invoke: dispatchBlockAction }}>
-            <BlockSequence blocks={shownBlocks} renderBlock={(block, index) => <CalmSecondaryContext.Provider key={block.id} value={calmChrome && block.type === 'CAPABILITY_LIST' && index > 0}><BlockView block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onWorkspaceExecutionComplete={updateExecution} onBatchItemAction={(batch) => void ask(batch.message, undefined, { sourceExecutionId: execution.executionId, operationId: batch.operationId, entityType: batch.entityType, batchDecisions: batch.decisions })} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId, operationId: execution.operation?.id })} onCollectionPage={(sectionId, direction) => void ask(`${direction === 'NEXT' ? 'Show next' : 'Show previous'} results`, undefined, { sourceExecutionId: execution.executionId, operationId: execution.operation?.id, entityType: 'ASK_COLLECTION_SECTION', entityId: sectionId, actionId: `${direction}_PAGE` })} onAccessLost={() => onAccessLost(execution)} onOpenContext={onOpenContext} /></CalmSecondaryContext.Provider>} />
+            <BlockSequence blocks={shownBlocks} renderBlock={(block, index) => <Fragment key={block.id}>{facetBadgeFor(execution.facetModes, shownBlocks, block) && <AnswerModeBadge mode={facetBadgeFor(execution.facetModes, shownBlocks, block)} facetLabel={facetClauseFor(execution.facetModes, block)} />}<CalmSecondaryContext.Provider value={calmChrome && block.type === 'CAPABILITY_LIST' && index > 0}><BlockView block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onWorkspaceExecutionComplete={updateExecution} onBatchItemAction={(batch) => void ask(batch.message, undefined, { sourceExecutionId: execution.executionId, operationId: batch.operationId, entityType: batch.entityType, batchDecisions: batch.decisions })} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId, operationId: execution.operation?.id })} onCollectionPage={(sectionId, direction) => void ask(`${direction === 'NEXT' ? 'Show next' : 'Show previous'} results`, undefined, { sourceExecutionId: execution.executionId, operationId: execution.operation?.id, entityType: 'ASK_COLLECTION_SECTION', entityId: sectionId, actionId: `${direction}_PAGE` })} onAccessLost={() => onAccessLost(execution)} onOpenContext={onOpenContext} /></CalmSecondaryContext.Provider></Fragment>} />
             {hasResponseContext(execution) && !calmChrome && <ResponseContextSummary execution={execution} open={contextOpen} onOpen={onOpenContext} />}
           </AskBlockActionContext.Provider></CalmReceiptContext.Provider>
           {/* ACUI-003: the trust line sits directly under the core answer, before any capture, review or handoff card. */}

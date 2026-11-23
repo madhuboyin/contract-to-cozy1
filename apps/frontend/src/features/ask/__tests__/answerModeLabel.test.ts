@@ -29,3 +29,36 @@ describe('answerModeLabel', () => {
     expect(`${label.text} ${label.description}`).not.toMatch(/guarantee|exact|quote:/i);
   });
 });
+
+import { facetBadgeFor, facetClauseFor } from '../answerModeLabel';
+
+// BICC-ANS-001/002: a composed answer labels each part once, on its first block, with that part's own mode.
+describe('facet badges', () => {
+  const facets = [
+    { blockIdPrefix: 's1-', operationId: 'INVENTORY_LOOKUP', mode: 'HOME_RECORD' as const, clause: 'how old is my roof' },
+    { blockIdPrefix: 's2-', operationId: 'ITEM_REPLACEMENT_COST', mode: 'ESTIMATE' as const, clause: 'what would a new one cost' },
+    { blockIdPrefix: 's3-', operationId: 'X', mode: null, clause: 'unlabelled' },
+  ];
+  const blocks = [{ id: 'composite-answer-first' }, { id: 's1-summary' }, { id: 's1-list' }, { id: 's2-summary' }, { id: 's2-evidence' }, { id: 's3-summary' }];
+
+  it('labels the first block of each part with that part’s own mode, and only that block', () => {
+    const labelled = blocks.map((block) => facetBadgeFor(facets, blocks, block));
+    expect(labelled).toEqual([null, 'HOME_RECORD', null, 'ESTIMATE', null, null]);
+  });
+
+  it('shows nothing for a part with no mode, for a single answer, or when there are no facets', () => {
+    expect(facetBadgeFor(facets, blocks, { id: 's3-summary' })).toBeNull();
+    expect(facetBadgeFor(undefined, blocks, blocks[1])).toBeNull();
+    expect(facetBadgeFor([], blocks, blocks[1])).toBeNull();
+  });
+
+  it('does not mislabel when a facet’s first block was filtered out of the shown blocks', () => {
+    const shown = [{ id: 's2-evidence' }];
+    expect(facetBadgeFor(facets, shown, shown[0])).toBe('ESTIMATE');
+  });
+
+  it('names the clause a part answers', () => {
+    expect(facetClauseFor(facets, { id: 's2-evidence' })).toBe('what would a new one cost');
+    expect(facetClauseFor(facets, { id: 'composite-answer-first' })).toBeNull();
+  });
+});

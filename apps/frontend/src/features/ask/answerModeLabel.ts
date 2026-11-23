@@ -20,3 +20,22 @@ export function answerModeLabel(mode: AskExecutionResponse['answerMode']): Answe
   if (!mode || mode === 'UNAVAILABLE') return null;
   return LABELS[mode] ?? null;
 }
+
+export interface FacetMode { blockIdPrefix: string; operationId: string; mode: AnswerMode | null; clause: string }
+
+/**
+ * BICC-ANS-001/002: for a composed answer, the mode to show above a block, or null. The badge goes on the FIRST block of each facet only (a facet's later blocks
+ * stay unlabelled), and a facet with no mode shows nothing.
+ */
+export function facetBadgeFor(facetModes: readonly FacetMode[] | undefined, blocks: ReadonlyArray<{ id: string }>, block: { id: string }): AnswerMode | null {
+  if (!facetModes?.length) return null;
+  const facet = facetModes.find((candidate) => block.id.startsWith(candidate.blockIdPrefix));
+  if (!facet?.mode) return null;
+  const first = blocks.find((candidate) => candidate.id.startsWith(facet.blockIdPrefix));
+  return first && first.id === block.id ? facet.mode : null;
+}
+
+/** The part of the question this facet answers, for the badge's assistive text. */
+export function facetClauseFor(facetModes: readonly FacetMode[] | undefined, block: { id: string }): string | null {
+  return facetModes?.find((candidate) => block.id.startsWith(candidate.blockIdPrefix))?.clause || null;
+}

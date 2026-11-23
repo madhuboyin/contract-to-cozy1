@@ -25,3 +25,11 @@ describe('AnswerModeBadge', () => {
     }
   });
 });
+
+describe('AnswerModeBadge for one part of a composed answer', () => {
+  it('names the part it labels for assistive technology', () => {
+    const { container } = render(<AnswerModeBadge mode="ESTIMATE" facetLabel="what would a new one cost" />);
+    expect(container.textContent).toContain('Answer type for “what would a new one cost”: ');
+    expect(screen.getByText('Estimate')).toBeInTheDocument();
+  });
+});

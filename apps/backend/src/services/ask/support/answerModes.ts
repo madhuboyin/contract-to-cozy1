@@ -38,3 +38,24 @@ export function deriveAnswerMode(input: { status: string; operationId: AskOperat
     default: return ESTIMATE_OPERATIONS.has(input.operationId) ? 'ESTIMATE' : 'HOME_RECORD';
   }
 }
+
+/** One facet of a composed answer and the mode of its own operation (BICC-ANS-001/002): a mixed answer keeps each facet's label and is never collapsed to one. */
+export interface FacetMode { /** Every block of this facet has an id starting with this prefix (the delivery projection's `sN-`). */ blockIdPrefix: string; operationId: string; mode: AnswerMode | null; clause: string }
+
+/**
+ * The per-facet modes of a stored composite, in delivery order. A section's mode is derived from its own operation and status exactly as a single answer's is.
+ * Fewer than two sections is not a mixed answer, so no facet modes are produced and the response-level mode stands.
+ */
+export function facetModesOf(composite: unknown): FacetMode[] {
+  const sections = composite && typeof composite === 'object' ? (composite as { sections?: unknown }).sections : null;
+  if (!Array.isArray(sections) || sections.length < 2) return [];
+  const modes: FacetMode[] = [];
+  sections.forEach((section, index) => {
+    const entry = section as { operationId?: unknown; status?: unknown; reasonCode?: unknown; clause?: unknown };
+    if (typeof entry?.operationId !== 'string' || typeof entry.status !== 'string') return;
+    let mode: AnswerMode | null = null;
+    try { mode = deriveAnswerMode({ status: entry.status, operationId: entry.operationId as AskOperationId, hasProperty: true, reasonCode: typeof entry.reasonCode === 'string' ? entry.reasonCode : null }); } catch { mode = null; }
+    modes.push({ blockIdPrefix: `s${index + 1}-`, operationId: entry.operationId, mode, clause: typeof entry.clause === 'string' ? entry.clause.slice(0, 200) : '' });
+  });
+  return modes;
+}
