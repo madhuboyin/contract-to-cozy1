@@ -60,9 +60,31 @@ const dataPoints = DATA_POINT_DEFINITIONS.map((point) => {
 const statusCounts = {}; for (const p of dataPoints) statusCounts[p.status] = (statusCounts[p.status] ?? 0) + 1;
 const ids = dataPoints.map((p) => p.id);
 
+// ---------------- capabilities (BICC-OPS-004): the adapter behind every operation, from the handler registry itself ----------------
+// Handlers register at import time and live in several folders (handlers/, execution/askCapture.ts, support/capabilityDiscovery.ts), so every file that registers one is found by content, not by name.
+const askRoot = path.join(BACKEND, 'src/services/ask');
+const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => (entry.isDirectory() ? walk(path.join(dir, entry.name)) : [path.join(dir, entry.name)]));
+const registeringFiles = walk(askRoot).filter((file) => file.endsWith('.ts') && !file.endsWith('capabilityHandlerRegistry.ts') && /\bregisterCapabilityHandler\(/.test(fs.readFileSync(file, 'utf8'))).sort();
+for (const file of registeringFiles) require(file);
+const { registeredCapabilityHandlerKeys } = ask('capabilityHandlerRegistry.ts');
+const registeredKeys = registeredCapabilityHandlerKeys();
+const adapterToOps = new Map();
+for (const [id, def] of Object.entries(ASK_OPERATION_DEFINITIONS)) adapterToOps.set(def.adapterKey, [...(adapterToOps.get(def.adapterKey) ?? []), id]);
+const capabilities = {
+  registeringFiles: registeringFiles.length,
+  registeredHandlers: registeredKeys.length,
+  adaptersReferencedByOperations: adapterToOps.size,
+  operationsWithoutHandler: [...adapterToOps.entries()].filter(([key]) => !registeredKeys.includes(key)).flatMap(([, ops]) => ops).sort(),
+  handlersNoOperationUses: registeredKeys.filter((key) => !adapterToOps.has(key)),
+  adaptersSharedByOperations: [...adapterToOps.entries()].filter(([, ops]) => ops.length > 1).map(([key, ops]) => ({ adapter: key, operations: ops.sort() })).sort((a, b) => a.adapter.localeCompare(b.adapter)),
+  operationsByEffect: Object.fromEntries(Object.entries(operations.reduce((acc, op) => { acc[op.effect ?? 'UNDECLARED'] = (acc[op.effect ?? 'UNDECLARED'] ?? 0) + 1; return acc; }, {})).sort()),
+  writeCapableOperations: operations.filter((op) => isWriteCapableOperation(op.id)).length,
+};
+
 const inventory = {
   scope: 'DETERMINISTIC_REACH_EVIDENCE_NO_GATE_CLAIMED',
   operations: { total: operations.length, byRoute: routeCounts, rows: operations },
+  capabilities,
   dataPoints: { total: dataPoints.length, byStatus: statusCounts, duplicateIds: ids.length - new Set(ids).size, untuned: dataPoints.filter((p) => !p.tunedQuestions).length, rows: dataPoints },
   missingTargets: dataPoints.filter((p) => p.gap).map((p) => ({ id: p.id, gap: p.gap, competing: p.competing })),
 };
@@ -80,7 +102,14 @@ if (val('md')) {
     `Data points with no tuning question (\`askBasicQuestions.json\`): **${inventory.dataPoints.untuned}** of ${dataPoints.length}.`, '',
     '## 3. Missing-target list', '',
     inventory.missingTargets.length ? ['| Data point | Gap class | Competing point(s) |', '|---|---|---|', ...inventory.missingTargets.map((m) => `| \`${m.id}\` | ${m.gap === 'MISSING_ALIAS_OR_CUE' ? 'missing alias or cue (parser/catalogue gap)' : 'alias collision (entity/filter gap)'} | ${m.competing.map((c) => `\`${c}\``).join(', ') || '—'} |`)].join('\n') : 'None: every data point is reachable by its own aliases.', '',
-    '## 4. Limits', '',
+    '## 4. Capabilities', '', 'Generated from the capability-handler registry and the operation definitions (BICC-OPS-004), so no hand-counted total is kept in prose.', '',
+    `- Registered capability handlers: **${capabilities.registeredHandlers}** (from ${capabilities.registeringFiles} source files); adapters referenced by operations: **${capabilities.adaptersReferencedByOperations}**.`,
+    `- Operations with no registered handler: **${capabilities.operationsWithoutHandler.length}**${capabilities.operationsWithoutHandler.length ? ` (${capabilities.operationsWithoutHandler.map((id) => `\`${id}\``).join(', ')})` : ''}.`,
+    `- Handlers no operation uses: **${capabilities.handlersNoOperationUses.length}**${capabilities.handlersNoOperationUses.length ? ` (${capabilities.handlersNoOperationUses.map((key) => `\`${key}\``).join(', ')})` : ''}.`,
+    `- Write-capable operations (preview or confirmation first): **${capabilities.writeCapableOperations}**.`,
+    `- Operations by declared effect: ${Object.entries(capabilities.operationsByEffect).map(([k, v]) => `${k} ${v}`).join(', ')}.`,
+    `- Adapters shared by more than one operation: **${capabilities.adaptersSharedByOperations.length}**${capabilities.adaptersSharedByOperations.length ? ` (${capabilities.adaptersSharedByOperations.map((entry) => `\`${entry.adapter}\` ← ${entry.operations.join(', ')}`).join('; ')})` : ''}.`, '',
+    '## 5. Limits', '',
     '- Probes are generated from the catalogue itself, so they measure whether the catalogue can reach its own entries, not whether real homeowner phrasings do (that is the held-out measure, `BICC-GATE-001`/`-003`).',
     '- Entity-level data reachability (which database entities Ask can read) is measured separately by `scripts/ask-data-reachability.js`.',
     '- Gap classes available beyond these two (unavailable canonical reader, intentional boundary) need a reader and boundary inventory and are not derived here.', '',
@@ -89,4 +118,5 @@ if (val('md')) {
 }
 console.log(`operations ${operations.length} (${Object.entries(routeCounts).map(([k, v]) => `${k} ${v}`).join(', ')})`);
 console.log(`data points ${dataPoints.length} (${Object.entries(statusCounts).map(([k, v]) => `${k} ${v}`).join(', ')}); untuned ${inventory.dataPoints.untuned}`);
+console.log(`capabilities: ${capabilities.registeredHandlers} handlers, ${capabilities.operationsWithoutHandler.length} operations without a handler, ${capabilities.handlersNoOperationUses.length} unused handlers`);
 console.log(`missing targets ${inventory.missingTargets.length}`);

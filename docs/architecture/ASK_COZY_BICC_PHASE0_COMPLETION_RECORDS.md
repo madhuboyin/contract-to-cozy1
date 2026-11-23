@@ -278,3 +278,7 @@ The inventory answer can now filter by two more recorded categories, electrical 
 
 **Photos: not built, needs your decision.** The inventory record has no photo field, so "which items have no photos" cannot be answered. Adding it is a data-model change (and likely an upload path), not an Ask change.
 Evidence: `inventoryRefinementRuntime` 17 pass, `inventoryLookupRecall` 4 pass; Ask suite 6277 tests, 292 failing, none new; backend typecheck clean.
+
+### Capability-level inventory (BICC-OPS-004, 2026-11-23)
+
+`scripts/ask-bicc-reach-inventory.js` now also generates a capabilities section from the capability-handler registry (`registeredCapabilityHandlerKeys`, a read-only accessor added to the registry) and the operation definitions: 231 registered handlers from 139 source files against 231 operations, none missing, none orphaned, no adapter shared, 130 write-capable operations (all preview or confirmation first), effect mix READ 100 / WRITE 128 / BOUNDARY 3. Output is in `ASK_COZY_BICC_REACH_INVENTORY.md` section 4. Handlers register at import time in several folders, so the script finds registering files by content; my first version only scanned `handlers/` and reported one operation (`PROPERTY_CONTEXT_AREA_CAPTURE`) as having no handler, which was the script's blind spot, not a missing handler (it registers in `execution/askCapture.ts`). Tests: 2 new in `biccReachInventory.test.js`. Not covered: skills, capability cards and discovery bindings are not enumerated.

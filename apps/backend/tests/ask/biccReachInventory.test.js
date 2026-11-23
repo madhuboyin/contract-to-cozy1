@@ -42,3 +42,19 @@ test('the missing-target list is exactly the unreachable or colliding data point
 test('no operation is reported as a certified fast path while no certificate exists', () => {
   assert.equal(inventory.operations.byRoute.CERTIFIED_FAST_PATH ?? 0, inventory.operations.rows.filter((row) => row.fastPathCertified > 0 && row.route === 'CERTIFIED_FAST_PATH').length);
 });
+
+// BICC-OPS-004: the capability inventory comes from the handler registry itself, so a drift between operations and handlers is a generated finding, not prose.
+test('every operation has a registered capability handler and no handler is orphaned', () => {
+  const c = inventory.capabilities;
+  assert.deepEqual(c.operationsWithoutHandler, []);
+  assert.deepEqual(c.handlersNoOperationUses, []);
+  assert.equal(c.registeredHandlers, c.adaptersReferencedByOperations);
+  assert.equal(c.registeredHandlers, Object.keys(ASK_OPERATION_DEFINITIONS).length, 'one handler per operation');
+});
+
+test('the capability counts are generated from the registries and agree with the operation rows', () => {
+  const c = inventory.capabilities;
+  assert.equal(Object.values(c.operationsByEffect).reduce((n, v) => n + v, 0), inventory.operations.total);
+  assert.ok(c.writeCapableOperations > 0 && c.writeCapableOperations <= inventory.operations.total);
+  assert.ok(c.registeringFiles > 0);
+});

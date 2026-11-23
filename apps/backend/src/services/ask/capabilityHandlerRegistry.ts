@@ -74,6 +74,11 @@ const registrationIssues: string[] = [];
 // below, aggregated into the same fail-fast startup check every other Ask
 // registry already uses (index.ts's askRegistryIssues), rather than thrown
 // synchronously on the first duplicate encountered.
+/** The adapter keys that have a registered handler, sorted (BICC-OPS-004: the capability inventory is generated from this registry, not hand-counted). */
+export function registeredCapabilityHandlerKeys(): string[] {
+  return [...registry.keys()].sort();
+}
+
 export function registerCapabilityHandler(adapterKey: string, handler: CapabilityHandler): void {
   if (registry.has(adapterKey)) {
     registrationIssues.push(`${adapterKey}: duplicate capability handler registration`);

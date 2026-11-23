@@ -34,7 +34,18 @@ Data points with no tuning question (`askBasicQuestions.json`): **83** of 107.
 |---|---|---|
 | `taxAssessment.totalAssessedValue` | alias collision (entity/filter gap) | `taxAssessment.assessmentDate` |
 
-## 4. Limits
+## 4. Capabilities
+
+Generated from the capability-handler registry and the operation definitions (BICC-OPS-004), so no hand-counted total is kept in prose.
+
+- Registered capability handlers: **231** (from 139 source files); adapters referenced by operations: **231**.
+- Operations with no registered handler: **0**.
+- Handlers no operation uses: **0**.
+- Write-capable operations (preview or confirmation first): **130**.
+- Operations by declared effect: BOUNDARY 3, READ 100, WRITE 128.
+- Adapters shared by more than one operation: **0**.
+
+## 5. Limits
 
 - Probes are generated from the catalogue itself, so they measure whether the catalogue can reach its own entries, not whether real homeowner phrasings do (that is the held-out measure, `BICC-GATE-001`/`-003`).
 - Entity-level data reachability (which database entities Ask can read) is measured separately by `scripts/ask-data-reachability.js`.
