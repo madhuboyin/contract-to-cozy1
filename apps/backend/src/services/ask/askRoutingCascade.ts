@@ -26,6 +26,8 @@ const HOME_VALUE_GROWTH_PATTERN = /\b(?:increase|raise|boost|grow|improve|add to
 const SMALL_TALK_PATTERN = /^\s*(?:hi|hello|hey|good (?:morning|afternoon|evening|night)|thanks?|thank you(?: so much| very much)?|ok(?:ay)?|cool|great|how are you(?: doing)?(?: today)?|how'?s it going|how is my day(?: going| been| so far)?|how'?s my day(?: going| been| so far)?|how is your day(?: going)?|what'?s up|tell me a joke)\b[\s\S]{0,20}$/i;
 
 /** PROVISIONAL: an uncertified deterministic rule matched a harmless read. The read may run, but its result must pass the full delivery gate and never gets the canonical bypass (FR-FAST, FR-GATE). */
+import { classifySocialTurn, type SocialTurnKind } from './support/socialTurn';
+
 export type AskRoutingStage = 'SAFETY' | 'DETERMINISTIC' | 'PROVISIONAL' | 'LOCAL_CLASSIFIER' | 'MODEL_CLASSIFIER' | 'CLARIFICATION' | 'REMOTE_FALLBACK';
 
 export interface AskRoutingCandidate {
@@ -48,6 +50,8 @@ export interface AskRoutingDecision {
   requiresClarification: boolean;
   entityResolution: AskEntityResolutionResult | null;
   fastPathLineage?: { ruleId: string; version: string; status: 'CERTIFIED' | 'DEMOTED' } | null;
+  /** BICC-UX-010: the whole message is a social phrase (greeting, thanks, acknowledgement...). The turn gets the authored social reply and runs no tool. */
+  socialTurn?: SocialTurnKind;
 }
 
 export function propertyScopeForAskRouting(
@@ -85,6 +89,12 @@ export function resolveAskRoutingCascade(rawMessage: string, options: {
   const directRule = direct.operationId === 'GROUNDED_GUIDANCE' || isSafetyBoundary(direct.operationId) ? null : fastPathRuleForResolution(direct);
   if (direct.operationId === 'EMERGENCY_BOUNDARY' || direct.operationId === 'UNSAFE_RESTRICTED_BOUNDARY' || direct.operationId === 'OUT_OF_SCOPE_BOUNDARY') {
     return { language, operation: direct, stage: 'SAFETY', candidates: [{ operationId: direct.operationId, language, confidence: direct.confidence, confidenceBand: 'HIGH' }], requiresClarification: false, entityResolution: null };
+  }
+  // BICC-UX-010: a message that is only a social phrase is answered by the authored social reply. It is decided right after safety (an emergency always wins) and before
+  // any rule, so no tool, clarification or suggested-action row can attach to it; a request that merely opens with a greeting is not a social turn.
+  const socialTurn = classifySocialTurn(rawMessage);
+  if (socialTurn) {
+    return { language, operation: direct, stage: 'REMOTE_FALLBACK', candidates: [], requiresClarification: false, entityResolution: null, socialTurn };
   }
   if (direct.operationId !== 'GROUNDED_GUIDANCE') {
     const rule = directRule;

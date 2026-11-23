@@ -148,3 +148,10 @@ Not done: the update path covers maintenance tasks only; slot carry uses the sum
 Evidence: `followUpSummaryGate.test.js` and `conversationSummary.test.js` 39 pass (deleted entity, access lost, scoping of the existence check, inventory update and refusals, real-checks scoping); typecheck clean; the Ask suite shows no new failures.
 
 Not done: the inventory row shape (`id` and `entityType` on a single list row) is tested with synthetic rows, not confirmed against a real inventory answer; other entity types are assumed to exist; the real checks have not run against a real database.
+
+### Social-turn contract (BICC-UX-010, 2026-11-23)
+
+A message that is only a social phrase (greeting, thanks, acknowledgement, goodbye, "how are you", "how is my day", "tell me a joke") is decided right after safety in the routing cascade (`classifySocialTurn`, `support/socialTurn.ts`) and answered with one authored summary block: no tool, no clarification, no confirmation, no capture, empty suggestions (so no suggested-action row) and no skill handoff. Wording is fixed, brief, and states no home fact, memory, feeling or completed work; the day-check reply says it cannot see the person's day. A message that adds anything ("hi, what is due this week", "thanks, now complete the gutter task") is not a social turn and routes normally; an emergency still wins because safety is decided first.
+
+Evidence: `tests/ask/socialTurn.test.js` 5 pass; typecheck clean; Ask suite 292 failing, none new versus the previous run.
+Not done: the old small-talk branch still routes its wider phrases ("what's up today?") to the fallback; reply wording is English only; not run on a real database or in a browser.
