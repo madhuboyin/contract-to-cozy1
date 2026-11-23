@@ -61,9 +61,10 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "OUT_OF_SCOPE_BOUNDARY",
   "confidence": 0.99,
   "order": 4,
-  "hash": "4650418506c6fc58",
+  "hash": "c4c716bb9ca54bdc",
   "condition": "isPortfolioQuestion(message)",
   "references": [
+   "support/portfolioAndLanguage.ts:CANDIDATE_HOMES_WORDING",
    "support/portfolioAndLanguage.ts:HOME_NOUN",
    "support/portfolioAndLanguage.ts:PORTFOLIO_PATTERNS",
    "support/portfolioAndLanguage.ts:isPortfolioQuestion"

@@ -36,6 +36,7 @@ test('no homes: an honest empty state that assumes nothing, with no action that 
     assert.equal(result.blocks[0].type, 'EMPTY_STATE');
     assert.deepEqual(result.blocks[0].actions, []);
     assert.match(result.blocks[0].body, /Nothing is assumed/);
+    assert.match(result.blocks[0].body, /Homes I’m considering/, 'it says where to add a home');
     assert.deepEqual(calls, [['u1', 'ACTIVE']], 'read for this person, active homes only');
   });
 });
@@ -118,4 +119,16 @@ test('candidate questions reach the new operation and no existing buyer or homeo
     assert.notEqual(resolveAskRoutingCascade(m, { propertyId: 'p1' }).operation.operationId, 'CANDIDATE_HOMES_REVIEW', m);
   }
   void resolveAskOperation;
+});
+
+test('the phrase the Compare button sends reaches this operation', () => {
+  const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
+  assert.equal(resolveAskRoutingCascade('Compare my candidate homes', {}).operation.operationId, 'CANDIDATE_HOMES_REVIEW');
+  assert.equal(resolveAskRoutingCascade('Compare my candidate homes', { propertyId: 'p1' }).operation.operationId, 'CANDIDATE_HOMES_REVIEW', 'also with a home selected');
+});
+
+test('a question about the homes a buyer is considering is not refused as a portfolio question about owned homes, while real portfolio questions still are', () => {
+  const { isPortfolioQuestion } = require('../../src/services/ask/support/portfolioAndLanguage.ts');
+  for (const m of ['Compare my candidate homes', 'Compare my homes I am considering', 'Compare the homes I am thinking of buying', 'How do my shortlisted houses compare', 'which of my candidate homes has the lowest property tax', 'compare my homes I might buy']) assert.equal(isPortfolioQuestion(m), false, m);
+  for (const m of ['which of my homes has overdue maintenance', 'compare my two houses', 'across all my properties', 'how many of my rentals have a leak']) assert.equal(isPortfolioQuestion(m), true, m);
 });

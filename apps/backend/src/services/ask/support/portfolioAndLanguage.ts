@@ -19,7 +19,12 @@ const PORTFOLIO_PATTERNS: readonly RegExp[] = [
   new RegExp(`\\b(?:my|our)\\s+(?:other|second|third|rental|investment|vacation)\\s+(?:home|house|property)s?\\b[^.?!]{0,30}\\b(?:and|versus|vs|compared)\\b`, 'i'),
 ];
 
+// The homes a buyer is considering are a different scope from the homes they own (BICC-BUY-003): a question about them is answered by the candidate-homes operation, not
+// refused as a portfolio question about owned homes. Deliberately narrow: only wording that says the homes are candidates.
+const CANDIDATE_HOMES_WORDING = new RegExp(`\\b(?:candidate|shortlist(?:ed)?|considering|thinking (?:of|about) buying|looking at buying|might buy|want to buy|plan(?:ning)? to buy|(?:saved|added) (?:as )?candidates?)\\b`, 'i');
+
 export function isPortfolioQuestion(message: string): boolean {
+  if (CANDIDATE_HOMES_WORDING.test(message)) return false;
   return PORTFOLIO_PATTERNS.some((pattern) => pattern.test(message));
 }
 

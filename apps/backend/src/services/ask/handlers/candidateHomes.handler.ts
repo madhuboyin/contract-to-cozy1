@@ -38,7 +38,7 @@ export async function candidateHomesReviewResult(userId: string, message: string
   if (!rows.length) {
     return {
       status: 'ANSWERED', reasonCode: 'CANDIDATE_HOMES_NONE', suggestions: [],
-      blocks: [{ type: 'EMPTY_STATE', id: 'candidate-homes-empty', title: 'No homes added yet', body: 'You have not added any homes you are considering. Once you add two or more with their price and costs, I can compare them side by side and show what each would cost to buy and own. Nothing is assumed for you.', actions: [] }] as AskPresentationBlock[],
+      blocks: [{ type: 'EMPTY_STATE', id: 'candidate-homes-empty', title: 'No homes added yet', body: 'You have not added any homes you are considering. Use the “Homes I’m considering” button beside the message box to add them. Once you add two or more with their price and costs, I can compare them side by side and show what each would cost to buy and own. Nothing is assumed for you.', actions: [] }] as AskPresentationBlock[],
     };
   }
 
@@ -47,7 +47,7 @@ export async function candidateHomesReviewResult(userId: string, message: string
     return {
       status: 'READY_WITH_LIMITATIONS', reasonCode: 'CANDIDATE_HOMES_ONE', suggestions: [],
       blocks: [
-        { type: 'SUMMARY', id: 'candidate-homes-summary', title: `You have one home added: ${rows[0].label}`, body: 'Add a second home and I can compare them. Here is what its cost looks like from the numbers you entered.', tone: 'DEFAULT', actions: [] },
+        { type: 'SUMMARY', id: 'candidate-homes-summary', title: `You have one home added: ${rows[0].label}`, body: 'Add a second home with the “Homes I’m considering” button beside the message box and I can compare them. Here is what its cost looks like from the numbers you entered.', tone: 'DEFAULT', actions: [] },
         costTable([rows[0]], [cost]),
         { type: 'LIMITATION', id: 'candidate-homes-cost-limit', title: 'These are estimates', body: BUYER_COST_DISCLAIMER, severity: 'INFO' },
       ] as AskPresentationBlock[],

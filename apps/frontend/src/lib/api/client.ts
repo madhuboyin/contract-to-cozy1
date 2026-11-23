@@ -1047,6 +1047,19 @@ class APIClient {
   async regenerateAskExecution(executionId: string, clientRequestId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/regenerate`, { method: 'POST', body: { clientRequestId }, signal: options.signal });
   }
+  // BICC-4.1: the buyer's own candidate homes (not a Property; scoped to the signed-in person).
+  async listAskCandidates(options: { signal?: AbortSignal } = {}): Promise<APIResponse<{ candidates: import('@/features/ask/candidateHomes').CandidateHome[] }>> {
+    return this.request('/api/ask/candidates', { signal: options.signal });
+  }
+  async createAskCandidate(payload: Record<string, string | number | null>): Promise<APIResponse<import('@/features/ask/candidateHomes').CandidateHome>> {
+    return this.request('/api/ask/candidates', { method: 'POST', body: payload });
+  }
+  async updateAskCandidate(id: string, payload: Record<string, string | number | null>): Promise<APIResponse<import('@/features/ask/candidateHomes').CandidateHome>> {
+    return this.request(`/api/ask/candidates/${encodeURIComponent(id)}`, { method: 'PATCH', body: payload });
+  }
+  async deleteAskCandidate(id: string): Promise<APIResponse<{ deleted: boolean }>> {
+    return this.request(`/api/ask/candidates/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
   async getConciergeHome(propertyId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<ConciergeHomeView>> {
     return this.request<ConciergeHomeView>(`/api/ask/concierge-home?propertyId=${encodeURIComponent(propertyId)}`, options);
   }

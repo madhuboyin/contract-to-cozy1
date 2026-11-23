@@ -10,6 +10,8 @@ import { VoiceInputButton } from './VoiceInputButton';
 import { ComposerIntakeButton } from './intake/ComposerIntakeButton';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AskIntakeDialog } from './intake/AskIntakeDialog';
+import { CandidateHomesDialog } from './candidates/CandidateHomesDialog';
+import { ComposerCandidatesButton } from './candidates/ComposerCandidatesButton';
 import { RouteContextStarter } from './RouteContextStarter';
 import type { RouteAskContext } from '@/features/ask/routeContext';
 import type { AskAction, AskCapabilityPrompt, AskExecutionResponse, AskPendingWorkItem, AskRecentSessionSummary, AskSessionChange } from '@/features/ask/types';
@@ -84,6 +86,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const [input, setInput] = useState('');
   const [intakeOpen, setIntakeOpen] = useState(false);
   const intakeOpenerRef = useRef<HTMLElement | null>(null);
+  // BICC-4.1: the buyer's own candidate homes (a dialog inside Ask; not a property and not a home record).
+  const [candidatesOpen, setCandidatesOpen] = useState(false);
+  const candidatesOpenerRef = useRef<HTMLElement | null>(null);
   const intakeSourceExecutionRef = useRef<AskExecutionResponse | null>(null);
   const inputRef = useRef('');
   inputRef.current = input;
@@ -395,6 +400,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         {latestExecution && composerAffordances.map((affordance) => <AttachEvidenceControl key={affordance.id} variant="composer" label={affordance.label}
           event={{ entityType: affordance.target.entityType, id: affordance.target.id, title: affordance.target.title }} propertyId={selectedPropertyId} disabled={loading || !sessionId}
           onAttached={(documentId) => void ask(affordance.target.message, undefined, { entityType: affordance.target.entityType, entityId: affordance.target.id, sourceExecutionId: latestExecution.executionId, operationId: 'CAPTURE_EVIDENCE_CONFIRM', documentId })} />)}
+        <ComposerCandidatesButton disabled={loading} embedded={placement === 'hero' && calm} onOpen={(opener) => { candidatesOpenerRef.current = opener; setCandidatesOpen(true); }} />
         <ComposerIntakeButton propertyId={selectedPropertyId} disabled={loading} embedded={placement === 'hero' && calm} onOpen={(opener) => openFileIntake(opener)} />
         <VoiceInputButton large={placement === 'hero' && !calm} embedded={placement === 'hero' && calm} disabled={loading || !sessionId} getValue={() => inputRef.current}
           onChange={(value) => { setInput(value); if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), value); }} />
@@ -408,6 +414,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
   return (
     <AskInlineContext.Provider value={inlineApi}>
+    <CandidateHomesDialog open={candidatesOpen} onOpenChange={setCandidatesOpen} returnFocusRef={candidatesOpenerRef} onCompare={() => void ask('Compare my candidate homes')} />
     <AskIntakeDialog open={intakeOpen} onOpenChange={setIntakeOpen} presetKind={intakePresetKind} propertyId={selectedPropertyId} returnFocusRef={intakeOpenerRef} onRecordChanged={refreshIntakeSource} seedFiles={intakeSeedFiles} onSeedConsumed={() => setIntakeSeedFiles(null)} />
     <div data-ask-layout={mode === 'page' ? 'full-window' : 'panel'} onDragOver={(event) => { if (event.dataTransfer?.types?.includes('Files')) event.preventDefault(); }} onDrop={(event) => { if (!event.dataTransfer?.files?.length) return; event.preventDefault(); if (!loading) seedFileIntake(event.dataTransfer.files, null); }} className={cn('flex min-h-0 flex-col', mode === 'page' ? 'h-full bg-white' : 'h-full bg-slate-50', calm && 'ask-calm')}>
       {/* Safe-area padding only changes anything on the mobile full-screen
