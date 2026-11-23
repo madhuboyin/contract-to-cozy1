@@ -272,6 +272,16 @@ register([
   removalCondition: REMOVAL_CONDITION,
 }, adapterOwner);
 
+// BICC-4.1: the buyer's own candidate homes. Message-routable, read-only, scoped to the person (a candidate is not a Property), with no owning Skill yet.
+register(['CANDIDATE_HOMES_REVIEW'], {
+  classification: 'TEMPORARY_GAP',
+  reason: 'Message-routable read of the signed-in person\'s own candidate homes (BICC-4.1). It has no owning Skill, so it reaches the missing-Skill governance path even though it only reads and writes nothing; a buyer Skill that owns it is the intended home.',
+  governingReference: 'ASK_COZY_BEST_IN_CLASS_CONVERSATIONAL_CONCIERGE_FRD.md BICC-BUY-002/004/005; ' + COVERAGE_MATRIX,
+  allowedEntryPaths: ['MESSAGE_ROUTING'],
+  equivalentControls: ['CAPABILITY_GUARD'],
+  removalCondition: REMOVAL_CONDITION,
+}, adapterOwner);
+
 // The same reads that no deterministic typed pattern reaches: only fuzzy/semantic message routing resolves them.
 register([
   'CLAIM_CHECKLIST_VIEW',

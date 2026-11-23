@@ -47,6 +47,7 @@ export const OPERATION_SPECIFIC_CONTINUATION_EXEMPTIONS: Readonly<Record<string,
   UNSAFE_RESTRICTED_BOUNDARY: 'Restricted responses show only policy-safe alternatives.',
   OUT_OF_SCOPE_BOUNDARY: 'Out-of-scope responses do not invent a property workflow.',
   GROUNDED_GUIDANCE: 'Property-less general guidance has no selected-home operation result to continue.',
+  CANDIDATE_HOMES_REVIEW: 'Property-less review of a buyer\'s own candidate homes: there is no selected-home result to continue, and the actions that would follow (adding or editing a home) are not Ask actions yet (BICC-4.1).',
 });
 
 const RECOVERY_ONLY_OUTCOMES = new Set(['RESTART_AFTER_EXPIRY']);

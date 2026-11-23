@@ -2,7 +2,7 @@
 
 **Generated:** by `apps/backend/scripts/generate-ask-adoption-ledger.js` from the live operation registry. Do not edit by hand.
 
-**Operations:** 231
+**Operations:** 232
 
 Each registered Ask operation has exactly one class. The class is derived from registry facts (family, allowed block types) plus an explicit
 list of operations this effort reviewed (`REVIEWED_OPERATIONS` in `apps/backend/src/services/ask/presentation/adoptionLedger.ts`). A test fails
@@ -12,10 +12,10 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | Class | Operations |
 |---|---:|
 | Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified) | 102 |
-| Requires collection adoption | 25 |
+| Requires collection adoption | 28 |
 | Requires trust or rationale adoption | 1 |
-| Compact receipt: no rich migration needed | 99 |
-| Specialized workflow requiring later review | 1 |
+| Compact receipt: no rich migration needed | 98 |
+| Specialized workflow requiring later review | 0 |
 | Not applicable (boundary operations) | 3 |
 
 ## Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified)
@@ -129,7 +129,10 @@ contract-level journey, or explicit producer-contract review; it is not verified
 
 | Operation | Why |
 |---|---|
+| `CANDIDATE_HOMES_REVIEW` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
+| `CAPTURE_WARRANTY_CONFIRM` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `COMMUNITY_UPDATES` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
+| `DATA_POINT_READ` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `ENVIRONMENT_REPORT` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `HOA_COMPLIANCE_STATUS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `HOME_BASICS_GUIDE` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
@@ -180,7 +183,6 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `CAPTURE_EVENT_CONFIRM` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `CAPTURE_EVIDENCE_CONFIRM` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `CAPTURE_FACT_CONFIRM` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
-| `CAPTURE_WARRANTY_CONFIRM` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `CLAIM_ACTIVITY_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `CLAIM_FILE` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `COVERAGE_ANALYSIS_RUN` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
@@ -269,7 +271,6 @@ contract-level journey, or explicit producer-contract review; it is not verified
 
 | Operation | Why |
 |---|---|
-| `DATA_POINT_READ` | A read with no list or table block allowed: a direct-answer profile only, not yet audited. |
 
 ## Not applicable (boundary operations)
 

@@ -207,8 +207,8 @@ test('BUY-003 isolation: no foreign key to Property in the schema, and no homeow
   assert.doesNotMatch(model, /@relation/, 'no relation to any other model');
   assert.doesNotMatch(model, /\bProperty\b\s+(?:@|\n)/, 'no Property field');
   const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)]));
-  const importers = walk(path.join(__dirname, '../../src')).filter((f) => f.endsWith('.ts') && !f.includes(`${path.sep}ask${path.sep}buyer${path.sep}`) && !f.endsWith('askCandidates.controller.ts') && /candidateProperty\.service|candidateComparison/.test(fs.readFileSync(f, 'utf8')));
-  assert.deepEqual(importers.map((f) => path.relative(path.join(__dirname, '../../src'), f)), [], 'only the candidate controller, and nothing in any homeowner module, reads candidates');
+  const importers = walk(path.join(__dirname, '../../src')).filter((f) => f.endsWith('.ts') && !f.includes(`${path.sep}ask${path.sep}buyer${path.sep}`) && !f.endsWith('askCandidates.controller.ts') && !f.endsWith(`handlers${path.sep}candidateHomes.handler.ts`) && /candidateProperty\.service|candidateComparison/.test(fs.readFileSync(f, 'utf8')));
+  assert.deepEqual(importers.map((f) => path.relative(path.join(__dirname, '../../src'), f)), [], 'only the candidate controller and the candidate-homes handler, and nothing in any homeowner module, read candidates');
 });
 
 // ---- the HTTP surface ----

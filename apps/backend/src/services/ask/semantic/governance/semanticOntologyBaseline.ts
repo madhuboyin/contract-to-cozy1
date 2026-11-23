@@ -476,6 +476,7 @@ export const ASK_OPERATION_DOMAIN_OWNERSHIP: Readonly<Record<AskOperationId, Sem
   HOA_COMPLIANCE_STATUS: 'domain.property_profile',
   HOA_COMPLIANCE_COMMAND: 'domain.property_profile',
   PROPERTY_BRIEFS_LIST: 'domain.property_profile',
+  CANDIDATE_HOMES_REVIEW: 'domain.buyer_journey',
   PROPERTY_BRIEF_COMMAND: 'domain.property_profile',
   HOME_BRIEFING_SHARE_COMMAND: 'domain.property_profile',
   HOME_BRIEFING_COMMAND: 'domain.property_profile',

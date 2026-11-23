@@ -1,7 +1,7 @@
 {
  "version": 2,
  "generatedBy": "scripts/ask-answer-contract-manifest.js",
- "operationCount": 124,
+ "operationCount": 125,
  "operations": [
   {
    "operationId": "APPLIANCE_FAILURE_RISK",
@@ -1367,6 +1367,31 @@
    "contract": null,
    "evidenceTier": "SOURCE_SCAN_ONLY",
    "attribution": "SHARED_FILE"
+  },
+  {
+   "operationId": "CANDIDATE_HOMES_REVIEW",
+   "adapterKey": "candidate-homes.review",
+   "handlerFiles": [
+    "handlers/candidateHomes.handler.ts"
+   ],
+   "allowedBlockTypes": [
+    "EMPTY_STATE",
+    "LIMITATION",
+    "SUMMARY",
+    "TABLE"
+   ],
+   "emittedBlockIds": [
+    "EMPTY_STATE:candidate-homes-empty",
+    "LIMITATION:candidate-homes-cost-limit",
+    "LIMITATION:candidate-homes-limits",
+    "SUMMARY:candidate-homes-summary",
+    "TABLE:candidate-homes-compare",
+    "TABLE:candidate-homes-cost"
+   ],
+   "typedContract": null,
+   "contract": null,
+   "evidenceTier": "SOURCE_SCAN_ONLY",
+   "attribution": "EXCLUSIVE_FILE"
   },
   {
    "operationId": "CAPABILITY_DISCOVERY",

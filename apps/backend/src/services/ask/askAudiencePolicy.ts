@@ -259,6 +259,8 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('HOME_TIMELINE_EVENTS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('MATERIAL_SPECS_LIST', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('PROPERTY_BRIEFS_LIST', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
+  // BICC-4.1: a buyer's own candidate homes; a prospective buyer has no property and so no operating mode (UNKNOWN), which is why every mode is allowed.
+  definePolicy('CANDIDATE_HOMES_REVIEW', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('GUIDANCE_JOURNEYS_LIST', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HIRING_GUIDE', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HOME_BASICS_GUIDE', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),

@@ -278,6 +278,14 @@ export const FAST_PATH_ADJACENCY: Readonly<Record<string, Readonly<Record<string
    "What maintenance tasks are due?"
   ]
  },
+ "CANDIDATE_HOMES_REVIEW": {
+  "BUYER_LOAN_ESTIMATES": [
+   "Compare my loan estimates"
+  ],
+  "MAINTENANCE_STATUS": [
+   "Show my maintenance tasks"
+  ]
+ },
  "PROPERTY_BRIEFS_LIST": {
   "HOME_TIMELINE_EVENTS": [
    "Show my home timeline"

@@ -297,6 +297,7 @@ export type AskOperationId =
   | 'HOME_TIMELINE_EVENTS'
   | 'MATERIAL_SPECS_LIST'
   | 'PROPERTY_BRIEFS_LIST'
+  | 'CANDIDATE_HOMES_REVIEW'
   | 'PROPERTY_BRIEF_COMMAND'
   | 'GUIDANCE_JOURNEYS_LIST'
   | 'GUIDANCE_JOURNEY_CONTINUE'
@@ -858,6 +859,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   GUIDANCE_STEP_ACKNOWLEDGE: definition('GUIDANCE_STEP_ACKNOWLEDGE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'guidance-overview.step-acknowledge', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   GUIDANCE_JOURNEY_DISMISS: definition('GUIDANCE_JOURNEY_DISMISS', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'guidance-overview.journey-dismiss', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   // FRD v1.63: reads listPropertyBriefs, the call GET /properties/:id/property-briefs makes for the Property Brief page.
+  // BICC-4.1 (FRD D03/D09): a buyer's own candidate homes, read-only and scoped to the person, not a property (a candidate is not a Property), so no property is required. The VIEWER floor applies only when a property happens to be selected.
+  CANDIDATE_HOMES_REVIEW: definition('CANDIDATE_HOMES_REVIEW', 'RECORD_QUERY', false, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'candidate-homes.review', ['SUMMARY', 'TABLE', 'LIMITATION', 'EMPTY_STATE']),
   PROPERTY_BRIEFS_LIST: definition('PROPERTY_BRIEFS_LIST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'property-brief.briefs', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   PROPERTY_BRIEF_COMMAND: definition('PROPERTY_BRIEF_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'property-brief.command', ['SUMMARY', 'WORKFLOW_PROGRESS']),
   MATERIAL_SPECS_LIST: definition('MATERIAL_SPECS_LIST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'material-specs.list', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),

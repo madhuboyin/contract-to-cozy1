@@ -162,6 +162,8 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'ITEM_REPLACEMENT_COST', message: 'What would a new roof cost me?', category: 'PARAPHRASE' },
   // Item reserve allocation (composition FRD Phase 4, 2026-11-10). Appended at the END: the fixtureId is positional.
   { operationId: 'ITEM_RESERVE_ALLOCATION', message: 'How much of my reserve is already earmarked for the roof?', category: 'PARAPHRASE' },
+  // Candidate homes review (BICC-4.1, 2026-11-23). Appended at the END: the fixtureId is positional.
+  { operationId: 'CANDIDATE_HOMES_REVIEW', message: 'Line up the houses I am considering buying and show me how they differ', category: 'PARAPHRASE' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(
@@ -300,6 +302,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   GUIDANCE_STEP_ACKNOWLEDGE: 'The selected review step of the guided journey is marked as reviewed after confirmation, with the time and what was reviewed.',
   GUIDANCE_JOURNEY_DISMISS: 'The selected guided journey is dismissed after confirmation and leaves your list.',
   PROPERTY_BRIEFS_LIST: 'Yes. The property brief you sent your insurer is still shared through one live link, which expires on October 30, 2026.',
+  CANDIDATE_HOMES_REVIEW: 'Here are the houses you are considering buying, lined up side by side to show how they differ: the Maple Street home has the lower property tax, and the Oak Avenue home is missing its insurance, so it is not compared on that.',
   PROPERTY_BRIEF_COMMAND: 'A Property Brief snapshot or controlled-link action is applied only after review and confirmation.',
   HOME_HABITS: 'The coach is recommending three small habits for your home, each with how often to do it and why.',
   HOUSEHOLD_INVITATION: 'Your partner can be invited to this household after you confirm the role.',

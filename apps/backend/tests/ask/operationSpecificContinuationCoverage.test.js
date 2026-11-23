@@ -19,7 +19,8 @@ const {
 
 // Reviewed 2026-11-02: the only operation added since the previous hash (commit a9c7f710) is COMMUNITY_UPDATES, now covered by recipes.
 // Reviewed 2026-11-10: the operations added since 2026-11-08 are ITEM_REPLACEMENT_COST and ITEM_RESERVE_ALLOCATION, each covered by recipes (capital outlook, ownership costs).
-const REVIEWED_OPERATION_REGISTRY_HASH = 'c0b9d47c8c05388abfd19071ea0d5cad02e9947797d7040316fc0b7f7c313196';
+// Reviewed 2026-11-23: the operation added since 2026-11-10 is CANDIDATE_HOMES_REVIEW (BICC-4.1), exempt as a property-less review of the buyer's own homes with no governed follow-up yet.
+const REVIEWED_OPERATION_REGISTRY_HASH = '4ab89b527c41309e8ce1577e4df9a9f89eb49066fe73b0928881129d2f582017';
 const registryIds = () => Object.keys(ASK_OPERATION_DEFINITIONS).sort();
 const registryHash = () => createHash('sha256').update(registryIds().join('\n')).digest('hex');
 
@@ -44,7 +45,7 @@ test('reviewed contextual surfaces and state exemptions are explicit and registe
   assert.ok(REVIEWED_CONTEXTUAL_CONTINUATION_OPERATIONS.SEASONAL_HOME_CARE);
   assert.ok(REVIEWED_CONTEXTUAL_CONTINUATION_OPERATIONS.HOME_HABITS);
   assert.deepEqual(Object.keys(OPERATION_SPECIFIC_CONTINUATION_EXEMPTIONS).sort(), [
-    'CAPABILITY_DISCOVERY', 'EMERGENCY_BOUNDARY', 'GROUNDED_GUIDANCE', 'OUT_OF_SCOPE_BOUNDARY', 'UNSAFE_RESTRICTED_BOUNDARY',
+    'CANDIDATE_HOMES_REVIEW', 'CAPABILITY_DISCOVERY', 'EMERGENCY_BOUNDARY', 'GROUNDED_GUIDANCE', 'OUT_OF_SCOPE_BOUNDARY', 'UNSAFE_RESTRICTED_BOUNDARY',
   ]);
   for (const operationId of [...Object.keys(REVIEWED_CONTEXTUAL_CONTINUATION_OPERATIONS), ...Object.keys(OPERATION_SPECIFIC_CONTINUATION_EXEMPTIONS)]) {
     assert.ok(ASK_OPERATION_DEFINITIONS[operationId], operationId);

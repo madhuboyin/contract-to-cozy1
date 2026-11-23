@@ -75,6 +75,7 @@ export const ASK_HANDLER_MANIFEST: readonly AskHandlerManifestEntry[] = [
   { id: 'handlers/coverageTermReview.handler', load: () => require('./handlers/coverageTermReview.handler') },
   { id: 'handlers/maintenanceEvidenceAttach.handler', load: () => require('./handlers/maintenanceEvidenceAttach.handler') },
   { id: 'handlers/propertyBrief.handler', load: () => require('./handlers/propertyBrief.handler') },
+  { id: 'handlers/candidateHomes.handler', load: () => require('./handlers/candidateHomes.handler') },
   { id: 'handlers/propertyBriefCommands.handler', load: () => require('./handlers/propertyBriefCommands.handler') },
   { id: 'handlers/homeTimeline.handler', load: () => require('./handlers/homeTimeline.handler') },
   { id: 'handlers/materialSpecs.handler', load: () => require('./handlers/materialSpecs.handler') },

@@ -39,7 +39,7 @@ test('the classification counts are the reviewed Phase 1 result', () => {
     LAUNCH_ONLY: 3,
     DETERMINISTIC_TYPED_READ: 5,
     GOVERNED_INTERNAL_COMMAND: 65,
-    TEMPORARY_GAP: 23,
+    TEMPORARY_GAP: 24,
   });
 });
 
