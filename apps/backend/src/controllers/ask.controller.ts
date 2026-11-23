@@ -1,3 +1,5 @@
+import { askWorkloadGate, workloadRefusalMessage } from '../services/ask/support/workloadLimits';
+import { askWorkloadRefusalsTotal } from '../lib/metrics';
 import { loadAskTargetSelection } from '../services/ask/askTargetSelectors';
 import type { NextFunction, Response } from 'express';
 import { z } from 'zod';
@@ -49,10 +51,22 @@ export async function postAskExecution(req: AuthRequest, res: Response, next: Ne
     if (!parsed.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'The Ask request is invalid.', details: parsed.error.flatten() } });
     // BICC-TRN-001: a browser that closes the connection before the answer is written has stopped the request. Cancellable work observes
     // the signal; committed work finishes and a reload shows its true state.
+    // BICC-TRN-005/006: a per-identity and per-home concurrency limit. A refusal happens BEFORE anything is created, so the client's draft and client request id stay
+    // reusable, and it names the exact wait (Retry-After and the body) instead of failing with a generic error.
+    const slot = askWorkloadGate.acquire('EXECUTION', user.userId, parsed.data.propertyId ?? null);
+    if (!slot.granted) {
+      askWorkloadRefusalsTotal.inc({ workload_class: slot.workloadClass, reason: slot.reason });
+      res.setHeader('Retry-After', String(slot.retryAfterSeconds));
+      return res.status(429).json({ success: false, error: { code: 'ASK_CAPACITY_EXCEEDED', message: workloadRefusalMessage(slot), retryAfterSeconds: slot.retryAfterSeconds, draftPreserved: true } });
+    }
     const stop = requestStopSignal(res);
-    const execution = await createAskExecution(user.userId, parsed.data, user.role, { signal: stop.signal });
-    stop.release();
-    return res.status(201).json({ success: true, data: execution });
+    try {
+      const execution = await createAskExecution(user.userId, parsed.data, user.role, { signal: stop.signal });
+      return res.status(201).json({ success: true, data: execution });
+    } finally {
+      stop.release();
+      slot.release();
+    }
   } catch (error) {
     const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
     if (code === 'ASK_PROPERTY_NOT_FOUND' || code === 'ASK_SESSION_NOT_FOUND') {

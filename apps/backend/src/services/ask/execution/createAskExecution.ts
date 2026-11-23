@@ -3,6 +3,7 @@
 // re-exports the names below so existing imports keep working.
 import { decideClarificationLoop } from '../support/clarificationLoop';
 import { socialTurnResult } from '../support/socialTurn';
+import { classifyLatency } from '../support/latencyClass';
 import { carriedSlotsFromSummary, loadConversationSummary } from '../conversationSummary';
 import type { Slots } from '../composition/slots';
 import { isWriteCapableOperation } from '../support/writeCapability';
@@ -14,7 +15,7 @@ import { logger } from '../../../lib/logger';
 import { recordAskCapabilityLifecycle } from '../askCapabilityLifecycle';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type AskPresentationBlock, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
-import { askCompositionTotal, askRecoveryOutcomeTotal, askTurnStageDurationSeconds, askTurnFailuresTotal, type AskTurnStage, askExecutionDurationSeconds, askExecutionsTotal, askInlineCapturesTotal, askRoutingDecisionsTotal, askUnansweredRecoveryTotal, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../../lib/metrics';
+import { askCompositionTotal, askRecoveryOutcomeTotal, askTurnLatencyByClassSeconds, askTurnStageDurationSeconds, askTurnFailuresTotal, type AskTurnStage, askExecutionDurationSeconds, askExecutionsTotal, askInlineCapturesTotal, askRoutingDecisionsTotal, askUnansweredRecoveryTotal, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../../lib/metrics';
 import { type AskAccountRole } from '../askAccountEligibility';
 import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, hasCoverageComparisonWording, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
 import { runConversationalCaptureForTurn } from '../conversationalUnderstanding/conversationalCapture';
@@ -181,6 +182,8 @@ export interface CreateAskExecutionInternal {
 export async function createAskExecution(userId: string, requestInput: CreateAskExecutionRequest, accountRole?: AskAccountRole, internal: CreateAskExecutionInternal = {}): Promise<AskExecutionResponse> {
   // Phase 3: the request clock. REQUEST_SETUP and REQUEST_TOTAL are measured from here; every older stage is measured from `startedAt` below.
   const requestStartedAt = Date.now();
+  // BICC-TRN-007: what kind of turn this became, for the per-class latency histogram.
+  const latencyFlags = { modelPlanned: false, composed: false };
   let input = requestInput;
   await ensureAskServiceAccountEligibility(userId, accountRole);
   const controls = readAskOperationalControls();
@@ -374,6 +377,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
         knownNames,
         signal: internal.signal,
       });
+    if (modelPlan?.kind === 'PLAN') latencyFlags.modelPlanned = true;
     if (modelPlan?.kind === 'UNAVAILABLE' || modelPlan?.kind === 'DISABLED' && modelPlan.reason !== 'FEATURE_OFF') {
       await prisma.askExecutionEvent.create({ data: {
         executionId: execution.id,
@@ -425,6 +429,10 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
         await prisma.askExecution.update({ where: { id: execution.id }, data: { assemblyVersion: null, parametersJson: Prisma.DbNull } }).catch(() => undefined);
         askCompositionTotal.inc({ outcome: 'failed' });
         await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'COMPOSITION_FAILED', metadataJson: asInputJson({ reason: error instanceof Error ? error.name : 'unknown' }) } }).catch(() => undefined);
+      }
+      if (composed) {
+        latencyFlags.composed = true;
+        askTurnLatencyByClassSeconds.observe({ latency_class: classifyLatency({ composed: true, modelPlanned: latencyFlags.modelPlanned }) }, (Date.now() - requestStartedAt) / 1000);
       }
       if (composed) return mapPersistedExecution(composed, await propertySummary(executionPropertyId));
     }
@@ -1032,6 +1040,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     markStage('PROPERTY_SUMMARY', operation.operationId);
     askTurnStageDurationSeconds.observe({ stage: 'TURN_TOTAL', operation: operation.operationId }, (Date.now() - startedAt) / 1000);
     askTurnStageDurationSeconds.observe({ stage: 'REQUEST_TOTAL', operation: operation.operationId }, (Date.now() - requestStartedAt) / 1000);
+    askTurnLatencyByClassSeconds.observe({ latency_class: classifyLatency({ confirmation: Boolean(result.confirmation), attachment: Boolean(input.launchContext?.documentId), modelPlanned: latencyFlags.modelPlanned }) }, (Date.now() - requestStartedAt) / 1000);
     return mapPersistedExecution(reconciledParent ?? saved, resolvedProperty, childExecutionResponses);
   } catch (caught) {
     const failureStatus = askFailureStatus(caught);

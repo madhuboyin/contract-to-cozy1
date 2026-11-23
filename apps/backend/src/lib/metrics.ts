@@ -66,6 +66,23 @@ export const askExecutionDurationSeconds = new Histogram({
 // and whether it is additive, nested, concurrent or cumulative, is defined in services/ask/askTurnStageContract.ts and locked by a test.
 export const ASK_TURN_STAGES = ['REQUEST_SETUP', 'ROUTE_AND_EXECUTE', 'ACTIONS_FINALIZE', 'SUGGESTION_FINALIZE', 'TRUST_VALIDATION', 'PERSIST_BASE', 'DURABLE_BASE_RESULT', 'POST_PERSIST_EVENTS', 'PROPERTY_SUMMARY', 'PROPERTY_SUMMARY_READ', 'INLINE_EXTRACTION', 'TURN_TOTAL', 'REQUEST_TOTAL', 'FAILED_REQUEST_TOTAL'] as const;
 export type AskTurnStage = typeof ASK_TURN_STAGES[number];
+/** BICC-TRN-007: whole-request latency by class (deterministic read, model-planned read, composed read, attachment analysis, consequential confirmation). */
+export const askTurnLatencyByClassSeconds = new Histogram({
+  name: 'ask_turn_latency_by_class_seconds',
+  help: 'Ask request duration by latency class',
+  labelNames: ['latency_class'] as const,
+  buckets: [0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 15, 30, 60],
+  registers: [register],
+});
+
+/** BICC-TRN-005/006: requests refused for capacity, by workload class and which limit was reached. */
+export const askWorkloadRefusalsTotal = new Counter({
+  name: 'ask_workload_refusals_total',
+  help: 'Ask requests refused because a per-identity or per-scope concurrency limit was reached',
+  labelNames: ['workload_class', 'reason'] as const,
+  registers: [register],
+});
+
 export const askTurnStageDurationSeconds = new Histogram({
   name: 'ask_turn_stage_duration_seconds',
   help: 'Ask turn duration by bounded stage and registered operation',
