@@ -1436,7 +1436,7 @@ const propertyAreaCaptureCommandPattern = /^\s*fill in the missing (?:core prope
 // conversational phrase deterministic so the receipt's declared suggestion
 // cannot fall through semantic routing and be replaced by a clarification.
 // Rooms a homeowner names in a question ("the kitchen", "my master bed room"). Used to scope item and colour questions to a room.
-const ROOM_NAME = '(?:master\\s+)?(?:bed\\s?rooms?|bath\\s?rooms?|kitchen|living\\s+room|dining\\s+room|laundry(?:\\s+room)?|garage|basement|attic|office|den|nursery|family\\s+room|guest\\s+room|kids?\\s+room|hallway|pantry|mudroom|sunroom|closet|patio|porch)';
+const ROOM_NAME = '(?:(?:master|primary|main)\\s+)?(?:bed\\s?rooms?|bath\\s?rooms?|kitchen|living\\s+room|dining\\s+room|laundry(?:\\s+room)?|garage|basement|attic|office|den|nursery|family\\s+room|guest\\s+room|kids?\\s+room|hallway|pantry|mudroom|sunroom|closet|patio|porch)';
 const roomSummaryPattern = /\b(?:show|list|view|see|review)\b.{0,30}\b(?:my|our|the|this)?\s*rooms?\b|\bhow many rooms?\b.{0,35}\b(?:my|our|the|this)?\s*(?:home|house|property)?\b/i;
 const PROPERTY_COMPLETENESS_PATTERNS = [
   /\b(?:pending|missing|incomplete|unfilled|outstanding|remaining)\b.{0,50}\b(?:details|information|info|facts|fields|records?)\b.{0,60}\b(?:home|house|property|profile|record)\b/i,
@@ -1494,6 +1494,13 @@ const propertyFactQuestionPattern = /\bhow many\s+(?:bed\s?rooms?|bath\s?rooms?|
 const propertyFactOtherIntentPattern = /\b(?:price|cost|per|value|worth|tax(?:es)?|change|update|set|edit|correct|fix|add|remove)\b/i;
 // Items kept in a room ("everything in my kitchen", "how many items are in my master bedroom", "the item details in each room"). The inventory
 // answer already matches a room by name; this routes the question to it.
+// BICC recall (INVENTORY_LOOKUP): the questions the inventory answer already handles but its first rules did not recognise. Each names the Living Home Record
+// explicitly or names a recordable household item, so "do I have a warranty / a mortgage / a leak" is never read as an inventory question.
+const INVENTORY_ITEM_NOUNS = '(?:refrigerator|fridge|freezer|water heater|washer|washing machine|dryer|dishwasher|microwave|oven|stove|cooktop|garbage disposal|sump pump|dehumidifier|humidifier|generator|thermostat|smoke (?:detector|alarm)|co (?:detector|alarm)|carbon monoxide (?:detector|alarm)|water softener|air purifier|ceiling fan|garage door opener|sprinkler system|hvac|furnace|boiler|heat pump|air conditioner|a\\/c|ac unit)';
+const inventoryPresencePattern = new RegExp(`^\\s*(?:do|does) (?:i|we) (?:have|own)\\s+(?:a|an|any|the)\\s+${INVENTORY_ITEM_NOUNS}\\b(?:\\s+(?:in|on|at)\\s+(?:my|our|the)\\s+[a-z ]{3,25})?\\s*\\??\\s*$|^\\s*(?:is|are) there\\s+(?:a|an|any)\\s+${INVENTORY_ITEM_NOUNS}s?\\b.{0,25}\\b(?:in (?:my|our|the) (?:inventory|home record|records?)|recorded|on record)\\s*\\??\\s*$`, 'i');
+const inventoryListAllPattern = /^\s*(?:(?:show|list|see|give) (?:me )?(?:all|every)\b.{0,25}\b(?:items?|things|stuff)\b.{0,30}\b(?:recorded|logged|added|in (?:my|our) (?:inventory|home record))|how many\b.{0,20}\b(?:items?|appliances?|things)\b.{0,25}\b(?:in (?:my|our|the) (?:inventory|home record)|(?:are |do (?:i|we) have )?recorded|do (?:i|we) have (?:recorded|in (?:my|our) inventory)))\b[^.]{0,20}$/i;
+const inventoryItemRecordPattern = new RegExp(`^\\s*(?:what(?:'s| is)|show me|give me|pull up)\\s+(?:the\\s+)?(?:full|complete|whole)\\s+(?:record|details|information|history|profile)\\s+(?:for|of|on)\\s+(?:my|our|the)\\s+${INVENTORY_ITEM_NOUNS}\\s*\\??\\s*$`, 'i');
+const inventoryNeedsDetailsPattern = /^\s*(?:what|which)\s+(?:items?|appliances?|systems?|equipment)\b.{0,25}\b(?:still\s+)?(?:need|needs|lack|are missing)\b.{0,15}\b(?:to add\s+)?(?:more\s+)?(?:details?|information|info)\b.{0,15}$/i;
 const roomContentsPattern = new RegExp(`\\b(?:items?|appliances?|things|stuff|equipment|inventory|everything|anything)\\b.{0,25}\\b(?:in|inside|from)\\b.{0,15}\\b${ROOM_NAME}\\b|\\bwhat(?:'s| is| do (?:i|we) have)\\s+in\\s+(?:my |our |the |this )?${ROOM_NAME}\\b`, 'i');
 const roomItemWordsPattern = /\b(?:items?|appliances?|stuff|things|equipment|inventory|what(?:'s| is) in)\b/i;
 const roomContentsOtherIntentPattern = /\b(?:add|create|put|move|rename|delete|remove|change|update|edit|correct|fix|set|tasks?|maintenance|chores?|due|overdue|warrant\w*|claims?|plants?|paint|colou?rs?|expenses?|cost)\b/i;
@@ -2102,6 +2109,18 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (inventoryLookupPattern.test(message) && !compoundCapabilityFilterPattern.test(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message) && !missingFieldFilterWording.test(message) && !/\b(?:paperwork|uploaded|documents?|manuals?|receipts?|invoices?)\b/i.test(message) && !/\b(?:coverage|covered|insurance|insured)\b/i.test(message)) {
     return resolved('INVENTORY_LOOKUP', 0.96, 'DET_INVENTORY_LOOKUP_04');
+  }
+  if (inventoryPresencePattern.test(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message)) {
+    return resolved('INVENTORY_LOOKUP', 0.95, 'DET_INVENTORY_LOOKUP_06');
+  }
+  if (inventoryListAllPattern.test(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message)) {
+    return resolved('INVENTORY_LOOKUP', 0.95, 'DET_INVENTORY_LOOKUP_07');
+  }
+  if (inventoryItemRecordPattern.test(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message)) {
+    return resolved('INVENTORY_LOOKUP', 0.95, 'DET_INVENTORY_LOOKUP_08');
+  }
+  if (inventoryNeedsDetailsPattern.test(message) && !explicitCapabilityPattern.test(message) && !repairRecordWritePattern.test(message)) {
+    return resolved('INVENTORY_LOOKUP', 0.95, 'DET_INVENTORY_LOOKUP_09');
   }
   if (propertyAreaCaptureCommandPattern.test(message)) {
     return resolved('PROPERTY_CONTEXT_AREA_CAPTURE', 1, 'DET_PROPERTY_CONTEXT_AREA_CAPTURE_01');

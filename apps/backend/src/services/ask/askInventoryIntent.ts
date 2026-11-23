@@ -15,6 +15,8 @@ const INCOMPLETE_INVENTORY_PATTERNS = [
   new RegExp(`\\b${INVENTORY_SUBJECT}\\s+${DETAIL_SUBJECT}\\s+(?:are\\s+)?(?:missing|incomplete)\\b`, 'i'),
   new RegExp(`\\b(?:incomplete|unfinished)(?:\\s+${INVENTORY_SUBJECT})?(?:\\s+${DETAIL_SUBJECT})?\\b`, 'i'),
   new RegExp(`\\b${INVENTORY_SUBJECT}\\s+needs?\\s+(?:${DETAIL_SUBJECT}|completion)\\b`, 'i'),
+  // "What items do I still need to add details for?": the person's own words for the same filter.
+  /\b(?:items?|appliances?|systems?|equipment)\b.{0,25}\b(?:still\s+)?(?:need|needs|lack)\b.{0,15}\b(?:to add\s+)?(?:more\s+)?(?:details?|information|info)\b/i,
 ] as const;
 
 const LIFECYCLE_INVENTORY_PATTERN = /\b(?:end of life|nearing (?:replacement|expiry)|expir(?:e|y|ing)|oldest systems?)\b/i;

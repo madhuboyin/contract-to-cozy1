@@ -179,3 +179,13 @@ A second failure was the suite's own expectation (1,200 million exceeds the one-
 Not covered: break-even, refinance and reserve-fund calculators, and any calculation delivered through a handler that needs a database. AUTHORIZATION here means the two capital handlers refuse a home the person cannot reach before reading anything; it is not a claim about every calculation. The gate applies when calculation mode is delivered (BICC-1C.1), which has not shipped.
 
 Evidence: 520 tests pass (519 cases plus the manifest check); typecheck clean; five pre-existing failures in `itemFundingGoal.test.js` and `ownerFailingPrompts.test.js` are unchanged by this work (same count with and without it).
+
+### INVENTORY_LOOKUP recall (2026-11-23)
+
+Tuning positives claimed by an inventory rule rose from **12 to 21 of 37**; wrong claims by a pool rule stay **0** (adjacent 32 and cross 30 negatives unchanged). New rules: `DET_INVENTORY_LOOKUP_06` (do I have / own / is there a named household item), `_07` (show all items, how many items), `_08` (the full record for a named item), `_09` (items that still need details); the room-contents list now accepts "primary" and "main" bedroom; the incomplete-records filter in the answer reads "items that still need details" so the claim is answered as asked. Each rule requires the whole question to be the shape (anchored) and a recordable household noun, so "do I have a warranty / a mortgage / a leak" and "how many documents" stay elsewhere (15 adjacent checks in `tests/ask/inventoryLookupRecall.test.js`).
+
+**What was not claimed, and why.** Age, cost, condition, photo, installed-before and bought-this-year filters, "oldest item", "wear out soon", and electrical/plumbing categories. The inventory answer has no such filters (its categories are HVAC, appliance and roof), so a rule would promise an answer the handler cannot give. They need handler features first.
+
+**The freeze was ended on purpose.** Adding rules changes the wave-1 rule versions, which the freeze guards. No sealed shard existed (none can until a human Ask Evaluation Reviewer is assigned), so nothing was burned; `wave1-frozen.json` records the new versions and a `refreezes` entry. These are tuning-set numbers: the tuning prompts were visible while the rules were written, so they measure recall on the set I tuned against, not on held-out phrasing.
+
+Evidence: `inventoryLookupRecall.test.js` 3 pass, `certificationWave1Tuning.test.js` pass; typecheck clean; Ask suite 6015 tests, 292 failing, none new.

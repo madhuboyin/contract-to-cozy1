@@ -4,9 +4,13 @@
  "ruleVersions": {
   "INVENTORY_LOOKUP": {
    "DET_INVENTORY_LOOKUP_01": "55e115cd2dac205e",
-   "DET_INVENTORY_LOOKUP_02": "668fb64586828b6b",
+   "DET_INVENTORY_LOOKUP_02": "d3b3e3f2ee123450",
    "DET_INVENTORY_LOOKUP_03": "b299f65389492e35",
    "DET_INVENTORY_LOOKUP_04": "671cd05799572885",
+   "DET_INVENTORY_LOOKUP_06": "bc3d0534b0078178",
+   "DET_INVENTORY_LOOKUP_07": "2b8f8927bc805264",
+   "DET_INVENTORY_LOOKUP_08": "3effed17c9a02b5f",
+   "DET_INVENTORY_LOOKUP_09": "40f3bdbfdc55acf8",
    "DET_INVENTORY_LOOKUP_05": "6f95f09c87063038"
   },
   "SELL_HOLD_RENT_ANALYSIS": {
@@ -23,5 +27,14 @@
  "tuningSet": "tests/fixtures/certification/wave1-tuning.json",
  "notGovernedByFastPath": {
   "DATA_POINT_READ": "Its deterministic rules are not message-routable, so they are not in FAST_PATH_RULES and the fast-path certification runner cannot certify them. It is exercised through the provisional-read and data-point reach path (BICC-1A.2: GATE-004A1 fixtures, GATE-001/003 held-out). The wave-1 tuning prompts still serve as its tuning set."
- }
+ },
+ "refreezes": [
+  {
+   "on": "2026-11-23",
+   "reason": "INVENTORY_LOOKUP recall: new rules DET_INVENTORY_LOOKUP_06..09 and a wider room-name list. No sealed shard existed, so none was burned.",
+   "affected": [
+    "INVENTORY_LOOKUP"
+   ]
+  }
+ ]
 }
