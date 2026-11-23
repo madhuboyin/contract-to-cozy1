@@ -63,7 +63,7 @@ export function buildDidYouMeanResult(options: readonly AskOperationId[], langua
       reasonCode: ASK_DID_YOU_MEAN_REASON,
       blocks: [{
         type: 'SUMMARY', id: 'did-you-mean', title: 'Did you mean one of these?',
-        body: `I couldn’t find an answer to that in your home record. Did you mean to ask: “${clarificationLabelFor(options[0], language)}”? If so, say it that way; otherwise say it another way.`,
+        body: `I wasn’t sure which request you meant, and I haven’t looked anything up yet. Did you mean to ask: “${clarificationLabelFor(options[0], language)}”? If so, say it that way; otherwise say it another way.`,
         tone: 'DEFAULT', actions: [],
       }],
       clarification: { version: 1, question: 'What would you like to know?', options: [], allowFreeText: true, expiresAt },
@@ -75,8 +75,8 @@ export function buildDidYouMeanResult(options: readonly AskOperationId[], langua
     status: 'NEEDS_CLARIFICATION',
     reasonCode: ASK_DID_YOU_MEAN_REASON,
     blocks: [{
-      type: 'SUMMARY', id: 'did-you-mean', title: 'I couldn’t find that in your home record',
-      body: 'Pick the closest match, or say it another way.',
+      type: 'SUMMARY', id: 'did-you-mean', title: 'Which of these did you mean?',
+      body: 'I wasn’t sure which request you meant, and I haven’t looked anything up yet. Pick the closest match, or say it another way.',
       tone: 'DEFAULT', actions: [],
     }],
     clarification: {

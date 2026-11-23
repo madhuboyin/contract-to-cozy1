@@ -241,3 +241,15 @@ Recorded at the owner's direction (there are no real users). FRD v0.3.6, row `BI
 What did not change: the register still reads `UNRECORDED` and `NOT_APPROVED` for every flow (the amendment defers the review, it does not claim one); no approval is inherited between flows; evaluator calls stay synthetic-only; no flow was enabled by this change and no flag, default or code was touched. Enabling a flow, for example the semantic planner, is a separate step and may need routing baselines re-recorded.
 
 Pre-launch checklist item: look up the tier and billing state of the key behind `GEMINI_API_KEY` and the data-use terms for that product and tier, and record them in the register for each enabled flow.
+
+### Owner prompt run, 2026-11-23: one fix kept, three rule changes reverted
+
+The owner ran the 764 corpus prompts through the app. The aggregate matched the offline baseline exactly (116 direct hits, 116 right-option clarifications, 31 dead ends, 481 fallbacks, 20 wrong), which confirms the planner is not involved.
+
+**Kept.** A "did you mean" clarification no longer claims a failed lookup. Ten of 25 sampled clarifications were headed "I couldn't find that in your home record" although nothing had been looked up. Multi-option title is now "Which of these did you mean?", the single-option body says Ask was unsure which request was meant and has not looked anything up yet. Test added in `didYouMean.test.js`; no other test or frontend file referenced the old wording.
+
+**Tried and reverted, with the reason.** I added reviewed wording rules for the Home Timeline ("what work has been done on this house"), document lookup ("pull up my uploaded manuals") and coverage holes ("what am I not covered for"). Measured on all 764 prompts: right-option clarifications +2, direct hits -1, dead ends -3, wrong unchanged. The single direct hit lost was "which things in my house have no protection", which the local classifier was already answering directly: a deterministic rule that is demoted (uncertified) claims the prompt, blocks the classifier from executing it (FR-FAST-3/7), and for an operation outside the provisional allowlist ends at a clarification or fallback. So **a new wording rule for a non-provisional operation can lose an answer that works today**, and the gain is only a more focused "did you mean". Reverted to the exact baseline (verified: identical counts).
+
+**What would move direct answers.** Certified rules (a human reviewer) or the provisional-read allowlist, which D14 forbids widening. Not done.
+
+**Not touched.** Inspection finding updates and negotiation prompts (writes: safe-routing clarifications are by design until certified); contractor payment totals (no operation computes them); "what should I ask for after the home inspection" answered as "No inspection report yet" (needs authored guidance); the "saved response can't be displayed" shield on prompt #27 (needs the backend log line listing the failing schema paths).

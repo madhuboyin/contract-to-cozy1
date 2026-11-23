@@ -96,3 +96,15 @@ test('a question is offered readings that look things up; writes only for comman
   for (const yes of ['add a task', 'can you file a claim', 'I finished the filter change', 'I paid the bill']) assert.equal(messageUsesCommandWording(yes), true, yes);
   for (const no of ['how is my water heater doing', 'what does my warranty cover', 'when did i replace the roof', 'is there a tool for this']) assert.equal(messageUsesCommandWording(no), false, no);
 });
+
+// Owner run 2026-11-23: ten clarifications were headed "I couldn't find that in your home record". A "did you mean" has looked nothing up, so it must not claim an absence.
+test('a did-you-mean never claims a failed lookup: it says it was unsure which request was meant and that nothing was looked up', () => {
+  for (const options of [['DOCUMENT_LOOKUP'], ['DOCUMENT_LOOKUP', 'HOME_TIMELINE_EVENTS'], ['COVERAGE_GAPS', 'WARRANTY_LOOKUP', 'INVENTORY_LOOKUP']]) {
+    const text = JSON.stringify(buildDidYouMeanResult(options).blocks);
+    assert.doesNotMatch(text, /couldn.t find (?:that|an answer)/i, options.join());
+    assert.doesNotMatch(text, /in your home record/i, options.join());
+    assert.match(text, /haven.t looked anything up yet/i, options.join());
+  }
+  assert.equal(buildDidYouMeanResult(['DOCUMENT_LOOKUP', 'HOME_TIMELINE_EVENTS']).blocks[0].title, 'Which of these did you mean?');
+  assert.equal(buildDidYouMeanResult(['DOCUMENT_LOOKUP']).blocks[0].title, 'Did you mean one of these?');
+});
