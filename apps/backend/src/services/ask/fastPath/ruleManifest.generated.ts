@@ -6,11 +6,20 @@ export const FAST_PATH_RULE_MANIFEST: readonly FastPathRuleManifestEntry[] = [
   "operationId": "EMERGENCY_BOUNDARY",
   "confidence": 1,
   "order": 0,
-  "hash": "8a832b641ebd9e55",
-  "condition": "emergencyPattern.test(message) || activeEmergencyPattern.test(message)",
+  "hash": "6ede12b47f03c6bb",
+  "condition": "isActiveEmergencyMessage(message)",
   "references": [
    "askOperationRegistry.ts:activeEmergencyPattern",
-   "askOperationRegistry.ts:emergencyPattern"
+   "askOperationRegistry.ts:electricalHazardPattern",
+   "askOperationRegistry.ts:emergencyPattern",
+   "askOperationRegistry.ts:isActiveEmergencyMessage",
+   "support/emergencyFraming.ts:CONDITIONAL",
+   "support/emergencyFraming.ts:EDUCATIONAL",
+   "support/emergencyFraming.ts:HISTORICAL",
+   "support/emergencyFraming.ts:PRESENT_CUE",
+   "support/emergencyFraming.ts:RESOLVED",
+   "support/emergencyFraming.ts:emergencyClauses",
+   "support/emergencyFraming.ts:isNonActiveFraming"
   ]
  },
  {

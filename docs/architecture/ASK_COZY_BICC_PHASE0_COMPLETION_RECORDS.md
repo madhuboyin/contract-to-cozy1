@@ -155,3 +155,15 @@ A message that is only a social phrase (greeting, thanks, acknowledgement, goodb
 
 Evidence: `tests/ask/socialTurn.test.js` 5 pass; typecheck clean; Ask suite 292 failing, none new versus the previous run.
 Not done: the old small-talk branch still routes its wider phrases ("what's up today?") to the fallback; reply wording is English only; not run on a real database or in a browser.
+
+### Emergency interception, phase 1S (2026-11-23)
+
+**Measured first.** An engineer-written tuning corpus (`tests/fixtures/safety/emergencyCorpus.js`: active rows across gas, CO, fire, smoke, electrical, overheating, flooding near electricity, flooding, structural, intrusion; benign rows across education, history, hypotheticals, resolved incidents and routine maintenance) was run against the existing interception. Result before any change: **recall 39/44 and 8/42 false positives**. Misses were live/exposed wiring, a sparking panel or wire, and an overheating water heater. False positives were the gas and CO nouns inside education ("what should I do if I smell gas"), history ("we had a gas leak last year"), a hypothetical and a resolved incident.
+
+**Changes.** (1) New `electricalHazardPattern` for live or exposed wires, sparking/arcing/smoking panels, wires, outlets and cords, and an overheating or smoking appliance. (2) `isActiveEmergencyMessage` replaces the bare pattern test: a pattern hit counts unless its clause is education, history, a hypothetical or a resolved incident (`support/emergencyFraming.ts`). Any present-tense cue ("right now", "my", "this", "again", "help") keeps the clause active, framing in one clause never silences another, and a message with no framing keeps the whole-message check. (3) "smelled gas" now matches. Fast-path manifest regenerated (condition text changed).
+
+**After.** 52/52 active, 0/45 benign fired. Writing the stricter rows (an emergency beside a question) found one more miss ("is it normal for my outlet to be sparking right now"), fixed.
+
+**What this is not.** The corpus was visible while the patterns were tuned, so these numbers are tuning evidence, not certification (BICC-EVAL-002). BICC-GATE-009 is not met: it needs a sealed corpus written independently and a Home Safety/Policy Reviewer. The framing check is deliberately narrow; unseen educational or historical phrasing can still fire, and unseen present-tense phrasing can still be missed. English only.
+
+Evidence: `tests/ask/emergencyInterception.test.js` 5 pass plus the four existing emergency suites; typecheck clean; Ask suite 292 failing, none new (one known DB-dependent test shifted a line number).

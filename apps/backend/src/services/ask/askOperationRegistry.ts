@@ -1,3 +1,4 @@
+import { emergencyClauses, isNonActiveFraming } from './support/emergencyFraming';
 import { detectUnsupportedLanguage, isPortfolioQuestion } from './support/portfolioAndLanguage';
 import { resolveDataPointsMulti, isReserveFactQuestion, isDataPointDetailQuestion, isDataPointOnlyQuestion, isSaleProfileQuestion, resolveDataPoint } from './dataPoint/dataPointCatalogue';
 import { parseProjectPermitFilter } from './support/projectPermitFilter';
@@ -1219,10 +1220,22 @@ const buyerLifecycleUpdatePattern = /\bcancel\b.{0,40}\b(?:this|my)\b.{0,20}\b(?
 
 // A CO alarm/detector is an emergency only as an event; a routine-maintenance noun after it ("Smoke & CO Detector Check", the Home Actions
 // card title the Review-in-Ask prompt quotes) is not. The gate reads the message alone: client launch context is never authoritative here.
-const emergencyPattern = /\b(smell(?:s|ing)? (?:like |of )?gas|smell(?:s|ing)? (?:like |of )?(?:rotten eggs?|sulfur|sulphur)|gas (?:smell|odou?r)|gas leak|carbon monoxide|\bco (?:alarm|detector)(?!\s+(?:check|checks|test|tests|testing|inspection|service|maintenance|battery|batteries|replacement|schedule)\b)|sparks?\b.{0,25}\b(?:from|at)\b|electrical fire|actively flooding.*electric(?:al)?|fire (?:right )?now|something\s+(?:is\s+)?burning|smell(?:s|ing)?\s+(?:something\s+)?(?:like\s+)?(?:smoke|burning|burnt)|(?:filling|filled|full)\s+(?:up\s+)?(?:with|of)\s+smoke|(?:there\s+(?:are|is)|(?:i|we)\s+(?:can\s+)?(?:see|saw))\s+(?:the\s+)?flames?|flames?\s+(?:coming|shooting|spreading|visible)|alarm\s+(?:is\s+|are\s+)?(?:going\s+off|sounding|blaring))\b/i;
+const emergencyPattern = /\b(smell(?:s|ed|ing)? (?:like |of )?gas|smell(?:s|ing)? (?:like |of )?(?:rotten eggs?|sulfur|sulphur)|gas (?:smell|odou?r)|gas leak|carbon monoxide|\bco (?:alarm|detector)(?!\s+(?:check|checks|test|tests|testing|inspection|service|maintenance|battery|batteries|replacement|schedule)\b)|sparks?\b.{0,25}\b(?:from|at)\b|electrical fire|actively flooding.*electric(?:al)?|fire (?:right )?now|something\s+(?:is\s+)?burning|smell(?:s|ing)?\s+(?:something\s+)?(?:like\s+)?(?:smoke|burning|burnt)|(?:filling|filled|full)\s+(?:up\s+)?(?:with|of)\s+smoke|(?:there\s+(?:are|is)|(?:i|we)\s+(?:can\s+)?(?:see|saw))\s+(?:the\s+)?flames?|flames?\s+(?:coming|shooting|spreading|visible)|alarm\s+(?:is\s+|are\s+)?(?:going\s+off|sounding|blaring))\b/i;
 // Something happening right now. Present-tense and first-person only, so "fire extinguisher", "smoke detector battery", "flood insurance", "burst pipe last winter" and
 // "fireplace" stay ordinary questions.
 const activeEmergencyPattern = /\b(?:call(?:ing)?\s+911|911\b|(?:is|are|it'?s|there'?s|there is)\s+(?:a\s+)?(?:on fire|fire\b|burning|smoke\b)|(?:house|home|kitchen|garage|attic|basement|roof|room|wall|oven|stove|panel|outlet)\s+(?:is\s+)?(?:on fire|burning|smoking)|i\s+(?:can\s+)?(?:see|smell|hear)\s+(?:smoke|fire|burning|gas|sparking|crackling)|smoke\s+(?:is\s+)?(?:coming|pouring|filling)|(?:pipe|water line|water main|supply line)\s+(?:just\s+|has\s+|is\s+)?(?:burst|bursting)\b(?!.{0,25}\b(?:last|ago|before|in \d{4})\b)|(?:pipe|water line|water main)\s+burst\s+(?:just now|right now|a minute ago|this (?:morning|afternoon|evening))|(?:basement|house|home|kitchen|floor|room|garage)\s+(?:(?:is\s+)?(?:flooding|filling with water)|is\s+flooded|(?:just|now)\s+flooded)|water\s+(?:is\s+)?(?:pouring|gushing|flooding|coming through)|(?:ceiling|roof|floor|wall)\s+(?:is\s+)?(?:collapsing|caving in)|someone\s+(?:is\s+)?(?:breaking in|in my house)|(?:break[- ]?in|intruder)\s+(?:right now|now))/i;
+// Live or exposed wiring, a panel/wire/outlet that is sparking, arcing or smoking, and an appliance that is overheating right now (BICC-SAFE-001).
+const electricalHazardPattern = /\b(?:live wires?|(?:exposed|bare|dangling|downed|fallen)\s+(?:live\s+)?wires?|(?:panel|breaker box|breaker|fuse box|wires?|wiring|outlet|socket|cord|power line)\s+(?:is\s+|are\s+|to be\s+|keeps\s+)?(?:sparking|arcing|smoking|melting|on fire)|(?:water heater|furnace|boiler|dryer|space heater|heater|panel|breaker|oven|stove)\s+(?:is\s+|keeps\s+)?(?:overheating|glowing red|smoking|on fire))\b/i;
+/**
+ * BICC-SAFE-001/002: the active-emergency decision. A noun pattern hit counts only when its clause is not education, history, a hypothetical or a resolved incident
+ * (emergencyFraming.ts); a message with no framing at all keeps the whole-message check, so a pattern that spans clauses still fires.
+ */
+export function isActiveEmergencyMessage(message: string): boolean {
+  const hit = (text: string): boolean => emergencyPattern.test(text) || activeEmergencyPattern.test(text) || electricalHazardPattern.test(text);
+  const clauses = emergencyClauses(message);
+  if (clauses.some((clause) => hit(clause) && !isNonActiveFraming(clause))) return true;
+  return !clauses.some(isNonActiveFraming) && hit(message);
+}
 const unsafeRestrictedPattern = /\b(?:bypass|avoid|evade|skip|work around)\b.{0,60}\b(?:permit|inspection|code|licen[cs]e|hoa|disclosure)\b|\b(?:disable|disconnect|remove|tamper with|cover|block)\b.{0,60}\b(?:smoke|carbon monoxide|co|fire|safety)\s*(?:detector|alarm|device)?\b|\b(?:conceal|hide|omit|misrepresent)\b.{0,80}\b(?:damage|defect|mold|leak|flood|fire|buyer|insurer|inspector|lender)\b|\b(?:remove|alter|cut|demolish|open up)\b.{0,70}\b(?:load[- ]bearing|structural)\b.{0,70}\b(?:wall|beam|column|support)?\b|\b(?:load[- ]bearing|structural)\b.{0,70}\b(?:without|skip|avoid|myself|diy)\b.{0,40}\b(?:inspection|permit|engineer|approval)?\b|\b(?:guarantee|certify|confirm(?: definitively)?|promise|tell me (?:for sure|the exact))\b.{0,100}\b(?:approved|approval|eligible|eligibility|legal|compliant|safe|pass inspection|refinanc|mortgage|loan|insurance claim|tax appeal|damage|loss|claim|covered|coverage|sale price|sell for)\b/i;
 const unauthorizedDataAccessPattern = /\b(?:show|list|give|export|send|reveal|access|download|delete|remove)\b.{0,50}\b(?:every|all|another|other)\b.{0,35}\b(?:users?[’']?s?|households?|homeowners?|customers?)\b.{0,45}\b(?:propert(?:y|ies)|records?|documents?|data|accounts?)\b|\b(?:uploaded|attached)\b.{0,40}\b(?:invoice|document|file)\b.{0,50}\b(?:says|instructs?|asks?)\b.{0,50}\b(?:send|share|upload|export)\b.{0,40}\b(?:records?|documents?|data)\b|\b(?:turn on|turn off|enable|disable|change|delete|remove|update|modify)\b.{0,60}\bfor\b.{0,20}\b(?:another|other|someone else'?s?)\b.{0,30}\b(?:users?|households?|homeowners?|customers?|person|member)\b|\b(?:change|modify|update|edit)\b.{0,80}\bpropert(?:y|ies)\b.{0,30}\b(?:i |that i )?(?:cannot|can'?t|do not|don'?t) access\b/i;
 /**
@@ -1690,7 +1703,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
     if (ruleId) RESOLUTION_RULE_IDS.set(resolution, ruleId);
     return resolution;
   };
-  if (emergencyPattern.test(message) || activeEmergencyPattern.test(message)) {
+  if (isActiveEmergencyMessage(message)) {
     return resolved('EMERGENCY_BOUNDARY', 1, 'DET_EMERGENCY_BOUNDARY_01');
   }
   if (unsafeRestrictedPattern.test(message)) {
