@@ -43,6 +43,7 @@ import { severeWeatherAlertsJob } from './jobs/severeWeatherAlerts.job';
 import { airNowAirQualityJob } from './jobs/airNowAirQuality.job';
 import { openFemaDeclarationsJob } from './jobs/openFemaDeclarations.job';
 import { cleanupInventoryDraftsJob } from './jobs/cleanupInventoryDrafts.job';
+import { cleanupAskAttachmentsJob } from './jobs/cleanupAskAttachments.job';
 import { ingestRadarSignalsJob } from './jobs/ingestRadarSignals.job';
 import { ingestTaxAssessmentEventsJob } from './jobs/ingestTaxAssessmentEvents.job';
 import { radarSafetyNetReconciliationJob } from './jobs/radarSafetyNetReconciliation.job';
@@ -377,6 +378,7 @@ const CRON_HANDLERS: Record<string, (opts?: WorkerHandlerOptions) => Promise<voi
     return result;
   },
   'inventory-draft-cleanup':         async () => { await cleanupInventoryDraftsJob(); },
+  'ask-attachment-cleanup':          async () => { await cleanupAskAttachmentsJob(); },
   'home-habit-generation':           async (opts) => {
     const result = await runHabitGenerationJob(opts);
     logger.info({ ...result }, `[home-habit-generation] examined=${result.examined} created=${result.created} notified=${result.notified}`);
@@ -510,6 +512,7 @@ const CRON_ENV_OVERRIDES: Record<string, string | undefined> = {
   'tax-assessment-ingest':      process.env.TAX_ASSESSMENT_INGEST_CRON,
   'radar-safety-net-reconciliation': process.env.RADAR_SAFETY_NET_RECONCILIATION_CRON,
   'inventory-draft-cleanup':    process.env.INVENTORY_DRAFT_CLEANUP_CRON,
+  'ask-attachment-cleanup':     process.env.ASK_ATTACHMENT_CLEANUP_CRON,
   'home-briefing-delivery':
     process.env.HOME_BRIEFING_DELIVERY_CRON
     ?? process.env.HOME_GAZETTE_GENERATION_CRON,

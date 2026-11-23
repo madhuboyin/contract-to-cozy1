@@ -24462,3 +24462,49 @@ model OperationalWorkReconciliation {
   @@index([sourceType, sourceEntityId])
   @@map("operational_work_reconciliations")
 }
+
+// BICC-MM-010 / FRD D10: an ephemeral chat attachment. It is NOT a Home Record: it has its own scope, owner and deletion time, and deleting or expiring it never
+// touches a separately confirmed canonical record. Derived material (preview, OCR text, chunks, index) is deleted with it; those copies are counted here so a
+// deletion cannot forget one. Apply with `npx prisma db push`.
+enum AskChatAttachmentState {
+  UPLOADING
+  READY
+  ANALYZING
+  ANALYZED
+  FAILED
+  PROMOTED
+  DELETED
+  EXPIRED
+}
+
+model AskChatAttachment {
+  id                  String                 @id @default(uuid())
+  userId              String
+  /// PROPERTY (an owned home) or CANDIDATE (a buyer's candidate property); never both.
+  scopeKind           String
+  scopeId             String
+  sessionId           String?
+  executionId         String?
+  state               AskChatAttachmentState @default(UPLOADING)
+  declaredMimeType    String
+  detectedMimeType    String?
+  originalFileName    String
+  sizeBytes           Int
+  sha256              String?
+  uploadedAt          DateTime               @default(now())
+  analysisCompletedAt DateTime?
+  /// When the original and every derivative must be gone (D10): 24h after analysis completes, 24h after upload if never analysed, 1h after upload if failed.
+  deleteAfter         DateTime
+  endedAt             DateTime?
+  endedReason         String?
+  /// Set only by an explicit, separately confirmed promotion; the canonical record is independent of this row.
+  promotedRecordId    String?
+  hasPreview          Boolean                @default(false)
+  hasOcrText          Boolean                @default(false)
+  chunkCount          Int                    @default(0)
+  hasDerivedIndex     Boolean                @default(false)
+
+  @@index([userId, state])
+  @@index([state, deleteAfter])
+  @@index([sessionId])
+}

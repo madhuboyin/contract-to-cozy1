@@ -453,6 +453,27 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     humanApprovalClass: 'HIGH_IMPACT_MANUAL',
   },
 
+  {
+    key: 'ask-attachment-cleanup',
+    name: 'Ask Attachment Cleanup',
+    description:
+      'Deletes expired, failed and abandoned Ask chat attachments and every derivative (raw file, preview, OCR text, chunks, index): 24 hours after analysis, 24 hours after upload if never analysed, one hour after a failed upload. Fails closed: a row is only ended after every copy is removed. Schedule overridable via ASK_ATTACHMENT_CLEANUP_CRON.',
+    category: 'MAINTENANCE',
+    schedule: 'Hourly at :20',
+    cronExpression: '20 * * * *',
+    type: 'cron',
+    queueName: 'cron-trigger-queue',
+    jobName: 'ask-attachment-cleanup',
+    triggerSupported: true,
+    impact: 'DESTRUCTIVE',
+    customerJob: 'PLATFORM_OPERATIONS',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: false,
+    broadSweep: true,
+    humanApprovalClass: 'HIGH_IMPACT_MANUAL',
+  },
+
   // ── Risk & Safety (cron) ──────────────────────────────────────────────────
   {
     key: 'coverage-lapse-incidents',
