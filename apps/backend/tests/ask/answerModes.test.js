@@ -49,3 +49,8 @@ test('the execution response carries the mode', () => {
   assert.equal(mapPersistedExecution(row, null).answerMode, 'ESTIMATE');
   assert.equal(mapPersistedExecution({ ...row, status: 'FAILED_RETRYABLE' }, null).answerMode, 'UNAVAILABLE');
 });
+
+test('a social reply declares no answer mode, so it is never labelled as a home record', () => {
+  assert.equal(deriveAnswerMode({ status: 'ANSWERED', operationId: 'GROUNDED_GUIDANCE', hasProperty: true, reasonCode: 'ASK_SOCIAL_TURN' }), null);
+  assert.equal(deriveAnswerMode({ status: 'ANSWERED', operationId: 'GROUNDED_GUIDANCE', hasProperty: true }), 'HOME_RECORD', 'other grounded-guidance answers are unchanged');
+});

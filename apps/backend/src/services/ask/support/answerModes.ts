@@ -22,7 +22,9 @@ export const ESTIMATE_OPERATIONS: ReadonlySet<string> = new Set([
 const UNAVAILABLE_STATUSES = new Set(['UNAVAILABLE', 'OUT_OF_SCOPE', 'BLOCKED', 'NOT_APPLICABLE', 'EXPIRED', 'FAILED_RETRYABLE', 'FAILED_TERMINAL', 'CANCELLED']);
 const SETTLED_STATUSES = new Set(['ANSWERED', 'READY_WITH_LIMITATIONS', 'COMPLETED']);
 
-export function deriveAnswerMode(input: { status: string; operationId: AskOperationId | null; hasProperty: boolean }): AnswerMode | null {
+export function deriveAnswerMode(input: { status: string; operationId: AskOperationId | null; hasProperty: boolean; reasonCode?: string | null }): AnswerMode | null {
+  // A social reply (BICC-UX-010) states nothing about the home, so it declares no mode: labelling "hello" as a home record would be false.
+  if (input.reasonCode === 'ASK_SOCIAL_TURN') return null;
   if (UNAVAILABLE_STATUSES.has(input.status)) return 'UNAVAILABLE';
   if (!SETTLED_STATUSES.has(input.status) || !input.operationId) return null;
   const definition = getAskOperationDefinition(input.operationId);

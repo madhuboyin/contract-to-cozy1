@@ -189,3 +189,10 @@ Tuning positives claimed by an inventory rule rose from **12 to 21 of 37**; wron
 **The freeze was ended on purpose.** Adding rules changes the wave-1 rule versions, which the freeze guards. No sealed shard existed (none can until a human Ask Evaluation Reviewer is assigned), so nothing was burned; `wave1-frozen.json` records the new versions and a `refreezes` entry. These are tuning-set numbers: the tuning prompts were visible while the rules were written, so they measure recall on the set I tuned against, not on held-out phrasing.
 
 Evidence: `inventoryLookupRecall.test.js` 3 pass, `certificationWave1Tuning.test.js` pass; typecheck clean; Ask suite 6015 tests, 292 failing, none new.
+
+### Answer-mode label in the UI (BICC-ANS-001/007, 2026-11-23)
+
+The server-declared `answerMode` is now worded on the answer card (`features/ask/answerModeLabel.ts`, rendered by `ExecutionCard` above the answer, both chromes): "From your home record", "From your documents", "Calculated", "Estimate", "Recommendation", and "General guidance · not from your home record" (ANS-007), each with a sentence for assistive technology and the hover title. Nothing is shown for UNAVAILABLE (the answer states its own reason), a missing mode, or an unknown one. A social reply (BICC-UX-010) now declares no mode (`deriveAnswerMode` takes the reason code) so "hello" is never labelled as a home record.
+
+Evidence: 4 label tests plus 162 workspace/feature jest tests pass; `next build` passes; backend `answerModes` 8 pass; backend typecheck clean.
+Not done: no component render test (the card needs a large prop surface and has none today) and no browser check, so placement, spacing and the folded state are unverified visually. Per-facet labels for composed answers wait on BICC-2.2. The existing HOME_RECORD label also appears on grounded-guidance answers that found nothing, which is the backend's existing classification and is not changed here.

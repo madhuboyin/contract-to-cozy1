@@ -189,7 +189,7 @@ export function mapPersistedExecution(execution: {
     regenerate: canRegenerate({ status: execution.status, operationId, parametersJson: execution.parametersJson }),
   };
   const regeneratedFromExecutionId = regenerationSourceOf(execution.parametersJson);
-  const answerMode = deriveAnswerMode({ status: execution.status, operationId, hasProperty: Boolean(execution.propertyId) });
+  const answerMode = deriveAnswerMode({ status: execution.status, operationId, hasProperty: Boolean(execution.propertyId), reasonCode: execution.reasonCode });
   const storedFamily = typeof (stored as { presentationFamily?: unknown }).presentationFamily === 'string' ? (stored as { presentationFamily: string }).presentationFamily : null;
   const storedBlocks = Array.isArray(stored.blocks) ? stored.blocks as Array<Record<string, unknown> & { type: string }> : null;
   const delivered: { family: string | null; blocks: unknown } = storedFamily || !storedBlocks || storedBlocks.some((block) => !block || typeof block !== 'object' || typeof block.type !== 'string')

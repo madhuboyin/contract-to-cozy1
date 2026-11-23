@@ -22,6 +22,7 @@ import { canFoldResult, resultHeadline } from '@/features/ask/conversationView';
 import { askAnswerWidth, askAnswerWidthClass } from '@/features/ask/answerLayout';
 import { handoffLabel, handoffPrompt } from '@/features/ask/skillHandoff';
 import { answerPlainText } from '@/features/ask/answerText';
+import { answerModeLabel } from '@/features/ask/answerModeLabel';
 import { AskPromptAttribution, FOCUSABLE_SELECTOR, draftStorageKey } from './support';
 import { ClarificationCard, ConfirmationCard, InlineCaptureCard, PendingOutcomeCard, PropertySelectionCard } from './CaptureCards';
 
@@ -278,6 +279,8 @@ export function ExecutionCard({
   // a completed ConfirmationCard unmounts (its Confirm button removed from
   // the DOM) and focus silently reverts to <body> -- a keyboard/screen-
   // reader user loses their place entirely after completing a row action.
+  // BICC-ANS-001: the kind of answer this is, in words, from the server-declared mode.
+  const modeLabel = answerModeLabel(execution.answerMode);
   const resultSettled = execution.status !== 'NEEDS_PROPERTY'
     && !execution.confirmation && !execution.clarification && execution.captureRequests.length === 0;
   useEffect(() => {
@@ -364,6 +367,7 @@ export function ExecutionCard({
 
         {folded && canFoldResult(execution) && <p data-ask-folded-headline="" className="text-sm font-semibold text-slate-900">{resultHeadline(execution)}<span className="ml-2 text-xs font-normal text-slate-500">Updated {new Date(execution.updatedAt).toLocaleString()}</span></p>}
         <div hidden={folded && canFoldResult(execution)} className="space-y-3">
+        {modeLabel && <p data-ask-answer-mode={execution.answerMode ?? undefined} title={modeLabel.description} className="text-[11px] font-medium text-slate-500"><span className="sr-only">Answer type: </span>{modeLabel.text}<span className="sr-only">. {modeLabel.description}</span></p>}
         {!calmChrome && <p className="text-xs text-slate-500" role="status" aria-live="polite">
           {'Updated'} {new Date(execution.updatedAt).toLocaleString()}
           {!calmChrome && execution.viewState && ` · ${execution.blocks.flatMap((block) => block.type === 'GROUPED_LIST' && block.id === 'maintenance-groups' ? block.sections : []).reduce((count, section) => count + section.count, 0)} matching tasks`}
