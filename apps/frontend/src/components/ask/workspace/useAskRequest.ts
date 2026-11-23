@@ -190,6 +190,38 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
     }
   };
 
+  // BICC-CTX-006: ask a settled read answer again as a NEW attempt. The original stays in the conversation (the result is appended, never swapped in),
+  // and the new attempt carries its own feedback.
+  const regenerateExecution = async (execution: AskExecutionResponse) => {
+    if (!sessionId || loading) return;
+    const requestedSessionId = sessionId;
+    const requestKey = `${requestedSessionId}:regenerate:${execution.executionId}`;
+    const requestToken = requests.current.begin(requestKey);
+    inFlight.current = { key: requestKey, token: requestToken, message: execution.question };
+    const controller = beginController(requestToken);
+    setError(null);
+    setNotice?.(null);
+    setLoading(true);
+    try {
+      const response = await api.regenerateAskExecution(execution.executionId, newId(), { signal: controller.signal });
+      if (!response.success || !response.data) throw new Error(response.message || 'Ask could not regenerate that answer.');
+      if (activeSessionRef.current !== requestedSessionId || !requests.current.current(requestKey, requestToken)) return;
+      setExecutions((current) => mergeResultExecutions(current, [response.data!]));
+      setJustUpdatedExecutionId(response.data.executionId);
+      if (mode === 'page') updateAskLocation({ sessionId: requestedSessionId, propertyId: response.data.property?.id ?? selectedPropertyId, executionId: response.data.executionId }, 'replace');
+      setRecentSessionsEpoch((current) => current + 1);
+    } catch (caught) {
+      if (activeSessionRef.current !== requestedSessionId || !requests.current.current(requestKey, requestToken)) return;
+      setError(caught instanceof Error ? caught.message : 'Ask is temporarily unavailable.');
+    } finally {
+      controllers.current.delete(requestToken);
+      if (!stoppedRequests.current.delete(requestToken)) {
+        setLoading(false);
+        if (inFlight.current?.token === requestToken) inFlight.current = null;
+      }
+    }
+  };
+
   // FRD v1.96: stop waiting for the answer. The request cannot be recalled once sent, so it may still complete on the
   // server (and then shows in the history); its answer is discarded here, and the question comes back into the composer.
   const stopAsking = () => {
@@ -222,5 +254,5 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
     window.setTimeout(() => { textareaRef.current?.focus(); textareaRef.current?.setSelectionRange(question.length, question.length); }, 0);
   };
 
-  return { ask, retryExecution, stopAsking, editAndResend };
+  return { ask, retryExecution, regenerateExecution, stopAsking, editAndResend };
 }

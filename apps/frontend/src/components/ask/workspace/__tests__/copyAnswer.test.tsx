@@ -44,3 +44,25 @@ describe('ExecutionFeedback hydration', () => {
     expect(screen.queryByText(/your feedback was saved/i)).toBeNull();
   });
 });
+
+// BICC-CTX-006: Regenerate is offered only when the answer can be regenerated and a handler exists.
+describe('ExecutionFeedback regenerate', () => {
+  it('offers Regenerate for a regenerable answer and calls the handler', () => {
+    const onRegenerate = jest.fn();
+    render(<ExecutionFeedback executionId="e1" capabilities={{ ...capabilities, regenerate: true }} onRegenerate={onRegenerate} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Regenerate answer' }));
+    expect(onRegenerate).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers nothing when the answer cannot be regenerated or there is no handler', () => {
+    const { rerender } = render(<ExecutionFeedback executionId="e1" capabilities={{ ...capabilities, regenerate: false }} onRegenerate={jest.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Regenerate answer' })).toBeNull();
+    rerender(<ExecutionFeedback executionId="e1" capabilities={{ ...capabilities, regenerate: true }} />);
+    expect(screen.queryByRole('button', { name: 'Regenerate answer' })).toBeNull();
+  });
+
+  it('disables the control while a request is running', () => {
+    render(<ExecutionFeedback executionId="e1" capabilities={{ ...capabilities, regenerate: true }} onRegenerate={jest.fn()} regenerating />);
+    expect(screen.getByRole('button', { name: 'Regenerate answer' })).toBeDisabled();
+  });
+});

@@ -29,7 +29,10 @@ import { ClarificationCard, ConfirmationCard, InlineCaptureCard, PendingOutcomeC
 // list's own section dividers stay, so no answer is a card holding cards.
 const FRAMELESS_LISTS = '[&>section.overflow-hidden]:rounded-none [&>section.overflow-hidden]:border-0 [&>section.overflow-hidden]:bg-transparent [&>section.overflow-hidden>div]:px-0 [&>section.overflow-hidden>div:first-child>h3:first-child]:sr-only [&_section.overflow-hidden_h4]:text-xs [&_section.overflow-hidden_h4]:font-semibold [&_section.overflow-hidden_h4]:uppercase [&_section.overflow-hidden_h4]:tracking-wide [&_section.overflow-hidden_h4]:text-slate-500';
 
-export function ExecutionFeedback({ executionId, propertyId, capabilities, calm = false, leading, onCorrectionExecution, copyText, savedFeedback }: {
+export function ExecutionFeedback({ executionId, propertyId, capabilities, calm = false, leading, onCorrectionExecution, copyText, savedFeedback, onRegenerate, regenerating = false }: {
+  // BICC-CTX-006: asks the same question again as a new, linked attempt; offered only when the answer can be regenerated.
+  onRegenerate?: () => void;
+  regenerating?: boolean;
   // BICC-UX-003: the rating already saved for this attempt, hydrated from the execution so a reload shows it. It belongs to this execution id only.
   savedFeedback?: AskExecutionResponse['feedback'];
   // BICC-UX-003: the plain text of the completed answer; the Copy control is offered only when there is some.
@@ -103,6 +106,7 @@ export function ExecutionFeedback({ executionId, propertyId, capabilities, calm 
             pressed, highlighted) but was silently lost if the user
             navigated away before sending a comment. */}
         <button type="button" disabled={saving} aria-label="Not helpful response" aria-pressed={rating === 'DOWN'} onClick={() => void submit('DOWN')} className={cn('rounded-lg p-2 hover:bg-slate-100', rating === 'DOWN' && 'bg-amber-50 text-amber-700')}><ThumbsDown className="h-4 w-4" /></button>
+        {capabilities.regenerate && onRegenerate && <button type="button" aria-label="Regenerate answer" disabled={regenerating} onClick={onRegenerate} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50"><RefreshCw className="h-4 w-4" aria-hidden="true" /></button>}
         {copyText && <button type="button" aria-label="Copy answer" onClick={() => void copyAnswer()} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800">{copied === 'copied' ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}</button>}
         <span className="sr-only" role="status" aria-live="polite">{copied === 'copied' ? 'Answer copied.' : copied === 'failed' ? 'Could not copy the answer.' : ''}</span>
         {calm && (capabilities.intent || capabilities.entity || (capabilities.homeRecord && propertyId)) ? (
@@ -133,7 +137,7 @@ export function ExecutionFeedback({ executionId, propertyId, capabilities, calm 
 }
 
 export function ExecutionCard({
-  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, retryExecution, selectedPropertyId, setInput, visibleSuggestions, activeSessionRef, refreshIssue, refreshResult, refreshPending, onAccessLost, contextOpen, onOpenContext, onOpenFileIntake, folded = false, pinned = false, onToggleFold, onTogglePin, onEditQuestion,
+  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, retryExecution, regenerateExecution, selectedPropertyId, setInput, visibleSuggestions, activeSessionRef, refreshIssue, refreshResult, refreshPending, onAccessLost, contextOpen, onOpenContext, onOpenFileIntake, folded = false, pinned = false, onToggleFold, onTogglePin, onEditQuestion,
 }: {
   execution: AskExecutionResponse;
   isSuperseded: boolean;
@@ -142,6 +146,7 @@ export function ExecutionCard({
   loading: boolean;
   ask: (question: string, attribution?: AskPromptAttribution, promptContext?: AskCapabilityPrompt['context'], options?: { presentInConversation?: boolean }) => Promise<AskExecutionResponse | void>;
   retryExecution?: (execution: AskExecutionResponse) => Promise<void>;
+  regenerateExecution?: (execution: AskExecutionResponse) => Promise<void>;
   selectedPropertyId: string;
   setInput: (value: string) => void;
   visibleSuggestions: string[];
@@ -406,7 +411,7 @@ export function ExecutionCard({
           return <p className="w-full max-w-[960px] text-sm" data-skill-handoff="" aria-describedby={`handoff-note-${execution.executionId}`}><span className="text-slate-500">Next: </span><button type="button" disabled={loading} onClick={() => void ask(prompt, undefined, { handoffFromExecutionId: execution.executionId, propertyId: continuity.propertyId ?? undefined, entityType: continuity.sourceEntityType ?? undefined, entityId: continuity.sourceEntityId ?? undefined, actionId: continuity.sourceHomeActionId ?? undefined, decisionThreadId: continuity.decisionThreadId ?? undefined, workItemId: continuity.workItemId ?? undefined, journeyId: continuity.journeyId ?? undefined, contextVersion: continuity.contextVersion ?? undefined, returnTo: continuity.returnDestination ?? undefined })} className="min-h-8 rounded-md px-1 text-left font-semibold text-teal-800 underline-offset-2 hover:underline disabled:opacity-50">{label} →</button><span id={`handoff-note-${execution.executionId}`} className="sr-only">Ask will check access, availability, and current home context again before continuing.</span></p>;
         })()}
         {shownSuggestions.length > 0 && <div className="flex flex-wrap gap-2 pt-1">{shownSuggestions.map((suggestion) => <button key={suggestion} onClick={() => { setInput(suggestion); window.localStorage.setItem(draftStorageKey(selectedPropertyId, execution.sessionId), suggestion); }} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-800">{suggestion}</button>)}</div>}
-        <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} capabilities={execution.correctionCapabilities} calm={calmChrome} onCorrectionExecution={updateExecution} savedFeedback={execution.feedback} copyText={execution.status === 'ANSWERED' || execution.status === 'READY_WITH_LIMITATIONS' ? answerPlainText(execution.blocks) : undefined} />
+        <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} capabilities={execution.correctionCapabilities} calm={calmChrome} onCorrectionExecution={updateExecution} savedFeedback={execution.feedback} onRegenerate={regenerateExecution ? () => void regenerateExecution(execution) : undefined} regenerating={loading} copyText={execution.status === 'ANSWERED' || execution.status === 'READY_WITH_LIMITATIONS' ? answerPlainText(execution.blocks) : undefined} />
         </div>
       </div>
     </article></CalmAnswerContext.Provider></CalmChromeContext.Provider></ResultViewContext.Provider></ResultRevalidationBoundary>

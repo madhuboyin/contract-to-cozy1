@@ -1044,6 +1044,9 @@ class APIClient {
   async retryAskExecution(executionId: string, clientRequestId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/retry`, { method: 'POST', body: { clientRequestId }, signal: options.signal });
   }
+  async regenerateAskExecution(executionId: string, clientRequestId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<AskExecutionResponse>> {
+    return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/regenerate`, { method: 'POST', body: { clientRequestId }, signal: options.signal });
+  }
   async getConciergeHome(propertyId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<ConciergeHomeView>> {
     return this.request<ConciergeHomeView>(`/api/ask/concierge-home?propertyId=${encodeURIComponent(propertyId)}`, options);
   }

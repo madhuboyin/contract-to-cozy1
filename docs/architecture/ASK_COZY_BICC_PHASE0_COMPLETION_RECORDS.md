@@ -86,3 +86,26 @@ Every record states what ran, what did not, and what is still open. Nothing here
 - **Document analysis** must observe the abort signal before `BICC-3.2` activation (recorded in the plan gate).
 - **Regeneration** (`BICC-CTX-006`) still belongs to `BICC-2.3`.
 - **No browser verification** of any frontend change and **no real-database run** of the feedback overlay or cancelled-execution persistence; both are unit-tested against stubs.
+
+## Unblocked engineering, third round (2026-11-23)
+
+Work that does not depend on a person. Nothing here ran against a real database, browser or provider; behavior is unit-tested against stubs and the integration points are type-checked.
+
+| Slice | What was built | Evidence | Not done |
+|---|---|---|---|
+| `BICC-1A.1` reach inventory | `scripts/ask-bicc-reach-inventory.js` generates the denominators: 231 operations by route and 107 data points by reachability, with the missing-target list; output committed as `ASK_COZY_BICC_REACH_INVENTORY.md`. Findings: 107 operations are not message-routable, 69 have only demoted fast-path rules, 11 are provisional reads and none is certified; 106 of 107 data points are reachable by their own aliases (one has an alias collision) and 83 have no tuning question. | `biccReachInventory.test.js` 5 pass | Gap classes "unavailable reader" and "intentional boundary" need a reader and boundary inventory. Probes come from the catalogue, so this measures catalogue self-consistency, not real phrasings. |
+| `BICC-1A.3` bounded recovery | **Portfolio questions** ("which of my homes has overdue maintenance?") used to be answered silently for the selected home; they now get a boundary that explains the limit and offers to choose a home (PORT-003). **Other languages** get a respectful, non-destructive recovery (UX-009); the detector is checked against more than 1,000 English prompts. **Clarification limit** (UND-007/008/009): a repeated or rephrased request after one clarification gets the best-supported plain read, labelled "How I read your question"; an unresolved entity, write or material decision is never guessed. | `portfolioAndLanguageBoundaries.test.js` 7 pass; `clarificationLoop.test.js` 9 pass | The clarification integration in `createAskExecution` is not run against a database. The portfolio boundary offers the selector in text, with no inline property-picker action. |
+| `BICC-1C.1` answer modes | Each response now carries `answerMode` (home record, estimate, recommendation, general guidance, unavailable), assigned by the operation, never by a model. `CALCULATION` is deliberately unused until an operation declares authoritative-only inputs; forecasts and computed figures are labelled `ESTIMATE`. | `answerModes.test.js` 6 pass | Per-facet modes for composed answers, `USER_DOCUMENT` (`BICC-3.2`), the UI label, and the GATE-004B1/005 evaluation. |
+| `BICC-1C.2` authored guidance | The 7-entry catalogue now carries owner, topic family, evidence basis, scope, exclusions, boundary, review state and dates, with a deterministic lint (prohibited claims, duplicates, conflicts, overdue review) and a coverage report that names the excluded topics. The lint caught and I loosened one over-strict rule. | `generalGuidanceGovernance.test.js` 6 pass | **All 7 entries have evidence basis `UNRECORDED` and safety and editorial review `PENDING`**: a person must supply sources and review them. No topic inventory or held-out demand measure yet, so GATE-011 is not measurable. |
+| `BICC-2.3` regeneration | `POST /api/ask/executions/:id/regenerate` creates a new execution linked to the original (`regeneratedFromExecutionId`), keeps both, is idempotent on `clientRequestId`, and refuses writes, confirmations, failures, composed parents and model-backed operations. A Regenerate control appears only when the answer is regenerable. Feedback stays per attempt. | `askRegenerate.test.js` 8 pass; frontend `copyAnswer`/`regenerate` tests pass | Not exercised against a real database or browser. |
+
+### Remaining unbuilt engineering
+
+- `BICC-2.1` structured conversation summary and entity-reference carrying (CTX-001 to CTX-005).
+- `BICC-1S` emergency interception improvements and corpus (the certification half needs the Home Safety/Policy Reviewer).
+- `BICC-1A.2` fidelity suites of at least 300 cases and the held-out data-point reach measure.
+- `BICC-1B` stays conditional on a measured residual gap.
+- `BICC-1C.2`/`BICC-UX-010` social-turn contract.
+- Evaluation corpora for `BICC-EVAL-001`, `-005`, `-007` to `-011` and `-015` to `-017`.
+- `INVENTORY_LOOKUP` recall: 12 of 37 tuning positives are claimed by an inventory rule.
+- Phases 3 to 5.

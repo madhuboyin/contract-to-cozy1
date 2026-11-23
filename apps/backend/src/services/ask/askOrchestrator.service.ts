@@ -14,6 +14,8 @@ import './execution/createAskExecution';
 export { createAskExecution } from './execution/createAskExecution';
 import './execution/askRetry';
 export { retryAskExecution } from './execution/askRetry';
+import './execution/askRegenerate';
+export { regenerateAskExecution } from './execution/askRegenerate';
 import './execution/askClarification';
 export { submitAskClarification, resolveAskExecutionProperty } from './execution/askClarification';
 import './execution/askConfirm';

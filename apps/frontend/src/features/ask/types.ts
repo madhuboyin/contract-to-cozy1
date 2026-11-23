@@ -464,7 +464,13 @@ export interface AskExecutionResponse {
     entity: boolean;
     homeRecord: boolean;
     retryResponse: boolean;
+    /** BICC-CTX-006: a settled read answer can be asked again as a new, linked attempt. */
+    regenerate?: boolean;
   };
+  /** The execution this attempt regenerates; the original stays in the conversation. */
+  regeneratedFromExecutionId?: string | null;
+  /** BICC-ANS-001: the origin and epistemic class of the answer (assigned by the operation). Null when there is no substantive answer yet. */
+  answerMode?: 'HOME_RECORD' | 'USER_DOCUMENT' | 'CALCULATION' | 'ESTIMATE' | 'RECOMMENDATION' | 'GENERAL_GUIDANCE' | 'UNAVAILABLE' | null;
   suggestions: string[];
   /** True when this result passed through the server-governed action finalizer; string suggestions are historical-only thereafter. */
   suggestedNextActionsGoverned?: boolean;

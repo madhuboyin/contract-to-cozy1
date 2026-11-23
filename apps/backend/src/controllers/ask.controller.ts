@@ -2,7 +2,7 @@ import { loadAskTargetSelection } from '../services/ask/askTargetSelectors';
 import type { NextFunction, Response } from 'express';
 import { z } from 'zod';
 import type { AuthRequest } from '../types/auth.types';
-import { AskSessionSearchRequestSchema, AskSessionUpdateRequestSchema, ContinueAskExecutionSchema, CreateAskExecutionRequestSchema, EditAskConfirmationSchema, RecordAskCaptureEventSchema, RequestAskCorrectionSchema, ResolveAskExecutionPropertySchema, RetryAskExecutionSchema, SubmitAskCaptureRequestSchema, SubmitAskClarificationSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema, SubmitHomeActionUsefulnessFeedbackSchema, DismissSuggestedActionSchema, SUGGESTED_NEXT_ACTION_ID_PATTERN } from '../productFramework/ask/ask.contract';
+import { AskSessionSearchRequestSchema, AskSessionUpdateRequestSchema, ContinueAskExecutionSchema, CreateAskExecutionRequestSchema, EditAskConfirmationSchema, RecordAskCaptureEventSchema, RequestAskCorrectionSchema, ResolveAskExecutionPropertySchema, RetryAskExecutionSchema, RegenerateAskExecutionSchema, SubmitAskCaptureRequestSchema, SubmitAskClarificationSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema, SubmitHomeActionUsefulnessFeedbackSchema, DismissSuggestedActionSchema, SUGGESTED_NEXT_ACTION_ID_PATTERN } from '../productFramework/ask/ask.contract';
 import { getAskRecordIndex } from '../services/ask/askRecordIndex.service';
 import { getAskRecordExportReview } from '../services/ask/askRecordExportReview.service';
 import { listAskNotifications, openAskNotification, setAskNotificationDismissed, setAskNotificationRead, AskNotificationInvalidRequestError, AskNotificationNotFoundError } from '../services/ask/askNotificationInbox.service';
@@ -12,7 +12,7 @@ import { getAskSavedPage, resolveAskSavedArtifactForUser, setAskSavedArchive, As
 import { getAskWorkPage, resolveAskWorkForUser, AskWorkInvalidRequestError } from '../services/ask/askWork.service';
 import { getAskRecordCollectionPage, AskRecordSectionUnavailableError } from '../services/ask/askRecordCollections.service';
 import { getAskRecordDetail } from '../services/ask/askRecordDetail.service';
-import { cancelAskExecution, confirmAskExecution, continueAskExecution, createAskExecution, editAskConfirmation, getAskExecution, getAskPendingWork, getAskSession, getConciergeHome, getRecentAskSessions, updateAskSessionForUser, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, requestAskCorrection, resolveAskExecutionProperty, retryAskExecution, submitAskCapture, submitAskClarification, submitAskExecutionFeedback, submitHomeActionUsefulnessFeedback } from '../services/ask/askOrchestrator.service';
+import { cancelAskExecution, confirmAskExecution, continueAskExecution, createAskExecution, editAskConfirmation, getAskExecution, getAskPendingWork, getAskSession, getConciergeHome, getRecentAskSessions, updateAskSessionForUser, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, requestAskCorrection, resolveAskExecutionProperty, retryAskExecution, regenerateAskExecution, submitAskCapture, submitAskClarification, submitAskExecutionFeedback, submitHomeActionUsefulnessFeedback } from '../services/ask/askOrchestrator.service';
 import { deleteAskSessionForUser } from '../services/ask/askRetention.service';
 import { dismissSuggestedAction, DismissSuggestedActionError } from '../services/ask/suggestedActions/dismissSuggestedAction';
 import {
@@ -78,6 +78,27 @@ export async function postAskExecutionRetry(req: AuthRequest, res: Response, nex
     const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
     if (code === 'ASK_EXECUTION_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Ask execution not found.' } });
     if (code === 'ASK_EXECUTION_NOT_RETRYABLE') return res.status(409).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'This response no longer needs a retry.' } });
+    if (code === 'ASK_PROPERTY_NOT_FOUND') return res.status(403).json({ success: false, error: { code: 'ASK_PERMISSION_REQUIRED', message: 'That home is not available for your account.' } });
+    const dependencyResponse = sendAskDependencyError(res, error);
+    if (dependencyResponse) return dependencyResponse;
+    return next(error);
+  }
+}
+
+export async function postAskExecutionRegenerate(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const input = RegenerateAskExecutionSchema.safeParse(req.body);
+    if (!input.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'The regenerate request is invalid.', details: input.error.flatten() } });
+    const stop = requestStopSignal(res);
+    const regenerated = await regenerateAskExecution(user.userId, req.params.executionId, input.data, user.role, { signal: stop.signal });
+    stop.release();
+    return res.status(201).json({ success: true, data: regenerated });
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+    if (code === 'ASK_EXECUTION_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Ask execution not found.' } });
+    if (code === 'ASK_EXECUTION_NOT_REGENERABLE') return res.status(409).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'This answer cannot be regenerated.' } });
     if (code === 'ASK_PROPERTY_NOT_FOUND') return res.status(403).json({ success: false, error: { code: 'ASK_PERMISSION_REQUIRED', message: 'That home is not available for your account.' } });
     const dependencyResponse = sendAskDependencyError(res, error);
     if (dependencyResponse) return dependencyResponse;

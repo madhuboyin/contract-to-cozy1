@@ -1,4 +1,6 @@
 // Ask handler support: executionState. Moved out of askHandlerSupport.ts unchanged (FRD v1.110); that file re-exports these modules.
+import { deriveAnswerMode } from './answerModes';
+import { canRegenerate, regenerationSourceOf } from './regeneration';
 import { staleMarkerFor } from './askReconciliation';
 import { ASK_RESPONSE_SCHEMA_VERSION, AskExecutionResponseSchema, AskPresentationBlockSchema, SuggestedNextActionsStatusSchema, type AskExecutionResponse, type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { declareAnswerFamily } from '../../../productFramework/ask/answerFamilyAnatomy';
@@ -184,7 +186,10 @@ export function mapPersistedExecution(execution: {
       && !['COMMAND', 'CAPABILITY_DISCOVERY', 'GENERAL_HOME_GUIDANCE', 'OUT_OF_SCOPE', 'UNSAFE_OR_RESTRICTED'].includes(operationDefinition?.family ?? ''),
     retryResponse: execution.status === 'FAILED_RETRYABLE'
       || (execution.status === 'UNAVAILABLE' && execution.reasonCode !== 'ASK_ANSWER_RELEVANCE_UNRESOLVED_AFTER_CLARIFICATION'),
+    regenerate: canRegenerate({ status: execution.status, operationId, parametersJson: execution.parametersJson }),
   };
+  const regeneratedFromExecutionId = regenerationSourceOf(execution.parametersJson);
+  const answerMode = deriveAnswerMode({ status: execution.status, operationId, hasProperty: Boolean(execution.propertyId) });
   const storedFamily = typeof (stored as { presentationFamily?: unknown }).presentationFamily === 'string' ? (stored as { presentationFamily: string }).presentationFamily : null;
   const storedBlocks = Array.isArray(stored.blocks) ? stored.blocks as Array<Record<string, unknown> & { type: string }> : null;
   const delivered: { family: string | null; blocks: unknown } = storedFamily || !storedBlocks || storedBlocks.some((block) => !block || typeof block !== 'object' || typeof block.type !== 'string')
@@ -225,6 +230,8 @@ export function mapPersistedExecution(execution: {
     confirmation: stored.confirmation ?? null,
     clarification: stored.clarification ?? null,
     correctionCapabilities,
+    regeneratedFromExecutionId,
+    answerMode,
     suggestions: stored.suggestions ?? [],
     // This marker is the compatibility boundary between historical raw strings and newly governed typed actions.
     // Omitting it here made the non-calm frontend treat every mapped governed execution as historical and hide its typed row.
@@ -272,7 +279,7 @@ export function mapPersistedExecution(execution: {
     captureRequests: [],
     confirmation: null,
     clarification: null,
-    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse },
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse, regenerate: false },
     suggestions: [],
     createdAt: execution.createdAt.toISOString(),
     updatedAt: execution.updatedAt.toISOString(),

@@ -1354,6 +1354,12 @@ export const ContinueAskExecutionSchema = z.object({
   surface: z.enum(['ASK_PAGE', 'GLOBAL_LAUNCHER']),
 }).strict();
 
+// BICC-CTX-006: "regenerate" asks the same question again as a NEW attempt linked to the original. Both results are kept; nothing is overwritten.
+export const RegenerateAskExecutionSchema = z.object({
+  clientRequestId: z.string().trim().min(1).max(160),
+}).strict();
+export type RegenerateAskExecution = z.infer<typeof RegenerateAskExecutionSchema>;
+
 export const RetryAskExecutionSchema = z.object({
   clientRequestId: z.string().trim().min(1).max(160),
 }).strict();
@@ -1688,7 +1694,13 @@ const AskExecutionResponseBaseSchema = z.object({
     entity: z.boolean(),
     homeRecord: z.boolean(),
     retryResponse: z.boolean(),
-  }).default({ intent: false, entity: false, homeRecord: false, retryResponse: false }),
+    /** BICC-CTX-006: a settled read answer can be asked again as a new, linked attempt. */
+    regenerate: z.boolean().default(false),
+  }).default({ intent: false, entity: false, homeRecord: false, retryResponse: false, regenerate: false }),
+  /** The execution this one regenerates, when it is a regeneration attempt. The original is untouched. */
+  regeneratedFromExecutionId: z.string().nullable().default(null),
+  /** BICC-ANS-001: the origin and epistemic class of this answer, assigned by the deterministic handler's operation. Null when there is no substantive answer yet. */
+  answerMode: z.enum(['HOME_RECORD', 'USER_DOCUMENT', 'CALCULATION', 'ESTIMATE', 'RECOMMENDATION', 'GENERAL_GUIDANCE', 'UNAVAILABLE']).nullable().default(null),
   suggestions: z.array(z.string()).max(5),
   // Present on every result that passed through the governed Suggested Next Action finalizer. Historical
   // executions predate this marker and may still render their string suggestions; governed results never do.
