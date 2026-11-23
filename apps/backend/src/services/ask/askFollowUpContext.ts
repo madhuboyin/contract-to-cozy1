@@ -1,7 +1,8 @@
 import type { AskExecutionStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import type { AskOperationId } from './askOperationRegistry';
-import { evaluateContinuationContext, singularEntityOf, type ContinuationContext } from './conversationSummary';
+import { evaluateContinuationContext, singularEntityOf, type ContinuationChecks, type ContinuationContext } from './conversationSummary';
+import { resolvePropertyAccess } from '../propertyAccess.service';
 
 // A registered operation family that a bare filter/scope refinement ("only
 // show the urgent ones") may legitimately continue without the homeowner
@@ -318,6 +319,19 @@ export function shouldForceAskOperation(input: {
 // resolve correctly — without ever touching the raw text shown to the
 // homeowner or sent to a model. Returns the original message unchanged when
 // no durable prior execution or recognizable continuation pattern applies.
+/** The live checks behind the conversation summary's reconciliation (BICC-CTX-003): access, existence and expiry, each scoped to the user and the home. */
+export function buildContinuationChecks(userId: string): ContinuationChecks {
+  return {
+    propertyAccessible: async (propertyId) => Boolean(await resolvePropertyAccess(userId, propertyId)),
+    existingEntityIds: async (entityType, ids, propertyId) => {
+      if (entityType === 'MAINTENANCE_TASK') return new Set((await prisma.propertyMaintenanceTask.findMany({ where: { id: { in: [...ids] }, propertyId }, select: { id: true } })).map((row) => row.id));
+      if (entityType === 'INVENTORY_ITEM') return new Set((await prisma.inventoryItem.findMany({ where: { id: { in: [...ids] }, propertyId }, select: { id: true } })).map((row) => row.id));
+      return new Set(ids); // a type the checks do not know is assumed to exist
+    },
+    expiredExecutionIds: async (ids) => new Set((await prisma.askExecution.findMany({ where: { id: { in: [...ids] }, userId, status: 'EXPIRED' }, select: { id: true } })).map((row) => row.id)),
+  };
+}
+
 /**
  * BICC-CTX-002: a follow-up that targets one canonical entity carries it as launch context so the operation resolves it by id. A client-declared entity always
  * wins (a declared control is authoritative), and a missing launch context stays missing (a safety turn has none).
@@ -333,6 +347,8 @@ export async function resolveAskFollowUpMessage(input: {
   sessionId: string;
   /** The caller's user, so the conversation summary read is scoped to their own turns. Omitted: the summary gate is skipped. */
   userId?: string | null;
+  /** Test seam: the live access, existence and expiry checks. Defaults to the real ones for the user. */
+  continuationChecks?: ContinuationChecks;
   propertyId: string | null | undefined;
   message: string;
   // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-003/ACT-001: set only when the
@@ -358,7 +374,7 @@ export async function resolveAskFollowUpMessage(input: {
   // ordinary follow-up does not continue from a result that belongs to a home the person has since left.
   let continuation: ContinuationContext | null = null;
   if (input.userId && !input.declaredSourceExecutionId) {
-    const context = continuation = await evaluateContinuationContext({ userId: input.userId, sessionId: input.sessionId, propertyId: input.propertyId ?? null }, prisma as never);
+    const context = continuation = await evaluateContinuationContext({ userId: input.userId, sessionId: input.sessionId, propertyId: input.propertyId ?? null }, prisma as never, input.continuationChecks ?? buildContinuationChecks(input.userId));
     if (context.blocked) return { ...fallback, contextReset: { disclosure: context.disclosure ?? '', reasons: context.reasons } };
   }
   const prior = await findRecentPriorExecution(input.sessionId, input.propertyId, input.declaredSourceExecutionId);
@@ -368,10 +384,15 @@ export async function resolveAskFollowUpMessage(input: {
     // BICC-CTX-002: "complete it" resolves by the entity's CANONICAL id when the prior answer named exactly one maintenance task and the conversation summary
     // agrees (same result, same id). The id goes to the same id-lookup a proactive card uses, so no title is matched and nothing can retarget by wording.
     const canonical = singularEntityOf(prior.resultJson);
-    const canonicalTask = canonical?.entityType === 'MAINTENANCE_TASK' && prior.operationId === 'MAINTENANCE_STATUS'
-      && continuation?.summary.referencedResult?.executionId === prior.id
-      && continuation.summary.activeEntities.some((entity) => entity.entityType === canonical.entityType && entity.entityId === canonical.entityId)
-      ? canonical : null;
+    // The prior answer named one entity and the conversation summary agrees (same result, same id, still existing): its canonical id is usable.
+    const agreed = canonical !== null && continuation?.summary.referencedResult?.executionId === prior.id
+      && continuation.summary.activeEntities.some((entity) => entity.entityType === canonical.entityType && entity.entityId === canonical.entityId);
+    // The single entity that answer named was deleted: never act on a title that now matches nothing, or something else.
+    if (canonical && continuation && !agreed && continuation.resets.some((reset) => reset.reason === 'ENTITY_DELETED')
+      && !continuation.summary.activeEntities.some((entity) => entity.entityId === canonical.entityId)) {
+      return { ...fallback, contextReset: { disclosure: 'The item we were looking at is no longer on this home, so I did not change anything. Tell me which one you mean.', reasons: ['ENTITY_DELETED'] } };
+    }
+    const canonicalTask = agreed && canonical?.entityType === 'MAINTENANCE_TASK' && prior.operationId === 'MAINTENANCE_STATUS' ? canonical : null;
     if (canonicalTask && MAINTENANCE_COMPLETE_VERB_PATTERN.test(input.message)) {
       return { effectiveMessage: input.message, forcedOperationId: 'MAINTENANCE_TASK_COMPLETE', sourceExecutionId: prior.id, continuationCursor: null, suppliedInput: { taskId: canonicalTask.entityId }, isFilterRefinement: false };
     }
@@ -379,6 +400,10 @@ export async function resolveAskFollowUpMessage(input: {
     // (it is the path a row button already uses). The message stays the person's own words, so a date or priority in it ("to Friday", "urgent") is still read.
     if (canonicalTask && MAINTENANCE_UPDATE_VERB_PATTERN.test(input.message)) {
       return { effectiveMessage: input.message, forcedOperationId: 'MAINTENANCE_TASK_UPDATE', sourceExecutionId: prior.id, continuationCursor: null, suppliedInput: null, isFilterRefinement: false, launchEntity: { entityType: canonicalTask.entityType, entityId: canonicalTask.entityId } };
+    }
+    // An inventory item listed alone: "update it" opens the correction review for that exact item (a preview; the write still needs confirmation).
+    if (agreed && canonical?.entityType === 'INVENTORY_ITEM' && prior.operationId === 'INVENTORY_LOOKUP' && /\bupdate\b/i.test(input.message)) {
+      return { effectiveMessage: input.message, forcedOperationId: 'INVENTORY_ITEM_CORRECT', sourceExecutionId: prior.id, continuationCursor: null, suppliedInput: null, isFilterRefinement: false, launchEntity: { entityType: canonical.entityType, entityId: canonical.entityId } };
     }
     const entityTitle = extractSingularEntityTitle(prior.resultJson);
     if (entityTitle) {

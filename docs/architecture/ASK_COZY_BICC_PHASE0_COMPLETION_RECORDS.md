@@ -138,3 +138,13 @@ Not done: slot and elliptical resolution still use the existing slot logic; the 
 Evidence: `followUpSummaryGate.test.js` and `conversationSummary.test.js` pass (15 + 18); `conversationalSlots.test.js` still passes unchanged; typecheck clean; the Ask suite shows no new failures.
 
 Not done: the update path covers maintenance tasks only; slot carry uses the summary's redaction and caps (item, date, objective text) which are stricter than before; not run against a real database; deleted-entity and access-loss sets are still not supplied to the reconciliation.
+
+### Live reconciliation checks and inventory by id (2026-11-23)
+
+**Live checks.** The follow-up gate now supplies the reconciliation with facts instead of assumptions (`buildContinuationChecks`): access to each earlier home (`resolvePropertyAccess`), whether the entities the summary carries still exist on this home (maintenance tasks and inventory items, scoped to the property), and whether the referenced result has expired (scoped to the user). A home the person can no longer reach now reads as `ACCESS_LOST` ("a home from earlier in this conversation is no longer available to you") rather than a switch. If the single entity the last answer named was deleted, "complete it", "reschedule it" and "update it" do nothing, match no title, and say so ("the item we were looking at is no longer on this home"). The checks add at most one access lookup per earlier home plus two scoped reads, and only for messages that look like follow-ups.
+
+**Inventory by id.** A single listed inventory item answered by `INVENTORY_LOOKUP` can be updated with "update it": the follow-up forces `INVENTORY_ITEM_CORRECT` with the item as launch entity. The result is a review (the write still needs confirmation). Other verbs, two listed items and a deleted item are never targeted by id.
+
+Evidence: `followUpSummaryGate.test.js` and `conversationSummary.test.js` 39 pass (deleted entity, access lost, scoping of the existence check, inventory update and refusals, real-checks scoping); typecheck clean; the Ask suite shows no new failures.
+
+Not done: the inventory row shape (`id` and `entityType` on a single list row) is tested with synthetic rows, not confirmed against a real inventory answer; other entity types are assumed to exist; the real checks have not run against a real database.

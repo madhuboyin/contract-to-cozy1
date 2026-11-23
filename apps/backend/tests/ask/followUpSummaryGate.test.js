@@ -23,7 +23,13 @@ function stub(rows) {
   prisma.askExecutionEvent.findMany = async () => [];
   return { queries, restore: () => { prisma.askExecution.findMany = original.findMany; prisma.askExecution.findFirst = original.findFirst; prisma.askExecutionEvent.findMany = original.events; } };
 }
-const resolve = (extra = {}) => resolveAskFollowUpMessage({ sessionId: 's1', userId: 'u1', propertyId: 'p2', message: 'Only show urgent', ...extra });
+const checks = (overrides = {}) => ({
+  propertyAccessible: async () => true,
+  existingEntityIds: async (type, ids) => new Set(ids),
+  expiredExecutionIds: async () => new Set(),
+  ...overrides,
+});
+const resolve = (extra = {}) => resolveAskFollowUpMessage({ sessionId: 's1', userId: 'u1', propertyId: 'p2', message: 'Only show urgent', continuationChecks: checks(), ...extra });
 
 test('after switching homes, a follow-up does not resolve against the other home and the person is told', async () => {
   // p2 has an older turn; the latest settled result belongs to p1 (the home the person just left)
@@ -186,4 +192,79 @@ test('the singular-entity reader returns typed ids only and none for lists, tabl
   const digest = digestFromRow({ id: 'e', status: 'ANSWERED', operationId: 'MAINTENANCE_STATUS', propertyId: 'p2', createdAt: new Date(), resultJson: list([task('task-9', 'Clean gutters')]) });
   assert.deepEqual(digest.entities, [{ entityType: 'MAINTENANCE_TASK', entityId: 'task-9' }]);
   assert.doesNotMatch(JSON.stringify(digest), /Clean gutters/);
+});
+
+// BICC-CTX-003: the live checks supply access loss, deletion and expiry to the reconciliation.
+test('a home the person can no longer reach reads as access lost, not a switch', async () => {
+  const s = stub([turn('old-p2', 'p2', 40), turn('latest-p1', 'p1', 2)]);
+  try {
+    const out = await resolve({ continuationChecks: checks({ propertyAccessible: async (id) => id !== 'p1' }) });
+    assert.deepEqual(out.contextReset.reasons, ['ACCESS_LOST']);
+    assert.match(out.contextReset.disclosure, /no longer available to you/);
+    assert.equal(out.sourceExecutionId, null);
+  } finally { s.restore(); }
+});
+
+test('the single task the last answer named was deleted: nothing is done, nothing is matched by title, and the person is told', async () => {
+  const s = stub([turn('t1', 'p2', 2, { resultJson: list([task('task-9', 'Clean gutters')]) })]);
+  try {
+    for (const message of ['Now complete it', 'Reschedule it to Friday']) {
+      const out = await resolve({ message, continuationChecks: checks({ existingEntityIds: async (type, ids) => new Set(ids.filter((id) => id !== 'task-9')) }) });
+      assert.equal(out.forcedOperationId, null, message);
+      assert.equal(out.suppliedInput, null);
+      assert.equal(out.effectiveMessage, message, 'the title is not written into the message');
+      assert.deepEqual(out.contextReset.reasons, ['ENTITY_DELETED']);
+      assert.match(out.contextReset.disclosure, /no longer on this home/);
+    }
+  } finally { s.restore(); }
+});
+
+test('the existence check is scoped to the home and asked only for the entities the summary carries', async () => {
+  const s = stub([turn('t1', 'p2', 2, { resultJson: list([task('task-9', 'Clean gutters')]) })]);
+  const asked = [];
+  try {
+    await resolve({ message: 'Now complete it', continuationChecks: checks({ existingEntityIds: async (type, ids, property) => { asked.push([type, [...ids], property]); return new Set(ids); } }) });
+    assert.deepEqual(asked, [['MAINTENANCE_TASK', ['task-9'], 'p2']]);
+  } finally { s.restore(); }
+});
+
+test('a listed inventory item is updated by its canonical id as a review (the write still needs confirmation)', async () => {
+  const s = stub([turn('i1', 'p2', 2, { operationId: 'INVENTORY_LOOKUP', resultJson: list([{ id: 'item-3', title: 'Furnace', entityType: 'INVENTORY_ITEM', meta: [] }]) })]);
+  try {
+    const out = await resolve({ message: 'Update it' });
+    assert.equal(out.forcedOperationId, 'INVENTORY_ITEM_CORRECT');
+    assert.deepEqual(out.launchEntity, { entityType: 'INVENTORY_ITEM', entityId: 'item-3' });
+    assert.equal(out.effectiveMessage, 'Update it');
+  } finally { s.restore(); }
+});
+
+test('an inventory item is never targeted by a verb that does not apply to it, nor when two are listed or it was deleted', async () => {
+  const one = stub([turn('i1', 'p2', 2, { operationId: 'INVENTORY_LOOKUP', resultJson: list([{ id: 'item-3', title: 'Furnace', entityType: 'INVENTORY_ITEM', meta: [] }]) })]);
+  try {
+    assert.equal((await resolve({ message: 'Cancel it' })).forcedOperationId, null);
+    const gone = await resolve({ message: 'Update it', continuationChecks: checks({ existingEntityIds: async () => new Set() }) });
+    assert.equal(gone.forcedOperationId, null);
+    assert.deepEqual(gone.contextReset.reasons, ['ENTITY_DELETED']);
+  } finally { one.restore(); }
+  const two = stub([turn('i1', 'p2', 2, { operationId: 'INVENTORY_LOOKUP', resultJson: list([{ id: 'a', title: 'Furnace', entityType: 'INVENTORY_ITEM', meta: [] }, { id: 'b', title: 'Boiler', entityType: 'INVENTORY_ITEM', meta: [] }]) })]);
+  try { assert.equal((await resolve({ message: 'Update it' })).forcedOperationId, null); } finally { two.restore(); }
+});
+
+test('the real checks are scoped to the user and the home', async () => {
+  const { buildContinuationChecks } = require('../../src/services/ask/askFollowUpContext.ts');
+  const real = buildContinuationChecks('u1');
+  const calls = [];
+  const originals = { task: prisma.propertyMaintenanceTask.findMany, item: prisma.inventoryItem.findMany, exec: prisma.askExecution.findMany };
+  prisma.propertyMaintenanceTask.findMany = async (args) => { calls.push(['task', args]); return [{ id: 'task-9' }]; };
+  prisma.inventoryItem.findMany = async (args) => { calls.push(['item', args]); return []; };
+  prisma.askExecution.findMany = async (args) => { calls.push(['exec', args]); return [{ id: 'e-old' }]; };
+  try {
+    assert.deepEqual([...await real.existingEntityIds('MAINTENANCE_TASK', ['task-9', 'task-x'], 'p2')], ['task-9']);
+    assert.deepEqual([...await real.existingEntityIds('INVENTORY_ITEM', ['i'], 'p2')], []);
+    assert.deepEqual([...await real.existingEntityIds('WARRANTY', ['w'], 'p2')], ['w'], 'an unknown type is assumed to exist');
+    assert.deepEqual([...await real.expiredExecutionIds(['e-old', 'e-new'])], ['e-old']);
+    assert.deepEqual(calls[0][1].where, { id: { in: ['task-9', 'task-x'] }, propertyId: 'p2' });
+    assert.deepEqual(calls[1][1].where, { id: { in: ['i'] }, propertyId: 'p2' });
+    assert.deepEqual(calls[2][1].where, { id: { in: ['e-old', 'e-new'] }, userId: 'u1', status: 'EXPIRED' });
+  } finally { prisma.propertyMaintenanceTask.findMany = originals.task; prisma.inventoryItem.findMany = originals.item; prisma.askExecution.findMany = originals.exec; }
 });

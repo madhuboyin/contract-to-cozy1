@@ -216,9 +216,11 @@ export function reconcileConversationSummary(summary: ConversationSummary, curre
   }
   for (const [reason, removed] of Object.entries(tally) as Array<[keyof typeof tally, number]>) count(reason, removed);
   const disclosure = resets.length
-    ? resets.some((reset) => reset.reason === 'PROPERTY_SWITCH' || reset.reason === 'ACCESS_LOST')
+    ? resets.some((reset) => reset.reason === 'PROPERTY_SWITCH')
       ? 'I started fresh because you switched homes, so nothing from the earlier conversation about another home carries over.'
-      : 'Something we were looking at earlier is no longer available, so I left it out.'
+      : resets.some((reset) => reset.reason === 'ACCESS_LOST')
+        ? 'A home from earlier in this conversation is no longer available to you, so I left it out.'
+        : 'Something we were looking at earlier is no longer available, so I left it out.'
     : null;
   return { summary: reconciled, resets, disclosure };
 }
@@ -307,7 +309,19 @@ export interface ContinuationContext {
   /** Plain words for the person, set only when the context was blocked (CTX-003). */
   disclosure: string | null;
   reasons: string[];
+  /** Every reset that applied, whether or not it blocked continuation. */
+  resets: ReconciledSummary['resets'];
   summary: ConversationSummary;
+}
+
+/** The live checks that turn reconciliation inputs into facts: the caller can authorize and read the records, the summary cannot. */
+export interface ContinuationChecks {
+  /** True when the person may still reach this home. */
+  propertyAccessible(propertyId: string): Promise<boolean>;
+  /** Of these entity ids on this home, the ones that still exist. A type the checks do not know returns every id (assumed to exist). */
+  existingEntityIds(entityType: string, ids: readonly string[], propertyId: string): Promise<ReadonlySet<string>>;
+  /** Of these executions, the ones whose result has expired. */
+  expiredExecutionIds(ids: readonly string[]): Promise<ReadonlySet<string>>;
 }
 
 /**
@@ -317,18 +331,29 @@ export interface ContinuationContext {
  */
 export async function evaluateContinuationContext(input: {
   userId: string; sessionId: string; propertyId: string | null; lifecycleMode?: LifecycleMode | null; now?: Date;
-}, db: Parameters<typeof loadConversationSummary>[1]): Promise<ContinuationContext> {
+}, db: Parameters<typeof loadConversationSummary>[1], checks?: ContinuationChecks): Promise<ContinuationContext> {
   const summary = await loadConversationSummary({ userId: input.userId, sessionId: input.sessionId, propertyId: input.propertyId, lifecycleMode: input.lifecycleMode ?? null, now: input.now }, db);
   // Without a selected home there is nothing to switch away from; the existing property-less scoping applies unchanged.
-  if (!input.propertyId) return { blocked: false, disclosure: null, reasons: [], summary };
-  // Another home that appears in the person's own conversation is a different home, not an access loss: this gate has no access lookup, so the person's
-  // own earlier homes are treated as reachable and only the switch is reported. (A real access-loss check belongs to the caller that can authorize.)
-  const seenHomes = new Set<string>([input.propertyId]);
-  for (const id of [summary.referencedResult?.propertyId, ...summary.activeEntities.map((entity) => entity.propertyId), ...summary.sources.map((source) => source.propertyId)]) if (id) seenHomes.add(id);
-  const reconciled = reconcileConversationSummary(summary, { propertyId: input.propertyId, accessiblePropertyIds: seenHomes });
+  if (!input.propertyId) return { blocked: false, disclosure: null, reasons: [], resets: [], summary };
+  // Another home that appears in the person's own conversation is a different home. With live checks, each earlier home is tested for access (a lost home reads
+  // as ACCESS_LOST); without them every earlier home is treated as reachable and only the switch is reported.
+  const homes = new Set<string>([input.propertyId]);
+  for (const id of [summary.referencedResult?.propertyId, ...summary.activeEntities.map((entity) => entity.propertyId), ...summary.sources.map((source) => source.propertyId)]) if (id) homes.add(id);
+  const accessible = new Set<string>([input.propertyId]);
+  for (const id of homes) { if (id === input.propertyId) continue; if (!checks || await checks.propertyAccessible(id)) accessible.add(id); }
+  // Entities of THIS home that no longer exist, and results that have expired, are looked up by canonical id.
+  const deleted = new Set<string>(); const expired = new Set<string>();
+  if (checks) {
+    const byType = new Map<string, string[]>();
+    for (const entity of summary.activeEntities) if (entity.propertyId === input.propertyId || entity.propertyId === null) byType.set(entity.entityType, [...(byType.get(entity.entityType) ?? []), entity.entityId]);
+    for (const [entityType, ids] of byType) { const existing = await checks.existingEntityIds(entityType, ids, input.propertyId); for (const id of ids) if (!existing.has(id)) deleted.add(id); }
+    const executionIds = [summary.referencedResult?.executionId, summary.openClarification?.executionId].filter((id): id is string => Boolean(id));
+    if (executionIds.length) for (const id of await checks.expiredExecutionIds(executionIds)) expired.add(id);
+  }
+  const reconciled = reconcileConversationSummary(summary, { propertyId: input.propertyId, accessiblePropertyIds: accessible, deletedEntityIds: deleted, expiredExecutionIds: expired });
   const referentLost = summary.referencedResult !== null && reconciled.summary.referencedResult === null
     && reconciled.resets.some((reset) => reset.reason === 'PROPERTY_SWITCH' || reset.reason === 'ACCESS_LOST');
-  return { blocked: referentLost, disclosure: referentLost ? reconciled.disclosure : null, reasons: referentLost ? reconciled.resets.map((reset) => reset.reason) : [], summary: reconciled.summary };
+  return { blocked: referentLost, disclosure: referentLost ? reconciled.disclosure : null, reasons: referentLost ? reconciled.resets.map((reset) => reset.reason) : [], resets: reconciled.resets, summary: reconciled.summary };
 }
 
 /**
