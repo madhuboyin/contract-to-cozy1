@@ -33,3 +33,19 @@ describe('AnswerModeBadge for one part of a composed answer', () => {
     expect(screen.getByText('Estimate')).toBeInTheDocument();
   });
 });
+
+describe('AnswerModeBadge freshness', () => {
+  it('shows the part’s own as-of date and says so to assistive technology', () => {
+    const { container } = render(<AnswerModeBadge mode="HOME_RECORD" asOf="2026-10-02T10:00:00.000Z" />);
+    expect(container.textContent).toContain('From your home record · as of ');
+    expect(container.textContent).toContain('The evidence for this part is as of ');
+  });
+
+  it('shows no date when none is known, never substituting another time', () => {
+    for (const asOf of [null, undefined, 'not a date']) {
+      const { container, unmount } = render(<AnswerModeBadge mode="ESTIMATE" asOf={asOf} />);
+      expect(container.textContent).not.toMatch(/as of/);
+      unmount();
+    }
+  });
+});

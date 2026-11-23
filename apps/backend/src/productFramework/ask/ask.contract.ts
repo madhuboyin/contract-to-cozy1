@@ -1703,7 +1703,7 @@ const AskExecutionResponseBaseSchema = z.object({
   answerMode: z.enum(['HOME_RECORD', 'USER_DOCUMENT', 'CALCULATION', 'ESTIMATE', 'RECOMMENDATION', 'GENERAL_GUIDANCE', 'UNAVAILABLE']).nullable().default(null),
   /** BICC-ANS-001/002: the mode of each facet of a composed answer, in delivery order. Absent for a single answer. The response-level `answerMode` is null when this is present. */
   facetModes: z.array(z.object({
-    blockIdPrefix: z.string(), operationId: z.string(), clause: z.string(),
+    blockIdPrefix: z.string(), operationId: z.string(), clause: z.string(), asOf: z.string().nullable().optional(),
     mode: z.enum(['HOME_RECORD', 'USER_DOCUMENT', 'CALCULATION', 'ESTIMATE', 'RECOMMENDATION', 'GENERAL_GUIDANCE', 'UNAVAILABLE']).nullable(),
   })).optional(),
   suggestions: z.array(z.string()).max(5),

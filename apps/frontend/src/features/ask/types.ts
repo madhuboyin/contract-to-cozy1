@@ -472,7 +472,7 @@ export interface AskExecutionResponse {
   /** BICC-ANS-001: the origin and epistemic class of the answer (assigned by the operation). Null when there is no substantive answer yet. */
   answerMode?: 'HOME_RECORD' | 'USER_DOCUMENT' | 'CALCULATION' | 'ESTIMATE' | 'RECOMMENDATION' | 'GENERAL_GUIDANCE' | 'UNAVAILABLE' | null;
   /** BICC-ANS-001/002: the mode of each part of a composed answer, in delivery order. When present the response-level `answerMode` is null. */
-  facetModes?: Array<{ blockIdPrefix: string; operationId: string; clause: string; mode: NonNullable<AskExecutionResponse['answerMode']> | null }>;
+  facetModes?: Array<{ blockIdPrefix: string; operationId: string; clause: string; asOf?: string | null; mode: NonNullable<AskExecutionResponse['answerMode']> | null }>;
   suggestions: string[];
   /** True when this result passed through the server-governed action finalizer; string suggestions are historical-only thereafter. */
   suggestedNextActionsGoverned?: boolean;

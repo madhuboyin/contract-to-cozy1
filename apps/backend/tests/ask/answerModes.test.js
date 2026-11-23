@@ -85,3 +85,13 @@ test('fewer than two sections is not a mixed answer, and malformed input yields 
 test('an unknown operation id gives a null mode rather than throwing', () => {
   assert.equal(facetModesOf({ sections: [section('NOT_AN_OPERATION'), section('INVENTORY_LOOKUP')] })[0].mode, null);
 });
+
+test('each facet keeps its own freshness: the oldest KNOWN observation time of its evidence, and null when none is known', () => {
+  const withProvenance = (operationId, provenance) => ({ operationId, status: 'ANSWERED', clause: 'part', provenance });
+  const modes = facetModesOf({ sections: [
+    withProvenance('INVENTORY_LOOKUP', [{ label: 'a', source: 's', observedAt: '2026-11-20T10:00:00.000Z' }, { label: 'b', source: 's', observedAt: '2026-10-02T10:00:00.000Z' }, { label: 'c', source: 's', observedAt: null }]),
+    withProvenance('ITEM_REPLACEMENT_COST', [{ label: 'x', source: 's', observedAt: 'not a date' }]),
+    withProvenance('WARRANTY_LOOKUP', undefined),
+  ] });
+  assert.deepEqual(modes.map((m) => m.asOf), ['2026-10-02T10:00:00.000Z', null, null]);
+});

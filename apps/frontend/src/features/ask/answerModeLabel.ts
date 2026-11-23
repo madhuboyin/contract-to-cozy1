@@ -21,7 +21,7 @@ export function answerModeLabel(mode: AskExecutionResponse['answerMode']): Answe
   return LABELS[mode] ?? null;
 }
 
-export interface FacetMode { blockIdPrefix: string; operationId: string; mode: AnswerMode | null; clause: string }
+export interface FacetMode { blockIdPrefix: string; operationId: string; mode: AnswerMode | null; clause: string; asOf?: string | null }
 
 /**
  * BICC-ANS-001/002: for a composed answer, the mode to show above a block, or null. The badge goes on the FIRST block of each facet only (a facet's later blocks
@@ -38,4 +38,9 @@ export function facetBadgeFor(facetModes: readonly FacetMode[] | undefined, bloc
 /** The part of the question this facet answers, for the badge's assistive text. */
 export function facetClauseFor(facetModes: readonly FacetMode[] | undefined, block: { id: string }): string | null {
   return facetModes?.find((candidate) => block.id.startsWith(candidate.blockIdPrefix))?.clause || null;
+}
+
+/** The facet's own observation date, for its badge. Null when none is known: the request time is never shown in its place. */
+export function facetAsOfFor(facetModes: readonly FacetMode[] | undefined, block: { id: string }): string | null {
+  return facetModes?.find((candidate) => block.id.startsWith(candidate.blockIdPrefix))?.asOf ?? null;
 }

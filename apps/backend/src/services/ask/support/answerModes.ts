@@ -40,7 +40,18 @@ export function deriveAnswerMode(input: { status: string; operationId: AskOperat
 }
 
 /** One facet of a composed answer and the mode of its own operation (BICC-ANS-001/002): a mixed answer keeps each facet's label and is never collapsed to one. */
-export interface FacetMode { /** Every block of this facet has an id starting with this prefix (the delivery projection's `sN-`). */ blockIdPrefix: string; operationId: string; mode: AnswerMode | null; clause: string }
+export interface FacetMode {
+  /** Every block of this facet has an id starting with this prefix (the delivery projection's `sN-`). */ blockIdPrefix: string; operationId: string; mode: AnswerMode | null; clause: string;
+  /** The oldest KNOWN observation time among this facet's own evidence (ANS-002: each facet keeps its own freshness); null when none is known. An unknown time is never replaced by the request time. */
+  asOf: string | null;
+}
+
+/** The oldest known, valid observation time in a section's provenance, or null. */
+function facetAsOf(provenance: unknown): string | null {
+  if (!Array.isArray(provenance)) return null;
+  const known = provenance.map((item) => (item as { observedAt?: unknown })?.observedAt).filter((value): value is string => typeof value === 'string' && !Number.isNaN(Date.parse(value))).sort();
+  return known.length ? known[0] : null;
+}
 
 /**
  * The per-facet modes of a stored composite, in delivery order. A section's mode is derived from its own operation and status exactly as a single answer's is.
@@ -51,11 +62,11 @@ export function facetModesOf(composite: unknown): FacetMode[] {
   if (!Array.isArray(sections) || sections.length < 2) return [];
   const modes: FacetMode[] = [];
   sections.forEach((section, index) => {
-    const entry = section as { operationId?: unknown; status?: unknown; reasonCode?: unknown; clause?: unknown };
+    const entry = section as { operationId?: unknown; status?: unknown; reasonCode?: unknown; clause?: unknown; provenance?: unknown };
     if (typeof entry?.operationId !== 'string' || typeof entry.status !== 'string') return;
     let mode: AnswerMode | null = null;
     try { mode = deriveAnswerMode({ status: entry.status, operationId: entry.operationId as AskOperationId, hasProperty: true, reasonCode: typeof entry.reasonCode === 'string' ? entry.reasonCode : null }); } catch { mode = null; }
-    modes.push({ blockIdPrefix: `s${index + 1}-`, operationId: entry.operationId, mode, clause: typeof entry.clause === 'string' ? entry.clause.slice(0, 200) : '' });
+    modes.push({ blockIdPrefix: `s${index + 1}-`, operationId: entry.operationId, mode, clause: typeof entry.clause === 'string' ? entry.clause.slice(0, 200) : '', asOf: facetAsOf(entry.provenance) });
   });
   return modes;
 }
