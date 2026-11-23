@@ -128,19 +128,43 @@ test('several listed tasks name nothing: "complete it" is not guessed', async ()
   } finally { s.restore(); }
 });
 
-test('another verb keeps the existing title behaviour, and a non-task entity is never completed by id', async () => {
+test('reschedule, update, cancel, archive, reopen and mark resolve by the canonical id too, and keep the person\'s own words', async () => {
+  for (const message of ['Reschedule it to Friday', 'Update it to urgent', 'Cancel it', 'Archive it', 'Reopen it', 'Mark it urgent']) {
+    const s = stub([turn('t1', 'p2', 2, { resultJson: list([task('task-9', 'Clean gutters')]) })]);
+    try {
+      const out = await resolve({ message });
+      assert.equal(out.forcedOperationId, 'MAINTENANCE_TASK_UPDATE', message);
+      assert.deepEqual(out.launchEntity, { entityType: 'MAINTENANCE_TASK', entityId: 'task-9' }, message);
+      assert.equal(out.effectiveMessage, message, 'no title is written into the message, so a date or priority in it is still read');
+      assert.equal(out.suppliedInput, null);
+      assert.equal(out.sourceExecutionId, 't1');
+    } finally { s.restore(); }
+  }
+});
+
+test('complete still wins over the update verbs, and a non-task entity is never targeted by id', async () => {
   const one = stub([turn('t1', 'p2', 2, { resultJson: list([task('task-9', 'Clean gutters')]) })]);
   try {
-    const out = await resolve({ message: 'Reschedule it' });
-    assert.equal(out.forcedOperationId, null);
-    assert.match(out.effectiveMessage, /Clean gutters/, 'the title rewrite path is unchanged for other verbs');
+    const out = await resolve({ message: 'Mark it complete' });
+    assert.equal(out.forcedOperationId, 'MAINTENANCE_TASK_COMPLETE');
+    assert.deepEqual(out.suppliedInput, { taskId: 'task-9' });
+    assert.equal(out.launchEntity ?? null, null);
   } finally { one.restore(); }
   const other = stub([turn('t1', 'p2', 2, { resultJson: list([{ id: 'w-1', title: 'Roof warranty', entityType: 'WARRANTY', meta: [] }]) })]);
   try {
-    const out = await resolve({ message: 'Now complete it' });
+    const out = await resolve({ message: 'Reschedule it' });
     assert.equal(out.forcedOperationId, null);
-    assert.equal(out.suppliedInput, null);
+    assert.equal(out.launchEntity ?? null, null);
   } finally { other.restore(); }
+});
+
+test('the canonical entity becomes launch context only when the client declared none', () => {
+  const { withFollowUpEntity } = require('../../src/services/ask/askFollowUpContext.ts');
+  const entity = { entityType: 'MAINTENANCE_TASK', entityId: 'task-9' };
+  assert.deepEqual(withFollowUpEntity({ surface: 'ASK_FOLLOW_UP', sourceExecutionId: 't1' }, entity), { surface: 'ASK_FOLLOW_UP', sourceExecutionId: 't1', entityType: 'MAINTENANCE_TASK', entityId: 'task-9' });
+  assert.deepEqual(withFollowUpEntity({ surface: 'ASK_PAGE', entityId: 'declared-1' }, entity), { surface: 'ASK_PAGE', entityId: 'declared-1' }, 'a declared entity is authoritative');
+  assert.equal(withFollowUpEntity(undefined, entity), undefined, 'a safety turn has no launch context');
+  assert.deepEqual(withFollowUpEntity({ surface: 'X' }, null), { surface: 'X' });
 });
 
 test('the id path needs the summary to agree: without a user it falls back to the existing behaviour', async () => {

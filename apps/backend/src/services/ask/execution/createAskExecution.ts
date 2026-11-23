@@ -2,6 +2,8 @@
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
 import { decideClarificationLoop } from '../support/clarificationLoop';
+import { carriedSlotsFromSummary, loadConversationSummary } from '../conversationSummary';
+import type { Slots } from '../composition/slots';
 import { isWriteCapableOperation } from '../support/writeCapability';
 import { enforceClarificationContract } from '../support/clarificationContract';
 import { createHash } from 'node:crypto';
@@ -23,7 +25,7 @@ import { offerDidYouMean, isAskUnansweredFallbackResult } from '../support/didYo
 import { withGeneralGuidanceCard } from '../support/generalGuidanceCard';
 import { findApprovedGeneralGuidanceText } from '../../groundedAsk.service';
 import { clarificationLabelFor, UPGRADE_OBJECTIVE_REASON, upgradeObjectiveLabelFor } from '../support/clarificationLabels';
-import { resolveAskFollowUpMessage, shouldForceAskOperation } from '../askFollowUpContext';
+import { resolveAskFollowUpMessage, shouldForceAskOperation, withFollowUpEntity } from '../askFollowUpContext';
 import { getSkillDefinition, getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../../skills/skillRegistry';
 import { ASK_CAPABILITY_UNIQUE_OPERATION } from '../../intelligence/capabilitySkillGuidanceBridge.registry';
 import { resolveHierarchicalSkillRouting, type SkillRoutingOutcome } from '../../skills/skillRouter';
@@ -496,6 +498,8 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     const slotPropertyId = executionPropertyId;
     slotFollowUp = await resolveSlotFollowUp({
       db: prisma as never, userId, sessionId: session.id, propertyId: slotPropertyId, message: input.message,
+      // BICC-CTX-001: the carried slots come from the bounded conversation summary (this home only), not a separate read of prior turns.
+      carriedSlotsSource: async () => carriedSlotsFromSummary(await loadConversationSummary({ userId, sessionId: session.id, propertyId: slotPropertyId, lifecycleMode: null, restrictToProperty: true }, prisma as never)) as Slots | null,
       revalidation: { propertyAccessible: async () => Boolean(await resolvePropertyAccess(userId, slotPropertyId)), itemExists: (item) => homeHasItem(slotPropertyId, item) },
     });
     if (slotFollowUp?.kind === 'DECLINED') {
@@ -810,11 +814,13 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
   // present -- for a declared chip, resolveAskFollowUpMessage's pinned
   // lookup found the SAME row by that id, so the two never actually
   // disagree; this only fills the gap for organic follow-ups.
-  const effectiveLaunchContext = safetyFirstDecision.stage === 'SAFETY'
+  let effectiveLaunchContext = safetyFirstDecision.stage === 'SAFETY'
     ? undefined
     : (followUp.sourceExecutionId && !input.launchContext?.sourceExecutionId)
       ? { ...(input.launchContext ?? { surface: 'ASK_FOLLOW_UP' }), sourceExecutionId: followUp.sourceExecutionId }
       : input.launchContext;
+  // BICC-CTX-002: a follow-up that targets one canonical entity carries it as launch context (only when the client declared none), so the operation resolves it by id.
+  effectiveLaunchContext = withFollowUpEntity(effectiveLaunchContext, followUp.launchEntity);
   try {
     const rawExecutedResult = await withAskTimeout(
       routingDecision.requiresClarification

@@ -52,6 +52,8 @@ export interface ConversationSummary {
   referencedResult: { executionId: string; operationId: string | null; resultId: string | null; propertyId: string | null } | null;
   activeEntities: SummaryEntity[];
   stated: { items: string[]; dates: string[]; horizonsYears: number[]; amounts: number[]; objectives: string[] };
+  /** The newest settled turn that stated anything, and the operation that answered it: what a slot follow-up ("what about the water heater?") rewrites. */
+  slotSource: { executionId: string; operationId: string | null } | null;
   corrections: Array<{ kind: 'INTENT' | 'ENTITY' | 'HOME_RECORD'; executionId: string }>;
   openClarification: { executionId: string; question: string; optionOperationIds: string[] } | null;
   sources: Array<{ sourceType: string; sourceId: string; propertyId: string | null }>;
@@ -92,6 +94,7 @@ export function buildConversationSummary(input: {
   const corrections: ConversationSummary['corrections'] = [];
   const sources = new Map<string, ConversationSummary['sources'][number]>();
   const workflows = new Map<string, ConversationSummary['workflows'][number]>();
+  let slotSource: ConversationSummary['slotSource'] = null;
   for (const turn of turns) {
     for (const entity of turn.entities ?? []) {
       const key = `${entity.entityType}:${entity.entityId}`;
@@ -99,7 +102,9 @@ export function buildConversationSummary(input: {
       entities.set(key, { entityType: entity.entityType, entityId: entity.entityId, label: entity.label ? clean(entity.label, policy.maxLabelChars) : null, propertyId: turn.propertyId });
     }
     const slots = turn.slots;
-    if (slots) {
+    // A value stated in a turn that did not answer is not carried (composition FRD FR-SLT-1/2): only settled turns contribute stated values.
+    if (slots && SETTLED.has(turn.status)) {
+      if (!slotSource && Object.values(slots).some((value) => value !== undefined && value !== null)) slotSource = { executionId: turn.executionId, operationId: turn.operationId };
       if (slots.item) stated.items.push(clean(slots.item, policy.maxLabelChars));
       if (slots.targetDate) stated.dates.push(clean(slots.targetDate, policy.maxLabelChars));
       if (Number.isFinite(slots.horizonYears)) stated.horizonsYears.push(Number(slots.horizonYears));
@@ -125,6 +130,7 @@ export function buildConversationSummary(input: {
     openClarification: open?.clarification ? { executionId: open.executionId, question: clean(open.clarification.question, policy.maxClarificationChars), optionOperationIds: open.clarification.optionOperationIds.slice(0, 4) } : null,
     sources: limit([...sources.values()], policy.maxSources),
     workflows: limit([...workflows.values()], policy.maxWorkflows),
+    slotSource,
     turnsIncluded: turns.length,
     truncated,
     redactions,
@@ -204,6 +210,7 @@ export function reconcileConversationSummary(summary: ConversationSummary, curre
   // A property switch also drops the stated values: a date or amount said about one home must not carry to another.
   if (tally.PROPERTY_SWITCH > 0 || tally.ACCESS_LOST > 0) {
     reconciled.stated = { items: [], dates: [], horizonsYears: [], amounts: [], objectives: [] };
+    reconciled.slotSource = null;
     reconciled.corrections = [];
     reconciled.workflows = [];
   }
@@ -274,12 +281,14 @@ export function digestFromRow(row: {
 /** Reads the last few top-level executions of one session and summarises them. Row ownership is verified by userId. */
 export async function loadConversationSummary(input: {
   userId: string; sessionId: string; propertyId: string | null; lifecycleMode: LifecycleMode | null; now?: Date;
+  /** Read only this home's turns. A slot follow-up carries values within one home; turns of another home are not context for it. */
+  restrictToProperty?: boolean;
 }, db: {
   askExecution: { findMany(args: Record<string, unknown>): Promise<Array<{ id: string; status: string; operationId: string | null; propertyId: string | null; createdAt: Date; parametersJson: unknown; launchContextJson: unknown; resultJson?: unknown }>> };
   askExecutionEvent: { findMany(args: Record<string, unknown>): Promise<Array<{ executionId: string; metadataJson: unknown }>> };
 }): Promise<ConversationSummary> {
   const rows = await db.askExecution.findMany({
-    where: { sessionId: input.sessionId, userId: input.userId, parentExecutionId: null },
+    where: { sessionId: input.sessionId, userId: input.userId, parentExecutionId: null, ...(input.restrictToProperty && input.propertyId ? { propertyId: input.propertyId, status: { in: ['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS'] } } : {}) },
     orderBy: { createdAt: 'desc' },
     take: SUMMARY_POLICY.maxTurns + 1,
     select: { id: true, status: true, operationId: true, propertyId: true, createdAt: true, parametersJson: true, launchContextJson: true, resultJson: true },
@@ -320,4 +329,20 @@ export async function evaluateContinuationContext(input: {
   const referentLost = summary.referencedResult !== null && reconciled.summary.referencedResult === null
     && reconciled.resets.some((reset) => reset.reason === 'PROPERTY_SWITCH' || reset.reason === 'ACCESS_LOST');
   return { blocked: referentLost, disclosure: referentLost ? reconciled.disclosure : null, reasons: referentLost ? reconciled.resets.map((reset) => reset.reason) : [], summary: reconciled.summary };
+}
+
+/**
+ * The slots a follow-up carries, read from the summary: the newest stated value of each kind (newest turn wins, FR-SLT-4), the operation that answered the newest
+ * turn that stated anything, and that turn's id. Null when no settled turn stated anything.
+ */
+export function carriedSlotsFromSummary(summary: ConversationSummary): { item?: string; targetDate?: string; horizonYears?: number; amount?: number; objective?: string; referencedExecutionId: string; operationId?: string } | null {
+  if (!summary.slotSource) return null;
+  const slots: { item?: string; targetDate?: string; horizonYears?: number; amount?: number; objective?: string; referencedExecutionId: string; operationId?: string } = { referencedExecutionId: summary.slotSource.executionId };
+  if (summary.stated.items[0]) slots.item = summary.stated.items[0];
+  if (summary.stated.dates[0]) slots.targetDate = summary.stated.dates[0];
+  if (summary.stated.horizonsYears[0] !== undefined) slots.horizonYears = summary.stated.horizonsYears[0];
+  if (summary.stated.amounts[0] !== undefined) slots.amount = summary.stated.amounts[0];
+  if (summary.stated.objectives[0]) slots.objective = summary.stated.objectives[0];
+  if (summary.slotSource.operationId) slots.operationId = summary.slotSource.operationId;
+  return slots;
 }

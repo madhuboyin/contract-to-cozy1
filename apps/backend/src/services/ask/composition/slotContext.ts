@@ -37,9 +37,14 @@ export async function priorTurnsOf(db: SlotDb, userId: string, sessionId: string
 /** Null when the message is not elliptical (the ordinary router handles it). */
 export async function resolveSlotFollowUp(input: {
   db: SlotDb; userId: string; sessionId: string; propertyId: string; message: string; revalidation: SlotRevalidation; now?: Date;
+  /**
+   * BICC-CTX-001: where the carried slots come from. Supplied, it replaces the direct read of prior turns: the caller reads them from the bounded conversation
+   * summary (one scoped read, recency window, redaction), so slot carry and the follow-up gate share one source of context.
+   */
+  carriedSlotsSource?: () => Promise<Slots | null>;
 }): Promise<SlotFollowUp | null> {
   if (!isEllipticalShape(input.message)) return null;
-  const carried = carriedSlots(await priorTurnsOf(input.db, input.userId, input.sessionId, input.propertyId), input.propertyId);
+  const carried = input.carriedSlotsSource ? await input.carriedSlotsSource() : carriedSlots(await priorTurnsOf(input.db, input.userId, input.sessionId, input.propertyId), input.propertyId);
   const resolution = resolveElliptical(input.message, carried, input.now);
   if (resolution.kind === 'NOT_ELLIPTICAL') return null;
   if (resolution.kind === 'NEEDS_SLOT') return { kind: 'DECLINED', reason: 'NEEDS_SLOT', detail: `The earlier turns do not say which ${resolution.missing} you mean.` };

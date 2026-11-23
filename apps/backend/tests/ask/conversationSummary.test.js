@@ -139,3 +139,67 @@ test('the persistence read is scoped to the user and session and uses typed colu
   assert.deepEqual(summary.corrections, [{ kind: 'INTENT', executionId: 'e1' }]);
   assert.deepEqual(summary.stated.items, ['roof']);
 });
+
+// BICC-CTX-001: slot carry reads the summary. It must agree with the existing carry for the same settled turns.
+test('the summary carries stated values from settled turns only, newest first, with the operation that answered the newest', () => {
+  const summary = build([
+    digest(1, { operationId: 'ITEM_REPLACEMENT_COST', slots: { item: 'roof', targetDate: 'in 5 years', horizonYears: 5, amount: 11500 } }),
+    digest(2, { status: 'NEEDS_CLARIFICATION', operationId: null, slots: { item: 'furnace', amount: 99 } }),
+    digest(3, { operationId: 'INVENTORY_LOOKUP', slots: { item: 'water heater' } }),
+  ]);
+  assert.deepEqual(summary.stated.items, ['roof', 'water heater'].sort((a, b) => summary.stated.items.indexOf(a) - summary.stated.items.indexOf(b)));
+  assert.equal(summary.stated.items.length, 2);
+  assert.equal(summary.stated.items.includes('furnace'), false, 'a value stated in a turn that did not answer is not carried');
+  assert.equal(summary.stated.amounts.includes(99), false);
+  assert.deepEqual(summary.slotSource, { executionId: 'e1', operationId: 'ITEM_REPLACEMENT_COST' });
+});
+
+test('carriedSlotsFromSummary agrees with carriedSlots on the same turns (newest wins per kind, newest stating turn gives the operation)', () => {
+  const { carriedSlotsFromSummary } = require('../../src/services/ask/conversationSummary.ts');
+  const { carriedSlots } = require('../../src/services/ask/composition/slots.ts');
+  const turns = [ // newest first
+    { id: 'n1', operationId: 'ITEM_REPLACEMENT_COST', slots: { item: 'water heater' } },
+    { id: 'n2', operationId: 'ITEM_REPLACEMENT_COST', slots: { item: 'roof', targetDate: 'in 5 years', horizonYears: 5, amount: 11500, objective: 'RESALE_VALUE' } },
+    { id: 'n3', operationId: 'INVENTORY_LOOKUP', slots: { item: 'furnace', amount: 100 } },
+  ];
+  const summary = build(turns.map((t, i) => digest(i + 1, { executionId: t.id, operationId: t.operationId, slots: t.slots })));
+  const fromSummary = carriedSlotsFromSummary(summary);
+  const existing = carriedSlots(turns.map((t) => ({ executionId: t.id, operationId: t.operationId, propertyId: 'p1', slots: t.slots })), 'p1');
+  assert.deepEqual(fromSummary, existing);
+  assert.equal(carriedSlotsFromSummary(build([digest(1)])), null, 'nothing stated, nothing carried');
+});
+
+test('stated values are redacted and bounded like every other summary field, and a property switch drops them with the source', () => {
+  const summary = build([digest(1, { slots: { item: 'roof', amount: 5000 } })]);
+  const out = reconcileConversationSummary({ ...summary, referencedResult: { ...summary.referencedResult, propertyId: 'p1' }, activeEntities: [{ entityType: 'I', entityId: 'i', label: null, propertyId: 'p1' }] }, { propertyId: 'p2', accessiblePropertyIds: new Set(['p1', 'p2']) });
+  assert.equal(out.summary.slotSource, null);
+  assert.deepEqual(out.summary.stated.amounts, []);
+});
+
+test('the slot read is scoped to the home and to settled turns', async () => {
+  const calls = [];
+  const db = { askExecution: { findMany: async (args) => { calls.push(args); return []; } }, askExecutionEvent: { findMany: async () => [] } };
+  await loadConversationSummary({ userId: 'u1', sessionId: 's1', propertyId: 'p1', lifecycleMode: null, restrictToProperty: true, now: NOW }, db);
+  assert.deepEqual(calls[0].where, { sessionId: 's1', userId: 'u1', parentExecutionId: null, propertyId: 'p1', status: { in: ['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS'] } });
+});
+
+test('an elliptical follow-up resolves from the summary-backed slots end to end, and still revalidates the item and the home', async () => {
+  const { resolveSlotFollowUp } = require('../../src/services/ask/composition/slotContext.ts');
+  const { carriedSlotsFromSummary } = require('../../src/services/ask/conversationSummary.ts');
+  const summary = build([digest(1, { executionId: 'cost-1', operationId: 'ITEM_REPLACEMENT_COST', slots: { item: 'roof', targetDate: 'in 5 years', horizonYears: 5 } })]);
+  const never = { askExecution: { findMany: async () => { throw new Error('the direct prior-turn read must not run when a source is supplied'); } } };
+  const ok = { propertyAccessible: async () => true, itemExists: async () => true };
+  const resolved = await resolveSlotFollowUp({ db: never, userId: 'u1', sessionId: 's1', propertyId: 'p1', message: 'what about the water heater?', revalidation: ok, now: NOW, carriedSlotsSource: async () => carriedSlotsFromSummary(summary) });
+  assert.equal(resolved.kind, 'RESOLVED');
+  assert.equal(resolved.message, 'how much does a new water heater cost in 5 years');
+  assert.equal(resolved.slots.item, 'water heater');
+  assert.equal(resolved.slots.referencedExecutionId, 'cost-1');
+  const gone = await resolveSlotFollowUp({ db: never, userId: 'u1', sessionId: 's1', propertyId: 'p1', message: 'what about the water heater?', revalidation: { ...ok, itemExists: async () => false }, now: NOW, carriedSlotsSource: async () => carriedSlotsFromSummary(summary) });
+  assert.deepEqual([gone.kind, gone.reason], ['DECLINED', 'ITEM_NOT_FOUND']);
+  const noHome = await resolveSlotFollowUp({ db: never, userId: 'u1', sessionId: 's1', propertyId: 'p1', message: 'what about the water heater?', revalidation: { ...ok, propertyAccessible: async () => false }, now: NOW, carriedSlotsSource: async () => carriedSlotsFromSummary(summary) });
+  assert.deepEqual([noHome.kind, noHome.reason], ['DECLINED', 'PROPERTY_NOT_ACCESSIBLE']);
+  const nothing = await resolveSlotFollowUp({ db: never, userId: 'u1', sessionId: 's1', propertyId: 'p1', message: 'what about the water heater?', revalidation: ok, now: NOW, carriedSlotsSource: async () => null });
+  assert.equal(nothing.kind, 'DECLINED');
+  assert.equal(nothing.reason, 'NEEDS_SLOT');
+  assert.equal(await resolveSlotFollowUp({ db: never, userId: 'u1', sessionId: 's1', propertyId: 'p1', message: 'How old is my roof?', revalidation: ok, now: NOW, carriedSlotsSource: async () => { throw new Error('not read'); } }), null, 'an ordinary question never reads the summary');
+});

@@ -147,6 +147,7 @@ const MONITOR_VAGUE_FOLLOWUP_PATTERN = /^\s*(?:what should i do(?: about (?:this
 // complete it"), not the other five verbs, which have no equivalent
 // suppliedInput-backed operation to force-route to yet.
 const MAINTENANCE_COMPLETE_VERB_PATTERN = /\b(?:complete|finish)\b/i;
+const MAINTENANCE_UPDATE_VERB_PATTERN = /\b(?:reschedule|update|cancel|archive|reopen|mark)\b/i;
 
 // FRD ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md Phase 4 exit
 // criterion / G04 (docs/architecture/ASK_COZY_PHASE4_SELL_HOLD_RENT_UX_COMPLETION_VERIFICATION.md):
@@ -187,6 +188,8 @@ export interface AskFollowUpResolution {
   isFilterRefinement: boolean;
   /** BICC-CTX-003: set when the conversation's latest result belongs to another home, so a follow-up did not continue; the person is told. */
   contextReset?: { disclosure: string; reasons: string[] } | null;
+  /** BICC-CTX-002: the canonical entity a follow-up targets, carried as launch context so the operation resolves it by id, never by a title. */
+  launchEntity?: { entityType: string; entityId: string } | null;
 }
 
 interface PriorExecutionRow {
@@ -315,6 +318,17 @@ export function shouldForceAskOperation(input: {
 // resolve correctly — without ever touching the raw text shown to the
 // homeowner or sent to a model. Returns the original message unchanged when
 // no durable prior execution or recognizable continuation pattern applies.
+/**
+ * BICC-CTX-002: a follow-up that targets one canonical entity carries it as launch context so the operation resolves it by id. A client-declared entity always
+ * wins (a declared control is authoritative), and a missing launch context stays missing (a safety turn has none).
+ */
+export function withFollowUpEntity<T extends { entityId?: string | null | undefined }>(
+  launchContext: T | undefined, launchEntity: { entityType: string; entityId: string } | null | undefined,
+): T | undefined {
+  if (!launchContext || !launchEntity || launchContext.entityId) return launchContext;
+  return { ...launchContext, entityType: launchEntity.entityType, entityId: launchEntity.entityId };
+}
+
 export async function resolveAskFollowUpMessage(input: {
   sessionId: string;
   /** The caller's user, so the conversation summary read is scoped to their own turns. Omitted: the summary gate is skipped. */
@@ -354,10 +368,17 @@ export async function resolveAskFollowUpMessage(input: {
     // BICC-CTX-002: "complete it" resolves by the entity's CANONICAL id when the prior answer named exactly one maintenance task and the conversation summary
     // agrees (same result, same id). The id goes to the same id-lookup a proactive card uses, so no title is matched and nothing can retarget by wording.
     const canonical = singularEntityOf(prior.resultJson);
-    if (canonical?.entityType === 'MAINTENANCE_TASK' && MAINTENANCE_COMPLETE_VERB_PATTERN.test(input.message) && prior.operationId === 'MAINTENANCE_STATUS'
+    const canonicalTask = canonical?.entityType === 'MAINTENANCE_TASK' && prior.operationId === 'MAINTENANCE_STATUS'
       && continuation?.summary.referencedResult?.executionId === prior.id
-      && continuation.summary.activeEntities.some((entity) => entity.entityType === canonical.entityType && entity.entityId === canonical.entityId)) {
-      return { effectiveMessage: input.message, forcedOperationId: 'MAINTENANCE_TASK_COMPLETE', sourceExecutionId: prior.id, continuationCursor: null, suppliedInput: { taskId: canonical.entityId }, isFilterRefinement: false };
+      && continuation.summary.activeEntities.some((entity) => entity.entityType === canonical.entityType && entity.entityId === canonical.entityId)
+      ? canonical : null;
+    if (canonicalTask && MAINTENANCE_COMPLETE_VERB_PATTERN.test(input.message)) {
+      return { effectiveMessage: input.message, forcedOperationId: 'MAINTENANCE_TASK_COMPLETE', sourceExecutionId: prior.id, continuationCursor: null, suppliedInput: { taskId: canonicalTask.entityId }, isFilterRefinement: false };
+    }
+    // Reschedule, update, cancel, archive, reopen or mark: the same canonical id goes in as the launch entity, which the update operation resolves directly
+    // (it is the path a row button already uses). The message stays the person's own words, so a date or priority in it ("to Friday", "urgent") is still read.
+    if (canonicalTask && MAINTENANCE_UPDATE_VERB_PATTERN.test(input.message)) {
+      return { effectiveMessage: input.message, forcedOperationId: 'MAINTENANCE_TASK_UPDATE', sourceExecutionId: prior.id, continuationCursor: null, suppliedInput: null, isFilterRefinement: false, launchEntity: { entityType: canonicalTask.entityType, entityId: canonicalTask.entityId } };
     }
     const entityTitle = extractSingularEntityTitle(prior.resultJson);
     if (entityTitle) {
