@@ -1,4 +1,4 @@
-import { askWorkloadGate, workloadRefusalMessage } from '../services/ask/support/workloadLimits';
+import { askWorkloadGate, workloadRefusalMessage } from '../services/ask/transport/workloadLimits';
 import { askWorkloadRefusalsTotal } from '../lib/metrics';
 import { loadAskTargetSelection } from '../services/ask/askTargetSelectors';
 import type { NextFunction, Response } from 'express';

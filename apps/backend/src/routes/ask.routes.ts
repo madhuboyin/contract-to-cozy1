@@ -1,3 +1,4 @@
+import { listAskCandidates, createAskCandidate, updateAskCandidate, deleteAskCandidate, compareAskCandidates, getAskCandidateCost } from '../controllers/askCandidates.controller';
 import { Router } from 'express';
 import multer from 'multer';
 import { authenticate } from '../middleware/auth.middleware';
@@ -22,6 +23,13 @@ const intakeContributor = [propertyAuthMiddleware, requireHouseholdRole('CONTRIB
 
 router.use('/ask', authenticate, requireAskEligibleAccount);
 router.get('/ask/concierge-home', getAskConciergeHome);
+// BICC-4.1: the buyer's candidate homes (BUY-002/004/005). Scoped to the authenticated person; not a Property, so no propertyId.
+router.get('/ask/candidates', listAskCandidates);
+router.post('/ask/candidates', createAskCandidate);
+router.post('/ask/candidates/compare', compareAskCandidates);
+router.patch('/ask/candidates/:candidateId', updateAskCandidate);
+router.delete('/ask/candidates/:candidateId', deleteAskCandidate);
+router.get('/ask/candidates/:candidateId/cost', getAskCandidateCost);
 router.get('/ask/target-selectors/:selectorId', getAskTargetSelectionHandler);
 router.post('/ask/executions', postAskExecution);
 router.post('/ask/executions/:executionId/retry', postAskExecutionRetry);

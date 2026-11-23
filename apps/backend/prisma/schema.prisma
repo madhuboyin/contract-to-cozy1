@@ -24508,3 +24508,48 @@ model AskChatAttachment {
   @@index([state, deleteAfter])
   @@index([sessionId])
 }
+
+// BICC-BUY-002 / BUY-003 / FRD D03: a buyer's candidate property. It is NOT a Property: no foreign key to Property, no household, no monitors, no homeowner calculation reads
+// it, and it never becomes an owned-home fact implicitly. It belongs to one person (userId) and is deleted on explicit deletion. Every user-entered or listing value carries
+// its provenance in `provenance` (field -> { source, asOf }). Promotion to an under-contract workflow is a separate, explicit action (BICC-4.3) that records promotedPropertyId.
+// Apply with `npx prisma db push`.
+enum CandidatePropertyStatus {
+  ACTIVE
+  ARCHIVED
+  PROMOTED
+}
+
+model CandidateProperty {
+  id                          String                  @id @default(uuid())
+  userId                      String
+  label                       String
+  addressLine                 String?
+  city                        String?
+  state                       String?
+  postalCode                  String?
+  listingUrl                  String?
+  listPriceCents              Int?
+  bedrooms                    Int?
+  bathrooms                   Float?
+  livingAreaSqFt              Int?
+  yearBuilt                   Int?
+  annualPropertyTaxCents      Int?
+  annualInsuranceCents        Int?
+  hoaMonthlyCents             Int?
+  monthlyUtilitiesCents       Int?
+  oneTimeWorkEstimateCents    Int?
+  /// The buyer's own financing assumptions for THIS candidate; never a lender figure.
+  downPaymentPercent          Float?
+  mortgageRatePercent         Float?
+  mortgageTermMonths          Int?
+  closingCostPercent          Float?
+  /// field name -> { source: 'USER_ENTERED' | 'LISTING', asOf: ISO date, note?: string }
+  provenance                  Json                    @default("{}")
+  notes                       String?
+  status                      CandidatePropertyStatus @default(ACTIVE)
+  promotedPropertyId          String?
+  createdAt                   DateTime                @default(now())
+  updatedAt                   DateTime                @updatedAt
+
+  @@index([userId, status])
+}

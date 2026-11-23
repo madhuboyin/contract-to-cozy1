@@ -66,6 +66,8 @@ const askRoot = path.join(BACKEND, 'src/services/ask');
 const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => (entry.isDirectory() ? walk(path.join(dir, entry.name)) : [path.join(dir, entry.name)]));
 const registeringFiles = walk(askRoot).filter((file) => file.endsWith('.ts') && !file.endsWith('capabilityHandlerRegistry.ts') && /\bregisterCapabilityHandler\(/.test(fs.readFileSync(file, 'utf8'))).sort();
 for (const file of registeringFiles) require(file);
+// Loading the registries without the runtime bootstrap is a guarded mistake (askRuntimeBootstrap.test.js): the bootstrap is what every real entry point loads.
+require(path.join(askRoot, 'askRuntimeBootstrap.ts'));
 const { registeredCapabilityHandlerKeys } = ask('capabilityHandlerRegistry.ts');
 const registeredKeys = registeredCapabilityHandlerKeys();
 const adapterToOps = new Map();

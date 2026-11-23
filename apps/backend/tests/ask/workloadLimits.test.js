@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 require('ts-node/register');
 
-const { AskWorkloadGate, DEFAULT_WORKLOAD_LIMITS, workloadLimitsFromEnv, workloadRefusalMessage } = require('../../src/services/ask/support/workloadLimits.ts');
+const { AskWorkloadGate, DEFAULT_WORKLOAD_LIMITS, workloadLimitsFromEnv, workloadRefusalMessage } = require('../../src/services/ask/transport/workloadLimits.ts');
 const { classifyLatency, LATENCY_CLASSES } = require('../../src/services/ask/support/latencyClass.ts');
 
 const small = () => new AskWorkloadGate({ ...DEFAULT_WORKLOAD_LIMITS, EXECUTION: { perUser: 2, perScope: 3, retryAfterSeconds: 7 } });
