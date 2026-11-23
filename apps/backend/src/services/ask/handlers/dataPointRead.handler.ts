@@ -78,7 +78,11 @@ export function ageSentence(point: DataPointDefinition, value: unknown, message:
 }
 export function formatDataPointValue(point: DataPointDefinition, value: unknown): string {
   switch (point.family) {
-    case 'date': return humanDate(value instanceof Date ? value : new Date(String(value))) ?? '';
+    case 'date': {
+      // An unreadable stored date is shown as nothing, never a crash (fidelity suite BICC-GATE-004A1: date:invalid-never-throws).
+      const when = value instanceof Date ? value : new Date(String(value));
+      return Number.isNaN(when.getTime()) ? '' : humanDate(when) ?? '';
+    }
     case 'money': return money(Math.round(Number(value) / 100));
     case 'dollars': return money(Math.round(Number(typeof value === 'object' && value && 'toNumber' in value ? (value as { toNumber(): number }).toNumber() : value)));
     case 'enum': return words(value);
