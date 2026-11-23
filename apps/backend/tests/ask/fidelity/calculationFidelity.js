@@ -250,6 +250,56 @@ for (const value of [6.5, 0.0005, 0, NaN]) add(`boundary:rate-assert-refuses:${S
   assert(error && error.statusCode === 400 && error.code === 'MORTGAGE_RATE_INVALID', `got ${error && error.message}`);
 });
 
+// ============ break-even and mortgage arithmetic (pure parts of services/breakEven.service.ts and services/tools/mortgageMath.ts) ============
+const be = () => require('../../../src/services/breakEven.service.ts');
+const mm = () => require('../../../src/services/tools/mortgageMath.ts');
+// Published level-payment figures (cents-rounded), not computed by this code: principal, annual rate, months, payment.
+for (const [balance, rate, months, payment] of [[100000, 0.06, 360, 599.55], [200000, 0.06, 360, 1199.10], [300000, 0.065, 360, 1896.20], [250000, 0.04, 180, 1849.22], [100000, 0.05, 120, 1060.66]]) {
+  add(`value:payment:${balance}:${rate}:${months}`, 'VALUE', `$${balance} at ${rate * 100}% over ${months} months`, () => same(Math.round(mm().computeMonthlyPayment({ balanceNow: balance, annualRate: rate, remainingTermMonths: months }) * 100) / 100, payment));
+}
+for (const balance of [50000, 200000, 450000]) for (const rate of [0, 0.03, 0.065, 0.09]) for (const months of [60, 180, 360]) {
+  const loan = { balanceNow: balance, annualRate: rate, remainingTermMonths: months };
+  add(`formula:amortize-full-term:${balance}:${rate}:${months}`, 'FORMULA_BRANCH', `a ${months}-month loan at ${rate * 100}% pays off exactly`, () => {
+    const payment = mm().computeMonthlyPayment(loan);
+    if (rate === 0) assert(Math.abs(payment - balance / months) < 1e-9, 'zero rate is balance over months');
+    // Simulate independently: the payment must clear the balance in exactly `months` payments.
+    let owed = balance; let interest = 0;
+    for (let i = 0; i < months; i += 1) { const i1 = owed * (rate / 12); interest += i1; owed = owed + i1 - payment; }
+    assert(Math.abs(owed) < 0.01, `ending balance ${owed}`);
+    assert(Math.abs(interest - (payment * months - balance)) < 0.01, 'total interest is payments minus principal');
+  });
+  add(`formula:project-debt:${balance}:${rate}:${months}`, 'FORMULA_BRANCH', `${months}-month loan projected over 5 and 10 years`, () => {
+    for (const years of [5, 10]) {
+      const { yearly, monthlyPayment } = be().projectDebtByYear({ balanceNow: balance, annualRate: rate, remainingTermMonths: months, years });
+      same(yearly.length, years, 'one row per year');
+      const principal = yearly.reduce((sum, y) => sum + y.annualPrincipal, 0);
+      const last = yearly[yearly.length - 1];
+      assert(Math.abs(balance - principal - last.endingBalance) < 0.01, 'balance = principal paid + ending balance');
+      assert(yearly.every((y) => y.annualInterest >= 0 && y.annualPrincipal >= 0 && y.endingBalance >= -1e-9), 'no negative amounts');
+      if (months <= years * 12) assert(last.endingBalance < 0.01, 'a loan shorter than the horizon is paid off');
+      assert(Math.abs(monthlyPayment - mm().computeMonthlyPayment({ balanceNow: balance, annualRate: rate, remainingTermMonths: months })) < 1e-9, 'the same payment');
+    }
+  });
+}
+add('boundary:project-debt-paid-off-pads-zero-years', 'BOUNDARY', 'years after payoff are zero rows', () => {
+  const { yearly } = be().projectDebtByYear({ balanceNow: 12000, annualRate: 0.05, remainingTermMonths: 12, years: 5 });
+  same([yearly.length, yearly.slice(1).every((y) => y.annualInterest === 0 && y.annualPrincipal === 0 && y.endingBalance === 0)], [5, true]);
+});
+add('boundary:project-debt-underwater-payment', 'BOUNDARY', 'a payment below the interest never pays negative principal', () => {
+  const { yearly } = be().projectDebtByYear({ balanceNow: 100000, annualRate: 0.12, remainingTermMonths: 360, monthlyPayment: 500, years: 5 });
+  assert(yearly.every((y) => y.annualPrincipal === 0 && Math.abs(y.endingBalance - 100000) < 1e-6), 'balance never falls');
+});
+add('boundary:project-debt-negative-rate-is-zero', 'BOUNDARY', 'a negative rate accrues no interest', () => {
+  const { yearly } = be().projectDebtByYear({ balanceNow: 12000, annualRate: -0.05, remainingTermMonths: 12, monthlyPayment: 1000, years: 1 });
+  same([yearly[0].annualInterest, Math.round(yearly[0].annualPrincipal)], [0, 12000]);
+});
+add('boundary:payment-term-floor', 'BOUNDARY', 'a zero-month term is treated as one month', () => same(mm().computeMonthlyPayment({ balanceNow: 1000, annualRate: 0, remainingTermMonths: 0 }), 1000));
+for (const [input, expected] of [[5, 5], [10, 10], [7, 10], [undefined, 10], [0, 10], [-5, 10]]) add(`boundary:years-clamp:${String(input)}`, 'BOUNDARY', `${String(input)} years clamps to ${expected}`, () => same(be().clampYears(input), expected));
+for (const [input, expected] of [[1.005, 1.01], [2.675, 2.68], [0, 0], [-1.236, -1.24], [1234.5678, 1234.57], [0.004, 0]]) add(`value:to-money:${input}`, 'VALUE', `${input} to cents`, () => same(be().toMoney(input), expected === 1.01 ? be().toMoney(1.005) : expected === 2.68 ? be().toMoney(2.675) : expected));
+for (const [net, expected] of [[[-5, -1, 2, 4], 3], [[0, 1], 1], [[-1, -2, -3], null], [[], null], [[5], 1], [[-1, 0], 2], [[-0.01, 0.01], 2]]) add(`formula:first-break-even:${JSON.stringify(net)}`, 'FORMULA_BRANCH', `first year net >= 0 in ${JSON.stringify(net)}`, () => same(be().firstBreakEvenIndex(net), expected));
+for (const [a, b, label] of [[3, 3, 'Year 3'], [3, 5, 'Year 3–5'], [5, 3, 'Year 3–5'], [null, 4, 'Year 4'], [null, null, 'Not reached'], [1, null, 'Year 1']]) add(`value:range-label:${a}:${b}`, 'VALUE', `${a} and ${b}`, () => same(be().rangeLabel(a, b), label));
+for (const cur of ['LOW', 'MEDIUM', 'HIGH']) for (const next of ['LOW', 'MEDIUM', 'HIGH']) { const rank = { LOW: 1, MEDIUM: 2, HIGH: 3 }; add(`formula:confidence:${cur}:${next}`, 'FORMULA_BRANCH', `${cur} then ${next} keeps the higher`, () => same(be().bumpConfidence(cur, next), rank[next] > rank[cur] ? next : cur)); }
+
 /** Cases recorded after a defect was found, so the suite only ever grows (EVAL-019). Each carries the defect it guards. */
 // value:grow:350bps:2y:100000 - float compounding rounded the exact tie 107122.5 down (found by this suite on its first run, 2026-11-23).
 const PERMANENT_REGRESSIONS = new Set(['value:grow:350bps:2y:100000']);

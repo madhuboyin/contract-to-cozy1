@@ -164,12 +164,12 @@ type DebtProjectionYear = {
   endingBalance: number;
 };
 
-function clampYears(y?: number): BreakEvenYears {
+export function clampYears(y?: number): BreakEvenYears {
   if (y === 5 || y === 10) return y;
   return 10;
 }
 
-function toMoney(n: number) {
+export function toMoney(n: number) {
   return Math.round(n * 100) / 100;
 }
 
@@ -178,14 +178,14 @@ function zipPrefix(zip: string) {
   return z.length >= 3 ? z.slice(0, 3) : z;
 }
 
-function firstBreakEvenIndex(net: number[]) {
+export function firstBreakEvenIndex(net: number[]) {
   for (let i = 0; i < net.length; i++) {
     if (net[i] >= 0) return i + 1; // 1-based index
   }
   return null;
 }
 
-function rangeLabel(a: number | null, b: number | null) {
+export function rangeLabel(a: number | null, b: number | null) {
   const xs = [a, b].filter((v): v is number => typeof v === 'number');
   if (!xs.length) return 'Not reached';
   const min = Math.min(...xs);
@@ -193,7 +193,7 @@ function rangeLabel(a: number | null, b: number | null) {
   return min === max ? `Year ${min}` : `Year ${min}–${max}`;
 }
 
-function bumpConfidence(
+export function bumpConfidence(
   cur: 'HIGH' | 'MEDIUM' | 'LOW',
   next: 'HIGH' | 'MEDIUM' | 'LOW'
 ): 'HIGH' | 'MEDIUM' | 'LOW' {
@@ -217,7 +217,7 @@ function ownershipCostContext(
   };
 }
 
-function projectDebtByYear(args: {
+export function projectDebtByYear(args: {
   balanceNow: number;
   annualRate: number;
   remainingTermMonths: number;

@@ -206,3 +206,9 @@ Not done: no component render test (the card needs a large prop surface and has 
 **Answer-mode badge** extracted to `AnswerModeBadge` with a render test (3 tests): label and assistive text, the general-guidance wording, and nothing for unavailable, none or unknown. `next build` passes.
 
 Evidence: Ask suite 6022 tests, 292 failing, none new (one known DB-dependent test shifted a line number); backend typecheck clean; frontend 13 workspace tests pass.
+
+### Break-even and mortgage arithmetic fidelity (2026-11-23)
+
+The calculation suite grew from 593 to **708 cases**. Added: five level-payment figures checked against an arbitrary-precision decimal calculation (separate from the code), a 36-loan matrix (balance x rate x term) asserting the computed payment pays the loan off exactly and total interest equals payments minus principal, the same matrix through `projectDebtByYear` at 5 and 10 years (balance equals principal paid plus ending balance, no negative amounts, a loan shorter than the horizon is paid off, same payment), boundary cases (payoff pads zero years, a payment below the interest never pays negative principal, a negative rate accrues nothing, a zero term is one month), and the break-even helpers (`clampYears`, `toMoney`, `firstBreakEvenIndex`, `rangeLabel`, `bumpConfidence`). The helpers are now exported from `breakEven.service.ts` (an `export` keyword only; behaviour unchanged). All pass; one expectation of mine was off by a cent (250,000 at 4% over 15 years is 1,849.22, not 1,849.21), which the decimal calculation settled.
+
+Not covered: `BreakEvenService.compute` end to end (needs a database) and the reserve-fund calculator. One existing break-even test fails with and without this change.
