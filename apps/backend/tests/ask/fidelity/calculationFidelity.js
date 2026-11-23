@@ -300,6 +300,88 @@ for (const [net, expected] of [[[-5, -1, 2, 4], 3], [[0, 1], 1], [[-1, -2, -3], 
 for (const [a, b, label] of [[3, 3, 'Year 3'], [3, 5, 'Year 3–5'], [5, 3, 'Year 3–5'], [null, 4, 'Year 4'], [null, null, 'Not reached'], [1, null, 'Year 1']]) add(`value:range-label:${a}:${b}`, 'VALUE', `${a} and ${b}`, () => same(be().rangeLabel(a, b), label));
 for (const cur of ['LOW', 'MEDIUM', 'HIGH']) for (const next of ['LOW', 'MEDIUM', 'HIGH']) { const rank = { LOW: 1, MEDIUM: 2, HIGH: 3 }; add(`formula:confidence:${cur}:${next}`, 'FORMULA_BRANCH', `${cur} then ${next} keeps the higher`, () => same(be().bumpConfidence(cur, next), rank[next] > rank[cur] ? next : cur)); }
 
+// ============ the reserve fund recalculation (services/homeReserveFundCalculation.service.ts), run against an in-memory store ============
+// The service reads the clock itself, so these cases freeze it. Expected values are written here from the FRD rules (point estimate by posture, proportional balance share,
+// near-term shortfall versus a smoothed monthly amount capped at the horizon, a confirmed allocation is never replaced), not taken from the service.
+/** Whole months, counting only completed ones (15 May to 1 May two years on is 23): the reserve fund's own documented rule, which differs from the calendar-month rule Ask's funding plan uses. */
+const wholeMonths = (from, to) => Math.max(1, (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth()) - (to.getDate() < from.getDate() ? 1 : 0));
+async function recalcWith({ posture = 'MODERATE', balance = 0, horizonYears = 10, items, lines = [] }) {
+  const { mock } = require('node:test');
+  const { prisma } = require('../../../src/lib/prisma.ts');
+  const { homeReserveFundCalculationService } = require('../../../src/services/homeReserveFundCalculation.service.ts');
+  const guidance = require('../../../src/services/guidanceEngine/guidanceJourney.service.ts');
+  const fund = { id: 'f1', propertyId: 'p1', posture, currentBalanceCents: balance, horizonYears, recommendedMonthlyContributionCents: 0, currentShortfallCents: 0 };
+  const captured = { upserts: [], updates: [], fundUpdate: null, recalc: null };
+  const saved = { fund: prisma.homeReserveFund, analysis: prisma.homeCapitalTimelineAnalysis, line: prisma.homeReserveFundLineItem, recalc: prisma.homeReserveFundRecalculation, tx: prisma.$transaction, ingest: guidance.guidanceJourneyService.ingestSignal };
+  prisma.homeReserveFund = { findUnique: async () => fund, update: async ({ data }) => { captured.fundUpdate = data; return { ...fund, ...data }; }, findUniqueOrThrow: async () => ({ ...fund, ...(captured.fundUpdate ?? {}) }) };
+  prisma.homeCapitalTimelineAnalysis = { findFirst: async () => ({ id: 'a1', items }) };
+  prisma.homeReserveFundLineItem = { findMany: async () => lines, upsert: ({ create, update }) => { captured.upserts.push({ create, update }); return Promise.resolve(); }, update: ({ where, data }) => { captured.updates.push({ where, data }); return Promise.resolve(); } };
+  prisma.homeReserveFundRecalculation = { create: ({ data }) => { captured.recalc = data; return Promise.resolve(); } };
+  prisma.$transaction = async (ops) => Promise.all(ops);
+  guidance.guidanceJourneyService.ingestSignal = async () => undefined;
+  mock.timers.enable({ apis: ['Date'], now: NOW });
+  try { await homeReserveFundCalculationService.recalculate('p1', 'MANUAL'); } finally {
+    mock.timers.reset();
+    prisma.homeReserveFund = saved.fund; prisma.homeCapitalTimelineAnalysis = saved.analysis; prisma.homeReserveFundLineItem = saved.line; prisma.homeReserveFundRecalculation = saved.recalc; prisma.$transaction = saved.tx; guidance.guidanceJourneyService.ingestSignal = saved.ingest;
+  }
+  return captured;
+}
+const reserveItem = (id, windowStart, min, max, extra = {}) => ({ id, windowStart, windowEnd: new Date(windowStart.getTime() + 86400000 * 365), estimatedCostMinCents: min, estimatedCostMaxCents: max, linkedHomeEventId: null, ...extra });
+const NEAR = new Date(2026, 6, 1); const FAR24 = new Date(2028, 4, 1); const FAR200 = new Date(2043, 4, 1);
+const pointOf = (posture, min, max) => (posture === 'CONSERVATIVE' ? max : posture === 'AGGRESSIVE' ? min : Math.round((min + max) / 2));
+for (const posture of ['CONSERVATIVE', 'MODERATE', 'AGGRESSIVE']) for (const [kind, when] of [['near', NEAR], ['smoothed', FAR24], ['beyond-horizon', FAR200]]) for (const balance of [0, 5000000]) for (const confirmed of [null, 111111]) {
+  add(`formula:reserve:${posture}:${kind}:${balance}:${confirmed}`, 'FORMULA_BRANCH', `${posture}, ${kind}, balance ${balance}, confirmed ${confirmed}`, async () => {
+    const min = 20000000; const max = 30000000;
+    const lines = confirmed ? [{ id: 'l1', timelineItemId: 'i1', status: 'ACTIVE', allocationConfirmedAt: NOW, allocationConfirmedMonthlyCents: confirmed }] : [];
+    const out = await recalcWith({ posture, balance, items: [reserveItem('i1', when, min, max)], lines });
+    const target = pointOf(posture, min, max); const allocBal = balance > 0 ? Math.round((balance * target) / target) : 0; // one item holds the whole balance
+    const near = when <= new Date(2026, 10, 15, 12);
+    const months = near ? 0 : Math.min(wholeMonths(NOW, when), 120);
+    const suggested = near ? 0 : ceilDiv(target, months);
+    const monthly = confirmed ?? suggested; const shortfall = near ? Math.max(0, target - allocBal) : 0;
+    const row = out.upserts[0].create;
+    same([row.targetCostCents, row.allocatedBalanceCents, row.allocationSuggestedMonthlyCents, row.allocatedMonthlyCents], [target, allocBal, suggested, monthly], 'line');
+    same([out.fundUpdate.recommendedMonthlyContributionCents, out.fundUpdate.currentShortfallCents], [monthly, shortfall], 'fund');
+  });
+}
+add('formula:reserve:balance-shared-by-cost', 'FORMULA_BRANCH', 'the one balance is shared across items in proportion to their targets', async () => {
+  const out = await recalcWith({ posture: 'AGGRESSIVE', balance: 1000000, items: [reserveItem('a', FAR24, 3000000, 3000000), reserveItem('b', FAR24, 1000000, 1000000)] });
+  same(out.upserts.map((u) => u.create.allocatedBalanceCents), [750000, 250000]);
+});
+add('formula:reserve:totals-are-the-sum', 'FORMULA_BRANCH', 'monthly contribution and shortfall are the sums over open items', async () => {
+  const out = await recalcWith({ posture: 'AGGRESSIVE', balance: 0, items: [reserveItem('a', NEAR, 400000, 400000), reserveItem('b', FAR24, 2400000, 2400000), reserveItem('c', NEAR, 100000, 100000)] });
+  const monthsB = wholeMonths(NOW, FAR24);
+  same([out.fundUpdate.currentShortfallCents, out.fundUpdate.recommendedMonthlyContributionCents], [500000, ceilDiv(2400000, monthsB)]);
+});
+add('boundary:reserve-no-balance-share-when-no-targets', 'BOUNDARY', 'items with no cost get no balance share and no division by zero', async () => {
+  const out = await recalcWith({ balance: 900000, items: [reserveItem('a', FAR24, null, null)] });
+  same([out.upserts[0].create.targetCostCents, out.upserts[0].create.allocatedBalanceCents, out.upserts[0].create.allocatedMonthlyCents], [0, 0, 0]);
+});
+add('boundary:reserve-only-one-cost-given', 'BOUNDARY', 'a missing minimum or maximum uses the other', async () => {
+  const out = await recalcWith({ posture: 'CONSERVATIVE', items: [reserveItem('a', FAR24, null, 500000), reserveItem('b', FAR24, 700000, null)] });
+  same(out.upserts.map((u) => u.create.targetCostCents), [500000, 700000]);
+});
+add('boundary:reserve-resolved-item-retired', 'BOUNDARY', 'an item linked to a home event is retired, not planned for', async () => {
+  const out = await recalcWith({ items: [reserveItem('a', FAR24, 1000000, 1000000, { linkedHomeEventId: 'evt-1' })], lines: [{ id: 'l1', timelineItemId: 'a', status: 'ACTIVE' }] });
+  same([out.upserts.length, out.updates.length, out.updates[0].data.status, out.updates[0].data.retiredReason, out.updates[0].data.retiredEvidenceRef, out.recalc.itemsRetired], [0, 1, 'RETIRED', 'LINKED_HOME_EVENT', 'evt-1', 1]);
+});
+add('boundary:reserve-vanished-item-retired', 'BOUNDARY', 'a line whose timeline item disappeared is retired as manual', async () => {
+  const out = await recalcWith({ items: [reserveItem('a', FAR24, 1000000, 1000000)], lines: [{ id: 'gone', timelineItemId: 'zzz', status: 'ACTIVE' }] });
+  same([out.updates.length, out.updates[0].data.retiredReason, out.recalc.itemsRetired, out.recalc.itemsAdded], [1, 'MANUAL', 1, 1]);
+});
+add('missing:reserve-already-retired-line-untouched', 'MISSING_DATA', 'a line already retired is not retired again', async () => {
+  const out = await recalcWith({ items: [reserveItem('a', FAR24, 1000000, 1000000)], lines: [{ id: 'old', timelineItemId: 'zzz', status: 'RETIRED' }] });
+  same([out.updates.length, out.recalc.itemsRetired], [0, 0]);
+});
+add('boundary:reserve-confirmed-allocation-survives', 'BOUNDARY', 'a confirmed allocation is kept even when the suggested amount differs, and the suggestion is still recorded', async () => {
+  const out = await recalcWith({ posture: 'AGGRESSIVE', items: [reserveItem('a', FAR24, 2400000, 2400000)], lines: [{ id: 'l1', timelineItemId: 'a', status: 'ACTIVE', allocationConfirmedAt: NOW, allocationConfirmedMonthlyCents: 5 }] });
+  same([out.upserts[0].create.allocatedMonthlyCents, out.upserts[0].create.allocationSuggestedMonthlyCents], [5, ceilDiv(2400000, wholeMonths(NOW, FAR24))]);
+});
+add('boundary:reserve-zero-confirmed-is-not-a-confirmation', 'BOUNDARY', 'a confirmed amount of zero does not replace the suggestion', async () => {
+  const out = await recalcWith({ posture: 'AGGRESSIVE', items: [reserveItem('a', FAR24, 2400000, 2400000)], lines: [{ id: 'l1', timelineItemId: 'a', status: 'ACTIVE', allocationConfirmedAt: NOW, allocationConfirmedMonthlyCents: 0 }] });
+  same(out.upserts[0].create.allocatedMonthlyCents, ceilDiv(2400000, wholeMonths(NOW, FAR24)));
+});
+
 /** Cases recorded after a defect was found, so the suite only ever grows (EVAL-019). Each carries the defect it guards. */
 // value:grow:350bps:2y:100000 - float compounding rounded the exact tie 107122.5 down (found by this suite on its first run, 2026-11-23).
 const PERMANENT_REGRESSIONS = new Set(['value:grow:350bps:2y:100000']);
