@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { decideClarificationLoop } from '../support/clarificationLoop';
 import { isWriteCapableOperation } from '../support/writeCapability';
 import { enforceClarificationContract } from '../support/clarificationContract';
 import { createHash } from 'node:crypto';
@@ -8,7 +9,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { logger } from '../../../lib/logger';
 import { recordAskCapabilityLifecycle } from '../askCapabilityLifecycle';
-import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
+import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type AskPresentationBlock, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
 import { askCompositionTotal, askRecoveryOutcomeTotal, askTurnStageDurationSeconds, askTurnFailuresTotal, type AskTurnStage, askExecutionDurationSeconds, askExecutionsTotal, askInlineCapturesTotal, askRoutingDecisionsTotal, askUnansweredRecoveryTotal, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../../lib/metrics';
 import { type AskAccountRole } from '../askAccountEligibility';
@@ -666,6 +667,34 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       entityResolution: resolveAskEntityState({ message: routingMessage, operationId: declaredOperation.operationId, propertyId: executionPropertyId, launchEntityId: input.launchContext?.entityId, requiresProperty: declaredOperation.requiresProperty }),
     };
   }
+  // BICC-UND-007/008/009: at most one consecutive clarification for the same unresolved intent. A repeat of the same request gets the best-supported
+  // interpretation, labelled, when that is a plain read; anything involving an unresolved entity, a write or a material decision keeps its bounded selection.
+  let assumedInterpretation: AskOperationId | null = null;
+  if (routingDecision.requiresClarification && routingDecision.stage !== 'SAFETY' && !declaredItemActionOperationId) {
+    const previousTurn = await prisma.askExecution.findFirst({
+      where: { sessionId: session.id, parentRole: null, id: { not: execution.id } },
+      orderBy: { createdAt: 'desc' },
+      select: { status: true, reasonCode: true, message: true, createdAt: true },
+    });
+    const loop = decideClarificationLoop({
+      previous: previousTurn, message: routingMessage,
+      candidates: routingDecision.candidates.map((candidate) => ({ operationId: candidate.operationId, confidence: candidate.confidence })),
+      entityAmbiguous: Boolean(routingDecision.entityResolution && ['AMBIGUOUS', 'MISSING', 'MENTION_ONLY'].includes(routingDecision.entityResolution.outcome)),
+    });
+    if (loop.kind === 'ASSUME') {
+      const assumed = getAskOperationDefinition(loop.operationId);
+      assumedInterpretation = loop.operationId;
+      routingDecision = {
+        language: routingDecision.language,
+        operation: { ...assumed, confidence: Math.min(assumed.confidence, 0.6) },
+        stage: 'LOCAL_CLASSIFIER',
+        candidates: routingDecision.candidates,
+        requiresClarification: false,
+        entityResolution: resolveAskEntityState({ message: routingMessage, operationId: assumed.operationId, propertyId: executionPropertyId, launchEntityId: input.launchContext?.entityId, requiresProperty: assumed.requiresProperty }),
+      };
+      logger.info({ executionId: execution.id, operationId: loop.operationId }, '[ask] clarification limit reached; answering the best-supported interpretation');
+    }
+  }
   const shouldForceOperation = shouldForceAskOperation({
     forcedOperationId, routingStage: routingDecision.stage, routingRequiresClarification: routingDecision.requiresClarification,
     routedOperationId: routingDecision.operation.operationId, isFilterRefinement: followUp.isFilterRefinement && !declaredItemActionOperationId && forcedOperationId === followUp.forcedOperationId,
@@ -866,6 +895,14 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       logger.warn({ executionId: execution.id, operationId: operation.operationId, reasonCode: result.reasonCode, violations: clarificationContract.violations }, '[ASK-CLARIFICATION] card repaired to satisfy the contract');
     }
     result = clarificationContract.result;
+    // UND-008: say plainly which interpretation was used so correcting it is easy.
+    if (assumedInterpretation && (result.status === 'ANSWERED' || result.status === 'READY_WITH_LIMITATIONS')) {
+      result = { ...result, blocks: [...result.blocks, {
+        type: 'SUMMARY', id: 'assumed-interpretation-note', title: 'How I read your question',
+        body: `I wasn't sure what you meant, so I answered this as “${clarificationLabelFor(assumedInterpretation)}”. If you meant something else, tell me in a few different words.`,
+        tone: 'DEFAULT', actions: [],
+      } as AskPresentationBlock] };
+    }
     const completedAt = terminalStatus(result.status) ? new Date() : undefined;
     const saved = await prisma.askExecution.update({
       where: { id: execution.id },
