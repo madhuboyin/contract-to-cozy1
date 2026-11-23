@@ -488,7 +488,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
   // deterministic routing/entity-matching regexes see enough context to
   // resolve correctly. The homeowner-visible/persisted question stays the
   // original input.message.
-  const followUp = await resolveAskFollowUpMessage({ sessionId: session.id, propertyId: executionPropertyId, message: input.message, declaredSourceExecutionId: input.launchContext?.sourceExecutionId ?? null });
+  const followUp = await resolveAskFollowUpMessage({ sessionId: session.id, userId, propertyId: executionPropertyId, message: input.message, declaredSourceExecutionId: input.launchContext?.sourceExecutionId ?? null });
   // Composition FRD §8: an elliptical follow-up ("what about the water heater?", "make it 10 years", "what would it cost?") resolves against the session's
   // carried slots, after revalidation. It applies only when the existing follow-up rewriting left the message alone and the turn is an ordinary typed one.
   let slotFollowUp: Awaited<ReturnType<typeof resolveSlotFollowUp>> = null;
@@ -896,6 +896,12 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     }
     result = clarificationContract.result;
     // UND-008: say plainly which interpretation was used so correcting it is easy.
+    // BICC-CTX-003: say plainly that earlier context was not carried over, so the person knows to restate what they meant.
+    if (followUp.contextReset?.disclosure && (result.status === 'ANSWERED' || result.status === 'READY_WITH_LIMITATIONS' || result.status === 'NEEDS_CLARIFICATION')) {
+      result = { ...result, blocks: [...result.blocks, {
+        type: 'SUMMARY', id: 'conversation-context-reset-note', title: 'Starting fresh', body: followUp.contextReset.disclosure, tone: 'DEFAULT', actions: [],
+      } as AskPresentationBlock] };
+    }
     if (assumedInterpretation && (result.status === 'ANSWERED' || result.status === 'READY_WITH_LIMITATIONS')) {
       result = { ...result, blocks: [...result.blocks, {
         type: 'SUMMARY', id: 'assumed-interpretation-note', title: 'How I read your question',

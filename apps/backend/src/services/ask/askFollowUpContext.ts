@@ -1,6 +1,7 @@
 import type { AskExecutionStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import type { AskOperationId } from './askOperationRegistry';
+import { evaluateContinuationContext } from './conversationSummary';
 
 // A registered operation family that a bare filter/scope refinement ("only
 // show the urgent ones") may legitimately continue without the homeowner
@@ -184,6 +185,8 @@ export interface AskFollowUpResolution {
   // turns, which are legitimately separate answers and must not collapse
   // into the prior card).
   isFilterRefinement: boolean;
+  /** BICC-CTX-003: set when the conversation's latest result belongs to another home, so a follow-up did not continue; the person is told. */
+  contextReset?: { disclosure: string; reasons: string[] } | null;
 }
 
 interface PriorExecutionRow {
@@ -314,6 +317,8 @@ export function shouldForceAskOperation(input: {
 // no durable prior execution or recognizable continuation pattern applies.
 export async function resolveAskFollowUpMessage(input: {
   sessionId: string;
+  /** The caller's user, so the conversation summary read is scoped to their own turns. Omitted: the summary gate is skipped. */
+  userId?: string | null;
   propertyId: string | null | undefined;
   message: string;
   // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-003/ACT-001: set only when the
@@ -335,6 +340,12 @@ export async function resolveAskFollowUpMessage(input: {
   const isConversationalFilterLead = CONVERSATIONAL_FILTER_LEAD.test(input.message);
   if (!entityMatch && !isFilterContinuation && !isConversationalFilterLead && !isEnvelopePagination && !isSpecialistContinuation && !isMonitorVagueFollowup && !isSellHoldRentVagueFollowup) return fallback;
 
+  // BICC-CTX-001/003: the structured conversation summary gates continuation. A declared control is pinned to one specific execution and bypasses it; an
+  // ordinary follow-up does not continue from a result that belongs to a home the person has since left.
+  if (input.userId && !input.declaredSourceExecutionId) {
+    const context = await evaluateContinuationContext({ userId: input.userId, sessionId: input.sessionId, propertyId: input.propertyId ?? null }, prisma as never);
+    if (context.blocked) return { ...fallback, contextReset: { disclosure: context.disclosure ?? '', reasons: context.reasons } };
+  }
   const prior = await findRecentPriorExecution(input.sessionId, input.propertyId, input.declaredSourceExecutionId);
   if (!prior || !prior.operationId) return fallback;
 

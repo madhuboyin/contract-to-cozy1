@@ -264,3 +264,35 @@ export async function loadConversationSummary(input: {
   for (const event of events) { const kind = record(event.metadataJson)?.kind; if (kind === 'INTENT' || kind === 'ENTITY' || kind === 'HOME_RECORD') correctionsBy.set(event.executionId, [...(correctionsBy.get(event.executionId) ?? []), kind]); }
   return buildConversationSummary({ digests: rows.map((row) => digestFromRow(row, correctionsBy.get(row.id) ?? [])), scope: { propertyId: input.propertyId, lifecycleMode: input.lifecycleMode }, now: input.now });
 }
+
+// ---------------- the continuation gate ----------------
+
+export interface ContinuationContext {
+  /** True when the most recent settled result belongs to a home the person is no longer on (or can no longer reach): a follow-up must not resolve against it. */
+  blocked: boolean;
+  /** Plain words for the person, set only when the context was blocked (CTX-003). */
+  disclosure: string | null;
+  reasons: string[];
+  summary: ConversationSummary;
+}
+
+/**
+ * BICC-CTX-001/003: decides whether an elliptical follow-up ("only show urgent", "what about it") may continue from the conversation so far. The summary is built
+ * from the session's recent turns and reconciled against the home the person is on now. When the latest settled result belongs to another home or one the person
+ * can no longer reach, the follow-up fails closed and the person is told, instead of silently resolving against an older turn of this home.
+ */
+export async function evaluateContinuationContext(input: {
+  userId: string; sessionId: string; propertyId: string | null; lifecycleMode?: LifecycleMode | null; now?: Date;
+}, db: Parameters<typeof loadConversationSummary>[1]): Promise<ContinuationContext> {
+  const summary = await loadConversationSummary({ userId: input.userId, sessionId: input.sessionId, propertyId: input.propertyId, lifecycleMode: input.lifecycleMode ?? null, now: input.now }, db);
+  // Without a selected home there is nothing to switch away from; the existing property-less scoping applies unchanged.
+  if (!input.propertyId) return { blocked: false, disclosure: null, reasons: [], summary };
+  // Another home that appears in the person's own conversation is a different home, not an access loss: this gate has no access lookup, so the person's
+  // own earlier homes are treated as reachable and only the switch is reported. (A real access-loss check belongs to the caller that can authorize.)
+  const seenHomes = new Set<string>([input.propertyId]);
+  for (const id of [summary.referencedResult?.propertyId, ...summary.activeEntities.map((entity) => entity.propertyId), ...summary.sources.map((source) => source.propertyId)]) if (id) seenHomes.add(id);
+  const reconciled = reconcileConversationSummary(summary, { propertyId: input.propertyId, accessiblePropertyIds: seenHomes });
+  const referentLost = summary.referencedResult !== null && reconciled.summary.referencedResult === null
+    && reconciled.resets.some((reset) => reset.reason === 'PROPERTY_SWITCH' || reset.reason === 'ACCESS_LOST');
+  return { blocked: referentLost, disclosure: referentLost ? reconciled.disclosure : null, reasons: referentLost ? reconciled.resets.map((reset) => reset.reason) : [], summary: reconciled.summary };
+}
