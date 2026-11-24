@@ -1060,6 +1060,13 @@ class APIClient {
   async deleteAskCandidate(id: string): Promise<APIResponse<{ deleted: boolean }>> {
     return this.request(`/api/ask/candidates/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
+  // BICC-4.3: explicit two-step promotion of a candidate to an under-contract home.
+  async reviewAskCandidatePromotion(id: string): Promise<APIResponse<import('@/features/ask/candidatePromotion').PromotionReview>> {
+    return this.request(`/api/ask/candidates/${encodeURIComponent(id)}/promotion`);
+  }
+  async confirmAskCandidatePromotion(id: string, payload: { token: string; linkToExistingHome?: boolean; targetCloseDate?: string | null }): Promise<APIResponse<import('@/features/ask/candidatePromotion').PromotionResult>> {
+    return this.request(`/api/ask/candidates/${encodeURIComponent(id)}/promotion`, { method: 'POST', body: payload });
+  }
   async getConciergeHome(propertyId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<ConciergeHomeView>> {
     return this.request<ConciergeHomeView>(`/api/ask/concierge-home?propertyId=${encodeURIComponent(propertyId)}`, options);
   }

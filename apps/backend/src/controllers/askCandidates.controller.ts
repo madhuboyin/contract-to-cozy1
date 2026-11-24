@@ -4,6 +4,7 @@ import type { NextFunction, Response } from 'express';
 import type { AuthRequest } from '../types/auth.types';
 import { APIError } from '../middleware/error.middleware';
 import { candidatePropertyService, type CandidateInput, type CandidatePatch } from '../services/ask/buyer/candidateProperty.service';
+import { candidatePromotionService } from '../services/ask/buyer/candidatePromotion.service';
 import { buyerCostBreakdown, compareCandidates, COMPARISON_DIMENSIONS, type CandidateFacts } from '../services/ask/buyer/candidateComparison';
 
 const need = (req: AuthRequest): string => { if (!req.user) throw new APIError('Authentication required.', 401, 'AUTH_REQUIRED'); return req.user.userId; };
@@ -58,5 +59,21 @@ export async function getAskCandidateCost(req: AuthRequest, res: Response, next:
     const row = await candidatePropertyService.get(need(req), req.params.candidateId);
     if (!row) throw new APIError('That home was not found.', 404, 'CANDIDATE_NOT_FOUND');
     return res.json({ success: true, data: buyerCostBreakdown(toFacts(row as unknown as Record<string, unknown>)) });
+  } catch (error) { return next(error); }
+}
+
+/** BUY-007 step 1: what promoting would create. Writes nothing. */
+export async function reviewAskCandidatePromotion(req: AuthRequest, res: Response, next: NextFunction) {
+  try { return res.json({ success: true, data: await candidatePromotionService.review(need(req), req.params.candidateId) }); } catch (error) { return next(error); }
+}
+
+/** BUY-007 step 2: explicit confirmation carrying the review's token. */
+export async function confirmAskCandidatePromotion(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const { token, linkToExistingHome, targetCloseDate } = body(req);
+    if (typeof token !== 'string' || !token) throw new APIError('Review the home before moving it.', 400, 'CANDIDATE_PROMOTION_INVALID');
+    if (targetCloseDate !== undefined && targetCloseDate !== null && (typeof targetCloseDate !== 'string' || Number.isNaN(Date.parse(targetCloseDate)))) throw new APIError('Enter a valid closing date.', 400, 'CANDIDATE_PROMOTION_INVALID');
+    const result = await candidatePromotionService.confirm(need(req), req.params.candidateId, { token, linkToExistingHome: linkToExistingHome === true, targetCloseDate: typeof targetCloseDate === 'string' ? new Date(targetCloseDate).toISOString() : null });
+    return res.status(201).json({ success: true, data: result });
   } catch (error) { return next(error); }
 }

@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { api } from '@/lib/api/client';
+import { CandidatePromotionPanel } from './CandidatePromotionPanel';
 import { CANDIDATE_FIELDS, changedFields, homeSummaryLine, parseCandidateForm, toForm, type CandidateForm, type CandidateHome, type FormIssues } from '@/features/ask/candidateHomes';
 
 const BUTTON = 'inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 disabled:opacity-50';
 const PRIMARY = 'inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-950 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 disabled:opacity-50';
 const GROUP_TITLES: Record<string, string> = { HOME: 'The home', LISTING: 'What the listing says', COSTS: 'Costs you know or expect', FINANCING: 'Your financing for this home' };
 
-type View = { kind: 'LIST' } | { kind: 'FORM'; home: CandidateHome | null } | { kind: 'REMOVE'; home: CandidateHome };
+type View = { kind: 'LIST' } | { kind: 'FORM'; home: CandidateHome | null } | { kind: 'REMOVE'; home: CandidateHome } | { kind: 'PROMOTE'; home: CandidateHome };
 
 /**
  * The buyer's own candidate homes (BICC-4.1), kept inside Ask. Add a home, change what you entered, or remove it; nothing is saved until Save, a blank field means
@@ -102,6 +103,7 @@ export function CandidateHomesDialog({ open, onOpenChange, onCompare, returnFocu
                   <li key={home.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
                     <span className="min-w-0 flex-1 text-sm font-medium text-slate-900">{homeSummaryLine(home)}</span>
                     <span className="flex gap-2">
+                      <button type="button" className={BUTTON} onClick={() => { setStatus(null); setView({ kind: 'PROMOTE', home }); }} aria-label={`Under contract on ${home.label}`}>Under contract?</button>
                       <button type="button" className={BUTTON} onClick={() => startForm(home)} aria-label={`Change ${home.label}`}>Change</button>
                       <button type="button" className={BUTTON} onClick={() => { setStatus(null); setView({ kind: 'REMOVE', home }); }} aria-label={`Remove ${home.label}`}>Remove</button>
                     </span>
@@ -115,6 +117,13 @@ export function CandidateHomesDialog({ open, onOpenChange, onCompare, returnFocu
               <button type="button" className={BUTTON} onClick={() => onOpenChange(false)}>Close</button>
             </div>
           </div>
+        )}
+
+        {view.kind === 'PROMOTE' && (
+          <CandidatePromotionPanel
+            candidateId={view.home.id} label={view.home.label} onCancel={() => backToList()}
+            onDone={(result) => { void load(); backToList(result.linkedExisting ? `Linked ${view.home.label} to your existing home.` : `${view.home.label} is now in your homes as under contract.`); }}
+          />
         )}
 
         {view.kind === 'REMOVE' && (
