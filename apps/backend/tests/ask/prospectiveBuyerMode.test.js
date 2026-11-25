@@ -85,3 +85,16 @@ test('BICC-D42 (STATIC): the decline is applied only for buyer mode with no prop
   assert.match(src, /session\.lifecycleMode === 'PROSPECTIVE_BUYER' && !executionPropertyId && operationDefinition\.requiresProperty/);
   assert.match(src, /buyerMode: session\.lifecycleMode === 'PROSPECTIVE_BUYER'/);
 });
+
+test('BICC-D42/BUY-004: in buyer mode, candidate-compare questions go to CANDIDATE_HOMES_REVIEW as a provisional read; otherwise unchanged', () => {
+  for (const text of ['compare my homes', 'Compare them', 'which of my homes has the lowest property tax', 'which one is the cheapest', 'what is the biggest', 'rank my options', 'line up these']) {
+    const on = resolveAskRoutingCascade(text, { buyerMode: true });
+    assert.equal(on.operation.operationId, 'CANDIDATE_HOMES_REVIEW', text);
+    assert.equal(on.stage, 'PROVISIONAL', text);
+    assert.notEqual(resolveAskRoutingCascade(text).stage === 'PROVISIONAL' && resolveAskRoutingCascade(text).candidates[0]?.reasonCodes?.[0], 'BUYER_MODE_CANDIDATE_COMPARE', text);
+  }
+  for (const text of ['compare my homes insurance quotes', 'which one is the cheapest contractor quote for my roof and gutters and siding work today please', 'what is the biggest expense this year', 'show my maintenance tasks']) {
+    const on = resolveAskRoutingCascade(text, { buyerMode: true });
+    assert.notEqual(on.candidates[0]?.reasonCodes?.[0], 'BUYER_MODE_CANDIDATE_COMPARE', text);
+  }
+});
