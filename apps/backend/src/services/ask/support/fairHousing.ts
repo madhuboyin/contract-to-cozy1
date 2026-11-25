@@ -51,6 +51,38 @@ export function classifyFairHousingRequest(message: string): FairHousingKind | n
   return null;
 }
 
+/** One earlier turn of the same conversation, newest first: what the person typed and how Ask answered it. */
+export interface FairHousingHistoryTurn { message: string; reasonCode: string | null }
+
+const FOLLOW_UP_CUE = /^(?:and|but|so|ok(?:ay)?|then|also|what about|how about|just|well|with|without|that have|where|who|near|full of|filled with|having|those|the ones)\b|\b(?:there|those|them|that (?:area|neighbou?rhood|place|street|town|part)|the same|that one|the area|the neighbou?rhood|same area)\b/;
+const MAX_FOLLOW_UP_WORDS = 14;
+const MAX_HISTORY_WORDS = 40;
+const words = (text: string): number => (text ? text.split(' ').length : 0);
+
+/**
+ * BICC-BUY-011 across turns. The single-message check (above) cannot see a request that is split ("which neighborhoods" then "with the fewest kids"), or a follow-up to a
+ * refusal ("ok what about the families there"). Only a SHORT current message is combined with the previous one or two user messages, and only when the combination is refused although no single message is;
+ * after a refusal, only a message that points back (a leading connective, or "there" / "those") is refused again. Everything else is the single-message result.
+ * Limits: closed pattern set, last two turns only, English only; a request that never states the steering anywhere in those turns is not caught.
+ */
+export function classifyFairHousingRequestWithHistory(message: string, history: ReadonlyArray<FairHousingHistoryTurn> = []): FairHousingKind | null {
+  const direct = classifyFairHousingRequest(message);
+  if (direct) return direct;
+  const text = normalize(message);
+  if (!text || words(text) > MAX_FOLLOW_UP_WORDS || history.length === 0) return null;
+  const previous = history[0];
+  // After a refusal, only a message that points back at the refused subject (not any next question) is refused again.
+  if (previous.reasonCode === 'ASK_FAIR_HOUSING_BOUNDARY' && FOLLOW_UP_CUE.test(text)) return classifyFairHousingRequest(previous.message) ?? 'WHO_LIVES_THERE';
+  for (const count of [1, 2]) {
+    const turns = history.slice(0, count);
+    if (turns.length < count || turns.some((turn) => words(normalize(turn.message)) > MAX_HISTORY_WORDS)) continue;
+    if (turns.some((turn) => classifyFairHousingRequest(turn.message))) continue;
+    const joined = classifyFairHousingRequest(`${[...turns].reverse().map((turn) => turn.message).join(' ')} ${message}`);
+    if (joined) return joined;
+  }
+  return null;
+}
+
 const OBJECTIVE = 'I can help with things you choose and that can be checked: price and total monthly cost, size, age and condition, commute times you give me, public services, environmental conditions such as flood zone, and documented inspection findings. Where I have a source and a date, I show them.';
 const REPLIES: Readonly<Record<FairHousingKind, { title: string; body: string }>> = {
   PROTECTED_CLASS: { title: 'I can’t help with that comparison', body: `I don’t rank, describe or compare homes or neighborhoods by who lives there, and I don’t guess anything about people from a name, a photo, a school or a location. ${OBJECTIVE}` },

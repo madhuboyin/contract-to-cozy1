@@ -189,9 +189,15 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
   let input = requestInput;
   await ensureAskServiceAccountEligibility(userId, accountRole);
   const controls = readAskOperationalControls();
+  // BICC-BUY-011: only a short message can be a follow-up, so history is read only then (one small indexed query).
+  const fairHousingHistory = input.message.trim().split(/\s+/).length <= 14
+    ? (await prisma.askExecution.findMany({ where: { sessionId: input.sessionId, userId, parentRole: null }, orderBy: { createdAt: 'desc' }, take: 2, select: { message: true, reasonCode: true } }))
+      .map((row) => ({ message: row.message, reasonCode: row.reasonCode ?? null }))
+    : [];
   const safetyFirstDecision = resolveAskRoutingCascade(input.message, {
     localRoutingEnabled: false,
     embeddingRetrievalEnabled: false,
+    fairHousingHistory,
   });
   const executionPropertyId = propertyScopeForAskRouting(safetyFirstDecision, input.propertyId);
   const initialPropertyAccess = executionPropertyId
@@ -358,7 +364,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
   if (!internal.composition && executionPropertyId && !input.launchContext?.operationId && !input.suggestedActionSelection) {
     const decomposition = decomposeForComposition(input.message, { eligibleOperationIds: new Set(eligibleOperationIds), knownNames });
     segmentationCertified = decomposition.kind === 'SINGLE' && decomposition.reason === 'SAME_OPERATION';
-    const plannerRoutingDecision = resolveAskRoutingCascade(input.message, { knownNames });
+    const plannerRoutingDecision = resolveAskRoutingCascade(input.message, { knownNames, fairHousingHistory });
     const plannerMayRun = plannerRoutingDecision.stage === 'REMOTE_FALLBACK' || plannerRoutingDecision.stage === 'CLARIFICATION';
     const modelPlan = !plannerMayRun || decomposition.kind === 'COMPOSE' || decomposition.kind === 'SINGLE' && decomposition.reason === 'FULL_MESSAGE_GATE'
       ? null
@@ -544,6 +550,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       propertyId: executionPropertyId,
       launchEntityId: input.launchContext?.entityId,
       knownNames,
+      fairHousingHistory,
       buyerMode: session.lifecycleMode === 'PROSPECTIVE_BUYER',
     });
   const launchCapabilityOperationId = input.launchContext?.capabilityId

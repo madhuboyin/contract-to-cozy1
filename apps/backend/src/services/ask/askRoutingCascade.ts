@@ -28,7 +28,7 @@ const SMALL_TALK_PATTERN = /^\s*(?:hi|hello|hey|good (?:morning|afternoon|evenin
 /** PROVISIONAL: an uncertified deterministic rule matched a harmless read. The read may run, but its result must pass the full delivery gate and never gets the canonical bypass (FR-FAST, FR-GATE). */
 import { classifySocialTurn, type SocialTurnKind } from './support/socialTurn';
 import { classifyBuyerRequest, type BuyerGuidanceKind } from './support/buyerGuidance';
-import { classifyFairHousingRequest, type FairHousingKind } from './support/fairHousing';
+import { classifyFairHousingRequestWithHistory, type FairHousingHistoryTurn, type FairHousingKind } from './support/fairHousing';
 
 export type AskRoutingStage = 'SAFETY' | 'DETERMINISTIC' | 'PROVISIONAL' | 'LOCAL_CLASSIFIER' | 'MODEL_CLASSIFIER' | 'CLARIFICATION' | 'REMOTE_FALLBACK';
 
@@ -86,6 +86,8 @@ export function resolveAskRoutingCascade(rawMessage: string, options: {
   knownNames?: ReadonlyArray<KnownName>;
   /** BICC-D42: the person explicitly turned on "Looking to buy" for this conversation (never inferred from text). */
   buyerMode?: boolean;
+  /** BICC-BUY-011: the previous user turns of this conversation (newest first), so a split request or a follow-up to a refusal is still refused. */
+  fairHousingHistory?: ReadonlyArray<FairHousingHistoryTurn>;
 } = {}): AskRoutingDecision {
   const language = options.language ?? ASK_DEFAULT_LANGUAGE;
   requireCertifiedAskLanguage(language);
@@ -99,7 +101,7 @@ export function resolveAskRoutingCascade(rawMessage: string, options: {
   // An emergency or an unsafe/restricted request always wins. The generic out-of-scope boundary does not: it also catches multi-home questions and other languages, none of which outranks the fair-housing refusal.
   if (direct.operationId === 'EMERGENCY_BOUNDARY' || direct.operationId === 'UNSAFE_RESTRICTED_BOUNDARY') return safetyDecision();
   // BICC-BUY-011: decided on the raw text right after those two, so no rule, classifier, fallback or out-of-scope reply can answer a steering request.
-  const fairHousing = classifyFairHousingRequest(rawMessage);
+  const fairHousing = classifyFairHousingRequestWithHistory(rawMessage, options.fairHousingHistory);
   if (fairHousing) {
     return { language, operation: direct, stage: 'REMOTE_FALLBACK', candidates: [], requiresClarification: false, entityResolution: null, fairHousing };
   }
