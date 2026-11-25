@@ -25,3 +25,11 @@ test('BICC-D42 (STATIC): the mode is stored on the session and never derived fro
   // propertyId resolution does not mention the mode
   assert.doesNotMatch(src.split('executionPropertyId = ')[1].split('\n')[0], /lifecycleMode/);
 });
+
+test('BICC-D42 (STATIC): the session read returns the stored mode, only ever as PROSPECTIVE_BUYER or null', () => {
+  const read = (p) => fs.readFileSync(path.join(__dirname, '../../src', p), 'utf8');
+  assert.match(read('controllers/ask.controller.ts'), /data: \{ executions, lifecycleMode \}/);
+  const svc = read('services/ask/execution/askSessions.ts');
+  assert.match(svc, /where: \{ id: sessionId, userId \}, select: \{ lifecycleMode: true \}/);
+  assert.match(svc, /=== 'PROSPECTIVE_BUYER' \? 'PROSPECTIVE_BUYER' : null/);
+});

@@ -14,7 +14,7 @@ import { getAskSavedPage, resolveAskSavedArtifactForUser, setAskSavedArchive, As
 import { getAskWorkPage, resolveAskWorkForUser, AskWorkInvalidRequestError } from '../services/ask/askWork.service';
 import { getAskRecordCollectionPage, AskRecordSectionUnavailableError } from '../services/ask/askRecordCollections.service';
 import { getAskRecordDetail } from '../services/ask/askRecordDetail.service';
-import { cancelAskExecution, confirmAskExecution, continueAskExecution, createAskExecution, editAskConfirmation, getAskExecution, getAskPendingWork, getAskSession, getConciergeHome, getRecentAskSessions, updateAskSessionForUser, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, requestAskCorrection, resolveAskExecutionProperty, retryAskExecution, regenerateAskExecution, submitAskCapture, submitAskClarification, submitAskExecutionFeedback, submitHomeActionUsefulnessFeedback } from '../services/ask/askOrchestrator.service';
+import { cancelAskExecution, confirmAskExecution, continueAskExecution, createAskExecution, editAskConfirmation, getAskExecution, getAskPendingWork, getAskSession, getAskSessionLifecycleMode, getConciergeHome, getRecentAskSessions, updateAskSessionForUser, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, requestAskCorrection, resolveAskExecutionProperty, retryAskExecution, regenerateAskExecution, submitAskCapture, submitAskClarification, submitAskExecutionFeedback, submitHomeActionUsefulnessFeedback } from '../services/ask/askOrchestrator.service';
 import { deleteAskSessionForUser } from '../services/ask/askRetention.service';
 import { dismissSuggestedAction, DismissSuggestedActionError } from '../services/ask/suggestedActions/dismissSuggestedAction';
 import {
@@ -334,8 +334,8 @@ export async function getAskSessionExecutions(req: AuthRequest, res: Response, n
     if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
     const sessionId = z.string().trim().min(1).max(160).safeParse(req.params.sessionId);
     if (!sessionId.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid Ask session.' } });
-    const executions = await getAskSession(userId, sessionId.data);
-    return res.status(200).json({ success: true, data: { executions } });
+    const [executions, lifecycleMode] = await Promise.all([getAskSession(userId, sessionId.data), getAskSessionLifecycleMode(userId, sessionId.data)]);
+    return res.status(200).json({ success: true, data: { executions, lifecycleMode } });
   } catch (error) {
     return next(error);
   }

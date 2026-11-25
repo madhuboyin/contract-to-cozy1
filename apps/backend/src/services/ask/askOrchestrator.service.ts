@@ -27,7 +27,7 @@ export { resolveHandoffAttribution, recordHandoffOutcome, classifyLaunchedOutcom
 import './execution/askFeedback';
 export { requestAskCorrection, submitAskExecutionFeedback, submitHomeActionUsefulnessFeedback } from './execution/askFeedback';
 import './execution/askSessions';
-export { getAskSession, getRecentAskSessions, updateAskSessionForUser, getAskExecution, getAskPendingWork, continueAskExecution } from './execution/askSessions';
+export { getAskSession, getAskSessionLifecycleMode, getRecentAskSessions, updateAskSessionForUser, getAskExecution, getAskPendingWork, continueAskExecution } from './execution/askSessions';
 import './execution/askConcierge';
 export { getConciergeHome } from './execution/askConcierge';
 export { operationalWorkCompletionObservedResult } from './handlers/miscHandlers.handler';

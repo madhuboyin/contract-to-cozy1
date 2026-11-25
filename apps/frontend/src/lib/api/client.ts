@@ -1076,8 +1076,8 @@ class APIClient {
   async getAskTargetSelection(selectorId: AskTargetSelectorId, propertyId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<AskTargetSelection>> {
     return this.request<AskTargetSelection>(`/api/ask/target-selectors/${encodeURIComponent(selectorId)}?propertyId=${encodeURIComponent(propertyId)}`, options);
   }
-  async getAskSession(sessionId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<{ executions: AskExecutionResponse[] }>> {
-    return this.request<{ executions: AskExecutionResponse[] }>(`/api/ask/sessions/${encodeURIComponent(sessionId)}`, options);
+  async getAskSession(sessionId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<{ executions: AskExecutionResponse[]; lifecycleMode?: 'PROSPECTIVE_BUYER' | null }>> {
+    return this.request<{ executions: AskExecutionResponse[]; lifecycleMode?: 'PROSPECTIVE_BUYER' | null }>(`/api/ask/sessions/${encodeURIComponent(sessionId)}`, options);
   }
   async getRecentAskSessions(scope: { propertyId: string } | { allHomes: true }, options: { cursor?: string; signal?: AbortSignal; archived?: boolean } = {}): Promise<APIResponse<import('@/features/ask/types').AskRecentSessionPage>> {
     const query = new URLSearchParams('allHomes' in scope ? { scope: 'all' } : { propertyId: scope.propertyId });

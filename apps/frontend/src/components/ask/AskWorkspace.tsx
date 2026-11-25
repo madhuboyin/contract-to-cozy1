@@ -11,6 +11,7 @@ import { ComposerIntakeButton } from './intake/ComposerIntakeButton';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AskIntakeDialog } from './intake/AskIntakeDialog';
 import { CandidateHomesDialog } from './candidates/CandidateHomesDialog';
+import { useBuyerMode } from './workspace/useBuyerMode';
 import { ComposerCandidatesButton } from './candidates/ComposerCandidatesButton';
 import { RouteContextStarter } from './RouteContextStarter';
 import type { RouteAskContext } from '@/features/ask/routeContext';
@@ -89,9 +90,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   // BICC-4.1: the buyer's own candidate homes (a dialog inside Ask; not a property and not a home record).
   const [candidatesOpen, setCandidatesOpen] = useState(false);
   const candidatesOpenerRef = useRef<HTMLElement | null>(null);
-  // BICC-D42/BUY-009: explicit, per-conversation buyer mode. undefined = never chosen here (server keeps its stored value); null = cleared.
-  const [lifecycleMode, setLifecycleMode] = useState<'PROSPECTIVE_BUYER' | null | undefined>(undefined);
-  useEffect(() => { setLifecycleMode(undefined); }, [sessionId]);
+  const [lifecycleMode, setLifecycleMode] = useBuyerMode(sessionId);
   const intakeSourceExecutionRef = useRef<AskExecutionResponse | null>(null);
   const inputRef = useRef('');
   inputRef.current = input;

@@ -60,6 +60,12 @@ export async function reconcileActivationCaptureForSessionRead<T extends { sessi
   return { ...execution, resultJson: { ...stored, blocks, captureRequests } };
 }
 
+// BICC-D42: the stored buyer mode of the caller's own conversation, so the client can show it again on reopen.
+export async function getAskSessionLifecycleMode(userId: string, sessionId: string): Promise<'PROSPECTIVE_BUYER' | null> {
+  const session = await prisma.askSession.findFirst({ where: { id: sessionId, userId }, select: { lifecycleMode: true } });
+  return session?.lifecycleMode === 'PROSPECTIVE_BUYER' ? 'PROSPECTIVE_BUYER' : null;
+}
+
 export async function getAskSession(userId: string, sessionId: string): Promise<AskExecutionResponse[]> {
   const session = await prisma.askSession.findFirst({ where: { id: sessionId, userId }, select: { id: true } });
   if (!session) return [];

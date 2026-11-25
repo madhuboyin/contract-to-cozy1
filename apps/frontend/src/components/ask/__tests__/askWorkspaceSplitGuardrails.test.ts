@@ -29,7 +29,7 @@ describe('AskWorkspace split guardrails', () => {
   });
 
   it('no workspace file imports AskWorkspace, and each stays below 700 lines', () => {
-    expect(workspaceFiles.sort()).toEqual(['AskShellHeader.tsx', 'CaptureCards.tsx', 'CollapsedConversationRail.tsx', 'ConciergeHome.tsx', 'ConversationHistoryNav.tsx', 'ExecutionCard.tsx', 'ExploreWithCozy.tsx', 'support.ts', 'useAskAccount.ts', 'useAskRequest.ts', 'useComposerKeys.ts', 'useConversationHistory.ts', 'useExploreWithCozy.ts', 'useMeasuredElementHeight.ts', 'usePendingWork.ts', 'useResponseContextPanel.ts', 'useResultRefresh.ts', 'useSelectedPropertyLabel.ts', 'useSessionHistoryActions.ts', 'useSessionLifecycle.ts', 'useStarterDismissal.ts']);
+    expect(workspaceFiles.sort()).toEqual(['AnswerModeBadge.tsx', 'AskShellHeader.tsx', 'CaptureCards.tsx', 'CollapsedConversationRail.tsx', 'ConciergeHome.tsx', 'ConversationHistoryNav.tsx', 'ExecutionCard.tsx', 'ExploreWithCozy.tsx', 'support.ts', 'useAskAccount.ts', 'useAskRequest.ts', 'useBuyerMode.ts', 'useComposerKeys.ts', 'useConversationHistory.ts', 'useExploreWithCozy.ts', 'useMeasuredElementHeight.ts', 'usePendingWork.ts', 'useResponseContextPanel.ts', 'useResultRefresh.ts', 'useSelectedPropertyLabel.ts', 'useSessionHistoryActions.ts', 'useSessionLifecycle.ts', 'useStarterDismissal.ts']);
     for (const name of workspaceFiles) {
       const source = read(path.join(workspaceDir, name));
       expect(source).not.toMatch(/from '(\.\.\/)?(\.\/)?AskWorkspace'/);
