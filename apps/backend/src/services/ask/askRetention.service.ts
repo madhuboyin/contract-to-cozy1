@@ -1,3 +1,6 @@
+import { deleteSessionAttachments } from './attachments/attachmentSweeper';
+import { prismaAttachmentSweepStore } from './attachments/attachmentStore.prisma';
+import { s3AttachmentObjectStore } from './attachments/attachmentObjectStore.s3';
 import { prisma } from '../../lib/prisma';
 import { askRetentionDeletionsTotal } from '../../lib/metrics';
 
@@ -66,6 +69,8 @@ export async function deleteAskSessionForUser(userId: string, sessionId: string)
   const session = await prisma.askSession.findFirst({ where: { id: sessionId, userId }, select: { executions: { select: { id: true } } } });
   if (!session) return false;
   const executionIds = session.executions.map(({ id }) => id);
+  // BICC-MM-010: a conversation's chat attachments and every derivative go with it. A copy that cannot be removed now is left due, and the scheduled sweep retries it.
+  await deleteSessionAttachments({ store: prismaAttachmentSweepStore, storage: s3AttachmentObjectStore, userId, sessionId }).catch(() => undefined);
   const deleted = await prisma.$transaction(async (tx) => {
     if (executionIds.length) {
       await tx.feedback.deleteMany({ where: { userId, targetType: 'ASK_EXECUTION', targetId: { in: executionIds } } });

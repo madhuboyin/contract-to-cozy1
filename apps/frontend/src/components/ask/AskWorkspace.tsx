@@ -12,6 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { AskIntakeDialog } from './intake/AskIntakeDialog';
 import { CandidateHomesDialog } from './candidates/CandidateHomesDialog';
 import { useBuyerMode } from './workspace/useBuyerMode';
+import { ComposerAttachButton } from './attachments/ComposerAttachButton';
 import { ComposerCandidatesButton } from './candidates/ComposerCandidatesButton';
 import { RouteContextStarter } from './RouteContextStarter';
 import type { RouteAskContext } from '@/features/ask/routeContext';
@@ -404,6 +405,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           onAttached={(documentId) => void ask(affordance.target.message, undefined, { entityType: affordance.target.entityType, entityId: affordance.target.id, sourceExecutionId: latestExecution.executionId, operationId: 'CAPTURE_EVIDENCE_CONFIRM', documentId })} />)}
         <ComposerCandidatesButton disabled={loading} embedded={placement === 'hero' && calm} onOpen={(opener) => { candidatesOpenerRef.current = opener; setLifecycleMode('PROSPECTIVE_BUYER'); setCandidatesOpen(true); }} />
         {lifecycleMode === 'PROSPECTIVE_BUYER' && <button type="button" onClick={() => setLifecycleMode(null)} data-ask-buyer-mode="" aria-label="Looking to buy. Turn off" title="Looking to buy. Select to turn off." className="shrink-0 self-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-900 hover:bg-emerald-100">Looking to buy ×</button>}
+        <ComposerAttachButton propertyId={selectedPropertyId} sessionId={sessionId} disabled={loading} embedded={placement === 'hero' && calm} />
         <ComposerIntakeButton propertyId={selectedPropertyId} disabled={loading} embedded={placement === 'hero' && calm} onOpen={(opener) => openFileIntake(opener)} />
         <VoiceInputButton large={placement === 'hero' && !calm} embedded={placement === 'hero' && calm} disabled={loading || !sessionId} getValue={() => inputRef.current}
           onChange={(value) => { setInput(value); if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), value); }} />

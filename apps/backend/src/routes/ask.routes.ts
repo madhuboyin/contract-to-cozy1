@@ -1,6 +1,8 @@
 import { listAskCandidates, createAskCandidate, updateAskCandidate, deleteAskCandidate, compareAskCandidates, getAskCandidateCost, reviewAskCandidatePromotion, confirmAskCandidatePromotion, deleteAskPromotedCandidateRecord, getAskCandidateComparison, saveAskCandidateComparison, clearAskCandidateComparison } from '../controllers/askCandidates.controller';
 import { Router } from 'express';
 import multer from 'multer';
+import { ATTACHMENT_EFFECTIVE_MAX_BYTES } from '../services/ask/attachments/attachmentPolicy';
+import { postAskAttachment, listAskAttachments, deleteAskAttachment } from '../controllers/askAttachments.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { requireAskEligibleAccount } from '../middleware/askAccountEligibility.middleware';
 import { getAskTargetSelectionHandler, deleteAskSession, patchAskSession, getAskConciergeHome, getAskExecutionById, getAskMonitor, getAskPendingExecutions, getAskWorkPageHandler, postAskSearchHandler, getAskNotificationsHandler, postAskNotificationOpenHandler, patchAskNotificationDismissHandler, patchAskNotificationReadHandler, getAskNotificationSettingsHandler, putAskNotificationCategoryHandler, putAskNotificationQuietHoursHandler, putAskNotificationConsentHandler, getAskSavedPageHandler, getAskSavedResolveHandler, patchAskSavedArchiveHandler, getAskWorkResolveHandler, getAskRecordIndexHandler, getAskRecordExportReviewHandler, getAskRecordSectionPage, getAskRecordDetailHandler, getAskRecentSessions, getAskSessionExecutions, patchAskMonitor, postAskCancellation, postAskCapture, postAskCaptureEvent, postAskClarification, postAskConfirmation, postAskConfirmationEdit, postAskContinuation, postAskCorrection, postAskExecution, postAskExecutionProperty, postAskExecutionRefresh, postAskExecutionRetry, postAskExecutionRegenerate, postAskFeedback, postDismissSuggestedAction, postAskSessionSearch, postHomeActionUsefulnessFeedback } from '../controllers/ask.controller';
@@ -19,11 +21,16 @@ const intakeUpload = multer({
   limits: { fileSize: ASK_INTAKE_MAX_BYTES },
   fileFilter: (_req, file, callback) => ((ASK_INTAKE_ACCEPTED_TYPES as readonly string[]).includes(file.mimetype) ? callback(null, true) : callback(new Error('Only PDF, JPEG, PNG, and WEBP files are supported.'))),
 });
+// BICC-3.1: ephemeral chat attachments. Memory storage with the effective size cap; the type is established from the bytes in the service, not from the declared type.
+const attachmentUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: ATTACHMENT_EFFECTIVE_MAX_BYTES, files: 1 } });
 const intakeContributor = [propertyAuthMiddleware, requireHouseholdRole('CONTRIBUTOR')];
 
 router.use('/ask', authenticate, requireAskEligibleAccount);
 router.get('/ask/concierge-home', getAskConciergeHome);
 // BICC-4.1: the buyer's candidate homes (BUY-002/004/005). Scoped to the authenticated person; not a Property, so no propertyId.
+router.post('/ask/attachments', uploadRateLimiter, attachmentUpload.single('file'), postAskAttachment);
+router.get('/ask/attachments', listAskAttachments);
+router.delete('/ask/attachments/:attachmentId', deleteAskAttachment);
 router.get('/ask/candidates', listAskCandidates);
 router.post('/ask/candidates', createAskCandidate);
 router.post('/ask/candidates/compare', compareAskCandidates);

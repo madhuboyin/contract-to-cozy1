@@ -1051,6 +1051,21 @@ class APIClient {
   async listAskCandidates(options: { signal?: AbortSignal; status?: 'ACTIVE' | 'PROMOTED' } = {}): Promise<APIResponse<{ candidates: import('@/features/ask/candidateHomes').CandidateHome[]; dimensions?: Array<{ key: string; label: string }> }>> {
     return this.request(options.status === 'PROMOTED' ? '/api/ask/candidates?status=PROMOTED' : '/api/ask/candidates', { signal: options.signal });
   }
+  // BICC-3.1: ephemeral chat attachments (kept for a day at most, never a Home Record).
+  async uploadAskAttachment(file: File, scope: { kind: 'PROPERTY' | 'CANDIDATE'; id: string }, sessionId?: string): Promise<APIResponse<import('@/features/ask/chatAttachments').ChatAttachment>> {
+    const formData = new FormData();
+    formData.append('scopeKind', scope.kind);
+    formData.append('scopeId', scope.id);
+    if (sessionId) formData.append('sessionId', sessionId);
+    formData.append('file', file);
+    return this.formDataRequest('/api/ask/attachments', formData);
+  }
+  async listAskAttachments(sessionId?: string): Promise<APIResponse<{ attachments: import('@/features/ask/chatAttachments').ChatAttachment[] }>> {
+    return this.request(sessionId ? `/api/ask/attachments?sessionId=${encodeURIComponent(sessionId)}` : '/api/ask/attachments');
+  }
+  async deleteAskAttachment(id: string): Promise<APIResponse<{ deleted: boolean; retryLater?: boolean }>> {
+    return this.request(`/api/ask/attachments/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
   // BICC-BUY-002: the one saved comparison (which of the person's homes, and what to compare).
   async getAskCandidateComparison(): Promise<APIResponse<{ comparison: { candidateIds: string[]; dimensions: string[] } | null }>> {
     return this.request('/api/ask/candidates/comparison');
