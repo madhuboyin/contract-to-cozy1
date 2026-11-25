@@ -8165,6 +8165,9 @@ model AskSession {
   titleSetByUserAt DateTime?
   pinnedAt         DateTime?
   archivedAt       DateTime?
+  // BICC-D42/BUY-009: explicit per-session lifecycle mode. Only "PROSPECTIVE_BUYER" is allowed (validated at the API).
+  // It grants no property access and is never inferred from message text.
+  lifecycleMode    String?
 
   user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   property   Property?      @relation(fields: [propertyId], references: [id], onDelete: SetNull)

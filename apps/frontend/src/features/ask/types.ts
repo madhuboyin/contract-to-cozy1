@@ -656,6 +656,8 @@ export interface CreateAskExecutionPayload {
   sessionId: string;
   message: string;
   propertyId?: string | null;
+  /** BICC-D42: explicit buyer mode for this session; the server accepts only this value or null. */
+  lifecycleMode?: 'PROSPECTIVE_BUYER' | null;
   /** Proof that this turn selects an app-offered action (plan §4.1). The server, not this payload, decides operation/entity. */
   suggestedActionSelection?: SuggestedNextActionSelection;
   launchContext?: {

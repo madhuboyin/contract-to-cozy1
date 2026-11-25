@@ -89,6 +89,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   // BICC-4.1: the buyer's own candidate homes (a dialog inside Ask; not a property and not a home record).
   const [candidatesOpen, setCandidatesOpen] = useState(false);
   const candidatesOpenerRef = useRef<HTMLElement | null>(null);
+  // BICC-D42/BUY-009: explicit, per-conversation buyer mode. undefined = never chosen here (server keeps its stored value); null = cleared.
+  const [lifecycleMode, setLifecycleMode] = useState<'PROSPECTIVE_BUYER' | null | undefined>(undefined);
+  useEffect(() => { setLifecycleMode(undefined); }, [sessionId]);
   const intakeSourceExecutionRef = useRef<AskExecutionResponse | null>(null);
   const inputRef = useRef('');
   inputRef.current = input;
@@ -228,7 +231,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
   const scopeLabel = selectedPropertyId ? 'Answers use your selected home record' : 'General home guidance';
 
-  const { ask, retryExecution, regenerateExecution, stopAsking, editAndResend } = useAskRequest({ sessionId, loading, executions, selectedPropertyId, mode, launchSurface, launchCapabilityId, launchRecord: launchRecord ? { ...launchRecord, message: initialQuestion } : undefined, safeBackTo, requests, inFlight, stoppedRequests, deniedProperties, activeSessionRef, textareaRef, setInput, setError, setNotice, setLoading, setServiceUnavailable, setExecutions, setJustUpdatedExecutionId, setRecentSessionsEpoch });
+  const { ask, retryExecution, regenerateExecution, stopAsking, editAndResend } = useAskRequest({ sessionId, loading, executions, selectedPropertyId, lifecycleMode, mode, launchSurface, launchCapabilityId, launchRecord: launchRecord ? { ...launchRecord, message: initialQuestion } : undefined, safeBackTo, requests, inFlight, stoppedRequests, deniedProperties, activeSessionRef, textareaRef, setInput, setError, setNotice, setLoading, setServiceUnavailable, setExecutions, setJustUpdatedExecutionId, setRecentSessionsEpoch });
 
   const { submit, keyDown, isComposingRef } = useComposerKeys({
     input,
@@ -400,7 +403,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         {latestExecution && composerAffordances.map((affordance) => <AttachEvidenceControl key={affordance.id} variant="composer" label={affordance.label}
           event={{ entityType: affordance.target.entityType, id: affordance.target.id, title: affordance.target.title }} propertyId={selectedPropertyId} disabled={loading || !sessionId}
           onAttached={(documentId) => void ask(affordance.target.message, undefined, { entityType: affordance.target.entityType, entityId: affordance.target.id, sourceExecutionId: latestExecution.executionId, operationId: 'CAPTURE_EVIDENCE_CONFIRM', documentId })} />)}
-        <ComposerCandidatesButton disabled={loading} embedded={placement === 'hero' && calm} onOpen={(opener) => { candidatesOpenerRef.current = opener; setCandidatesOpen(true); }} />
+        <ComposerCandidatesButton disabled={loading} embedded={placement === 'hero' && calm} onOpen={(opener) => { candidatesOpenerRef.current = opener; setLifecycleMode('PROSPECTIVE_BUYER'); setCandidatesOpen(true); }} />
+        {lifecycleMode === 'PROSPECTIVE_BUYER' && <button type="button" onClick={() => setLifecycleMode(null)} data-ask-buyer-mode="" aria-label="Looking to buy. Turn off" title="Looking to buy. Select to turn off." className="shrink-0 self-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-900 hover:bg-emerald-100">Looking to buy ×</button>}
         <ComposerIntakeButton propertyId={selectedPropertyId} disabled={loading} embedded={placement === 'hero' && calm} onOpen={(opener) => openFileIntake(opener)} />
         <VoiceInputButton large={placement === 'hero' && !calm} embedded={placement === 'hero' && calm} disabled={loading || !sessionId} getValue={() => inputRef.current}
           onChange={(value) => { setInput(value); if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), value); }} />

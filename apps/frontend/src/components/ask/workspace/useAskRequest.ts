@@ -8,11 +8,12 @@ import { askServiceIsPaused, draftStorageKey, newId, updateAskLocation, type Ask
 // Sending a question: the request, its stale-answer guards, restoring the text on failure, stopping a request and
 // bringing an earlier question back to edit. Moved out of AskWorkspace unchanged (P2, FRD v1.107). The refs are shared
 // with result refresh, so the workspace owns them and passes them in.
-export function useAskRequest({ sessionId, loading, executions, selectedPropertyId, mode, launchSurface, launchCapabilityId, launchRecord, safeBackTo, requests, inFlight, stoppedRequests, deniedProperties, activeSessionRef, textareaRef, setInput, setError, setNotice, setLoading, setServiceUnavailable, setExecutions, setJustUpdatedExecutionId, setRecentSessionsEpoch }: {
+export function useAskRequest({ sessionId, loading, executions, selectedPropertyId, lifecycleMode, mode, launchSurface, launchCapabilityId, launchRecord, safeBackTo, requests, inFlight, stoppedRequests, deniedProperties, activeSessionRef, textareaRef, setInput, setError, setNotice, setLoading, setServiceUnavailable, setExecutions, setJustUpdatedExecutionId, setRecentSessionsEpoch }: {
   sessionId: string;
   loading: boolean;
   executions: AskExecutionResponse[];
   selectedPropertyId: string | undefined;
+  lifecycleMode?: 'PROSPECTIVE_BUYER' | null;
   mode: 'page' | 'panel';
   launchSurface: string;
   launchCapabilityId: string;
@@ -86,6 +87,7 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
       const suggestedActionSource = suggestedAction ? executions.find((item) => item.executionId === suggestedAction.fromExecutionId) : undefined;
       const response = await api.createAskExecution({
         clientRequestId: newId(), sessionId: requestedSessionId, message, propertyId: suggestedAction ? (suggestedActionSource?.property?.id ?? selectedPropertyId ?? null) : (promptContext?.propertyId ?? selectedPropertyId ?? null),
+        ...(lifecycleMode !== undefined ? { lifecycleMode } : {}),
         ...(suggestedAction ? { suggestedActionSelection: { suggestedActionId: suggestedAction.actionId, suggestedActionFromExecutionId: suggestedAction.fromExecutionId, message } } : {}),
         launchContext: {
           surface: (isFirstMessage && launchSurface) || (mode === 'page' ? 'ASK_PAGE' : 'GLOBAL_LAUNCHER'),

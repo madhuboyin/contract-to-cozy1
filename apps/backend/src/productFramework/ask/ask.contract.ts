@@ -1538,6 +1538,8 @@ export const CreateAskExecutionRequestSchema = z.object({
   sessionId: z.string().trim().min(1).max(160),
   message: z.string().trim().min(1).max(4000),
   propertyId: z.string().trim().min(1).max(160).nullable().optional(),
+  // BICC-D42: explicit entry to buyer mode for this session; null leaves it. Omitted keeps the stored value.
+  lifecycleMode: z.literal('PROSPECTIVE_BUYER').nullable().optional(),
   suggestedActionSelection: SuggestedNextActionSelectionSchema.optional(),
   launchContext: z.object({
     surface: z.string().trim().min(1).max(80),

@@ -244,10 +244,10 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
   const session = existingSession
     ? await prisma.askSession.update({
       where: { id: existingSession.id },
-      data: { propertyId: executionPropertyId ?? undefined, lastActiveAt: new Date(), expiresAt },
+      data: { propertyId: executionPropertyId ?? undefined, lastActiveAt: new Date(), expiresAt, ...(input.lifecycleMode !== undefined ? { lifecycleMode: input.lifecycleMode } : {}) },
     })
     : await prisma.askSession.create({
-      data: { id: input.sessionId, userId, propertyId: executionPropertyId ?? null, title: input.message.slice(0, 120), expiresAt },
+      data: { id: input.sessionId, userId, propertyId: executionPropertyId ?? null, title: input.message.slice(0, 120), expiresAt, lifecycleMode: input.lifecycleMode ?? null },
     });
   // Plan §4.1: verify an app-authored selection against the stored offered-action ledger before it can influence routing.
   // Client-supplied operation/entity launch fields are never authoritative on this path; the stored action's are.
@@ -510,7 +510,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     slotFollowUp = await resolveSlotFollowUp({
       db: prisma as never, userId, sessionId: session.id, propertyId: slotPropertyId, message: input.message,
       // BICC-CTX-001: the carried slots come from the bounded conversation summary (this home only), not a separate read of prior turns.
-      carriedSlotsSource: async () => carriedSlotsFromSummary(await loadConversationSummary({ userId, sessionId: session.id, propertyId: slotPropertyId, lifecycleMode: null, restrictToProperty: true }, prisma as never)) as Slots | null,
+      carriedSlotsSource: async () => carriedSlotsFromSummary(await loadConversationSummary({ userId, sessionId: session.id, propertyId: slotPropertyId, lifecycleMode: session.lifecycleMode === 'PROSPECTIVE_BUYER' ? 'PROSPECTIVE_BUYER' : null, restrictToProperty: true }, prisma as never)) as Slots | null,
       revalidation: { propertyAccessible: async () => Boolean(await resolvePropertyAccess(userId, slotPropertyId)), itemExists: (item) => homeHasItem(slotPropertyId, item) },
     });
     if (slotFollowUp?.kind === 'DECLINED') {
