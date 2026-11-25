@@ -84,6 +84,8 @@ export function resolveAskRoutingCascade(rawMessage: string, options: {
   launchEntityId?: string | null;
   /** The authorised property's own names (insurers, contractors, lenders, household members): protected from spelling correction (FR-NRM-1, FR-PRV-1). */
   knownNames?: ReadonlyArray<KnownName>;
+  /** BICC-D42: the person explicitly turned on "Looking to buy" for this conversation (never inferred from text). */
+  buyerMode?: boolean;
 } = {}): AskRoutingDecision {
   const language = options.language ?? ASK_DEFAULT_LANGUAGE;
   requireCertifiedAskLanguage(language);
@@ -103,7 +105,7 @@ export function resolveAskRoutingCascade(rawMessage: string, options: {
   }
   if (direct.operationId === 'OUT_OF_SCOPE_BOUNDARY') return safetyDecision();
   // BICC-BUY-001: a general buyer question or wish gets authored guidance before any rule can mistake it for another request.
-  const buyerGuidance = classifyBuyerRequest(rawMessage);
+  const buyerGuidance = classifyBuyerRequest(rawMessage, { buyerMode: options.buyerMode });
   if (buyerGuidance) {
     return { language, operation: direct, stage: 'REMOTE_FALLBACK', candidates: [], requiresClarification: false, entityResolution: null, buyerGuidance };
   }

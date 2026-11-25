@@ -544,6 +544,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       propertyId: executionPropertyId,
       launchEntityId: input.launchContext?.entityId,
       knownNames,
+      buyerMode: session.lifecycleMode === 'PROSPECTIVE_BUYER',
     });
   const launchCapabilityOperationId = input.launchContext?.capabilityId
     ? ASK_CAPABILITY_UNIQUE_OPERATION[input.launchContext.capabilityId]
@@ -719,6 +720,12 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     ? { ...getAskOperationDefinition(forcedOperationId as AskOperationId), confidence: 1 }
     : routingDecision.operation;
   const operationDefinition = getAskOperationDefinition(operation.operationId);
+  // BICC-D42: in "Looking to buy" with no home selected, an operation that needs a property is declined plainly instead of guessing one.
+  // Candidate homes and general buyer guidance need no property and are not affected; an emergency or other boundary is never replaced.
+  if (session.lifecycleMode === 'PROSPECTIVE_BUYER' && !executionPropertyId && operationDefinition.requiresProperty
+    && routingDecision.stage !== 'SAFETY' && !routingDecision.requiresClarification && !routingDecision.socialTurn && !routingDecision.fairHousing && !routingDecision.buyerGuidance) {
+    routingDecision = { ...routingDecision, buyerGuidance: 'NEEDS_HOME' };
+  }
   const routedEntityResolution = shouldForceOperation
     ? resolveAskEntityState({ message: routingMessage, operationId: operation.operationId, propertyId: executionPropertyId, launchEntityId: input.launchContext?.entityId, requiresProperty: operation.requiresProperty })
     : routingDecision.entityResolution;

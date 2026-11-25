@@ -6,12 +6,13 @@ import type { AskOperationResult } from '../askOperationRegistry';
 import type { AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { buyerIntroResult, isBuyerIntro } from './buyerIntro';
 
-export type BuyerGuidanceKind = 'INTRO' | 'STEPS' | 'WHAT_TO_CHECK' | 'COSTS' | 'INSPECTION' | 'OFFER_PRICE';
+export type BuyerGuidanceKind = 'INTRO' | 'STEPS' | 'WHAT_TO_CHECK' | 'COSTS' | 'INSPECTION' | 'OFFER_PRICE' | 'NEEDS_HOME';
 
 const normalize = (message: string): string => message.toLowerCase().normalize('NFKC').replace(/[’]/g, "'").replace(/[^a-z0-9'\s]/g, ' ').replace(/\s+/g, ' ').trim();
 const HOME = '(?:a |your |my |our )?(?:first |new )?(?:house|home|property|condo|townhouse)';
 
-const TOPICS: ReadonlyArray<readonly [Exclude<BuyerGuidanceKind, 'INTRO'>, readonly RegExp[]]> = [
+type TopicKind = Exclude<BuyerGuidanceKind, 'INTRO' | 'NEEDS_HOME'>;
+const TOPICS: ReadonlyArray<readonly [TopicKind, readonly RegExp[]]> = [
   ['OFFER_PRICE', [
     new RegExp(`^(?:what(?: is|'s)|what would be) (?:a |the )?(?:good|fair|right|smart|reasonable) (?:price|amount|number) to offer(?: on| for)? ${HOME}$`),
     new RegExp(`^how much (?:should|do|would) (?:i|we) (?:offer|bid)(?: on| for)? ${HOME}$`),
@@ -42,16 +43,43 @@ const TOPICS: ReadonlyArray<readonly [Exclude<BuyerGuidanceKind, 'INTRO'>, reado
   ]],
 ];
 
+// BICC-D42: only when the person has explicitly turned on "Looking to buy" for this conversation. The buying context is then known, so the
+// same closed set of questions is recognised without the words "buying a home". Still whole-message forms only; nothing here reads a home, a number or a name.
+const BUYER_MODE_TOPICS: ReadonlyArray<readonly [TopicKind, readonly RegExp[]]> = [
+  ['OFFER_PRICE', [
+    /^(?:what|how much) (?:should|do|would) (?:i|we) (?:offer|bid)$/,
+    /^(?:what(?: is|'s)|what would be) (?:a |the )?(?:good|fair|right|reasonable) (?:price|amount|number|offer)(?: to offer)?$/,
+  ]],
+  ['WHAT_TO_CHECK', [
+    /^what (?:should|do|can) (?:i|we) (?:need to )?(?:look for|check|ask|inspect|watch for)(?: at| in| during)?(?: a| the)?(?: (?:home|house|showing|open house|walkthrough))?$/,
+    /^what to (?:look for|check|watch for)$/,
+    /^what are the (?:red flags|warning signs)$/,
+  ]],
+  ['COSTS', [
+    /^(?:what|which) (?:costs|expenses|fees) (?:are|come) (?:involved|up)$/,
+    /^what are the (?:closing )?costs$/,
+    /^how much (?:are|will) (?:the )?closing costs(?: be)?$/,
+  ]],
+  ['STEPS', [
+    /^what are the steps$/,
+    /^(?:where|how) (?:do|should) (?:i|we) (?:start|begin|get started)$/,
+  ]],
+  ['INSPECTION', [
+    /^do (?:i|we) need an? (?:home )?inspection$/,
+  ]],
+];
+
 /** The kind of buyer request the WHOLE message is, or null. A message that names a particular home, number, document, date or task is never one of these. */
-export function classifyBuyerRequest(message: string): BuyerGuidanceKind | null {
+export function classifyBuyerRequest(message: string, options: { buyerMode?: boolean } = {}): BuyerGuidanceKind | null {
   const text = normalize(message);
   if (!text || text.split(' ').length > 16) return null;
   for (const [kind, patterns] of TOPICS) if (patterns.some((pattern) => pattern.test(text))) return kind;
+  if (options.buyerMode) for (const [kind, patterns] of BUYER_MODE_TOPICS) if (patterns.some((pattern) => pattern.test(text))) return kind;
   return isBuyerIntro(message) ? 'INTRO' : null;
 }
 
 const CHECK_WITH = 'Rules and timelines differ by state and by contract, so confirm the details with your agent, attorney and lender.';
-const GUIDANCE: Readonly<Record<Exclude<BuyerGuidanceKind, 'INTRO'>, { title: string; body: string }>> = {
+const GUIDANCE: Readonly<Record<TopicKind | 'NEEDS_HOME', { title: string; body: string }>> = {
   STEPS: {
     title: 'How buying a home usually works',
     body: [
@@ -82,6 +110,13 @@ const GUIDANCE: Readonly<Record<Exclude<BuyerGuidanceKind, 'INTRO'>, { title: st
       'A home inspection is a visual check of a home’s major systems and structure by a licensed inspector, usually during the contract period. You get a written report of what they saw and what they recommend looking at more closely, and they may suggest a specialist for things like the roof, sewer line or foundation.',
       'It is not a guarantee, and it doesn’t tell you whether to buy. After the report, buyers commonly ask the seller for repairs or a credit, accept the home as it is, or, where the contract allows, step back. Your agent or attorney can tell you what your contract allows and by when.',
       'Once you’re under contract, I can help you keep track of the findings and what you decided about each.',
+    ].join('\n\n'),
+  },
+  NEEDS_HOME: {
+    title: 'That needs a home you own or are buying',
+    body: [
+      'You have \u201cLooking to buy\u201d turned on, and no home is selected, so I have no property to look at for that. I don\u2019t guess one.',
+      'You can add the homes you\u2019re considering with the \u201cHomes I\u2019m considering\u201d button, ask me to compare them, or ask a general buying question. If you meant a home you already own, select it, or turn off \u201cLooking to buy\u201d next to the box.',
     ].join('\n\n'),
   },
   OFFER_PRICE: {
