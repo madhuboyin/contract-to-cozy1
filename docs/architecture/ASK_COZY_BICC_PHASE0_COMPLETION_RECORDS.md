@@ -380,3 +380,16 @@ An external review of the previous entry was right on every point. Corrections, 
 
 **Verification.** New or changed: 7 buyer-guidance, 9 fair-housing, 6 lifecycle, 4 finding-disposition, 2 viewer-refusal and 7 authorization tests (5 buyer-introduction tests carried over); typecheck clean. Full Ask suite: 6,390 tests, 292 failing against a 293 baseline; the only difference from the baseline list is that `confirmCapabilityHandlerRegistry.test.js` now fails at file level (worker-serialization error after about 85 seconds) rather than at line 49, and it fails the same way with my changes stashed. Nothing ran in a browser or against a real backend.
 
+
+### Schema and deployment readiness for the BICC work (2026-11-25)
+
+Review finding P2: several BICC features depend on Prisma schema additions that the repository's policy leaves to the owner to apply (`npx prisma db push`; no migration scripts). This lists every schema change the BICC work made, so readiness is a checkable list and not a recollection. **Status of each is the owner's to confirm; this record does not know.** The owner reported on 2026-11-24 that a `db push` was done and deployed after the buyer-mode commit (`8d440ffe`); nothing below was re-verified by me, and the saved-comparison table (`c346bd2b`) was added after that report.
+
+| Schema change | Commit | Needed by | Symptom if missing |
+|---|---|---|---|
+| `AskSession.lifecycleMode` | `8d440ffe` | Buyer mode (D42): every Ask turn writes it on session create/update | Session create and update fail with an unknown-column error, which breaks Ask for everyone, not only buyers |
+| `CandidateComparisonState` (new table) | `c346bd2b` | Saved comparison (D44) | The "What to compare" save/clear fail; the candidate-homes review catches the read error and compares every home, so the answer still works |
+| `CandidateProperty` and its promotion reservation column `promotionReservedAt` | `eddd8167`, `0dd7090b` | Candidate homes (BUY-002) and promotion (BUY-007) | Candidate reads and writes fail; promotion fails without the reservation column |
+| The ephemeral chat-attachment model (BICC-MM-010) | `a280d6a2` or earlier | Attachment lifecycle primitives only; no route uses it yet | None today: nothing calls it |
+
+After a `db push`: run `npx prisma generate` in `apps/backend`, and in `apps/workers` (it reads the backend schema), then restart the pods (a `:latest` image needs an explicit rollout restart). Verification not done by me: no query was run against the real database, so "the table exists" and "the client was regenerated" are unconfirmed. A quick check the owner can run in pgAdmin: `select column_name from information_schema.columns where table_name = 'AskSession' and column_name = 'lifecycleMode'`, and `select to_regclass('"CandidateComparisonState"')`.
