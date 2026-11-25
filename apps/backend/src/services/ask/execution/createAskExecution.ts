@@ -4,6 +4,7 @@
 import { decideClarificationLoop } from '../support/clarificationLoop';
 import { socialTurnResult } from '../support/socialTurn';
 import { fairHousingResult } from '../support/fairHousing';
+import { loadFairHousingHistory } from '../support/fairHousingHistory';
 import { buyerGuidanceResult } from '../support/buyerGuidance';
 import { classifyLatency } from '../support/latencyClass';
 import { carriedSlotsFromSummary, loadConversationSummary } from '../conversationSummary';
@@ -189,11 +190,10 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
   let input = requestInput;
   await ensureAskServiceAccountEligibility(userId, accountRole);
   const controls = readAskOperationalControls();
-  // BICC-BUY-011: only a short message can be a follow-up, so history is read only then (one small indexed query).
-  const fairHousingHistory = input.message.trim().split(/\s+/).length <= 14
-    ? (await prisma.askExecution.findMany({ where: { sessionId: input.sessionId, userId, parentRole: null }, orderBy: { createdAt: 'desc' }, take: 2, select: { message: true, reasonCode: true } }))
-      .map((row) => ({ message: row.message, reasonCode: row.reasonCode ?? null }))
-    : [];
+  // BICC-BUY-011: the history is always loaded (two small indexed rows); whether it applies is decided by the wording of the message, not by cost.
+  const priorTurns = await loadFairHousingHistory(prisma as never, { userId, sessionId: input.sessionId });
+  const fairHousingHistory = priorTurns.map(({ message, reasonCode }) => ({ message, reasonCode }));
+  const candidateContext = priorTurns[0]?.operationId === 'CANDIDATE_HOMES_REVIEW';
   const safetyFirstDecision = resolveAskRoutingCascade(input.message, {
     localRoutingEnabled: false,
     embeddingRetrievalEnabled: false,
@@ -552,6 +552,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       knownNames,
       fairHousingHistory,
       buyerMode: session.lifecycleMode === 'PROSPECTIVE_BUYER',
+      candidateContext,
     });
   const launchCapabilityOperationId = input.launchContext?.capabilityId
     ? ASK_CAPABILITY_UNIQUE_OPERATION[input.launchContext.capabilityId]

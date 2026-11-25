@@ -86,15 +86,22 @@ test('BICC-D42 (STATIC): the decline is applied only for buyer mode with no prop
   assert.match(src, /buyerMode: session\.lifecycleMode === 'PROSPECTIVE_BUYER'/);
 });
 
-test('BICC-D42/BUY-004: in buyer mode, candidate-compare questions go to CANDIDATE_HOMES_REVIEW as a provisional read; otherwise unchanged', () => {
-  for (const text of ['compare my homes', 'Compare them', 'which of my homes has the lowest property tax', 'which one is the cheapest', 'what is the biggest', 'rank my options', 'line up these']) {
+test('BICC-D42/BUY-004: explicit candidate-compare forms route in buyer mode; pronoun-only forms need a candidate-homes answer right before', () => {
+  for (const text of ['compare my homes', 'which of my homes has the lowest property tax', 'rank my options', 'show the candidates side by side']) {
     const on = resolveAskRoutingCascade(text, { buyerMode: true });
     assert.equal(on.operation.operationId, 'CANDIDATE_HOMES_REVIEW', text);
     assert.equal(on.stage, 'PROVISIONAL', text);
-    assert.notEqual(resolveAskRoutingCascade(text).stage === 'PROVISIONAL' && resolveAskRoutingCascade(text).candidates[0]?.reasonCodes?.[0], 'BUYER_MODE_CANDIDATE_COMPARE', text);
+    assert.notEqual(resolveAskRoutingCascade(text).candidates[0]?.reasonCodes?.[0], 'BUYER_MODE_CANDIDATE_COMPARE', text);
   }
-  for (const text of ['compare my homes insurance quotes', 'which one is the cheapest contractor quote for my roof and gutters and siding work today please', 'what is the biggest expense this year', 'show my maintenance tasks']) {
-    const on = resolveAskRoutingCascade(text, { buyerMode: true });
-    assert.notEqual(on.candidates[0]?.reasonCodes?.[0], 'BUYER_MODE_CANDIDATE_COMPARE', text);
+  for (const text of ['Compare them', 'which one is the cheapest', 'what is the biggest', 'line up these']) {
+    assert.notEqual(resolveAskRoutingCascade(text, { buyerMode: true }).candidates[0]?.reasonCodes?.[0], 'BUYER_MODE_CANDIDATE_COMPARE', `no context: ${text}`);
+    assert.notEqual(resolveAskRoutingCascade(text, { buyerMode: true, candidateContext: false }).candidates[0]?.reasonCodes?.[0], 'BUYER_MODE_CANDIDATE_COMPARE', `no context: ${text}`);
+    const withContext = resolveAskRoutingCascade(text, { buyerMode: true, candidateContext: true });
+    assert.equal(withContext.operation.operationId, 'CANDIDATE_HOMES_REVIEW', `with context: ${text}`);
+    assert.equal(withContext.stage, 'PROVISIONAL', text);
+    assert.notEqual(resolveAskRoutingCascade(text, { candidateContext: true }).candidates[0]?.reasonCodes?.[0], 'BUYER_MODE_CANDIDATE_COMPARE', `not buyer mode: ${text}`);
+  }
+  for (const text of ['compare my homes insurance quotes', 'what is the biggest expense this year', 'show my maintenance tasks']) {
+    assert.notEqual(resolveAskRoutingCascade(text, { buyerMode: true, candidateContext: true }).candidates[0]?.reasonCodes?.[0], 'BUYER_MODE_CANDIDATE_COMPARE', text);
   }
 });

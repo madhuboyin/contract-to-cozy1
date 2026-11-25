@@ -54,8 +54,12 @@ export function classifyFairHousingRequest(message: string): FairHousingKind | n
 /** One earlier turn of the same conversation, newest first: what the person typed and how Ask answered it. */
 export interface FairHousingHistoryTurn { message: string; reasonCode: string | null }
 
-const FOLLOW_UP_CUE = /^(?:and|but|so|ok(?:ay)?|then|also|what about|how about|just|well|with|without|that have|where|who|near|full of|filled with|having|those|the ones)\b|\b(?:there|those|them|that (?:area|neighbou?rhood|place|street|town|part)|the same|that one|the area|the neighbou?rhood|same area)\b/;
-const MAX_FOLLOW_UP_WORDS = 14;
+// A real reference back to the refused subject: a pointer to the area or the people ("those areas", "that neighborhood", "the families there", "who lives there"), or "what about" the
+// people or area. A bare "there", "where", "who" or "with" is NOT enough: "where is the closest grocery store" and "what is the roof age there" are ordinary questions.
+const PEOPLE = '(?:families|family|people|folks|residents|neighbou?rs|crowd|demographics?|kids|children)';
+const AREA = '(?:areas?|neighbou?rhoods?|places?|streets?|towns?|parts? of town|zip codes?|communit(?:y|ies))';
+const FOLLOW_UP_CUE = new RegExp(`\\b(?:those|these|that|the same|same) ${AREA}\\b|\\b(?:those|these|the) ${PEOPLE} (?:there|here|nearby|around|in (?:that|those|the) ${AREA})\\b|\\bwho (?:lives?|is living|are living|moved|moves) (?:there|here|nearby)\\b|^(?:and |but |so |ok(?:ay)? |then )?(?:what|how) about (?:the )?(?:${PEOPLE}|${AREA}|those|them)\\b`);
+const MAX_FOLLOW_UP_WORDS = 14; // a short message is the only kind that completes an earlier one; this is a linguistic limit, not a cost limit
 const MAX_HISTORY_WORDS = 40;
 const words = (text: string): number => (text ? text.split(' ').length : 0);
 

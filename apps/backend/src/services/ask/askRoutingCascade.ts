@@ -31,7 +31,12 @@ import { classifyBuyerRequest, type BuyerGuidanceKind } from './support/buyerGui
 import { classifyFairHousingRequestWithHistory, type FairHousingHistoryTurn, type FairHousingKind } from './support/fairHousing';
 
 // Whole-question forms only: a comparison or "which has the lowest/highest/cheapest..." about the person's candidate homes, in buyer mode.
-const BUYER_MODE_CANDIDATE_COMPARE = /^(?:(?:please )?(?:compare|rank|line up|show|list) (?:them|these|those|my (?:homes|houses|options|candidates|choices)|the (?:homes|houses|options|candidates))(?: side by side)?|(?:which|what) (?:one |of (?:my|the|these|those) (?:homes|houses|options|candidates)? ?)?(?:has|have|is|are|costs?|would be) (?:the )?(?:lowest|highest|cheapest|cheaper|most expensive|biggest|smallest|oldest|newest|largest|best)(?: (?:property tax(?:es)?|price|purchase price|payment|monthly (?:cost|payment)|cash to close|closing costs?|square (?:feet|footage)|size|age|year built|hoa(?: fee)?|insurance|one[- ]time (?:work|costs?)|repairs?|cost to own|cost))?)$/;
+const DIMENSION = '(?: (?:property tax(?:es)?|price|purchase price|payment|monthly (?:cost|payment)|cash to close|closing costs?|square (?:feet|footage)|size|age|year built|hoa(?: fee)?|insurance|one[- ]time (?:work|costs?)|repairs?|cost to own|cost))?';
+const SUPERLATIVE = '(?:lowest|highest|cheapest|cheaper|most expensive|biggest|smallest|oldest|newest|largest|best)';
+// Names the candidate homes outright, so no earlier turn is needed.
+const BUYER_MODE_CANDIDATE_EXPLICIT = new RegExp(`^(?:(?:please )?(?:compare|rank|line up|show|list) (?:my (?:homes|houses|options|candidates|choices)|the (?:homes|houses|options|candidates))(?: side by side)?|(?:which|what) of (?:my|the) (?:homes|houses|options|candidates) (?:has|have|is|are|costs?|would be) (?:the )?${SUPERLATIVE}${DIMENSION})$`);
+// Pronoun-only forms: "them", "these", "which one". Nothing in the message says what they refer to, so they count only right after a candidate-homes answer.
+const BUYER_MODE_CANDIDATE_PRONOUN = new RegExp(`^(?:(?:please )?(?:compare|rank|line up|show|list) (?:them|these|those)(?: side by side)?|(?:which|what) (?:one )?(?:has|have|is|are|costs?|would be) (?:the )?${SUPERLATIVE}${DIMENSION})$`);
 
 export type AskRoutingStage = 'SAFETY' | 'DETERMINISTIC' | 'PROVISIONAL' | 'LOCAL_CLASSIFIER' | 'MODEL_CLASSIFIER' | 'CLARIFICATION' | 'REMOTE_FALLBACK';
 
@@ -91,6 +96,8 @@ export function resolveAskRoutingCascade(rawMessage: string, options: {
   buyerMode?: boolean;
   /** BICC-BUY-011: the previous user turns of this conversation (newest first), so a split request or a follow-up to a refusal is still refused. */
   fairHousingHistory?: ReadonlyArray<FairHousingHistoryTurn>;
+  /** BICC-D42: the previous delivered turn was the candidate-homes answer, so "them" / "which one" refers to those homes. */
+  candidateContext?: boolean;
 } = {}): AskRoutingDecision {
   const language = options.language ?? ASK_DEFAULT_LANGUAGE;
   requireCertifiedAskLanguage(language);
@@ -111,7 +118,7 @@ export function resolveAskRoutingCascade(rawMessage: string, options: {
   // Decided before the generic out-of-scope boundary, which also catches "my homes" as a portfolio question.
   // BICC-D42/BUY-004: with "Looking to buy" on, a question about "my homes" / "these" / "the options" is about the candidate homes. Only the read that lists and compares them is
   // chosen, and only as a PROVISIONAL read (tried, then judged by the delivery gate); nothing here reads a number or names a home, and no write is reachable.
-  if (options.buyerMode && BUYER_MODE_CANDIDATE_COMPARE.test(normalizeForRouting(rawMessage, options.knownNames).toLowerCase().replace(/[?!.]+$/, '').trim()) && (!options.eligibleOperationIds || [...options.eligibleOperationIds].includes('CANDIDATE_HOMES_REVIEW'))) {
+  if (options.buyerMode && ((text) => BUYER_MODE_CANDIDATE_EXPLICIT.test(text) || (options.candidateContext === true && BUYER_MODE_CANDIDATE_PRONOUN.test(text)))(normalizeForRouting(rawMessage, options.knownNames).toLowerCase().replace(/[?!.]+$/, '').trim()) && (!options.eligibleOperationIds || [...options.eligibleOperationIds].includes('CANDIDATE_HOMES_REVIEW'))) {
     const review = resolution('CANDIDATE_HOMES_REVIEW', ASK_OPERATION_DEFINITIONS.CANDIDATE_HOMES_REVIEW.confidence);
     return {
       language, operation: review, stage: 'PROVISIONAL',
