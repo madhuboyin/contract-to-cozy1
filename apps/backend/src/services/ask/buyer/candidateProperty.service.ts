@@ -6,6 +6,7 @@ import { APIError } from '../../../middleware/error.middleware';
 export const MAX_ACTIVE_CANDIDATES_PER_USER = 25;
 const FACT_FIELDS = ['listPriceCents', 'bedrooms', 'bathrooms', 'livingAreaSqFt', 'yearBuilt', 'annualPropertyTaxCents', 'annualInsuranceCents', 'hoaMonthlyCents', 'monthlyUtilitiesCents', 'oneTimeWorkEstimateCents', 'downPaymentPercent', 'mortgageRatePercent', 'mortgageTermMonths', 'closingCostPercent'] as const;
 export type CandidateFactField = typeof FACT_FIELDS[number];
+export const ADDRESS_FIELDS = ['addressLine', 'city', 'state', 'postalCode'] as const;
 const TEXT_FIELDS = ['addressLine', 'city', 'state', 'postalCode', 'listingUrl', 'notes'] as const;
 
 export type CandidateInput = { label: string } & Partial<Record<CandidateFactField, number | null>> & Partial<Record<typeof TEXT_FIELDS[number], string | null>>;
@@ -43,6 +44,12 @@ export function nextProvenance(existing: unknown, input: CandidatePatch, source:
   for (const field of FACT_FIELDS) {
     if (!(field in input)) continue;
     if (input[field] === null) delete current[field]; else if (input[field] !== undefined) current[field] = { source, asOf: now.toISOString() };
+  }
+  // The address parts carry their source too (promotion shows it); a blank or cleared part loses its entry.
+  for (const field of ADDRESS_FIELDS) {
+    if (!(field in input)) continue;
+    const value = input[field];
+    if (value === null || (typeof value === 'string' && !value.trim())) delete current[field]; else if (value !== undefined) current[field] = { source, asOf: now.toISOString() };
   }
   return current;
 }
@@ -84,6 +91,15 @@ export const candidatePropertyService = {
   /** Explicit deletion removes the candidate (D03). A promoted candidate is kept: it is the audit link to the property it became. */
   async remove(userId: string, id: string) {
     const result = await prisma.candidateProperty.deleteMany({ where: { id, userId, status: { not: 'PROMOTED' } } });
+    if (result.count !== 1) throw new APIError('That home was not found.', 404, 'CANDIDATE_NOT_FOUND');
+  },
+
+  /**
+   * BUY-007: deletes a PROMOTED candidate record by the owner's explicit choice. The record and its link are removed entirely; the property it became, its journey and every other
+   * record are not touched (nothing here references them). Only the owner's own PROMOTED candidate qualifies.
+   */
+  async removePromotedRecord(userId: string, id: string) {
+    const result = await prisma.candidateProperty.deleteMany({ where: { id, userId, status: 'PROMOTED' } });
     if (result.count !== 1) throw new APIError('That home was not found.', 404, 'CANDIDATE_NOT_FOUND');
   },
 

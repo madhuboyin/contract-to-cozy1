@@ -240,3 +240,29 @@ test('the compare endpoint compares only the caller\'s homes and refuses a reque
     void rows;
   });
 });
+
+// BICC-4.3 review fixes: address parts carry their source, and a promoted record can be deleted by the owner without touching anything else.
+test('address parts get a source and date when supplied and lose it when cleared, like the numeric facts', () => {
+  const now = new Date('2026-11-24T00:00:00Z');
+  const first = nextProvenance({}, { addressLine: '12 Maple St', city: 'Austin', listPriceCents: 1 }, 'LISTING', now);
+  assert.deepEqual(first.addressLine, { source: 'LISTING', asOf: now.toISOString() });
+  assert.deepEqual(first.city, { source: 'LISTING', asOf: now.toISOString() });
+  const next = nextProvenance(first, { city: '  ', postalCode: '78701' }, 'USER_ENTERED', now);
+  assert.equal(next.city, undefined, 'a blank part loses its entry');
+  assert.equal(next.addressLine.source, 'LISTING', 'an untouched part keeps its own source');
+  assert.equal(next.postalCode.source, 'USER_ENTERED');
+});
+
+test('removePromotedRecord deletes only the owner\'s own PROMOTED candidate, entirely', async () => {
+  const seen = [];
+  const orig = prisma.candidateProperty.deleteMany;
+  // The home it became, its journey and its onboarding must not be touched: any write to them fails the test.
+  const guarded = ['property.delete', 'property.deleteMany', 'property.update', 'property.updateMany', 'propertyOnboarding.delete', 'propertyOnboarding.deleteMany', 'propertyOnboarding.update', 'propertyOnboarding.updateMany', 'homeBuyerChecklist.delete', 'homeBuyerChecklist.deleteMany', 'homeBuyerChecklist.update'];
+  const saved = guarded.map((path) => { const [model, fn] = path.split('.'); const prev = prisma[model][fn]; prisma[model][fn] = () => { throw new Error(`${path} must not be called`); }; return [model, fn, prev]; });
+  prisma.candidateProperty.deleteMany = async ({ where }) => { seen.push(where); return { count: where.userId === 'u1' && where.id === 'c1' && where.status === 'PROMOTED' ? 1 : 0 }; };
+  try {
+    await candidatePropertyService.removePromotedRecord('u1', 'c1');
+    assert.deepEqual(seen[0], { id: 'c1', userId: 'u1', status: 'PROMOTED' });
+    await assert.rejects(candidatePropertyService.removePromotedRecord('other', 'c1'), (e) => e.code === 'CANDIDATE_NOT_FOUND');
+  } finally { prisma.candidateProperty.deleteMany = orig; for (const [model, fn, prev] of saved) prisma[model][fn] = prev; }
+});

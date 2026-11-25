@@ -60,7 +60,7 @@ export function CandidatePromotionPanel({ candidateId, label, onDone, onCancel }
               <input id="promotion-close-date" type="date" value={closeDate} onChange={(event) => setCloseDate(event.target.value)} className="mt-1 min-h-11 rounded-xl border border-slate-300 px-3 text-sm text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600" />
             </div>
           )}
-          <p className="text-xs text-slate-500">Your candidate stays in your list, marked as moved, so you can see where it went.</p>
+          <p className="text-xs text-slate-500">Your candidate stays in this list under “Moved to your homes”, so you can see where it went.</p>
         </>
       )}
       <div className="flex flex-wrap gap-2">

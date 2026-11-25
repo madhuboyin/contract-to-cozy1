@@ -9,11 +9,14 @@ const mocked = api as unknown as Record<'listAskCandidates' | 'createAskCandidat
 const maple = { id: 'a', label: 'Maple St', city: 'Austin', state: 'TX', listPriceCents: 40000000, bedrooms: 3 };
 const oak = { id: 'b', label: 'Oak Ave', listPriceCents: null };
 const open = (props: Partial<React.ComponentProps<typeof CandidateHomesDialog>> = {}) => render(<CandidateHomesDialog open onOpenChange={jest.fn()} {...props} />);
+// The dialog also asks for the already-moved homes (status PROMOTED); these tests have none.
+const listActive = (candidates: unknown[]) => mocked.listAskCandidates.mockImplementation(async (o?: { status?: string }) => ({ success: true, data: { candidates: o?.status === 'PROMOTED' ? [] : candidates } }));
+const activeCalls = () => mocked.listAskCandidates.mock.calls.filter((c) => !c[0]?.status);
 const field = (label: RegExp | string) => screen.getByLabelText(label);
 
 beforeEach(() => {
   Object.values(mocked).forEach((fn) => fn.mockReset());
-  mocked.listAskCandidates.mockResolvedValue({ success: true, data: { candidates: [maple, oak] } });
+  listActive([maple, oak]);
 });
 
 // BICC-4.1: the buyer's own list of homes, inside Ask. Nothing is saved before Save; a blank is "not entered".
@@ -29,12 +32,12 @@ describe('CandidateHomesDialog', () => {
   });
 
   it('with no homes it explains and offers only Add; with one home it does not offer a comparison', async () => {
-    mocked.listAskCandidates.mockResolvedValue({ success: true, data: { candidates: [] } });
+    listActive([]);
     const { unmount } = open({ onCompare: jest.fn() });
     expect(await screen.findByText(/You have not added a home yet/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Compare my homes' })).toBeNull();
     unmount();
-    mocked.listAskCandidates.mockResolvedValue({ success: true, data: { candidates: [maple] } });
+    listActive([maple]);
     open({ onCompare: jest.fn() });
     await screen.findByText(/Maple St/);
     expect(screen.queryByRole('button', { name: 'Compare my homes' })).toBeNull();
@@ -63,7 +66,7 @@ describe('CandidateHomesDialog', () => {
     expect(payload.hoaMonthlyCents).toBe(0);
     expect(payload.bedrooms).toBeNull();
     expect(await screen.findByText('Added the home.')).toBeInTheDocument();
-    expect(mocked.listAskCandidates).toHaveBeenCalledTimes(2);
+    expect(activeCalls()).toHaveLength(2);
   });
 
   it('does not save and names the problem when the form is not valid', async () => {

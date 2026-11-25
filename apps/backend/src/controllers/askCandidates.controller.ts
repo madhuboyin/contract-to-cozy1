@@ -13,7 +13,7 @@ const toFacts = (row: Record<string, unknown>): CandidateFacts => row as unknown
 
 export async function listAskCandidates(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const status = req.query.status === 'ARCHIVED' ? 'ARCHIVED' : 'ACTIVE';
+    const status = req.query.status === 'ARCHIVED' ? 'ARCHIVED' : req.query.status === 'PROMOTED' ? 'PROMOTED' : 'ACTIVE';
     return res.json({ success: true, data: { candidates: await candidatePropertyService.list(need(req), status), dimensions: COMPARISON_DIMENSIONS.map(({ key, label }) => ({ key, label })) } });
   } catch (error) { return next(error); }
 }
@@ -75,5 +75,13 @@ export async function confirmAskCandidatePromotion(req: AuthRequest, res: Respon
     if (targetCloseDate !== undefined && targetCloseDate !== null && (typeof targetCloseDate !== 'string' || Number.isNaN(Date.parse(targetCloseDate)))) throw new APIError('Enter a valid closing date.', 400, 'CANDIDATE_PROMOTION_INVALID');
     const result = await candidatePromotionService.confirm(need(req), req.params.candidateId, { token, linkToExistingHome: linkToExistingHome === true, targetCloseDate: typeof targetCloseDate === 'string' ? new Date(targetCloseDate).toISOString() : null });
     return res.status(201).json({ success: true, data: result });
+  } catch (error) { return next(error); }
+}
+
+/** BUY-007: delete the candidate record of a home that was moved to "my homes". The home itself is untouched. */
+export async function deleteAskPromotedCandidateRecord(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    await candidatePropertyService.removePromotedRecord(need(req), req.params.candidateId);
+    return res.json({ success: true, data: { deleted: true } });
   } catch (error) { return next(error); }
 }

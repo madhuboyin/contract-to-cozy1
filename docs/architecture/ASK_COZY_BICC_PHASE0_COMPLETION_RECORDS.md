@@ -337,3 +337,19 @@ Verification note for the above: the Ask suite ends at 293 failures against 292 
 
 **Not done.** Not run against a real database, the real property workflow or a browser. Deleting a promoted candidate by choice (BUY-007 says "or be deleted by explicit user choice"); promotion by typing to Ask (needs property-optional confirm/capture, D38); the BUY-008 buyer actions; BUY-001, BUY-006, BICC-4.2 (fair-housing boundary). BUY-007 is PARTIAL in the ledger for those reasons.
 
+### BICC-4.3 review corrections (2026-11-24)
+
+An external review of the promotion slice found four defects in what I had recorded above and one gap. The earlier entry overstated three things, corrected here.
+
+1. **"Two confirmations at once can't both succeed" was true of the response, not of the side effects.** The property and journey were created before the candidate was claimed, so two requests could each create a property. Now the candidate is reserved first (`promotionReservedAt`, a compare-and-set that only one request wins; a reservation older than two minutes counts as abandoned), the created property id is written onto the candidate the moment it exists, and the candidate becomes PROMOTED only after the journey is in place. The loser gets `CANDIDATE_PROMOTION_IN_PROGRESS` and creates nothing.
+2. **Promotion was not atomic when a later step failed.** Creating the property cannot sit inside one database transaction here (the property workflow has its own post-create steps), so the design is reserve, record, resume instead: a failure releases the reservation and keeps the recorded property, and the retry resumes that property (it is not reported as a duplicate) rather than creating a second.
+3. **"Stays in your list, marked as moved" was false.** The list showed active candidates only. The dialog now has a "Moved to your homes" section (status `PROMOTED`), and the copy matches.
+4. **Address provenance was fabricated as "entered by you".** Provenance recorded only numeric facts, so a listing-sourced address was shown as user-entered. Address parts (`addressLine`, `city`, `state`, `postalCode`) now carry their source and date from creation and edit; a part with no recorded source (every candidate saved before this change) shows "source not recorded".
+5. **Linking to a same-address home did not check the home was under contract.** Linking is now dedup resolution only for a home still in the buying lifecycle (`SHOPPING` or `UNDER_CONTRACT`). An owned or otherwise-settled home at that address blocks the move with the reason and offers neither link nor create.
+
+**Also built, as the review advised:** deleting the candidate record of a promoted home by explicit choice (`DELETE /ask/candidates/:id/promoted-record`). It deletes the record and its link entirely, only for the owner's own PROMOTED candidate, behind a separate confirmation that says the home is not changed. The home's onboarding metadata still names the candidate id it came from; that is an id, not candidate details.
+
+**Evidence.** Backend: 14 promotion tests (new: simultaneous confirmations create one property and one journey; fresh versus abandoned reservation; interrupted journey then resume creates exactly one property; owned home blocks; address provenance) and 21 workspace tests (new: address provenance, deletion scope with a guard that any write to the property, onboarding or buyer checklist fails the test); 46 candidate tests pass; typecheck clean. Frontend: 20 candidate dialog tests pass; `next build` passes.
+
+**Limits.** The concurrency test uses a fake store that applies each update atomically, as the database does; it has not run against Postgres. Nothing ran against the real property workflow or a browser. **Needs `prisma db push`** (new nullable column `CandidateProperty.promotionReservedAt`); without it, confirming a promotion fails at the reservation. BUY-007 stays PARTIAL.
+

@@ -10,7 +10,7 @@ const BUTTON = 'inline-flex min-h-11 items-center justify-center rounded-xl bord
 const PRIMARY = 'inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-950 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 disabled:opacity-50';
 const GROUP_TITLES: Record<string, string> = { HOME: 'The home', LISTING: 'What the listing says', COSTS: 'Costs you know or expect', FINANCING: 'Your financing for this home' };
 
-type View = { kind: 'LIST' } | { kind: 'FORM'; home: CandidateHome | null } | { kind: 'REMOVE'; home: CandidateHome } | { kind: 'PROMOTE'; home: CandidateHome };
+type View = { kind: 'LIST' } | { kind: 'FORM'; home: CandidateHome | null } | { kind: 'REMOVE'; home: CandidateHome } | { kind: 'PROMOTE'; home: CandidateHome } | { kind: 'DELETE_RECORD'; home: CandidateHome };
 
 /**
  * The buyer's own candidate homes (BICC-4.1), kept inside Ask. Add a home, change what you entered, or remove it; nothing is saved until Save, a blank field means
@@ -20,6 +20,7 @@ export function CandidateHomesDialog({ open, onOpenChange, onCompare, returnFocu
   open: boolean; onOpenChange: (open: boolean) => void; onCompare?: () => void; returnFocusRef?: React.RefObject<HTMLElement | null>;
 }) {
   const [homes, setHomes] = useState<CandidateHome[] | null>(null);
+  const [moved, setMoved] = useState<CandidateHome[]>([]);
   const [view, setView] = useState<View>({ kind: 'LIST' });
   const [form, setForm] = useState<CandidateForm>({});
   const [issues, setIssues] = useState<FormIssues>({});
@@ -34,11 +35,13 @@ export function CandidateHomesDialog({ open, onOpenChange, onCompare, returnFocu
       const response = await api.listAskCandidates();
       if (!response.success || !response.data) throw new Error(response.message || 'Your homes could not be loaded.');
       setHomes(response.data.candidates);
+      // Homes already moved stay visible (audit); a failure here must not hide the active list.
+      api.listAskCandidates({ status: 'PROMOTED' }).then((r) => setMoved(r.success && r.data ? r.data.candidates : [])).catch(() => setMoved([]));
     } catch (caught) { setHomes([]); setError(caught instanceof Error ? caught.message : 'Your homes could not be loaded.'); }
   }, []);
 
   useEffect(() => {
-    if (!open) { setHomes(null); setView({ kind: 'LIST' }); setForm({}); setIssues({}); setError(null); setStatus(null); setBusy(false); return; }
+    if (!open) { setHomes(null); setMoved([]); setView({ kind: 'LIST' }); setForm({}); setIssues({}); setError(null); setStatus(null); setBusy(false); return; }
     void load();
   }, [open, load]);
 
@@ -73,6 +76,18 @@ export function CandidateHomesDialog({ open, onOpenChange, onCompare, returnFocu
       await load();
       backToList(`Removed ${home.label}.`);
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'That home could not be removed.'); }
+    finally { setBusy(false); }
+  };
+
+  const deleteRecord = async (home: CandidateHome) => {
+    if (busy) return;
+    setBusy(true); setError(null);
+    try {
+      const response = await api.deleteAskPromotedCandidateRecord(home.id);
+      if (!response.success) throw new Error(response.message || 'That record could not be deleted.');
+      await load();
+      backToList(`Deleted the candidate record for ${home.label}. The home itself was not changed.`);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'That record could not be deleted.'); }
     finally { setBusy(false); }
   };
 
@@ -111,6 +126,19 @@ export function CandidateHomesDialog({ open, onOpenChange, onCompare, returnFocu
                 ))}
               </ul>
             )}
+            {moved.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Moved to your homes</h3>
+                <ul className="mt-1 divide-y divide-slate-200 rounded-xl border border-slate-200" aria-label="Homes already moved to your homes">
+                  {moved.map((home) => (
+                    <li key={home.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm text-slate-700">
+                      <span>{home.label} · now in your homes as under contract</span>
+                      <button type="button" className={BUTTON} onClick={() => { setStatus(null); setView({ kind: 'DELETE_RECORD', home }); }} aria-label={`Delete candidate record for ${home.label}`}>Delete candidate record</button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div className="flex flex-wrap gap-2">
               <button type="button" className={PRIMARY} onClick={() => startForm(null)}>Add a home</button>
               {onCompare && homes !== null && homes.length >= 2 && <button type="button" className={BUTTON} onClick={() => { onOpenChange(false); onCompare(); }}>Compare my homes</button>}
@@ -124,6 +152,17 @@ export function CandidateHomesDialog({ open, onOpenChange, onCompare, returnFocu
             candidateId={view.home.id} label={view.home.label} onCancel={() => backToList()}
             onDone={(result) => { void load(); backToList(result.linkedExisting ? `Linked ${view.home.label} to your existing home.` : `${view.home.label} is now in your homes as under contract.`); }}
           />
+        )}
+
+        {view.kind === 'DELETE_RECORD' && (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-800">Delete the candidate record for <strong>{view.home.label}</strong>?</p>
+            <p className="text-sm text-slate-700">This permanently removes the candidate details and the link to the home it became. It does not delete or change the home in your account, and it cannot be undone.</p>
+            <div className="flex gap-2">
+              <button type="button" className={PRIMARY} disabled={busy} onClick={() => void deleteRecord(view.home)}>{busy ? 'Deleting…' : 'Delete candidate record'}</button>
+              <button type="button" className={BUTTON} disabled={busy} onClick={() => backToList()}>Keep it</button>
+            </div>
+          </div>
         )}
 
         {view.kind === 'REMOVE' && (

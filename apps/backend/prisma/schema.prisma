@@ -24548,6 +24548,8 @@ model CandidateProperty {
   notes                       String?
   status                      CandidatePropertyStatus @default(ACTIVE)
   promotedPropertyId          String?
+  /// Set while one promotion is in flight (BUY-007); a reservation older than the service's window is treated as abandoned.
+  promotionReservedAt         DateTime?
   createdAt                   DateTime                @default(now())
   updatedAt                   DateTime                @updatedAt
 

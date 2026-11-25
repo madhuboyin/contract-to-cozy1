@@ -1048,8 +1048,8 @@ class APIClient {
     return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/regenerate`, { method: 'POST', body: { clientRequestId }, signal: options.signal });
   }
   // BICC-4.1: the buyer's own candidate homes (not a Property; scoped to the signed-in person).
-  async listAskCandidates(options: { signal?: AbortSignal } = {}): Promise<APIResponse<{ candidates: import('@/features/ask/candidateHomes').CandidateHome[] }>> {
-    return this.request('/api/ask/candidates', { signal: options.signal });
+  async listAskCandidates(options: { signal?: AbortSignal; status?: 'ACTIVE' | 'PROMOTED' } = {}): Promise<APIResponse<{ candidates: import('@/features/ask/candidateHomes').CandidateHome[] }>> {
+    return this.request(options.status === 'PROMOTED' ? '/api/ask/candidates?status=PROMOTED' : '/api/ask/candidates', { signal: options.signal });
   }
   async createAskCandidate(payload: Record<string, string | number | null>): Promise<APIResponse<import('@/features/ask/candidateHomes').CandidateHome>> {
     return this.request('/api/ask/candidates', { method: 'POST', body: payload });
@@ -1066,6 +1066,9 @@ class APIClient {
   }
   async confirmAskCandidatePromotion(id: string, payload: { token: string; linkToExistingHome?: boolean; targetCloseDate?: string | null }): Promise<APIResponse<import('@/features/ask/candidatePromotion').PromotionResult>> {
     return this.request(`/api/ask/candidates/${encodeURIComponent(id)}/promotion`, { method: 'POST', body: payload });
+  }
+  async deleteAskPromotedCandidateRecord(id: string): Promise<APIResponse<{ deleted: boolean }>> {
+    return this.request(`/api/ask/candidates/${encodeURIComponent(id)}/promoted-record`, { method: 'DELETE' });
   }
   async getConciergeHome(propertyId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<ConciergeHomeView>> {
     return this.request<ConciergeHomeView>(`/api/ask/concierge-home?propertyId=${encodeURIComponent(propertyId)}`, options);

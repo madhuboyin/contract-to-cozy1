@@ -1,6 +1,6 @@
 import { fieldSourceText, promotionHeadline, fieldLabel, type PromotionReview } from '../candidatePromotion';
 
-const base: PromotionReview = { proposal: { candidateId: 'c', fields: [], missingRequired: [], notCarriedOver: [] }, token: 't', existingHome: null, canPromote: true };
+const base: PromotionReview = { proposal: { candidateId: 'c', fields: [], missingRequired: [], notCarriedOver: [] }, token: 't', existingHome: null, blockedReason: null, canPromote: true };
 
 describe('candidate promotion copy', () => {
   it('claims a source only when one was recorded', () => {
@@ -10,7 +10,7 @@ describe('candidate promotion copy', () => {
   });
   it('names what is missing, warns about a duplicate, or explains what will be created', () => {
     expect(promotionHeadline({ ...base, canPromote: false, proposal: { ...base.proposal, missingRequired: ['city', 'ZIP code'] } })).toBe('Add the city, ZIP code before moving this home.');
-    expect(promotionHeadline({ ...base, existingHome: { propertyId: 'p', name: null, address: '12 Maple St' } })).toMatch(/already have a home at 12 Maple St/);
+    expect(promotionHeadline({ ...base, existingHome: { propertyId: 'p', name: null, address: '12 Maple St', linkable: true } })).toMatch(/already have a home at 12 Maple St/);
     expect(promotionHeadline(base)).toMatch(/under contract/);
   });
   it('labels known fields and passes unknown ones through', () => {

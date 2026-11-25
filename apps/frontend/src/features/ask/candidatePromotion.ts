@@ -3,7 +3,8 @@ export type PromotionField = { field: string; value: string | number; source: st
 export type PromotionReview = {
   proposal: { candidateId: string; fields: PromotionField[]; missingRequired: string[]; notCarriedOver: string[] };
   token: string;
-  existingHome: { propertyId: string; name: string | null; address: string } | null;
+  existingHome: { propertyId: string; name: string | null; address: string; linkable: boolean } | null;
+  blockedReason: string | null;
   canPromote: boolean;
 };
 export type PromotionResult = { propertyId: string; created: boolean; linkedExisting: boolean; candidateId: string };
@@ -21,6 +22,7 @@ export const fieldLabel = (field: string): string => LABELS[field] ?? field;
 
 /** The review's headline, or the reason it cannot go ahead yet. */
 export function promotionHeadline(review: PromotionReview): string {
+  if (review.blockedReason) return review.blockedReason;
   if (!review.canPromote) return `Add the ${review.proposal.missingRequired.join(', ')} before moving this home.`;
   if (review.existingHome) return `You already have a home at ${review.existingHome.address}. You can link this one to it instead of creating a second.`;
   return 'This creates a new home in your account, marked as under contract. Review what will be carried over.';

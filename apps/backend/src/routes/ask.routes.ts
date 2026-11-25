@@ -1,4 +1,4 @@
-import { listAskCandidates, createAskCandidate, updateAskCandidate, deleteAskCandidate, compareAskCandidates, getAskCandidateCost, reviewAskCandidatePromotion, confirmAskCandidatePromotion } from '../controllers/askCandidates.controller';
+import { listAskCandidates, createAskCandidate, updateAskCandidate, deleteAskCandidate, compareAskCandidates, getAskCandidateCost, reviewAskCandidatePromotion, confirmAskCandidatePromotion, deleteAskPromotedCandidateRecord } from '../controllers/askCandidates.controller';
 import { Router } from 'express';
 import multer from 'multer';
 import { authenticate } from '../middleware/auth.middleware';
@@ -32,6 +32,7 @@ router.delete('/ask/candidates/:candidateId', deleteAskCandidate);
 router.get('/ask/candidates/:candidateId/cost', getAskCandidateCost);
 router.get('/ask/candidates/:candidateId/promotion', reviewAskCandidatePromotion);
 router.post('/ask/candidates/:candidateId/promotion', confirmAskCandidatePromotion);
+router.delete('/ask/candidates/:candidateId/promoted-record', deleteAskPromotedCandidateRecord);
 router.get('/ask/target-selectors/:selectorId', getAskTargetSelectionHandler);
 router.post('/ask/executions', postAskExecution);
 router.post('/ask/executions/:executionId/retry', postAskExecutionRetry);
