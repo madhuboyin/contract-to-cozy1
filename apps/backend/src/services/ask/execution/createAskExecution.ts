@@ -6,6 +6,8 @@ import { socialTurnResult } from '../support/socialTurn';
 import { fairHousingResult } from '../support/fairHousing';
 import { loadFairHousingHistory } from '../support/fairHousingHistory';
 import { buyerGuidanceResult } from '../support/buyerGuidance';
+import { attachedDocumentResult } from '../attachments/attachedDocument';
+import { MIN_DOCUMENT_PREFILTER } from '../support/attachedDocumentRequest';
 import { classifyLatency } from '../support/latencyClass';
 import { carriedSlotsFromSummary, loadConversationSummary } from '../conversationSummary';
 import type { Slots } from '../composition/slots';
@@ -194,6 +196,9 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
   const priorTurns = await loadFairHousingHistory(prisma as never, { userId, sessionId: input.sessionId });
   const fairHousingHistory = priorTurns.map(({ message, reasonCode }) => ({ message, reasonCode }));
   const candidateContext = priorTurns[0]?.operationId === 'CANDIDATE_HOMES_REVIEW';
+  // BICC-3.2: one cheap count, and only for a message that names a document at all.
+  const attachmentContext = MIN_DOCUMENT_PREFILTER.test(input.message)
+    && (await prisma.askChatAttachment.count({ where: { userId, sessionId: input.sessionId, state: { in: ['READY', 'ANALYZED'] }, deleteAfter: { gt: new Date() } } })) > 0;
   const safetyFirstDecision = resolveAskRoutingCascade(input.message, {
     localRoutingEnabled: false,
     embeddingRetrievalEnabled: false,
@@ -553,6 +558,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       fairHousingHistory,
       buyerMode: session.lifecycleMode === 'PROSPECTIVE_BUYER',
       candidateContext,
+      attachmentContext,
     });
   const launchCapabilityOperationId = input.launchContext?.capabilityId
     ? ASK_CAPABILITY_UNIQUE_OPERATION[input.launchContext.capabilityId]
@@ -592,7 +598,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     propertyAccess: initialPropertyAccess,
     audiencePolicyEnabled: controls.audiencePolicyEnabled,
   });
-  if (!forcedOperationId && routingDecision.stage === 'REMOTE_FALLBACK' && skillRoutingDecision.outcome === 'RESOLVED' && skillRoutingDecision.selectedOperationId) {
+  if (!forcedOperationId && !routingDecision.attachedDocument && routingDecision.stage === 'REMOTE_FALLBACK' && skillRoutingDecision.outcome === 'RESOLVED' && skillRoutingDecision.selectedOperationId) {
     const selectedOperation = getAskOperationDefinition(skillRoutingDecision.selectedOperationId);
     const confidence = skillRoutingDecision.skillCandidates[0]?.confidence ?? selectedOperation.confidence;
     routingDecision = {
@@ -603,7 +609,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       requiresClarification: false,
       entityResolution: resolveAskEntityState({ message: routingMessage, operationId: selectedOperation.operationId, propertyId: executionPropertyId, launchEntityId: input.launchContext?.entityId, requiresProperty: selectedOperation.requiresProperty }),
     };
-  } else if (!forcedOperationId && routingDecision.stage === 'REMOTE_FALLBACK'
+  } else if (!forcedOperationId && !routingDecision.attachedDocument && routingDecision.stage === 'REMOTE_FALLBACK'
     && (skillRoutingDecision.outcome === 'AMBIGUOUS_OPERATION' || skillRoutingDecision.outcome === 'AMBIGUOUS_SKILL')) {
     const skillAmbiguityOperations = skillRoutingDecision.outcome === 'AMBIGUOUS_SKILL'
       ? skillRoutingDecision.skillCandidates.flatMap((candidate) => {
@@ -731,7 +737,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
   // BICC-D42: in "Looking to buy" with no home selected, an operation that needs a property is declined plainly instead of guessing one.
   // Candidate homes and general buyer guidance need no property and are not affected; an emergency or other boundary is never replaced.
   if (session.lifecycleMode === 'PROSPECTIVE_BUYER' && !executionPropertyId && operationDefinition.requiresProperty
-    && routingDecision.stage !== 'SAFETY' && !routingDecision.requiresClarification && !routingDecision.socialTurn && !routingDecision.fairHousing && !routingDecision.buyerGuidance) {
+    && routingDecision.stage !== 'SAFETY' && !routingDecision.requiresClarification && !routingDecision.socialTurn && !routingDecision.fairHousing && !routingDecision.buyerGuidance && !routingDecision.attachedDocument) {
     routingDecision = { ...routingDecision, buyerGuidance: 'NEEDS_HOME' };
   }
   const routedEntityResolution = shouldForceOperation
@@ -859,6 +865,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
         ))
         : routingDecision.fairHousing ? Promise.resolve(fairHousingResult(routingDecision.fairHousing))
         : routingDecision.buyerGuidance ? Promise.resolve(buyerGuidanceResult(routingDecision.buyerGuidance))
+        : routingDecision.attachedDocument ? attachedDocumentResult({ userId, sessionId: session.id, request: routingDecision.attachedDocument })
         : routingDecision.socialTurn ? Promise.resolve(socialTurnResult(routingDecision.socialTurn))
         : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: executionPropertyId, operation, launchContext: effectiveLaunchContext, continuationCursor: followUp.continuationCursor, suppliedInput: followUp.suppliedInput, deferSemanticValidation: true }, skillTelemetryTrace),
       controls.executionTimeoutMs,
@@ -866,7 +873,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       // a reload shows its true final state (BICC-TRN-001). A stop before the work starts, or during a read, ends the turn as CANCELLED.
       isWriteCapableOperation(operation.operationId) ? undefined : internal.signal,
     );
-    const rawResult = routingDecision.requiresClarification || routingDecision.socialTurn || routingDecision.fairHousing || routingDecision.buyerGuidance
+    const rawResult = routingDecision.requiresClarification || routingDecision.socialTurn || routingDecision.fairHousing || routingDecision.buyerGuidance || routingDecision.attachedDocument
       ? rawExecutedResult
       : gateUncertifiedCommandPreview({
         operationId: operation.operationId,
@@ -894,7 +901,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     // FR-GATE-3(a): a capability card the homeowner chose names its operation (the card maps to exactly one), so that operation was confirmed by the homeowner, not inferred from text. Without this a card-launched answer
     // would face the relevance check as if routing had guessed it.
     const operationChosenByCard = Boolean(launchCapabilityOperationId) && forcedOperationId === launchCapabilityOperationId && operation.operationId === launchCapabilityOperationId;
-    const validation = routingDecision.requiresClarification || routingDecision.socialTurn || routingDecision.fairHousing || routingDecision.buyerGuidance
+    const validation = routingDecision.requiresClarification || routingDecision.socialTurn || routingDecision.fairHousing || routingDecision.buyerGuidance || routingDecision.attachedDocument
       ? null
       : validateAskAnswerTrustPipeline({ question: routingMessage, operationId: operation.operationId, result: presentedResult, propertyId: executionPropertyId, semanticEnabled: controls.semanticResponseValidatorEnabled && !declaredOperationRan, language: routingDecision.language, routedDeterministically: routingDecision.stage === 'DETERMINISTIC', operationConfirmedByUser: operationChosenByCard, provisionalRead: routingDecision.stage === 'PROVISIONAL' && operation.operationId === routingDecision.operation.operationId, entityResolution: routingDecision.entityResolution, segmentationCertified, routingAlternatives: routingDecision.stage === 'LOCAL_CLASSIFIER' ? routingDecision.candidates.map((candidate) => ({ operationId: candidate.operationId, confidence: candidate.confidence })) : undefined });
     let result = validation?.result ?? presentedResult;

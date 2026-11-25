@@ -1,6 +1,6 @@
 // BICC-MM-010: the S3 side of an ephemeral chat attachment. Keys come only from storageKeyFor (owner, scope and id are validated and are part of the path). Raw files are
 // written encrypted at rest. A missing bucket FAILS CLOSED: nothing is written and nothing is reported as deleted.
-import { DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getS3Client } from '../../storage/s3Client';
 import { storageKeyFor, type AttachmentOwner } from './attachmentLifecycle';
 import type { AttachmentDerivedKind } from './attachmentPolicy';
@@ -8,6 +8,8 @@ import type { AttachmentDerivedStorage, SweepableAttachment } from './attachment
 
 export interface AttachmentObjectStore extends AttachmentDerivedStorage {
   putRaw(owner: AttachmentOwner, attachmentId: string, bytes: Buffer, mimeType: string): Promise<void>;
+  /** The raw bytes of one attachment, for reading it. Throws when the bucket is not set or the object is gone. */
+  getRaw(owner: AttachmentOwner, attachmentId: string): Promise<Buffer>;
 }
 
 export const s3AttachmentObjectStore: AttachmentObjectStore = {
@@ -18,6 +20,13 @@ export const s3AttachmentObjectStore: AttachmentObjectStore = {
       Bucket: bucket, Key: storageKeyFor(owner, attachmentId, 'RAW_FILE'), Body: bytes, ContentType: mimeType, ServerSideEncryption: 'AES256',
       Metadata: { userid: owner.userId, scopekind: owner.scopeKind.toLowerCase() },
     }));
+  },
+  async getRaw(owner, attachmentId) {
+    const bucket = process.env.S3_BUCKET;
+    if (!bucket) throw new Error('S3_BUCKET is not set');
+    const result = await getS3Client().send(new GetObjectCommand({ Bucket: bucket, Key: storageKeyFor(owner, attachmentId, 'RAW_FILE') }));
+    if (!result.Body) throw new Error('The stored file is empty.');
+    return Buffer.from(await result.Body.transformToByteArray());
   },
   async deleteCopies(attachment: SweepableAttachment, kinds: readonly AttachmentDerivedKind[]) {
     const bucket = process.env.S3_BUCKET;

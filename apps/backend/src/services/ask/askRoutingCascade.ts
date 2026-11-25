@@ -27,6 +27,7 @@ const SMALL_TALK_PATTERN = /^\s*(?:hi|hello|hey|good (?:morning|afternoon|evenin
 
 /** PROVISIONAL: an uncertified deterministic rule matched a harmless read. The read may run, but its result must pass the full delivery gate and never gets the canonical bypass (FR-FAST, FR-GATE). */
 import { classifySocialTurn, type SocialTurnKind } from './support/socialTurn';
+import { classifyAttachedDocumentRequest, type AttachedDocumentRequest } from './support/attachedDocumentRequest';
 import { classifyBuyerRequest, type BuyerGuidanceKind } from './support/buyerGuidance';
 import { classifyFairHousingRequestWithHistory, type FairHousingHistoryTurn, type FairHousingKind } from './support/fairHousing';
 
@@ -66,6 +67,8 @@ export interface AskRoutingDecision {
   fairHousing?: FairHousingKind;
   /** BICC-BUY-001: the whole message is a general buyer question or wish; answered by authored buyer guidance (no property, no model). */
   buyerGuidance?: BuyerGuidanceKind;
+  /** BICC-3.2: a question about the file attached to this conversation, answered by quoting the matching passages (no model, no operation). */
+  attachedDocument?: AttachedDocumentRequest;
 }
 
 export function propertyScopeForAskRouting(
@@ -98,6 +101,8 @@ export function resolveAskRoutingCascade(rawMessage: string, options: {
   fairHousingHistory?: ReadonlyArray<FairHousingHistoryTurn>;
   /** BICC-D42: the previous delivered turn was the candidate-homes answer, so "them" / "which one" refers to those homes. */
   candidateContext?: boolean;
+  /** BICC-3.2: this conversation has a live attached file, so a question about "the PDF" is about it. Never inferred from the message. */
+  attachmentContext?: boolean;
 } = {}): AskRoutingDecision {
   const language = options.language ?? ASK_DEFAULT_LANGUAGE;
   requireCertifiedAskLanguage(language);
@@ -131,6 +136,12 @@ export function resolveAskRoutingCascade(rawMessage: string, options: {
   const buyerGuidance = classifyBuyerRequest(rawMessage, { buyerMode: options.buyerMode });
   if (buyerGuidance) {
     return { language, operation: direct, stage: 'REMOTE_FALLBACK', candidates: [], requiresClarification: false, entityResolution: null, buyerGuidance };
+  }
+  // BICC-3.2: with a live attachment in this conversation, a closed set of questions about "the PDF / document / file" is answered from that file. Decided from the question
+  // alone; the file's text is never consulted here.
+  if (options.attachmentContext) {
+    const attachedDocument = classifyAttachedDocumentRequest(rawMessage);
+    if (attachedDocument) return { language, operation: direct, stage: 'REMOTE_FALLBACK', candidates: [], requiresClarification: false, entityResolution: null, attachedDocument };
   }
   // BICC-UX-010: a message that is only a social phrase is answered by the authored social reply. It is decided right after safety (an emergency always wins) and before
   // any rule, so no tool, clarification or suggested-action row can attach to it; a request that merely opens with a greeting is not a social turn.

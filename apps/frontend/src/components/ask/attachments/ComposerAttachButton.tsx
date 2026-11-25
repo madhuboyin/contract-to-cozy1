@@ -79,7 +79,7 @@ export function ComposerAttachButton({ propertyId, sessionId, disabled, embedded
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto" onCloseAutoFocus={(event) => { event.preventDefault(); opener.current?.focus(); }}>
           <DialogTitle>Files in this conversation</DialogTitle>
-          <DialogDescription className="text-sm text-slate-600">A photo or PDF you want to ask about. It stays in this conversation only, is not saved to your home records, and is removed automatically within a day. Nothing is read until you ask.</DialogDescription>
+          <DialogDescription className="text-sm text-slate-600">A photo or PDF you want to ask about. It stays in this conversation only, is not saved to your home records, and is removed automatically within a day. Nothing is read until you ask. For a PDF with selectable text, try “What does the PDF say about hail?” or “Find the deductible in the document.” Photos and scanned pages cannot be read yet.</DialogDescription>
           <p role="status" aria-live="polite" className="min-h-5 text-sm text-emerald-900">{status}</p>
           {error && <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>}
           <ul className="divide-y divide-slate-200 rounded-xl border border-slate-200 empty:hidden" aria-label="Files">
