@@ -3,6 +3,8 @@
 // re-exports the names below so existing imports keep working.
 import { decideClarificationLoop } from '../support/clarificationLoop';
 import { socialTurnResult } from '../support/socialTurn';
+import { fairHousingResult } from '../support/fairHousing';
+import { buyerIntroResult } from '../support/buyerIntro';
 import { classifyLatency } from '../support/latencyClass';
 import { carriedSlotsFromSummary, loadConversationSummary } from '../conversationSummary';
 import type { Slots } from '../composition/slots';
@@ -840,6 +842,8 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
             : 'ASK_ROUTING_AMBIGUOUS',
           routingMessage,
         ))
+        : routingDecision.fairHousing ? Promise.resolve(fairHousingResult(routingDecision.fairHousing))
+        : routingDecision.buyerIntro ? Promise.resolve(buyerIntroResult())
         : routingDecision.socialTurn ? Promise.resolve(socialTurnResult(routingDecision.socialTurn))
         : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: executionPropertyId, operation, launchContext: effectiveLaunchContext, continuationCursor: followUp.continuationCursor, suppliedInput: followUp.suppliedInput, deferSemanticValidation: true }, skillTelemetryTrace),
       controls.executionTimeoutMs,
@@ -847,7 +851,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       // a reload shows its true final state (BICC-TRN-001). A stop before the work starts, or during a read, ends the turn as CANCELLED.
       isWriteCapableOperation(operation.operationId) ? undefined : internal.signal,
     );
-    const rawResult = routingDecision.requiresClarification || routingDecision.socialTurn
+    const rawResult = routingDecision.requiresClarification || routingDecision.socialTurn || routingDecision.fairHousing || routingDecision.buyerIntro
       ? rawExecutedResult
       : gateUncertifiedCommandPreview({
         operationId: operation.operationId,
@@ -875,7 +879,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     // FR-GATE-3(a): a capability card the homeowner chose names its operation (the card maps to exactly one), so that operation was confirmed by the homeowner, not inferred from text. Without this a card-launched answer
     // would face the relevance check as if routing had guessed it.
     const operationChosenByCard = Boolean(launchCapabilityOperationId) && forcedOperationId === launchCapabilityOperationId && operation.operationId === launchCapabilityOperationId;
-    const validation = routingDecision.requiresClarification || routingDecision.socialTurn
+    const validation = routingDecision.requiresClarification || routingDecision.socialTurn || routingDecision.fairHousing || routingDecision.buyerIntro
       ? null
       : validateAskAnswerTrustPipeline({ question: routingMessage, operationId: operation.operationId, result: presentedResult, propertyId: executionPropertyId, semanticEnabled: controls.semanticResponseValidatorEnabled && !declaredOperationRan, language: routingDecision.language, routedDeterministically: routingDecision.stage === 'DETERMINISTIC', operationConfirmedByUser: operationChosenByCard, provisionalRead: routingDecision.stage === 'PROVISIONAL' && operation.operationId === routingDecision.operation.operationId, entityResolution: routingDecision.entityResolution, segmentationCertified, routingAlternatives: routingDecision.stage === 'LOCAL_CLASSIFIER' ? routingDecision.candidates.map((candidate) => ({ operationId: candidate.operationId, confidence: candidate.confidence })) : undefined });
     let result = validation?.result ?? presentedResult;

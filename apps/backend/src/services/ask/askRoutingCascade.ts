@@ -27,6 +27,8 @@ const SMALL_TALK_PATTERN = /^\s*(?:hi|hello|hey|good (?:morning|afternoon|evenin
 
 /** PROVISIONAL: an uncertified deterministic rule matched a harmless read. The read may run, but its result must pass the full delivery gate and never gets the canonical bypass (FR-FAST, FR-GATE). */
 import { classifySocialTurn, type SocialTurnKind } from './support/socialTurn';
+import { isBuyerIntro } from './support/buyerIntro';
+import { classifyFairHousingRequest, type FairHousingKind } from './support/fairHousing';
 
 export type AskRoutingStage = 'SAFETY' | 'DETERMINISTIC' | 'PROVISIONAL' | 'LOCAL_CLASSIFIER' | 'MODEL_CLASSIFIER' | 'CLARIFICATION' | 'REMOTE_FALLBACK';
 
@@ -52,6 +54,10 @@ export interface AskRoutingDecision {
   fastPathLineage?: { ruleId: string; version: string; status: 'CERTIFIED' | 'DEMOTED' } | null;
   /** BICC-UX-010: the whole message is a social phrase (greeting, thanks, acknowledgement...). The turn gets the authored social reply and runs no tool. */
   socialTurn?: SocialTurnKind;
+  /** BICC-BUY-011: the request asks for steering by protected class, who lives there, suitability for a group or neighborhood desirability; answered by the authored refusal. */
+  fairHousing?: FairHousingKind;
+  /** BICC-BUY-001: the whole message is a general wish to buy a home; answered by the authored buyer introduction (no property needed). */
+  buyerIntro?: boolean;
 }
 
 export function propertyScopeForAskRouting(
@@ -89,6 +95,15 @@ export function resolveAskRoutingCascade(rawMessage: string, options: {
   const directRule = direct.operationId === 'GROUNDED_GUIDANCE' || isSafetyBoundary(direct.operationId) ? null : fastPathRuleForResolution(direct);
   if (direct.operationId === 'EMERGENCY_BOUNDARY' || direct.operationId === 'UNSAFE_RESTRICTED_BOUNDARY' || direct.operationId === 'OUT_OF_SCOPE_BOUNDARY') {
     return { language, operation: direct, stage: 'SAFETY', candidates: [{ operationId: direct.operationId, language, confidence: direct.confidence, confidenceBand: 'HIGH' }], requiresClarification: false, entityResolution: null };
+  }
+  // BICC-BUY-011: decided on the raw text right after safety, so no rule, classifier or fallback can answer a steering request.
+  const fairHousing = classifyFairHousingRequest(rawMessage);
+  if (fairHousing) {
+    return { language, operation: direct, stage: 'REMOTE_FALLBACK', candidates: [], requiresClarification: false, entityResolution: null, fairHousing };
+  }
+  // BICC-BUY-001: a general wish to buy a home gets the authored introduction before any rule can mistake it for another request.
+  if (isBuyerIntro(rawMessage)) {
+    return { language, operation: direct, stage: 'REMOTE_FALLBACK', candidates: [], requiresClarification: false, entityResolution: null, buyerIntro: true };
   }
   // BICC-UX-010: a message that is only a social phrase is answered by the authored social reply. It is decided right after safety (an emergency always wins) and before
   // any rule, so no tool, clarification or suggested-action row can attach to it; a request that merely opens with a greeting is not a social turn.

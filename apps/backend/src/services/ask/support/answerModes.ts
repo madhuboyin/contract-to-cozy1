@@ -25,6 +25,10 @@ const SETTLED_STATUSES = new Set(['ANSWERED', 'READY_WITH_LIMITATIONS', 'COMPLET
 export function deriveAnswerMode(input: { status: string; operationId: AskOperationId | null; hasProperty: boolean; reasonCode?: string | null }): AnswerMode | null {
   // A social reply (BICC-UX-010) states nothing about the home, so it declares no mode: labelling "hello" as a home record would be false.
   if (input.reasonCode === 'ASK_SOCIAL_TURN') return null;
+  // A fair-housing refusal (BICC-BUY-011) is a boundary, not missing data, so it must not read as an unavailable record.
+  if (input.reasonCode === 'ASK_FAIR_HOUSING_BOUNDARY') return null;
+  // The buyer introduction (BICC-BUY-001) describes what Ask can do; it states nothing about a record.
+  if (input.reasonCode === 'ASK_BUYER_INTRO') return null;
   if (UNAVAILABLE_STATUSES.has(input.status)) return 'UNAVAILABLE';
   if (!SETTLED_STATUSES.has(input.status) || !input.operationId) return null;
   const definition = getAskOperationDefinition(input.operationId);
