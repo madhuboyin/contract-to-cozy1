@@ -24558,3 +24558,13 @@ model CandidateProperty {
 
   @@index([userId, status])
 }
+
+/// BICC-BUY-002: the buyer's one saved comparison (which of their own candidate homes, and which things to compare). Per person, no Property, never read by any
+/// homeowner feature. Ids that are no longer the person's active homes are dropped when it is read, so a deleted home cannot linger.
+model CandidateComparisonState {
+  userId       String   @id
+  candidateIds String[]
+  dimensions   String[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

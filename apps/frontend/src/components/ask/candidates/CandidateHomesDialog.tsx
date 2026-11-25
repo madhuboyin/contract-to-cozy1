@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { api } from '@/lib/api/client';
 import { CandidatePromotionPanel } from './CandidatePromotionPanel';
+import { CandidateComparisonPicker } from './CandidateComparisonPicker';
 import { CANDIDATE_FIELDS, changedFields, homeSummaryLine, parseCandidateForm, toForm, type CandidateForm, type CandidateHome, type FormIssues } from '@/features/ask/candidateHomes';
 
 const BUTTON = 'inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 disabled:opacity-50';
@@ -21,6 +22,7 @@ export function CandidateHomesDialog({ open, onOpenChange, onCompare, returnFocu
 }) {
   const [homes, setHomes] = useState<CandidateHome[] | null>(null);
   const [moved, setMoved] = useState<CandidateHome[]>([]);
+  const [dimensions, setDimensions] = useState<Array<{ key: string; label: string }>>([]);
   const [view, setView] = useState<View>({ kind: 'LIST' });
   const [form, setForm] = useState<CandidateForm>({});
   const [issues, setIssues] = useState<FormIssues>({});
@@ -35,6 +37,7 @@ export function CandidateHomesDialog({ open, onOpenChange, onCompare, returnFocu
       const response = await api.listAskCandidates();
       if (!response.success || !response.data) throw new Error(response.message || 'Your homes could not be loaded.');
       setHomes(response.data.candidates);
+      setDimensions(response.data.dimensions ?? []);
       // Homes already moved stay visible (audit); a failure here must not hide the active list.
       api.listAskCandidates({ status: 'PROMOTED' }).then((r) => setMoved(r.success && r.data ? r.data.candidates : [])).catch(() => setMoved([]));
     } catch (caught) { setHomes([]); setError(caught instanceof Error ? caught.message : 'Your homes could not be loaded.'); }
@@ -126,6 +129,7 @@ export function CandidateHomesDialog({ open, onOpenChange, onCompare, returnFocu
                 ))}
               </ul>
             )}
+            {homes !== null && homes.length >= 2 && <CandidateComparisonPicker homes={homes} dimensions={dimensions} onStatus={setStatus} />}
             {moved.length > 0 && (
               <div>
                 <h3 className="text-sm font-semibold text-slate-900">Moved to your homes</h3>

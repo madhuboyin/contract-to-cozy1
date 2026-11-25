@@ -1,4 +1,4 @@
-import { listAskCandidates, createAskCandidate, updateAskCandidate, deleteAskCandidate, compareAskCandidates, getAskCandidateCost, reviewAskCandidatePromotion, confirmAskCandidatePromotion, deleteAskPromotedCandidateRecord } from '../controllers/askCandidates.controller';
+import { listAskCandidates, createAskCandidate, updateAskCandidate, deleteAskCandidate, compareAskCandidates, getAskCandidateCost, reviewAskCandidatePromotion, confirmAskCandidatePromotion, deleteAskPromotedCandidateRecord, getAskCandidateComparison, saveAskCandidateComparison, clearAskCandidateComparison } from '../controllers/askCandidates.controller';
 import { Router } from 'express';
 import multer from 'multer';
 import { authenticate } from '../middleware/auth.middleware';
@@ -27,6 +27,9 @@ router.get('/ask/concierge-home', getAskConciergeHome);
 router.get('/ask/candidates', listAskCandidates);
 router.post('/ask/candidates', createAskCandidate);
 router.post('/ask/candidates/compare', compareAskCandidates);
+router.get('/ask/candidates/comparison', getAskCandidateComparison);
+router.put('/ask/candidates/comparison', saveAskCandidateComparison);
+router.delete('/ask/candidates/comparison', clearAskCandidateComparison);
 router.patch('/ask/candidates/:candidateId', updateAskCandidate);
 router.delete('/ask/candidates/:candidateId', deleteAskCandidate);
 router.get('/ask/candidates/:candidateId/cost', getAskCandidateCost);

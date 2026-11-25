@@ -6,6 +6,7 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { money } from '../askFormatting';
 import { candidatePropertyService } from '../buyer/candidateProperty.service';
+import { candidateComparisonStateService } from '../buyer/candidateComparisonState.service';
 import { BUYER_COST_DISCLAIMER, COMPARISON_DIMENSIONS, buyerCostBreakdown, compareCandidates, type CandidateFacts, type ComparisonDimensionKey } from '../buyer/candidateComparison';
 
 const MAX_COMPARED = 6;
@@ -17,9 +18,9 @@ const DIMENSION_WORDS: ReadonlyArray<[ComparisonDimensionKey, RegExp]> = [
 ];
 
 /** The dimensions the message names, in catalogue order; none named means the default set. */
-export function dimensionsNamedIn(message: string): ComparisonDimensionKey[] {
+export function dimensionsNamedIn(message: string, fallback: readonly ComparisonDimensionKey[] = DEFAULT_DIMENSIONS): ComparisonDimensionKey[] {
   const named = DIMENSION_WORDS.filter(([, pattern]) => pattern.test(message)).map(([key]) => key);
-  return named.length ? COMPARISON_DIMENSIONS.map((d) => d.key).filter((key) => named.includes(key)) : [...DEFAULT_DIMENSIONS];
+  return named.length ? COMPARISON_DIMENSIONS.map((d) => d.key).filter((key) => named.includes(key)) : [...fallback];
 }
 
 const NOT_ENTERED = 'Not entered';
@@ -33,7 +34,12 @@ const cents = (value: number | null): string => (value === null ? NOT_ENTERED : 
 const asFacts = (row: unknown): CandidateFacts => row as CandidateFacts;
 
 export async function candidateHomesReviewResult(userId: string, message: string): Promise<AskOperationResult> {
-  const rows = (await candidatePropertyService.list(userId, 'ACTIVE')).slice(0, MAX_COMPARED).map(asFacts);
+  const everyHome = (await candidatePropertyService.list(userId, 'ACTIVE')).map(asFacts);
+  // BUY-002: the person's saved comparison chooses which homes and, when the question names none, which things to compare. A question that names things still wins.
+  const saved = await candidateComparisonStateService.get(userId).catch(() => null);
+  const savedIds = saved ? new Set(saved.candidateIds) : null;
+  const usingSaved = Boolean(saved && everyHome.filter((home) => savedIds!.has(home.id)).length >= 2);
+  const rows = (usingSaved ? everyHome.filter((home) => savedIds!.has(home.id)) : everyHome).slice(0, MAX_COMPARED);
 
   if (!rows.length) {
     return {
@@ -54,7 +60,8 @@ export async function candidateHomesReviewResult(userId: string, message: string
     };
   }
 
-  const dimensions = dimensionsNamedIn(message);
+  const savedDimensions = usingSaved && saved?.dimensions.length ? (saved.dimensions as ComparisonDimensionKey[]) : DEFAULT_DIMENSIONS;
+  const dimensions = dimensionsNamedIn(message, savedDimensions);
   const comparison = compareCandidates(rows, dimensions);
   if ('error' in comparison) return { status: 'READY_WITH_LIMITATIONS', reasonCode: 'CANDIDATE_HOMES_NOT_COMPARABLE', suggestions: [], blocks: [{ type: 'SUMMARY', id: 'candidate-homes-summary', title: 'I could not compare those', body: 'None of the items you asked about can be compared.', tone: 'CAUTION', actions: [] }] as AskPresentationBlock[] };
 
@@ -68,7 +75,7 @@ export async function candidateHomesReviewResult(userId: string, message: string
   return {
     status: anyGap ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: anyGap ? 'CANDIDATE_HOMES_PARTIAL' : 'CANDIDATE_HOMES_COMPARED', suggestions: [],
     blocks: [
-      { type: 'SUMMARY', id: 'candidate-homes-summary', title: `Comparing ${rows.length} homes`, body: `Side by side on ${comparison.rows.map((r) => r.label.toLowerCase()).join(', ')}. "Lowest" is marked only where every home has a value. I do not pick a winner: you chose what matters.`, tone: 'DEFAULT', actions: [] },
+      { type: 'SUMMARY', id: 'candidate-homes-summary', title: `Comparing ${rows.length} homes`, body: `Side by side on ${comparison.rows.map((r) => r.label.toLowerCase()).join(', ')}. "Lowest" is marked only where every home has a value. I do not pick a winner: you chose what matters.${usingSaved ? ` This is your saved comparison (${rows.length} of ${everyHome.length} homes); change it from “Homes I’m considering”.` : ''}`, tone: 'DEFAULT', actions: [] },
       { type: 'TABLE', id: 'candidate-homes-compare', title: 'Your homes side by side', columns, rows: tableRows } as AskPresentationBlock,
       costTable(rows, costs),
       { type: 'LIMITATION', id: 'candidate-homes-limits', title: 'What these numbers are', body: `${comparison.disclosure} ${BUYER_COST_DISCLAIMER}`, severity: anyGap ? 'CAUTION' : 'INFO' },

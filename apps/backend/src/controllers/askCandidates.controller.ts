@@ -5,6 +5,7 @@ import type { AuthRequest } from '../types/auth.types';
 import { APIError } from '../middleware/error.middleware';
 import { candidatePropertyService, type CandidateInput, type CandidatePatch } from '../services/ask/buyer/candidateProperty.service';
 import { candidatePromotionService } from '../services/ask/buyer/candidatePromotion.service';
+import { candidateComparisonStateService } from '../services/ask/buyer/candidateComparisonState.service';
 import { buyerCostBreakdown, compareCandidates, COMPARISON_DIMENSIONS, type CandidateFacts } from '../services/ask/buyer/candidateComparison';
 
 const need = (req: AuthRequest): string => { if (!req.user) throw new APIError('Authentication required.', 401, 'AUTH_REQUIRED'); return req.user.userId; };
@@ -84,4 +85,17 @@ export async function deleteAskPromotedCandidateRecord(req: AuthRequest, res: Re
     await candidatePropertyService.removePromotedRecord(need(req), req.params.candidateId);
     return res.json({ success: true, data: { deleted: true } });
   } catch (error) { return next(error); }
+}
+
+/** BUY-002: the saved comparison (null when none, or when fewer than two of its homes are still active). */
+export async function getAskCandidateComparison(req: AuthRequest, res: Response, next: NextFunction) {
+  try { return res.json({ success: true, data: { comparison: await candidateComparisonStateService.get(need(req)) } }); } catch (error) { return next(error); }
+}
+
+export async function saveAskCandidateComparison(req: AuthRequest, res: Response, next: NextFunction) {
+  try { return res.json({ success: true, data: { comparison: await candidateComparisonStateService.save(need(req), body(req) as { candidateIds: unknown; dimensions: unknown }) } }); } catch (error) { return next(error); }
+}
+
+export async function clearAskCandidateComparison(req: AuthRequest, res: Response, next: NextFunction) {
+  try { await candidateComparisonStateService.clear(need(req)); return res.json({ success: true, data: { comparison: null } }); } catch (error) { return next(error); }
 }

@@ -3,8 +3,8 @@ import '@testing-library/jest-dom';
 import { CandidateHomesDialog } from '../CandidateHomesDialog';
 import { api } from '@/lib/api/client';
 
-jest.mock('@/lib/api/client', () => ({ api: { listAskCandidates: jest.fn(), createAskCandidate: jest.fn(), updateAskCandidate: jest.fn(), deleteAskCandidate: jest.fn() } }));
-const mocked = api as unknown as Record<'listAskCandidates' | 'createAskCandidate' | 'updateAskCandidate' | 'deleteAskCandidate', jest.Mock>;
+jest.mock('@/lib/api/client', () => ({ api: { listAskCandidates: jest.fn(), createAskCandidate: jest.fn(), updateAskCandidate: jest.fn(), deleteAskCandidate: jest.fn(), getAskCandidateComparison: jest.fn(), saveAskCandidateComparison: jest.fn(), clearAskCandidateComparison: jest.fn() } }));
+const mocked = api as unknown as Record<'listAskCandidates' | 'createAskCandidate' | 'updateAskCandidate' | 'deleteAskCandidate' | 'getAskCandidateComparison' | 'saveAskCandidateComparison' | 'clearAskCandidateComparison', jest.Mock>;
 
 const maple = { id: 'a', label: 'Maple St', city: 'Austin', state: 'TX', listPriceCents: 40000000, bedrooms: 3 };
 const oak = { id: 'b', label: 'Oak Ave', listPriceCents: null };
@@ -17,6 +17,7 @@ const field = (label: RegExp | string) => screen.getByLabelText(label);
 beforeEach(() => {
   Object.values(mocked).forEach((fn) => fn.mockReset());
   listActive([maple, oak]);
+  mocked.getAskCandidateComparison.mockResolvedValue({ success: true, data: { comparison: null } });
 });
 
 // BICC-4.1: the buyer's own list of homes, inside Ask. Nothing is saved before Save; a blank is "not entered".

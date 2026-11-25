@@ -1048,8 +1048,18 @@ class APIClient {
     return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/regenerate`, { method: 'POST', body: { clientRequestId }, signal: options.signal });
   }
   // BICC-4.1: the buyer's own candidate homes (not a Property; scoped to the signed-in person).
-  async listAskCandidates(options: { signal?: AbortSignal; status?: 'ACTIVE' | 'PROMOTED' } = {}): Promise<APIResponse<{ candidates: import('@/features/ask/candidateHomes').CandidateHome[] }>> {
+  async listAskCandidates(options: { signal?: AbortSignal; status?: 'ACTIVE' | 'PROMOTED' } = {}): Promise<APIResponse<{ candidates: import('@/features/ask/candidateHomes').CandidateHome[]; dimensions?: Array<{ key: string; label: string }> }>> {
     return this.request(options.status === 'PROMOTED' ? '/api/ask/candidates?status=PROMOTED' : '/api/ask/candidates', { signal: options.signal });
+  }
+  // BICC-BUY-002: the one saved comparison (which of the person's homes, and what to compare).
+  async getAskCandidateComparison(): Promise<APIResponse<{ comparison: { candidateIds: string[]; dimensions: string[] } | null }>> {
+    return this.request('/api/ask/candidates/comparison');
+  }
+  async saveAskCandidateComparison(payload: { candidateIds: string[]; dimensions: string[] }): Promise<APIResponse<{ comparison: { candidateIds: string[]; dimensions: string[] } | null }>> {
+    return this.request('/api/ask/candidates/comparison', { method: 'PUT', body: payload });
+  }
+  async clearAskCandidateComparison(): Promise<APIResponse<{ comparison: null }>> {
+    return this.request('/api/ask/candidates/comparison', { method: 'DELETE' });
   }
   async createAskCandidate(payload: Record<string, string | number | null>): Promise<APIResponse<import('@/features/ask/candidateHomes').CandidateHome>> {
     return this.request('/api/ask/candidates', { method: 'POST', body: payload });
