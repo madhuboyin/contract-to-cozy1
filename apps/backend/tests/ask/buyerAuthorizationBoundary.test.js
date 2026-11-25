@@ -1,5 +1,6 @@
-// BICC-BUY-008 / BUY-009 / BUY-010 / BUY-003: the buyer write operations keep their role floors and confirmation, buyers use the same account boundary as every Ask user, and the
-// candidate API cannot be reached without it. Registry- and source-driven, so a new buyer command that skips the floor fails here.
+// BICC-BUY-008 / BUY-009 / BUY-010 / BUY-003: STATIC guardrails only. They check registry metadata and source text, so they catch a new buyer command that skips the role floor or a
+// candidate route registered ahead of the guard; they do NOT prove that no write happens before confirmation or that nothing is sent. That behaviour is checked by the handler-level
+// suites (buyerLifecycleConfirmationBoundary, buyerFindingDispositionConfirmationBoundary, buyerViewerRefusalBoundary, buyerWalkthroughCommands and the other per-command suites).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -25,7 +26,7 @@ test('every buyer write operation needs a selected property, is a deterministic 
   }
 });
 
-test('operations that change a contract, a disclosure, a loan, insurance, the walkthrough or the purchase lifecycle are material decisions, so they are previewed and confirmed', () => {
+test('STATIC: the contract, disclosure, loan, insurance, walkthrough and lifecycle commands are material decisions and their handlers mention a confirmation preview', () => {
   const material = ['BUYER_CONTRACT_COMMAND', 'BUYER_CLOSING_DISCLOSURE_COMMAND', 'BUYER_LOAN_ESTIMATE_COMMAND', 'BUYER_INSURANCE_COMMAND', 'BUYER_WALKTHROUGH_COMMAND', 'BUYER_LIFECYCLE_UPDATE', 'BUYER_FINDING_DISPOSITION'];
   for (const id of material) assert.equal(ASK_OPERATION_DEFINITIONS[id].safetyClass, 'MATERIAL_DECISION', id);
   for (const file of ['buyerContractCommands', 'buyerClosingDisclosureCommands', 'buyerLoanEstimateCommands', 'buyerInsuranceCommands', 'buyerWalkthroughCommands']) {
@@ -33,13 +34,13 @@ test('operations that change a contract, a disclosure, a loan, insurance, the wa
   }
 });
 
-test('no buyer operation sends, files, signs or submits anything: the contract flow says it does not review contracts and waives nothing', () => {
+test('STATIC: the contract flow tells the buyer it does not review contracts and changes nothing until the draft is confirmed (wording only; this does not inspect outbound calls)', () => {
   const contract = read('src/services/ask/handlers/buyerContractCommands.handler.ts');
   assert.match(contract, /does not review contracts, and this waives nothing/);
   assert.match(contract, /Your plan does not change until you confirm the draft/);
 });
 
-test('buyers use the same account boundary as everyone: only a homeowner account is eligible, there is no buyer role, and nothing is available without authentication', () => {
+test('STATIC: the account rule is homeowner-only on server and client, there is no buyer role, and the candidate routes are registered after the authentication and eligibility guard', () => {
   assert.equal(isAskAccountRoleEligible('HOMEOWNER'), true);
   for (const role of ['PROVIDER', 'ADMIN', 'PROSPECTIVE_BUYER', 'GUEST', '', null, undefined]) assert.equal(isAskAccountRoleEligible(role), false, String(role));
   const routes = read('src/routes/ask.routes.ts');
@@ -50,6 +51,12 @@ test('buyers use the same account boundary as everyone: only a homeowner account
     assert.ok(at > guard, `${route} is registered after the authentication and eligibility guard`);
   }
   assert.match(read('../frontend/src/features/ask/accountEligibility.ts'), /HOMEOWNER/, 'the client uses the same rule');
+});
+
+test('every buyer write operation is exercised by at least one handler-level test (a new buyer command with no such test fails here)', () => {
+  const files = fs.readdirSync(path.join(__dirname)).filter((f) => f.endsWith('.test.js') && f !== 'buyerAuthorizationBoundary.test.js').map((f) => [f, fs.readFileSync(path.join(__dirname, f), 'utf8')]);
+  const untested = buyerCommands.map((d) => d.operationId).filter((id) => !files.some(([, text]) => text.includes(id) && /confirmCapabilityInvoke|capabilityInvoke|confirmAskExecution/.test(text)));
+  assert.deepEqual(untested, []);
 });
 
 test('a candidate is not a property: the candidate API and promotion take no property id from the request, and promotion is not reachable by typing', () => {

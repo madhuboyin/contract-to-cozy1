@@ -28,7 +28,7 @@ export function deriveAnswerMode(input: { status: string; operationId: AskOperat
   // A fair-housing refusal (BICC-BUY-011) is a boundary, not missing data, so it must not read as an unavailable record.
   if (input.reasonCode === 'ASK_FAIR_HOUSING_BOUNDARY') return null;
   // The buyer introduction (BICC-BUY-001) describes what Ask can do; it states nothing about a record.
-  if (input.reasonCode === 'ASK_BUYER_INTRO') return null;
+  if (input.reasonCode === 'ASK_BUYER_INTRO' || input.reasonCode === 'ASK_BUYER_GUIDANCE') return null;
   if (UNAVAILABLE_STATUSES.has(input.status)) return 'UNAVAILABLE';
   if (!SETTLED_STATUSES.has(input.status) || !input.operationId) return null;
   const definition = getAskOperationDefinition(input.operationId);

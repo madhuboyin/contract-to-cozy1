@@ -12,11 +12,13 @@ export type FairHousingKind = 'PROTECTED_CLASS' | 'SUITABILITY_FOR_GROUP' | 'WHO
 
 const normalize = (message: string): string => message.toLowerCase().normalize('NFKC').replace(/[’]/g, "'").replace(/[^a-z0-9'%\s-]/g, ' ').replace(/\s+/g, ' ').trim();
 
-const GROUP = '(?:white|black|african[- ]americans?|asians?|hispanics?|latinos?|latinas?|latinx|mexicans?|chinese|indians?|arabs?|middle eastern|native americans?|immigrants?|foreigners?|minorit(?:y|ies)|jewish|jews|muslims?|christians?|catholics?|hindus?|mormons?|sikhs?|buddhists?|atheists?|religious|gay|lesbian|lgbtq?\\+?|transgender|disabled|handicapped|elderly|seniors?|old people|retirees?|young people|singles?|single (?:moms?|mothers?|dads?|fathers?|parents?)|families with (?:young )?(?:kids|children)|(?:couples|people|families|parents) with (?:young )?(?:kids|children)|childless|no kids|men|women|girls?|boys?)';
-const PLACE_OR_PEOPLE = '(?:neighbou?rs?|neighbou?rhoods?|areas?|communit(?:y|ies)|blocks?|streets?|towns?|cities|zip(?: code)?s?|part of town|side of town|subdivisions?|developments?|complex(?:es)?|buildings?|people|folks|residents?|families|population|crowd|demographics?|lives? (?:there|here|nearby|around|next)|live (?:there|here|nearby|around|next))';
+const NH = 'ne[a-z]{0,3}b[a-z]{0,3}hoods?'; // neighborhood, neighbourhood and the common misspellings (neigborhood)
+const GROUP = '(?:white|black|african[- ]americans?|asians?|hispanics?|latinos?|latinas?|latinx|mexicans?|chinese|indians?|arabs?|middle eastern|native americans?|immigrants?|foreigners?|minorit(?:y|ies)|jewish|jews|muslims?|christians?|catholics?|hindus?|mormons?|sikhs?|buddhists?|atheists?|religious|gay|lesbian|lgbtq?\\+?|transgender|disabled|handicapped|elderly|seniors?|old people|retirees?|young people|young professionals|low[- ]income|working class|wealthy (?:people|families|folks)|rich (?:people|folks|families|neighbou?rs)|singles?|single (?:moms?|mothers?|dads?|fathers?|parents?)|families with (?:young )?(?:kids|children)|(?:couples|people|families|parents) with (?:young )?(?:kids|children)|childless|no kids|men|women|girls?|boys?)';
+const PLACE_OR_PEOPLE = `(?:neighbou?rs?|${NH}|areas?|communit(?:y|ies)|blocks?|streets?|towns?|cities|zip(?: code)?s?|part of town|side of town|subdivisions?|developments?|complex(?:es)?|buildings?|people|folks|residents?|families|population|crowd|demographics?|lives? (?:there|here|nearby|around|next)|live (?:there|here|nearby|around|next))`;
 
 const GROUP_IN_PLACE = new RegExp(`\\b${GROUP}\\b[^.?!]{0,40}\\b${PLACE_OR_PEOPLE}\\b|\\b${PLACE_OR_PEOPLE}\\b[^.?!]{0,40}\\b${GROUP}\\b`);
-const EXPLICIT: ReadonlyArray<readonly [FairHousingKind, RegExp]> = [
+const withNH = (re: RegExp): RegExp => new RegExp(re.source.split('neighbou?rhoods?').join(NH).split('neighbou?rhood').join(NH), re.flags);
+const EXPLICIT_SOURCE: ReadonlyArray<readonly [FairHousingKind, RegExp]> = [
   ['WHO_LIVES_THERE', /\b(?:demographics?|demographic (?:makeup|mix|breakdown|profile)|racial(?:ly)? (?:makeup|mix|breakdown|diverse|composition)|ethnic(?:ally)? (?:makeup|mix|breakdown|diverse|composition)|diversity of the|diverse (?:neighbou?rhood|area|community)|segregat\w*|gentrif\w* (?:and|with) (?:race|minorit))\b/],
   ['WHO_LIVES_THERE', /\bwho(?:'s| is| are)? (?:lives?|living|moved|moving) (?:in|around|near|next|nearby|there|here)\b/],
   ['WHO_LIVES_THERE', /\b(?:what|which) (?:kind|type|sort) of (?:people|folks|neighbou?rs|families|residents|crowd)\b/],
@@ -24,10 +26,19 @@ const EXPLICIT: ReadonlyArray<readonly [FairHousingKind, RegExp]> = [
   ['WHO_LIVES_THERE', /\bavoid(?:ing)? (?:neighbou?rhoods?|areas?|communit(?:y|ies)|buildings?|streets?)\s+(?:with|that have|where|full of|filled with)\b/],
   ['SUITABILITY_FOR_GROUP', /\b(?:family[- ]friendly|kid[- ]friendly|child[- ]friendly|senior[- ]friendly|singles?[- ]friendly|adults? only|no kids|(?:ideal|perfect|best|good|great|right|suitable) (?:for|fit for) (?:a |my )?(?:young )?(?:famil(?:y|ies)|kids|children|couples?|singles?|retire\w*|seniors?|elderly|bachelors?|professionals?))\b[^.?!]{0,30}\b(?:neighbou?rhoods?|areas?|communit(?:y|ies)|town|streets?|homes?|houses?|listing|properties|property)?\b/],
   ['SUITABILITY_FOR_GROUP', /\b(?:neighbou?rhoods?|areas?|homes?|houses?|communit(?:y|ies)|streets?) (?:for|that (?:suits?|fits?)|suited (?:to|for)|where) (?:a |my )?(?:young )?(?:famil(?:y|ies)|kids|children|couples?|singles?|retire\w*|seniors?|elderly|bachelors?)\b/],
-  ['DESIRABILITY', /\b(?:good|bad|nice|best|worst|safe|safest|unsafe|sketchy|rough|ghetto|desirable|undesirable|decent|dangerous|quiet|up and coming|trendy|better|worse|worst) (?:neighbou?rhood|neighbou?rhoods|part of town|side of town|zip codes?)\b/],
+  ['DESIRABILITY', /\b(?:good|bad|nice|best|worst|safe|safest|unsafe|sketchy|rough|ghetto|desirable|undesirable|decent|dangerous|quiet|up and coming|trendy|better|worse|worst) (?:neighbou?rhoods?|part of town|side of town|zip codes?)\b/],
   ['DESIRABILITY', /\b(?:is|are|was|would) (?:this|that|the|my|it|these|those) (?:a )?(?:neighbou?rhood|area|part of town|side of town|zip code)s? (?:a )?(?:good|bad|safe|unsafe|nice|rough|sketchy|desirable|dangerous|decent|ok(?:ay)?)\b/],
   ['DESIRABILITY', /\b(?:rank|ranking|rate|rating|score|compare|best|top|worst) (?:the )?(?:neighbou?rhoods?|areas?|zip codes?|parts of town)\b/],
+  ['SUITABILITY_FOR_GROUP', /\b(?:place|area|neighbou?rhood|town|community|street|school district) (?:to|for) (?:raise|raising|grow(?:ing)? up|bring(?:ing)? up) (?:my |our |a )?(?:kids|children|family|daughters?|sons?)\b/],
+  ['SUITABILITY_FOR_GROUP', /\b(?:would|will|do|does|can) (?:my|our) (?:family|kids|children|wife|husband|partner|kind of people) (?:fit in|belong|feel (?:welcome|comfortable|at home))\b|\b(?:fit in|belong|feel welcome|feel at home) in (?:this|that|the) (?:neighbou?rhood|area|community|street)\b/],
+  ['WHO_LIVES_THERE', /\b(?:tell me about|describe|what about|what are) (?:the )?(?:people|folks|residents|neighbou?rs|crowd) (?:next door|nearby|around|in the (?:area|neighbou?rhood|building|complex|community))\b/],
+  ['WHO_LIVES_THERE', /\b(?:kids|children|families|people|neighbou?rs) like (?:mine|ours|my kids|my family|us)\b|\bwho hangs? out\b|\bhangs? out (?:there|here|around)\b/],
+  ['WHO_LIVES_THERE', /\b(?:section 8|housing vouchers?|welfare|public housing|subsidized housing)\b[^.?!]{0,30}\b(?:neighbou?rs?|renters?|tenants?|residents?|nearby|around|area)\b/],
+  ['DESIRABILITY', /\b(?:is|are) (?:this|that|it|the area|the neighbou?rhood) (?:a )?(?:safe|nice|decent|good|bad|rough) (?:area|neighbou?rhood|part of town)\b|\b(?:safe|nice|decent|good|bad|rough) place to (?:live|buy|raise|move)\b/],
+  ['DESIRABILITY', /\bwhich (?:areas?|neighbou?rhoods?|parts of town|streets?|zip codes?) (?:should|do|would) (?:i|we) (?:avoid|stay away from|skip|steer clear of)\b/],
+  ['DESIRABILITY', /\b(?:up and coming|on the rise|trendy) (?:area|neighbou?rhood|part of town)s?\b|\bwhich (?:neighbou?rhoods?|areas?) are (?:up and coming|on the rise|trendy)\b/],
 ];
+const EXPLICIT: ReadonlyArray<readonly [FairHousingKind, RegExp]> = EXPLICIT_SOURCE.map(([kind, re]) => [kind, withNH(re)] as const);
 
 /** The kind of steering the whole message asks for, or null. Evaluated on the raw message; the order is protected-class first, then who lives there, suitability, desirability. */
 export function classifyFairHousingRequest(message: string): FairHousingKind | null {

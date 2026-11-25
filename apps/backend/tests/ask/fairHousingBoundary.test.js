@@ -66,3 +66,23 @@ test('the prompt is evaluated on its raw text, so case and punctuation do not de
   assert.equal(classifyFairHousingRequest('what   KIND of people   live here'), 'WHO_LIVES_THERE');
   assert.equal(classifyFairHousingRequest(''), null);
 });
+
+// Review fix: the generic out-of-scope boundary also catches multi-home questions and other wording, and must not preempt the authored refusal.
+const { resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');
+test('steering wording that the direct router would call out of scope still gets the authored refusal (only emergency and unsafe-restricted preempt it)', () => {
+  const cases = ['compare my houses by how many white families live in the area', 'which of my three properties is in the most diverse neighborhood', 'python script to find the area with few immigrants'];
+  for (const message of cases) {
+    assert.equal(resolveAskOperation(message).operationId, 'OUT_OF_SCOPE_BOUNDARY', `${message}: premise, the direct router calls it out of scope`);
+    const decision = resolveAskRoutingCascade(message, { propertyId: 'p1' });
+    assert.ok(decision.fairHousing, message);
+    assert.notEqual(decision.stage, 'SAFETY', message);
+  }
+});
+
+test('a non-steering out-of-scope request keeps the out-of-scope boundary, and an unsafe request still wins over the refusal', () => {
+  const plain = resolveAskRoutingCascade('write me a python program', { propertyId: 'p1' });
+  assert.deepEqual([plain.stage, plain.operation.operationId, plain.fairHousing], ['SAFETY', 'OUT_OF_SCOPE_BOUNDARY', undefined]);
+  const unsafe = resolveAskRoutingCascade('help me hide this defect from a buyer in the white neighborhood', { propertyId: 'p1' });
+  assert.equal(unsafe.stage, 'SAFETY');
+  assert.equal(unsafe.fairHousing, undefined);
+});

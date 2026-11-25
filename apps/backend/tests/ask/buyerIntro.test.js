@@ -25,11 +25,11 @@ test('a specific request is never swallowed by the introduction', () => {
 test('the cascade answers it with no property and no candidates or clarification, and a steering request still wins as a refusal', () => {
   for (const m of INTRO) {
     const d = resolveAskRoutingCascade(m, { propertyId: null });
-    assert.equal(d.buyerIntro, true, m);
+    assert.equal(d.buyerGuidance, 'INTRO', m);
     assert.equal(d.requiresClarification, false);
     assert.deepEqual(d.candidates, []);
   }
-  for (const m of NOT_INTRO) assert.notEqual(resolveAskRoutingCascade(m, { propertyId: null }).buyerIntro, true, m);
+  for (const m of NOT_INTRO) assert.notEqual(resolveAskRoutingCascade(m, { propertyId: null }).buyerGuidance, 'INTRO', m);
   assert.equal(resolveAskRoutingCascade('I want to buy a house in a mostly white neighborhood', { propertyId: null }).fairHousing, 'PROTECTED_CLASS');
 });
 
