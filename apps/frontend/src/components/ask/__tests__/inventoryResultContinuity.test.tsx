@@ -210,6 +210,18 @@ test('an incomplete inventory row exposes Add missing details and dispatches the
   expect(onAction).toHaveBeenCalledWith('INVENTORY_ITEM', 'item-0', 'Complete the missing details for this inventory item.', 'INVENTORY_ITEM_CORRECT', 'MUTATE_RECORD');
 });
 
+test('incomplete replacement guidance renders its primary completion action and dispatches the exact item', () => {
+  const completion = { id: 'complete-replacement-guidance-details', label: 'Add details to complete this recommendation', message: 'Complete the missing details for this inventory item.', style: 'PRIMARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT' };
+  const incomplete: typeof block = { ...block, description: 'Add the missing item details, then this recommendation will refresh.', sections: [{ ...block.sections[0], items: [
+    { ...block.sections[0].items[0], status: null, description: 'More details are needed before comparing repair and replacement.', actions: [completion] },
+  ] }] };
+  const onAction = jest.fn();
+  render(<InventoryResultList block={incomplete} propertyId="home" onAction={onAction} onFilter={() => {}} onPage={() => {}} onAccessLost={() => {}} link={(_, label) => label} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Add details to complete this recommendation' }));
+  expect(onAction).toHaveBeenCalledWith('INVENTORY_ITEM', 'item-0', 'Complete the missing details for this inventory item.', 'INVENTORY_ITEM_CORRECT', 'MUTATE_RECORD');
+  expect(screen.getByText('Not recorded')).toBeInTheDocument();
+});
+
 test('an incomplete inventory row routes missing coverage to the governed item-scoped coverage review', () => {
   const reviewCoverage = { id: 'review-coverage-information', label: 'Review coverage information', message: 'Review the coverage information for this inventory item.', style: 'SECONDARY' as const, interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'COVERAGE_GAPS' };
   const incomplete: typeof block = { ...block, sections: [{ ...block.sections[0], items: [

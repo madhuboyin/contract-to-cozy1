@@ -22,6 +22,38 @@ test('an owner gets the governed action on a row whose state matches; a viewer g
   assert.equal(enrich([row('a')], { role: 'EDITOR' }).actionsByRowId.size, 1, 'a contributor follows the destination floor');
 });
 
+test('incomplete replacement guidance offers its item-targeted completion workflow only to a managing role', () => {
+  const replacementRow = { id: 'washer', label: 'Washer Dryer', entityType: 'INVENTORY_ITEM', states: ['replacement-guidance:INPUTS_MISSING'] };
+  const owner = rows.enrichRowActions({ sourceOperationId: 'REPLACEMENT_GUIDANCE', role: 'OWNER', presentation: 'INVENTORY_RESULT_LIST', rows: [replacementRow] });
+  assert.deepEqual(owner.actionsByRowId.get('washer').map((action) => [action.id, action.label, action.operationId, action.interactionType, action.message]), [[
+    'complete-replacement-guidance-details', 'Add details to complete this recommendation', 'INVENTORY_ITEM_CORRECT', 'MUTATE_RECORD', 'Complete the missing details for this inventory item.',
+  ]]);
+  const viewer = rows.enrichRowActions({ sourceOperationId: 'REPLACEMENT_GUIDANCE', role: 'VIEWER', presentation: 'INVENTORY_RESULT_LIST', rows: [replacementRow] });
+  assert.equal(viewer.actionsByRowId.size, 0);
+});
+
+test('replacement guidance with missing decision inputs asks for details instead of recommending repair', () => {
+  const target = {
+    ...SLICE_SEEDED_PROPERTY_SNAPSHOT.items[1],
+    id: 'washer-1', name: 'Washer Dryer', condition: 'UNKNOWN', installedOn: null, replacementCostCents: null,
+  };
+  const snapshot = { ...SLICE_SEEDED_PROPERTY_SNAPSHOT, items: [target] };
+  const run = (role) => executeSemanticSlice({ rawText: 'Should I repair or replace my Washer Dryer?', snapshot, auth: { ...SLICE_OWNER_AUTH, role } });
+
+  const owner = run('OWNER');
+  const summary = owner.operationResult.blocks.find((block) => block.type === 'SUMMARY');
+  assert.match(summary.body, /More details are needed before comparing repair and replacement/);
+  assert.doesNotMatch(summary.body, /Repair and routine maintenance are recommended/);
+  const ownerList = owner.operationResult.blocks.find((block) => block.type === 'GROUPED_LIST');
+  assert.equal(ownerList.description, 'Add the missing item details, then this recommendation will refresh.');
+  assert.deepEqual(ownerList.sections[0].items[0].actions.map((action) => action.id), ['complete-replacement-guidance-details']);
+  assert.equal(ownerList.sections[0].items[0].status, undefined, 'unknown condition is not substituted with a good condition');
+
+  const viewerList = run('VIEWER').operationResult.blocks.find((block) => block.type === 'GROUPED_LIST');
+  assert.equal(viewerList.description, 'An owner or editor can add the missing item details.');
+  assert.equal(viewerList.sections[0].items[0].actions, undefined);
+});
+
 test('eligibility is per row: a missing id/type or a non-matching state loses its action without affecting siblings', () => {
   const result = enrich([row('ok'), row('no-type', { entityType: null }), row('other-state', { states: ['warranty:UNKNOWN'] }), row('explicit', { states: ['warranty:EXPLICIT_NO_COVERAGE'] }), row('wrong-type', { entityType: 'WARRANTY' }), row('ok2')]);
   // An explicit "no coverage" row is eligible for its own reconciling action (never Record warranty); unknown and conflicted rows get none.

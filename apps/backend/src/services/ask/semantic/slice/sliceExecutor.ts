@@ -593,9 +593,15 @@ function executeValidatedSlicePlan(input: {
     }
     const warranty = evaluateWarrantyState(targetItem);
     const hasActiveWarranty = warranty.state === 'ITEM_WARRANTY_LINKED' || warranty.state === 'BOTH_CONSISTENT';
-    const recommendation = targetItem.condition === 'REPLACE_SOON' || targetItem.condition === 'POOR_CONDITION'
-      ? (hasActiveWarranty ? 'Check warranty claim eligibility before scheduling replacement.' : 'Plan replacement based on condition and estimated cost.')
-      : 'Repair and routine maintenance are recommended before replacement.';
+    const conditionMissing = !targetItem.condition || targetItem.condition === 'UNKNOWN';
+    const installedOnMissing = !targetItem.installedOn;
+    const replacementCostMissing = targetItem.replacementCostCents == null;
+    const decisionInputsMissing = conditionMissing || installedOnMissing || replacementCostMissing;
+    const recommendation = decisionInputsMissing
+      ? 'More details are needed before comparing repair and replacement.'
+      : targetItem.condition === 'REPLACE_SOON' || targetItem.condition === 'POOR_CONDITION' || targetItem.condition === 'POOR'
+        ? (hasActiveWarranty ? 'Check warranty claim eligibility before scheduling replacement.' : 'Plan replacement based on condition and estimated cost.')
+        : 'Repair and routine maintenance are recommended before replacement.';
     const costText = formatMoneyCents(targetItem.replacementCostCents, !canReadSensitive);
     const answerVariantId = 'phase2a-replacement-guidance-summary';
     const receipt = buildSemanticReadReceipt({
@@ -614,14 +620,27 @@ function executeValidatedSlicePlan(input: {
       observedAt: `${snapshot.asOfDate}T00:00:00.000Z`,
       answerVariantId,
     });
+    const enrichment = enrichRowActions({
+      sourceOperationId: 'REPLACEMENT_GUIDANCE',
+      role: auth.role,
+      presentation: 'INVENTORY_RESULT_LIST',
+      rows: [{
+        id: targetItem.id,
+        label: targetItem.name,
+        entityType: 'INVENTORY_ITEM',
+        states: decisionInputsMissing ? ['replacement-guidance:INPUTS_MISSING'] : [],
+      }],
+    });
+    const actions = enrichment.actionsByRowId.get(targetItem.id);
     const rows: SlicePresentationRow[] = [{
       id: targetItem.id,
       label: targetItem.name,
       subtitle: `${recommendation} Estimated replacement: ${costText}.`,
       description: `${recommendation} Estimated replacement: ${costText}.`,
       meta: [targetItem.category, [targetItem.brand, targetItem.modelNumber].filter(Boolean).join(' ') || 'Not recorded'],
-      stateCode: targetItem.condition ?? 'GOOD_CONDITION',
+      stateCode: conditionMissing ? undefined : targetItem.condition,
       groupKey: 'Replacement Guidance',
+      ...(actions ? { entityType: 'INVENTORY_ITEM', actions } : {}),
     }];
     const blocks = buildSliceRichPresentation({
       receipt,
@@ -631,7 +650,9 @@ function executeValidatedSlicePlan(input: {
       listId: 'inventory-results',
       recordKind: 'INVENTORY_ITEM',
       listTitle: `${targetItem.name} details`,
-      listDescription: 'Open the item for its full home-record details',
+      listDescription: decisionInputsMissing
+        ? (actions ? 'Add the missing item details, then this recommendation will refresh.' : 'An owner or editor can add the missing item details.')
+        : 'Open the item for its full home-record details',
     });
     const operationResult: AskOperationResult = {
       status: 'ANSWERED',

@@ -66,6 +66,22 @@ export const ACTION_ENRICHMENT_PRESENTATIONS: Readonly<Record<string, { readonly
  */
 export const ACTION_ENRICHMENT_REGISTRY: readonly ActionEnrichmentEntry[] = Object.freeze([
   {
+    // Replacement guidance cannot make a grounded repair-or-replace recommendation without these decision inputs. The existing inventory completion
+    // capture collects every missing value in one form, reviews the proposed updates, and refreshes the source execution after confirmation.
+    id: 'replacement-guidance-missing-inputs-complete',
+    sourceOperationId: 'REPLACEMENT_GUIDANCE',
+    predicateState: 'replacement-guidance:INPUTS_MISSING',
+    entityType: 'INVENTORY_ITEM',
+    actionId: 'complete-replacement-guidance-details',
+    label: 'Add details to complete this recommendation',
+    message: 'Complete the missing details for this inventory item.',
+    style: 'PRIMARY',
+    destinationOperationId: 'INVENTORY_ITEM_CORRECT',
+    effect: 'MUTATION',
+    placement: 'INLINE',
+    presentation: 'INVENTORY_RESULT_LIST',
+  },
+  {
     id: 'inventory-warranty-absent-record-warranty',
     sourceOperationId: 'DATA_POINT_READ',
     predicateState: 'warranty:NO_LINK_RECORDED',

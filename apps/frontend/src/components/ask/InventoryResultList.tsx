@@ -20,7 +20,7 @@ const COMPLETE_MISSING_DETAILS_ACTION_ID = 'complete-missing-details';
 const REVIEW_COVERAGE_ACTION_ID = 'review-coverage-information';
 // Governed row actions chosen by the server's action-enrichment registry. At most this many rows per result block show the action inline, counted
 // in rendered order over rows that carry it; every other row keeps it in its inline detail (Actionable Result Enrichment FRD FR-ACT-4).
-const ENRICHMENT_ROW_ACTION_IDS: ReadonlySet<string> = new Set(['record-warranty-item', 'review-replacement-item', 'complete-missing-details-item', 'update-coverage-status-item']);
+const ENRICHMENT_ROW_ACTION_IDS: ReadonlySet<string> = new Set(['record-warranty-item', 'review-replacement-item', 'complete-missing-details-item', 'complete-replacement-guidance-details', 'update-coverage-status-item']);
 const ENRICHMENT_INLINE_ROW_LIMIT = 5;
 
 function errorStatus(error: unknown): number | null {
